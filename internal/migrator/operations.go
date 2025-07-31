@@ -17,55 +17,10 @@ func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) er
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
-	// Check for conflicts first
-	migrations, err := m.loadMigrationsFromDir()
-	if err != nil {
-		return fmt.Errorf("failed to load migrations: %w", err)
-	}
-
-	hasConflicts, conflicts, err := m.hasConflicts(ctx, migrations)
-	if err != nil {
-		return fmt.Errorf("failed to check for conflicts: %w", err)
-	}
-
-	if hasConflicts {
-		log.Println("⚠️  WARNING: Potential conflicts detected:")
-		for _, conflict := range conflicts {
-			log.Printf("  • %s", conflict)
-		}
-
-		if m.askUserConfirmation("Do you want to backup all tables before proceeding?") {
-			backupPath, err := m.createBackup(ctx, "Pre-migration backup due to conflicts")
-			if err != nil {
-				return fmt.Errorf("failed to create backup: %w", err)
-			}
-			if backupPath != "" {
-				log.Printf("✅ Backup created at: %s", backupPath)
-			}
-
-			if m.askUserConfirmation("Reset database and clear all migrations?") {
-				if err := m.Reset(ctx); err != nil {
-					return fmt.Errorf("failed to reset database: %w", err)
-				}
-			}
-		}
-
-		if !m.askUserConfirmation("Continue with migration despite conflicts?") {
-			log.Println("❌ Migration cancelled by user")
-			return nil
-		}
-	}
-
 	// Generate new migration if name provided
 	if name != "" {
-		if err := m.GenerateMigration(name, schemaPath); err != nil {
+		if err := m.GenerateMigration(ctx, name, schemaPath); err != nil {
 			return fmt.Errorf("failed to generate migration: %w", err)
-		}
-
-		// Reload migrations after generating new one
-		migrations, err = m.loadMigrationsFromDir()
-		if err != nil {
-			return fmt.Errorf("failed to reload migrations: %w", err)
 		}
 	}
 
@@ -108,6 +63,12 @@ func (m *Migrator) Deploy(ctx context.Context) error {
 	for _, migration := range pendingMigrations {
 		log.Printf("⏳ Applying migration: %s", migration.Name)
 
+		// Read migration SQL
+		migrationSQL, err := parseMigrationFile(migration.FilePath)
+		if err != nil {
+			return fmt.Errorf("failed to read migration file %s: %w", migration.FilePath, err)
+		}
+
 		// Start migration record
 		if _, err := m.db.Exec(ctx, `
 			INSERT INTO _graft_migrations (id, checksum, migration_name, started_at) 
@@ -123,7 +84,7 @@ func (m *Migrator) Deploy(ctx context.Context) error {
 			return fmt.Errorf("failed to start transaction for migration %s: %w", migration.ID, err)
 		}
 
-		if _, err := tx.Exec(ctx, migration.Up); err != nil {
+		if _, err := tx.Exec(ctx, migrationSQL.Up); err != nil {
 			tx.Rollback(ctx)
 
 			// Log failure

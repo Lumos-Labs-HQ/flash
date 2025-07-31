@@ -85,7 +85,7 @@ Examples:
 		force, _ := cmd.Flags().GetBool("force")
 		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
 
-		if err := m.GenerateMigration(migrationName, cfg.SchemaPath); err != nil {
+		if err := m.GenerateMigration(ctx, migrationName, cfg.SchemaPath); err != nil {
 			return err
 		}
 
