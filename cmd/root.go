@@ -13,13 +13,24 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "graft",
-	Short: "A Prisma-like CLI tool for database migrations and schema management",
-	Long: `Graft is a Go-based CLI tool that provides database migration capabilities
-similar to Prisma, with support for schema comparison, backup management,
-and optional SQLC integration.`,
+	Short: "A database migration CLI tool",
+	Long: `Graft is a Go-based CLI tool that provides database migration capabilities 
+similar to Prisma, with support for schema comparison, backup management, 
+and optional SQLC integration.
+
+Features:
+- Project-aware configuration management
+- Database-agnostic design (currently supports PostgreSQL)
+- Migration tracking and validation
+- Automatic backup system
+- SQLC integration`,
+	// Uncomment the following line if your bare application
+	// has an action associated with it:
+	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
 	return rootCmd.Execute()
 }
@@ -27,70 +38,34 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Global flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is graft.config.json or graft.config.yaml)")
-	rootCmd.PersistentFlags().Bool("force", false, "skip confirmations")
+	// Here you will define your flags and configuration settings.
+	// Cobra supports persistent flags, which, if defined here,
+	// will be global for your application.
+
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./graft.config.json)")
+	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
+
+	// Cobra also supports local flags, which will only run
+	// when this action is called directly.
+	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
-// initConfig reads in config file and ENV variables.
+// initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Find project root directory
-		projectRoot, err := findProjectRoot()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error finding project root: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Search config in project root with names "graft.config" (without extension).
-		viper.AddConfigPath(projectRoot)
+		// Search for config file in current directory
+		viper.AddConfigPath(".")
+		viper.SetConfigType("json")
 		viper.SetConfigName("graft.config")
-		viper.SetConfigType("json") // Default to JSON, but will try YAML too
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err != nil {
-		// Config file not found, check if graft is initialized
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found, will be handled by individual commands
-		} else {
-			fmt.Fprintf(os.Stderr, "Error reading config file: %v\n", err)
-			os.Exit(1)
-		}
+	if err := viper.ReadInConfig(); err == nil {
+		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
-}
-
-// findProjectRoot finds the project root by looking for go.mod, package.json, or .git
-func findProjectRoot() (string, error) {
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	return findProjectRootRecursive(currentDir)
-}
-
-func findProjectRootRecursive(dir string) (string, error) {
-	// Check for common project indicators
-	indicators := []string{"go.mod", "package.json", ".git", "graft.config.json", "graft.config.yaml"}
-	
-	for _, indicator := range indicators {
-		if _, err := os.Stat(dir + "/" + indicator); err == nil {
-			return dir, nil
-		}
-	}
-
-	// Check parent directory
-	parent := dir + "/.."
-	if parent == dir {
-		// Reached root directory
-		return dir, nil
-	}
-
-	return findProjectRootRecursive(parent)
 }

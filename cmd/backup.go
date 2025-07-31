@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"Rana718/Graft/internal/config"
@@ -14,17 +12,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// migrateCmd represents the migrate command
-var migrateCmd = &cobra.Command{
-	Use:   "migrate [name]",
-	Short: "Create a new migration",
-	Long: `Create a new migration file with the specified name.
-If no name is provided, you will be prompted to enter one.
+// backupCmd represents the backup command
+var backupCmd = &cobra.Command{
+	Use:   "backup [comment]",
+	Short: "Create a database backup",
+	Long: `Create a manual backup of the database.
+The backup includes all table data and migration history in JSON format.
+
+The backup will be saved in the backup directory specified in your config
+with a timestamp-based filename.
 
 Examples:
-  graft migrate "create users table"
-  graft migrate "add email index"
-  graft migrate  # Interactive mode`,
+  graft backup "before major update"
+  graft backup "pre-production backup"
+  graft backup  # Creates backup with default comment`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -39,22 +40,11 @@ Examples:
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		var migrationName string
+		var comment string
 		if len(args) > 0 {
-			migrationName = strings.Join(args, " ")
+			comment = strings.Join(args, " ")
 		} else {
-			// Interactive mode
-			fmt.Print("Enter migration name: ")
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			migrationName = strings.TrimSpace(input)
-		}
-
-		if migrationName == "" {
-			return fmt.Errorf("migration name cannot be empty")
+			comment = "Manual backup"
 		}
 
 		// Connect to database
@@ -84,10 +74,10 @@ Examples:
 		force, _ := cmd.Flags().GetBool("force")
 		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
 
-		return m.GenerateMigration(migrationName)
+		return m.Backup(ctx, comment)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(migrateCmd)
+	rootCmd.AddCommand(backupCmd)
 }

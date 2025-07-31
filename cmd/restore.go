@@ -1,11 +1,8 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"os"
-	"strings"
 
 	"Rana718/Graft/internal/config"
 	"Rana718/Graft/internal/migrator"
@@ -14,17 +11,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// migrateCmd represents the migrate command
-var migrateCmd = &cobra.Command{
-	Use:   "migrate [name]",
-	Short: "Create a new migration",
-	Long: `Create a new migration file with the specified name.
-If no name is provided, you will be prompted to enter one.
+// restoreCmd represents the restore command
+var restoreCmd = &cobra.Command{
+	Use:   "restore <backup-file>",
+	Short: "Restore database from backup",
+	Long: `Restore the database from a previously created backup file.
+This is a destructive operation that will overwrite all existing data.
+
+The backup file should be a JSON file created by the 'graft backup' command.
+
+⚠️  WARNING: This will overwrite all existing data in your database!
 
 Examples:
-  graft migrate "create users table"
-  graft migrate "add email index"
-  graft migrate  # Interactive mode`,
+  graft restore db_backup/backup_2024-01-15_10-30-00.json
+  graft restore --force backup.json  # Skip confirmation prompts`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -39,23 +40,7 @@ Examples:
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		var migrationName string
-		if len(args) > 0 {
-			migrationName = strings.Join(args, " ")
-		} else {
-			// Interactive mode
-			fmt.Print("Enter migration name: ")
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			migrationName = strings.TrimSpace(input)
-		}
-
-		if migrationName == "" {
-			return fmt.Errorf("migration name cannot be empty")
-		}
+		backupFile := args[0]
 
 		// Connect to database
 		dbURL, err := cfg.GetDatabaseURL()
@@ -84,10 +69,10 @@ Examples:
 		force, _ := cmd.Flags().GetBool("force")
 		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
 
-		return m.GenerateMigration(migrationName)
+		return m.Restore(ctx, backupFile)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(migrateCmd)
+	rootCmd.AddCommand(restoreCmd)
 }

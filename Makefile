@@ -1,96 +1,118 @@
-# Graft CLI Tool Makefile
+# Graft CLI Makefile
 
-.PHONY: build clean test install dev-setup help
+# Variables
+BINARY_NAME=graft
+BINARY_UNIX=$(BINARY_NAME)_unix
+BINARY_WINDOWS=$(BINARY_NAME).exe
+VERSION=1.0.0
+BUILD_DIR=build
+
+# Default target
+.PHONY: all
+all: clean build
 
 # Build the binary
+.PHONY: build
 build:
-	go build -o graft .
+	@echo "Building $(BINARY_NAME)..."
+	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY_NAME) .
+	@echo "Build complete: $(BINARY_NAME)"
 
 # Build for multiple platforms
-build-all:
-	GOOS=linux GOARCH=amd64 go build -o graft-linux-amd64 .
-	GOOS=darwin GOARCH=amd64 go build -o graft-darwin-amd64 .
-	GOOS=darwin GOARCH=arm64 go build -o graft-darwin-arm64 .
-	GOOS=windows GOARCH=amd64 go build -o graft-windows-amd64.exe .
-
-# Clean build artifacts
-clean:
-	rm -f graft graft-* 
-
-# Run tests
-test:
-	go test ./...
-
-# Install dependencies
-deps:
-	go mod tidy
-	go mod download
+.PHONY: build-all
+build-all: clean
+	@echo "Building for multiple platforms..."
+	@mkdir -p $(BUILD_DIR)
+	
+	# Linux
+	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_UNIX) .
+	
+	# Windows
+	GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_WINDOWS) .
+	
+	# macOS
+	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)_darwin .
+	
+	@echo "Cross-platform build complete in $(BUILD_DIR)/"
 
 # Install the binary to GOPATH/bin
+.PHONY: install
 install: build
-	cp graft $(GOPATH)/bin/
+	@echo "Installing $(BINARY_NAME) to $(GOPATH)/bin..."
+	cp $(BINARY_NAME) $(GOPATH)/bin/
+	@echo "Installation complete"
 
-# Development setup
-dev-setup:
+# Clean build artifacts
+.PHONY: clean
+clean:
+	@echo "Cleaning build artifacts..."
+	@rm -f $(BINARY_NAME)
+	@rm -f $(BINARY_UNIX)
+	@rm -f $(BINARY_WINDOWS)
+	@rm -rf $(BUILD_DIR)
+	@echo "Clean complete"
+
+# Run tests
+.PHONY: test
+test:
+	@echo "Running tests..."
+	go test -v ./...
+
+# Download dependencies
+.PHONY: deps
+deps:
+	@echo "Downloading dependencies..."
+	go mod download
 	go mod tidy
-	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-
-# Start development database
-dev-db:
-	docker-compose -f examples/docker-compose.yml up -d
-
-# Stop development database
-dev-db-stop:
-	docker-compose -f examples/docker-compose.yml down
-
-# Initialize development environment
-dev-init: dev-db
-	@echo "Waiting for database to be ready..."
-	@sleep 5
-	export DATABASE_URL="postgres://graft_user:graft_password@localhost:5432/graft_db?sslmode=disable" && \
-	./graft init
-
-# Run example migration
-dev-migrate: build
-	export DATABASE_URL="postgres://graft_user:graft_password@localhost:5432/graft_db?sslmode=disable" && \
-	./graft migrate "create example tables" && \
-	cp examples/example-migration.sql migrations/$(shell ls migrations/ | tail -1) && \
-	./graft apply
-
-# Show development status
-dev-status: build
-	export DATABASE_URL="postgres://graft_user:graft_password@localhost:5432/graft_db?sslmode=disable" && \
-	./graft status
-
-# Reset development database
-dev-reset: build
-	export DATABASE_URL="postgres://graft_user:graft_password@localhost:5432/graft_db?sslmode=disable" && \
-	./graft reset --force
 
 # Format code
+.PHONY: fmt
 fmt:
+	@echo "Formatting code..."
 	go fmt ./...
 
 # Lint code
+.PHONY: lint
 lint:
+	@echo "Linting code..."
 	golangci-lint run
 
+# Run the CLI with help
+.PHONY: run
+run: build
+	./$(BINARY_NAME) --help
+
+# Development setup
+.PHONY: dev-setup
+dev-setup: deps
+	@echo "Setting up development environment..."
+	@if ! command -v golangci-lint &> /dev/null; then \
+		echo "Installing golangci-lint..."; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest; \
+	fi
+	@echo "Development setup complete"
+
+# Create a release
+.PHONY: release
+release: clean build-all
+	@echo "Creating release $(VERSION)..."
+	@mkdir -p release
+	@cp $(BUILD_DIR)/* release/
+	@echo "Release $(VERSION) created in release/"
+
 # Show help
+.PHONY: help
 help:
-	@echo "Available commands:"
-	@echo "  build      - Build the graft binary"
+	@echo "Available targets:"
+	@echo "  build      - Build the binary"
 	@echo "  build-all  - Build for multiple platforms"
+	@echo "  install    - Install binary to GOPATH/bin"
 	@echo "  clean      - Clean build artifacts"
 	@echo "  test       - Run tests"
-	@echo "  deps       - Install dependencies"
-	@echo "  install    - Install binary to GOPATH/bin"
-	@echo "  dev-setup  - Setup development environment"
-	@echo "  dev-db     - Start development database"
-	@echo "  dev-db-stop- Stop development database"
-	@echo "  dev-init   - Initialize development environment"
-	@echo "  dev-migrate- Run example migration"
-	@echo "  dev-status - Show development status"
-	@echo "  dev-reset  - Reset development database"
+	@echo "  deps       - Download dependencies"
 	@echo "  fmt        - Format code"
 	@echo "  lint       - Lint code"
+	@echo "  run        - Build and run with --help"
+	@echo "  dev-setup  - Setup development environment"
+	@echo "  release    - Create release build"
 	@echo "  help       - Show this help"

@@ -1,10 +1,10 @@
 {
-  "schema_path": "db/schema.sql",
-  "migrations_path": "migrations",
-  "sqlc_config_path": "",
   "backup_path": "db_backup",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
-  }
+  },
+  "migrations_path": "migrations",
+  "schema_path": "db/schema.sql",
+  "sqlc_config_path": ""
 }

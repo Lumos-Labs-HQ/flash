@@ -7,7 +7,7 @@ Graft is a Go-based CLI tool that provides database migration capabilities simil
 🔧 **Core Capabilities:**
 - Project-aware configuration management
 - Automatic project root detection
-- Support for JSON and YAML configuration files
+- Support for JSON configuration files
 - Database-agnostic design (currently supports PostgreSQL)
 
 🗃️ **Migration Management:**
@@ -17,11 +17,14 @@ Graft is a Go-based CLI tool that provides database migration capabilities simil
 - Checksum validation for migration integrity
 
 💬 **Prisma-like Commands:**
+- `graft init` - Initialize project
 - `graft migrate` - Create new migrations
 - `graft apply` - Apply pending migrations
-- `graft deploy` - Record migrations without execution
+- `graft deploy` - Deploy migrations (production)
 - `graft reset` - Drop all data and re-apply migrations
 - `graft status` - Show migration status
+- `graft backup` - Create database backup
+- `graft restore` - Restore from backup
 - `graft sqlc-migrate` - Apply migrations + run SQLC
 
 🔁 **SQLC Integration:**
@@ -51,6 +54,12 @@ go build -o graft .
 go install github.com/your-username/graft@latest
 ```
 
+### Manual Installation
+
+1. Download the binary from releases
+2. Place it in your PATH
+3. Make it executable: `chmod +x graft`
+
 ## Quick Start
 
 ### 1. Initialize Graft in Your Project
@@ -64,7 +73,8 @@ This creates:
 - `graft.config.json` - Configuration file
 - `migrations/` - Migration files directory
 - `db_backup/` - Backup directory
-- `db/` - Schema directory
+- `db/` - Schema directory with example schema
+- `.env.example` - Environment variables template
 
 ### 2. Configure Database Connection
 
@@ -74,24 +84,46 @@ Set your database URL as an environment variable:
 export DATABASE_URL="postgres://user:password@localhost:5432/mydb"
 ```
 
+Or create a `.env` file:
+```bash
+cp .env.example .env
+# Edit .env with your database credentials
+```
+
 ### 3. Create Your First Migration
 
 ```bash
 graft migrate "create users table"
 ```
 
-Edit the generated migration file:
+This generates a migration file in `migrations/` directory with a template:
 
-```sql
--- Migration: create users table
--- Created at: 2024-01-15 10:30:00
+```json
+{
+  "migration": {
+    "id": "20240131103000_create_users_table",
+    "name": "create users table",
+    "up": "-- CreateTable: create users table\n-- Add your SQL commands here\n\n-- Example:\n-- CREATE TABLE users (\n--     id SERIAL PRIMARY KEY,\n--     name VARCHAR(255) NOT NULL,\n--     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()\n-- );",
+    "down": "-- Drop or alter statements to reverse the migration\n-- Add your reverse SQL commands here\n\n-- Example:\n-- DROP TABLE IF EXISTS users CASCADE;",
+    "checksum": "...",
+    "created_at": "2024-01-31T10:30:00Z"
+  }
+}
+```
 
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+Edit the migration file to add your SQL:
+
+```json
+{
+  "migration": {
+    "id": "20240131103000_create_users_table",
+    "name": "create users table",
+    "up": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    name VARCHAR(255) NOT NULL,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()\n);",
+    "down": "DROP TABLE IF EXISTS users CASCADE;",
+    "checksum": "...",
+    "created_at": "2024-01-31T10:30:00Z"
+  }
+}
 ```
 
 ### 4. Apply Migrations
@@ -106,9 +138,146 @@ graft apply
 graft status
 ```
 
+## CLI Commands
+
+### Global Flags
+
+- `--config string` - Config file path (default: `./graft.config.json`)
+- `--force, -f` - Skip confirmation prompts
+- `--help, -h` - Show help
+
+### `graft init`
+Initialize graft in the current project.
+
+```bash
+graft init
+```
+
+**What it does:**
+- Creates `graft.config.json` with default settings
+- Creates required directories (`migrations/`, `db_backup/`, `db/`)
+- Creates example schema file (`db/schema.sql`)
+- Creates `.env.example` template
+
+### `graft migrate [name]`
+Create a new migration file.
+
+```bash
+graft migrate "add user roles"
+graft migrate  # Interactive mode - prompts for name
+```
+
+**Options:**
+- Provide migration name as argument or enter interactively
+- Generates timestamped migration file in JSON format
+- Creates template with `up` and `down` SQL sections
+
+### `graft apply`
+Apply all pending migrations with conflict detection.
+
+```bash
+graft apply
+graft apply --force  # Skip confirmations
+```
+
+**What it does:**
+- Checks for migration conflicts
+- Prompts for backup if conflicts detected
+- Applies all pending migrations in order
+- Updates migration tracking table
+
+### `graft deploy`
+Deploy all pending migrations (production-ready).
+
+```bash
+graft deploy
+graft deploy --force  # Skip confirmations
+```
+
+**What it does:**
+- Applies all pending migrations without conflict detection
+- Suitable for production environments
+- Assumes migrations are pre-tested
+
+### `graft status`
+Show current migration status.
+
+```bash
+graft status
+```
+
+**Output includes:**
+- Database connection status
+- Total, applied, and pending migration counts
+- Detailed list of each migration with status and timestamps
+
+### `graft reset`
+Drop all data and optionally remove migration files.
+
+```bash
+graft reset
+graft reset --force  # Skip confirmations and backup
+```
+
+**⚠️ WARNING:** This is destructive and will delete all data!
+
+**What it does:**
+- Prompts for confirmation
+- Offers to create backup before reset
+- Drops all database tables
+- Optionally removes migration files
+
+### `graft backup [comment]`
+Create a manual database backup.
+
+```bash
+graft backup "before major update"
+graft backup "pre-production backup"
+graft backup  # Uses default comment
+```
+
+**What it does:**
+- Creates JSON backup of all table data
+- Includes migration history
+- Saves with timestamp-based filename
+- Stores in configured backup directory
+
+### `graft restore <backup-file>`
+Restore database from backup file.
+
+```bash
+graft restore db_backup/backup_2024-01-31_10-30-00.json
+graft restore --force backup.json  # Skip confirmations
+```
+
+**⚠️ WARNING:** This will overwrite all existing data!
+
+**What it does:**
+- Prompts for confirmation
+- Restores all table data from backup
+- Restores migration history
+- Uses database transactions for consistency
+
+### `graft sqlc-migrate`
+Apply migrations and run SQLC generate.
+
+```bash
+graft sqlc-migrate
+```
+
+**Requirements:**
+- SQLC must be installed and in PATH
+- `sqlc_config_path` must be set in config
+- Valid `sqlc.yaml` configuration file
+
+**What it does:**
+- Applies all pending migrations
+- Runs `sqlc generate` to update Go types
+- Reports any errors from either step
+
 ## Configuration
 
-### Example `graft.config.json`
+### `graft.config.json`
 
 ```json
 {
@@ -134,122 +303,30 @@ graft status
 | `database.provider` | Database provider | `postgresql` |
 | `database.url_env` | Environment variable for DB URL | `DATABASE_URL` |
 
-## Commands
-
-### `graft init`
-Initialize graft in the current project.
-
-```bash
-graft init
-```
-
-### `graft migrate [name]`
-Create a new migration file.
-
-```bash
-graft migrate "add user roles"
-graft migrate  # Interactive mode
-```
-
-### `graft apply`
-Apply all pending migrations.
-
-```bash
-graft apply
-graft apply --force  # Skip confirmations
-```
-
-### `graft deploy`
-Record migrations as applied without executing them.
-
-```bash
-graft deploy
-```
-
-### `graft reset`
-Drop all data and re-apply all migrations.
-
-```bash
-graft reset
-graft reset --force  # Skip confirmations and backup
-```
-
-### `graft status`
-Show current migration status.
-
-```bash
-graft status
-```
-
-### `graft sqlc-migrate`
-Apply migrations and run SQLC generate.
-
-```bash
-graft sqlc-migrate
-```
-
-## SQLC Integration
-
-If you're using SQLC for Go code generation, graft can automatically run `sqlc generate` after applying migrations.
-
-1. Set `sqlc_config_path` in your config:
-
-```json
-{
-  "sqlc_config_path": "sqlc.yaml"
-}
-```
-
-2. Use `graft sqlc-migrate` or `graft apply` - both will run SQLC automatically.
-
-## Backup System
-
-Graft automatically prompts for backups before destructive operations:
-
-- **Backup Location**: `db_backup/YYYY-MM-DD_HHMMSS/backup.json`
-- **Format**: JSON with complete table data
-- **Automatic Prompts**: Before `reset` and schema conflicts
-
-### Backup Structure
-
-```json
-{
-  "timestamp": "2024-01-15 10:30:00",
-  "tables": [
-    {
-      "table_name": "users",
-      "columns": ["id", "name", "email", "created_at"],
-      "rows": [
-        {"id": 1, "name": "John", "email": "john@example.com", "created_at": "2024-01-15T10:00:00Z"}
-      ]
-    }
-  ]
-}
-```
-
 ## Migration Files
 
-Migration files are stored in the `migrations/` directory with timestamp-based naming:
+Migration files are stored as JSON in the `migrations/` directory:
 
 ```
 migrations/
-├── 20240115103000_create_users_table.sql
-├── 20240115104500_add_user_roles.sql
-└── 20240115110000_create_posts_table.sql
+├── 20240131103000_create_users_table.json
+├── 20240131104500_add_user_roles.json
+└── 20240131110000_create_posts_table.json
 ```
 
 ### Migration File Format
 
-```sql
--- Migration: create users table
--- Created at: 2024-01-15 10:30:00
-
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+```json
+{
+  "migration": {
+    "id": "20240131103000_create_users_table",
+    "name": "create users table",
+    "up": "CREATE TABLE users (\n    id SERIAL PRIMARY KEY,\n    name VARCHAR(255) NOT NULL,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()\n);",
+    "down": "DROP TABLE IF EXISTS users CASCADE;",
+    "checksum": "a1b2c3d4e5f6...",
+    "created_at": "2024-01-31T10:30:00Z"
+  }
+}
 ```
 
 ## Database Support
@@ -262,6 +339,50 @@ Planned support:
 - 🔄 SQLite
 - 🔄 SQL Server
 
+## SQLC Integration
+
+If you're using SQLC for Go code generation:
+
+1. Set `sqlc_config_path` in your config:
+
+```json
+{
+  "sqlc_config_path": "sqlc.yaml"
+}
+```
+
+2. Use `graft sqlc-migrate` to apply migrations and generate types:
+
+```bash
+graft sqlc-migrate
+```
+
+## Backup System
+
+Graft automatically prompts for backups before destructive operations:
+
+- **Backup Location**: `db_backup/backup_YYYY-MM-DD_HHMMSS.json`
+- **Format**: JSON with complete table data
+- **Automatic Prompts**: Before `reset` and schema conflicts
+
+### Backup Structure
+
+```json
+{
+  "timestamp": "2024-01-31_10-30-00",
+  "version": "5_migrations",
+  "comment": "Pre-reset backup",
+  "tables": {
+    "users": {
+      "columns": ["id", "name", "email", "created_at"],
+      "data": [
+        {"id": 1, "name": "John", "email": "john@example.com", "created_at": "2024-01-31T10:00:00Z"}
+      ]
+    }
+  }
+}
+```
+
 ## Best Practices
 
 1. **Always Review Migrations**: Check generated migration files before applying
@@ -270,6 +391,7 @@ Planned support:
 4. **Backup Production**: Always backup production databases before migrations
 5. **Version Control**: Commit migration files to version control
 6. **Sequential Migrations**: Apply migrations in order, don't skip
+7. **Use --force Carefully**: Only use `--force` flag when you're certain
 
 ## Troubleshooting
 
@@ -277,21 +399,27 @@ Planned support:
 
 **Database Connection Failed**
 ```bash
-Error: failed to connect to database: database URL not found in environment variable DATABASE_URL
+Error: database URL not found in environment variable DATABASE_URL
 ```
-Solution: Set the `DATABASE_URL` environment variable.
+**Solution:** Set the `DATABASE_URL` environment variable or create a `.env` file.
 
 **Migration Already Exists**
 ```bash
 Error: migration validation failed: migration already exists
 ```
-Solution: Check for duplicate migration names or use `graft status` to see applied migrations.
+**Solution:** Check for duplicate migration names or use `graft status` to see applied migrations.
 
 **SQLC Generate Failed**
 ```bash
-⚠️ SQLC generate failed: exec: "sqlc": executable file not found in $PATH
+Error: sqlc not found in PATH
 ```
-Solution: Install SQLC or remove `sqlc_config_path` from config.
+**Solution:** Install SQLC or remove `sqlc_config_path` from config.
+
+**Config File Not Found**
+```bash
+Error: failed to load config
+```
+**Solution:** Run `graft init` to create config file or specify path with `--config`.
 
 ### Debug Mode
 
@@ -300,6 +428,56 @@ Use the `--force` flag to skip confirmations during development:
 ```bash
 graft apply --force
 graft reset --force
+```
+
+## Examples
+
+### Basic Workflow
+
+```bash
+# Initialize project
+graft init
+
+# Set database URL
+export DATABASE_URL="postgres://user:pass@localhost:5432/mydb"
+
+# Create first migration
+graft migrate "initial schema"
+
+# Edit the migration file, then apply
+graft apply
+
+# Check status
+graft status
+
+# Create another migration
+graft migrate "add indexes"
+
+# Apply new migration
+graft apply
+```
+
+### Production Deployment
+
+```bash
+# Deploy migrations in production
+graft deploy
+
+# Check status
+graft status
+
+# Create backup before major changes
+graft backup "before v2.0 deployment"
+```
+
+### Development with SQLC
+
+```bash
+# Set SQLC config in graft.config.json
+# "sqlc_config_path": "sqlc.yaml"
+
+# Apply migrations and generate types
+graft sqlc-migrate
 ```
 
 ## Contributing
@@ -319,3 +497,4 @@ MIT License - see LICENSE file for details.
 - Inspired by [Prisma](https://www.prisma.io/) migration system
 - Built with [Cobra](https://github.com/spf13/cobra) CLI framework
 - Uses [Viper](https://github.com/spf13/viper) for configuration management
+- PostgreSQL support via [pgx](https://github.com/jackc/pgx)
