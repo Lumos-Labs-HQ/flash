@@ -71,10 +71,12 @@ graft init
 
 This creates:
 - `graft.config.json` - Configuration file
-- `migrations/` - Migration files directory
-- `db_backup/` - Backup directory
-- `db/` - Schema directory with example schema
+- `db/schema/` - Schema directory with example schema
+- `db/queries/` - SQL queries directory for SQLC
+- `sqlc.yml` - SQLC configuration file
 - `.env.example` - Environment variables template
+
+Note: Migration and backup directories (`db/migrations/`, `db/backup/`) are created automatically when needed. SQLC generated files go to `graft_gen/` (created by SQLC).
 
 ### 2. Configure Database Connection
 
@@ -281,10 +283,10 @@ graft sqlc-migrate
 
 ```json
 {
-  "schema_path": "db/schema.sql",
-  "migrations_path": "migrations",
-  "sqlc_config_path": "sqlc.yaml",
-  "backup_path": "db_backup",
+  "schema_path": "db/schema/schema.sql",
+  "migrations_path": "db/migrations",
+  "sqlc_config_path": "sqlc.yml",
+  "backup_path": "db/backup",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
@@ -296,19 +298,19 @@ graft sqlc-migrate
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `schema_path` | Path to schema file | `db/schema.sql` |
-| `migrations_path` | Directory for migration files | `migrations` |
-| `sqlc_config_path` | Path to SQLC config (optional) | `""` |
-| `backup_path` | Directory for backups | `db_backup` |
+| `schema_path` | Path to schema file | `db/schema/schema.sql` |
+| `migrations_path` | Directory for migration files | `db/migrations` |
+| `sqlc_config_path` | Path to SQLC config | `sqlc.yml` |
+| `backup_path` | Directory for backups | `db/backup` |
 | `database.provider` | Database provider | `postgresql` |
 | `database.url_env` | Environment variable for DB URL | `DATABASE_URL` |
 
 ## Migration Files
 
-Migration files are stored as JSON in the `migrations/` directory:
+Migration files are stored as JSON in the `db/migrations/` directory:
 
 ```
-migrations/
+db/migrations/
 ├── 20240131103000_create_users_table.json
 ├── 20240131104500_add_user_roles.json
 └── 20240131110000_create_posts_table.json
@@ -341,29 +343,46 @@ Planned support:
 
 ## SQLC Integration
 
-If you're using SQLC for Go code generation:
+Graft comes with built-in SQLC integration for seamless Go code generation:
 
-1. Set `sqlc_config_path` in your config:
+1. **Automatic Setup**: `graft init` creates a complete SQLC configuration:
 
-```json
-{
-  "sqlc_config_path": "sqlc.yaml"
-}
+```yaml
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "db/queries/"
+    schema: "db/schema/"
+    gen:
+      go:
+        package: "graft"
+        out: "graft_gen/"
+        sql_package: "pgx/v5"
 ```
 
-2. Use `graft sqlc-migrate` to apply migrations and generate types:
+2. **Automatic Generation**: 
+   - `graft migrate` automatically runs SQLC generate after creating migrations
+   - `graft sqlc-migrate` applies migrations and generates types
 
-```bash
-graft sqlc-migrate
+3. **Directory Structure**:
+```
+db/
+├── schema/
+│   └── schema.sql      # Database schema
+├── queries/
+│   └── users.sql       # SQL queries for SQLC
+└── migrations/         # Migration files
+graft_gen/              # Generated Go types
 ```
 
 ## Backup System
 
 Graft automatically prompts for backups before destructive operations:
 
-- **Backup Location**: `db_backup/backup_YYYY-MM-DD_HHMMSS.json`
+- **Backup Location**: `db/backup/backup_YYYY-MM-DD_HHMMSS.json`
 - **Format**: JSON with complete table data
 - **Automatic Prompts**: Before `reset` and schema conflicts
+- **Smart Backup**: Only creates backups when database contains data
 
 ### Backup Structure
 

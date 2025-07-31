@@ -15,9 +15,12 @@ var initCmd = &cobra.Command{
 	Short: "Initialize graft in the current project",
 	Long: `Initialize graft in the current project by creating:
 - graft.config.json - Configuration file
-- migrations/ - Migration files directory  
-- db_backup/ - Backup directory
-- db/ - Schema directory`,
+- db/schema/ - Schema directory with example schema
+- db/queries/ - SQL queries directory for SQLC
+- sqlc.yml - SQLC configuration file
+- .env.example - Environment variables template
+
+Note: Migration and backup directories are created automatically when needed.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return initializeProject()
 	},
@@ -32,10 +35,10 @@ func initializeProject() error {
 
 	// Create default configuration
 	config := map[string]interface{}{
-		"schema_path":     "db/schema.sql",
-		"migrations_path": "migrations",
-		"sqlc_config_path": "",
-		"backup_path":     "db_backup",
+		"schema_path":      "db/schema/schema.sql",
+		"migrations_path":  "db/migrations",
+		"sqlc_config_path": "sqlc.yml",
+		"backup_path":      "db/backup",
 		"database": map[string]string{
 			"provider": "postgresql",
 			"url_env":  "DATABASE_URL",
@@ -57,11 +60,10 @@ func initializeProject() error {
 
 	fmt.Println("✅ Created graft.config.json")
 
-	// Create directories
+	// Create directories (only essential ones, others created on demand)
 	directories := []string{
-		"migrations",
-		"db_backup", 
-		"db",
+		"db/schema",
+		"db/queries",
 	}
 
 	for _, dir := range directories {
@@ -71,22 +73,40 @@ func initializeProject() error {
 		fmt.Printf("✅ Created directory: %s/\n", dir)
 	}
 
+	// Create SQLC configuration file
+	sqlcConfig := `version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "db/queries/"
+    schema: "db/schema/"
+    gen:
+      go:
+        package: "graft"
+        out: "graft_gen/"
+        sql_package: "pgx/v5"
+`
+
+	if err := os.WriteFile("sqlc.yml", []byte(sqlcConfig), 0644); err != nil {
+		return fmt.Errorf("failed to create SQLC config: %w", err)
+	}
+	fmt.Println("✅ Created sqlc.yml")
+
 	// Create example schema file
-	schemaPath := filepath.Join("db", "schema.sql")
+	schemaPath := filepath.Join("db", "schema", "schema.sql")
 	schemaContent := `-- Example schema file
 -- Add your database schema here
 
 -- Example table:
--- CREATE TABLE users (
---     id SERIAL PRIMARY KEY,
---     name VARCHAR(255) NOT NULL,
---     email VARCHAR(255) UNIQUE NOT NULL,
---     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
---     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
--- );
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
 
 -- Example index:
--- CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_email ON users(email);
 `
 
 	if err := os.WriteFile(schemaPath, []byte(schemaContent), 0644); err != nil {
@@ -94,28 +114,48 @@ func initializeProject() error {
 	}
 	fmt.Printf("✅ Created example schema: %s\n", schemaPath)
 
-	// Create .env example
-	envContent := `# Database connection URL
-# Replace with your actual database credentials
-DATABASE_URL=postgres://username:password@localhost:5432/database_name
+	// Create example queries file
+	queriesPath := filepath.Join("db", "queries", "users.sql")
+	queriesContent := `-- Example queries for SQLC
+-- Add your SQL queries here
 
-# Example for local development:
-# DATABASE_URL=postgres://postgres:password@localhost:5432/myapp_dev
+-- Example queries:
+name: GetUser :one
+SELECT id, name, email, created_at, updated_at FROM users
+WHERE id = $1 LIMIT 1;
+
+-- name: CreateUser :one
+INSERT INTO users (name, email)
+VALUES ($1, $2)
+RETURNING id, name, email, created_at, updated_at;
+
 `
 
+	if err := os.WriteFile(queriesPath, []byte(queriesContent), 0644); err != nil {
+		return fmt.Errorf("failed to create queries file: %w", err)
+	}
+	fmt.Printf("✅ Created example queries: %s\n", queriesPath)
+
+	// Create .env example
+	envContent := `# Database connection URL
+		# Replace with your actual database credentials
+		DATABASE_URL=postgres://username:password@localhost:5432/database_name
+	`
+
 	if _, err := os.Stat(".env"); os.IsNotExist(err) {
-		if err := os.WriteFile(".env.example", []byte(envContent), 0644); err != nil {
-			return fmt.Errorf("failed to create .env.example: %w", err)
+		if err := os.WriteFile(".env", []byte(envContent), 0644); err != nil {
+			return fmt.Errorf("failed to create .env: %w", err)
 		}
-		fmt.Println("✅ Created .env.example")
+		fmt.Println("✅ Created .env")
 	}
 
 	fmt.Println("\n🎉 Graft initialized successfully!")
 	fmt.Println("\nNext steps:")
 	fmt.Println("1. Set your DATABASE_URL environment variable")
-	fmt.Println("2. Edit db/schema.sql with your database schema")
-	fmt.Println("3. Run 'graft migrate \"initial migration\"' to create your first migration")
-	fmt.Println("4. Run 'graft apply' to apply migrations")
+	fmt.Println("2. Edit db/schema/schema.sql with your database schema")
+	fmt.Println("3. Edit db/queries/users.sql with your SQL queries")
+	fmt.Println("4. Run 'graft migrate \"initial migration\"' to create your first migration")
+	fmt.Println("5. Run 'graft sqlc-migrate' to apply migrations and generate Go types")
 
 	return nil
 }

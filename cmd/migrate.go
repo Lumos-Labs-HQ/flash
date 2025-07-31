@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"Rana718/Graft/internal/config"
@@ -84,8 +85,44 @@ Examples:
 		force, _ := cmd.Flags().GetBool("force")
 		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
 
-		return m.GenerateMigration(migrationName)
+		if err := m.GenerateMigration(migrationName); err != nil {
+			return err
+		}
+
+		// Run SQLC generate if config is available
+		if cfg.SqlcConfigPath != "" {
+			if _, err := os.Stat(cfg.SqlcConfigPath); err == nil {
+				fmt.Println("🔧 Running SQLC generate...")
+				if err := runSQLCGenerate(cfg.SqlcConfigPath); err != nil {
+					fmt.Printf("⚠️  Warning: SQLC generate failed: %v\n", err)
+					fmt.Println("You can run 'graft sqlc-migrate' later to generate types")
+				} else {
+					fmt.Println("✅ SQLC types generated successfully")
+				}
+			}
+		}
+
+		return nil
 	},
+}
+
+// runSQLCGenerate runs sqlc generate with the specified config
+func runSQLCGenerate(configPath string) error {
+	// Check if sqlc is available
+	if _, err := exec.LookPath("sqlc"); err != nil {
+		return fmt.Errorf("sqlc not found in PATH. Please install SQLC: https://docs.sqlc.dev/en/latest/overview/install.html")
+	}
+
+	// Run sqlc generate with the specified config
+	cmd := exec.Command("sqlc", "generate", "-f", configPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("sqlc generate failed: %w", err)
+	}
+
+	return nil
 }
 
 func init() {

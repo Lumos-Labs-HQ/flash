@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 
 	"Rana718/Graft/internal/config"
 	"Rana718/Graft/internal/migrator"
@@ -97,25 +96,6 @@ This command will:
 		log.Println("🎉 Migrations applied and SQLC types generated successfully!")
 		return nil
 	},
-}
-
-func runSQLCGenerate(configPath string) error {
-	// Check if sqlc is available
-	if _, err := exec.LookPath("sqlc"); err != nil {
-		return fmt.Errorf("sqlc not found in PATH. Please install SQLC: https://docs.sqlc.dev/en/latest/overview/install.html")
-	}
-
-	// Run sqlc generate with the specified config
-	cmd := exec.Command("sqlc", "generate", "-f", configPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("sqlc generate failed: %w", err)
-	}
-
-	log.Println("✅ SQLC generate completed successfully")
-	return nil
 }
 
 func init() {

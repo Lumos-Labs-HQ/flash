@@ -39,7 +39,9 @@ func (m *Migrator) Apply(ctx context.Context, name string) error {
 			if err != nil {
 				return fmt.Errorf("failed to create backup: %w", err)
 			}
-			log.Printf("✅ Backup created at: %s", backupPath)
+			if backupPath != "" {
+				log.Printf("✅ Backup created at: %s", backupPath)
+			}
 
 			if m.askUserConfirmation("Reset database and clear all migrations?") {
 				if err := m.Reset(ctx); err != nil {
@@ -253,7 +255,7 @@ func (m *Migrator) Reset(ctx context.Context) error {
 				log.Println("❌ Reset cancelled")
 				return nil
 			}
-		} else {
+		} else if backupPath != "" {
 			log.Printf("✅ Backup created at: %s", backupPath)
 		}
 	}

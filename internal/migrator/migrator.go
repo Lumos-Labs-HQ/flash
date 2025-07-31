@@ -187,6 +187,32 @@ func (m *Migrator) createBackup(ctx context.Context, comment string) (string, er
 		return "", fmt.Errorf("failed to get table names: %w", err)
 	}
 
+	// Check if database has any meaningful data (excluding _prisma_migrations)
+	hasData := false
+	for _, table := range tables {
+		if table == "_prisma_migrations" {
+			continue
+		}
+		
+		var count int
+		err := m.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
+		if err != nil {
+			log.Printf("⚠️  Warning: Failed to count rows in table %s: %v", table, err)
+			continue
+		}
+		
+		if count > 0 {
+			hasData = true
+			break
+		}
+	}
+
+	// If no data exists and this isn't a forced backup, skip
+	if !hasData && !strings.Contains(comment, "Manual backup") && !strings.Contains(comment, "Pre-reset") {
+		log.Println("ℹ️  No data found in database, skipping backup creation")
+		return "", nil
+	}
+
 	for _, table := range tables {
 		rows, err := m.db.Query(ctx, fmt.Sprintf("SELECT * FROM %s", table))
 		if err != nil {

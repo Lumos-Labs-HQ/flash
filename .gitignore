@@ -23,7 +23,7 @@ go.work
 .env
 
 # Database backups
-db_backup/
+db/backup/
 
 # IDE files
 .vscode/
@@ -42,7 +42,10 @@ ehthumbs.db
 Thumbs.db
 
 # Migration files (uncomment if you don't want to track them)
-# migrations/
+# db/migrations/
+
+# SQLC generated files
+graft_gen/
 
 # Logs
 *.log
