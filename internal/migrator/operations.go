@@ -10,7 +10,7 @@ import (
 )
 
 // Apply applies pending migrations for development
-func (m *Migrator) Apply(ctx context.Context, name string) error {
+func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) error {
 	log.Println("🚀 Running graft apply...")
 
 	if err := m.createMigrationsTable(ctx); err != nil {
@@ -58,7 +58,7 @@ func (m *Migrator) Apply(ctx context.Context, name string) error {
 
 	// Generate new migration if name provided
 	if name != "" {
-		if err := m.GenerateMigration(name); err != nil {
+		if err := m.GenerateMigration(name, schemaPath); err != nil {
 			return fmt.Errorf("failed to generate migration: %w", err)
 		}
 
@@ -110,7 +110,7 @@ func (m *Migrator) Deploy(ctx context.Context) error {
 
 		// Start migration record
 		if _, err := m.db.Exec(ctx, `
-			INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at) 
+			INSERT INTO _graft_migrations (id, checksum, migration_name, started_at) 
 			VALUES ($1, $2, $3, NOW())
 			ON CONFLICT (id) DO NOTHING
 		`, migration.ID, migration.Checksum, migration.Name); err != nil {
@@ -128,7 +128,7 @@ func (m *Migrator) Deploy(ctx context.Context) error {
 
 			// Log failure
 			m.db.Exec(ctx, `
-				UPDATE _prisma_migrations 
+				UPDATE _graft_migrations 
 				SET logs = $1, finished_at = NOW() 
 				WHERE id = $2
 			`, fmt.Sprintf("Migration failed: %v", err), migration.ID)
@@ -142,7 +142,7 @@ func (m *Migrator) Deploy(ctx context.Context) error {
 
 		// Mark as completed
 		if _, err := m.db.Exec(ctx, `
-			UPDATE _prisma_migrations 
+			UPDATE _graft_migrations 
 			SET finished_at = NOW(), applied_steps_count = 1, logs = 'Migration completed successfully'
 			WHERE id = $1
 		`, migration.ID); err != nil {
@@ -346,7 +346,7 @@ func (m *Migrator) restoreFromBackup(ctx context.Context, backupPath string) err
 
 	// Restore tables
 	for _, tableName := range tables {
-		if tableName == "_prisma_migrations" {
+		if tableName == "_graft_migrations" {
 			continue
 		}
 
@@ -399,15 +399,15 @@ func (m *Migrator) restoreFromBackup(ctx context.Context, backupPath string) err
 		log.Printf("✅ Restored table %s with %d rows", tableName, len(data))
 	}
 
-	// Restore _prisma_migrations table
-	if migrationsData, exists := backup.Tables["_prisma_migrations"]; exists {
+	// Restore _graft_migrations table
+	if migrationsData, exists := backup.Tables["_graft_migrations"]; exists {
 		tableMap := migrationsData.(map[string]interface{})
 		data := tableMap["data"].([]interface{})
 
 		for _, row := range data {
 			rowMap := row.(map[string]interface{})
 			_, err := tx.Exec(ctx, `
-				INSERT INTO _prisma_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) 
+				INSERT INTO _graft_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) 
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
 				ON CONFLICT (id) DO NOTHING
 			`, rowMap["id"], rowMap["checksum"], rowMap["finished_at"], rowMap["migration_name"],

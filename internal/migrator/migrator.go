@@ -78,10 +78,10 @@ func NewMigrator(db *pgxpool.Pool, migrationsPath, backupPath string, force bool
 	}
 }
 
-// createMigrationsTable creates the Prisma-style migrations table
+// createMigrationsTable creates the Graft-style migrations table
 func (m *Migrator) createMigrationsTable(ctx context.Context) error {
 	query := `
-        CREATE TABLE IF NOT EXISTS _prisma_migrations (
+        CREATE TABLE IF NOT EXISTS _graft_migrations (
             id VARCHAR(36) PRIMARY KEY,
             checksum VARCHAR(64) NOT NULL,
             finished_at TIMESTAMP WITH TIME ZONE,
@@ -100,7 +100,7 @@ func (m *Migrator) createMigrationsTable(ctx context.Context) error {
 func (m *Migrator) getAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	applied := make(map[string]*time.Time)
 
-	query := `SELECT id, finished_at FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`
+	query := `SELECT id, finished_at FROM _graft_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`
 	rows, err := m.db.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (m *Migrator) hasConflicts(ctx context.Context, migrations []Migration) (bo
 					return false, nil, err
 				}
 
-				if exists && tableName != "_prisma_migrations" {
+				if exists && tableName != "_graft_migrations" {
 					conflicts = append(conflicts, fmt.Sprintf("Table '%s' already exists", tableName))
 				}
 			}
@@ -187,10 +187,10 @@ func (m *Migrator) createBackup(ctx context.Context, comment string) (string, er
 		return "", fmt.Errorf("failed to get table names: %w", err)
 	}
 
-	// Check if database has any meaningful data (excluding _prisma_migrations)
+	// Check if database has any meaningful data (excluding _graft_migrations)
 	hasData := false
 	for _, table := range tables {
-		if table == "_prisma_migrations" {
+		if table == "_graft_migrations" {
 			continue
 		}
 		
@@ -298,8 +298,8 @@ func (m *Migrator) getAllTableNames(ctx context.Context) ([]string, error) {
 	return tables, nil
 }
 
-// GenerateMigration creates a new migration file
-func (m *Migrator) GenerateMigration(name string) error {
+// GenerateMigration creates a new migration file with actual SQL from schema
+func (m *Migrator) GenerateMigration(name string, schemaPath string) error {
 	if err := os.MkdirAll(m.migrationsPath, 0755); err != nil {
 		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
@@ -308,21 +308,32 @@ func (m *Migrator) GenerateMigration(name string) error {
 	cleanName := strings.ReplaceAll(strings.ToLower(name), " ", "_")
 	migrationID := fmt.Sprintf("%s_%s", timestamp, cleanName)
 
-	upSQL := fmt.Sprintf(`-- CreateTable or AlterTable: %s
--- Add your SQL commands here
+	// Read schema file if it exists
+	var upSQL string
+	var downSQL string
 
--- Example:
--- CREATE TABLE example (
---     id SERIAL PRIMARY KEY,
---     name VARCHAR(255) NOT NULL,
---     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
--- );`, name)
-
-	downSQL := `-- Drop or alter statements to reverse the migration
--- Add your reverse SQL commands here
-
--- Example:
--- DROP TABLE IF EXISTS example CASCADE;`
+	if schemaPath != "" {
+		if schemaContent, err := os.ReadFile(schemaPath); err == nil {
+			schemaSQL := strings.TrimSpace(string(schemaContent))
+			if schemaSQL != "" && !strings.HasPrefix(schemaSQL, "--") {
+				// Use actual schema content
+				upSQL = schemaSQL
+				downSQL = generateDownSQL(schemaSQL)
+			} else {
+				// Schema is empty or commented, use template
+				upSQL = generateTemplateSQL(name)
+				downSQL = generateTemplateDownSQL()
+			}
+		} else {
+			// Schema file doesn't exist, use template
+			upSQL = generateTemplateSQL(name)
+			downSQL = generateTemplateDownSQL()
+		}
+	} else {
+		// No schema path provided, use template
+		upSQL = generateTemplateSQL(name)
+		downSQL = generateTemplateDownSQL()
+	}
 
 	migration := Migration{
 		ID:        migrationID,
@@ -351,7 +362,65 @@ func (m *Migrator) GenerateMigration(name string) error {
 	}
 
 	log.Printf("✨ Generated migration: %s", filePath)
+	if strings.Contains(upSQL, "CREATE TABLE") {
+		log.Printf("📋 Migration contains actual SQL from schema file")
+	} else {
+		log.Printf("📝 Edit the migration file to add your SQL commands, then run 'graft apply'")
+	}
 	return nil
+}
+
+// generateTemplateSQL creates template SQL for migration
+func generateTemplateSQL(name string) string {
+	return fmt.Sprintf(`-- CreateTable or AlterTable: %s
+-- Add your SQL commands here
+
+-- Example:
+-- CREATE TABLE example (
+--     id SERIAL PRIMARY KEY,
+--     name VARCHAR(255) NOT NULL,
+--     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+-- );`, name)
+}
+
+// generateTemplateDownSQL creates template down SQL
+func generateTemplateDownSQL() string {
+	return `-- Drop or alter statements to reverse the migration
+-- Add your reverse SQL commands here
+
+-- Example:
+-- DROP TABLE IF EXISTS example CASCADE;`
+}
+
+// generateDownSQL generates reverse SQL from up SQL
+func generateDownSQL(upSQL string) string {
+	lines := strings.Split(upSQL, "\n")
+	var downStatements []string
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToUpper(line), "CREATE TABLE") {
+			// Extract table name
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				tableName := strings.Trim(parts[2], "();")
+				downStatements = append(downStatements, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE;", tableName))
+			}
+		} else if strings.HasPrefix(strings.ToUpper(line), "CREATE INDEX") {
+			// Extract index name
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				indexName := parts[2]
+				downStatements = append(downStatements, fmt.Sprintf("DROP INDEX IF EXISTS %s;", indexName))
+			}
+		}
+	}
+	
+	if len(downStatements) == 0 {
+		return generateTemplateDownSQL()
+	}
+	
+	return strings.Join(downStatements, "\n")
 }
 
 // loadMigrationsFromDir loads migrations from directory

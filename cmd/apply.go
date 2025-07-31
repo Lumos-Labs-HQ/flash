@@ -64,7 +64,7 @@ Use --force to skip confirmation prompts.`,
 		force, _ := cmd.Flags().GetBool("force")
 		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
 
-		return m.Apply(ctx, "")
+		return m.Apply(ctx, "", cfg.SchemaPath)
 	},
 }
 

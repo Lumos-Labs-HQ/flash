@@ -101,12 +101,10 @@ CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Example index:
-CREATE INDEX idx_users_email ON users(email);
 `
 
 	if err := os.WriteFile(schemaPath, []byte(schemaContent), 0644); err != nil {
@@ -120,15 +118,15 @@ CREATE INDEX idx_users_email ON users(email);
 -- Add your SQL queries here
 
 -- Example queries:
-name: GetUser :one
+-- name: GetUser :one
 SELECT id, name, email, created_at, updated_at FROM users
 WHERE id = $1 LIMIT 1;
+
 
 -- name: CreateUser :one
 INSERT INTO users (name, email)
 VALUES ($1, $2)
 RETURNING id, name, email, created_at, updated_at;
-
 `
 
 	if err := os.WriteFile(queriesPath, []byte(queriesContent), 0644); err != nil {

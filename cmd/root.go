@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -52,6 +53,13 @@ func init() {
 
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
+	// Load .env file if it exists (silently ignore if not found)
+	if err := godotenv.Load(); err != nil {
+		// Try loading from common locations
+		godotenv.Load(".env")
+		godotenv.Load(".env.local")
+	}
+
 	if cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
