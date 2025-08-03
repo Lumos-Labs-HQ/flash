@@ -319,7 +319,7 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	if schemaPath != "" {
 		if _, err := os.Stat(schemaPath); err == nil {
 			log.Printf("🔍 Analyzing schema changes...")
-			diff, err := m.generateSchemaDiff(ctx, schemaPath)
+			diff, err := m.generateIncrementalSchemaDiff(ctx, schemaPath)
 			if err != nil {
 				log.Printf("⚠️  Warning: Failed to generate schema diff: %v", err)
 				upSQL, downSQL = generateTemplateSQL(name), generateTemplateDownSQL()
@@ -374,6 +374,11 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	// Create migrations table if it doesn't exist
 	if err := m.createMigrationsTable(ctx); err != nil {
 		log.Printf("⚠️  Warning: Failed to create migrations table: %v", err)
+	}
+
+	// Save current schema state for future comparisons
+	if err := m.saveSchemaSnapshot(schemaPath, migrationID); err != nil {
+		log.Printf("⚠️  Warning: Failed to save schema snapshot: %v", err)
 	}
 
 	log.Printf("✨ Generated migration: %s", filePath)
@@ -1190,4 +1195,161 @@ type ColumnDiff struct {
 	OldType string
 	NewType string
 	Changes []string
+}
+
+// generateIncrementalSchemaDiff compares the current schema file with the last known schema state
+func (m *Migrator) generateIncrementalSchemaDiff(ctx context.Context, targetSchemaPath string) (*SchemaDiff, error) {
+	// Parse current schema file
+	targetSchema, err := parseSchemaFile(targetSchemaPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse target schema: %w", err)
+	}
+
+	// Get the last known schema state from snapshots
+	lastSchema, err := m.getLastSchemaSnapshot()
+	if err != nil {
+		log.Printf("⚠️  No previous schema snapshot found, treating as initial migration")
+		// If no previous snapshot, compare with current database state
+		return m.generateSchemaDiff(ctx, targetSchemaPath)
+	}
+
+	log.Printf("📸 Comparing with last schema snapshot")
+
+	diff := &SchemaDiff{
+		NewTables:      []SchemaTable{},
+		DroppedTables:  []string{},
+		ModifiedTables: []TableDiff{},
+		NewIndexes:     []SchemaIndex{},
+		DroppedIndexes: []string{},
+	}
+
+	// Create maps for easier lookup
+	lastTables := make(map[string]SchemaTable)
+	for _, table := range lastSchema {
+		lastTables[table.Name] = table
+	}
+
+	targetTables := make(map[string]SchemaTable)
+	for _, table := range targetSchema {
+		targetTables[table.Name] = table
+	}
+
+	// Find new tables (tables that exist in target but not in last snapshot)
+	for _, targetTable := range targetSchema {
+		if _, exists := lastTables[targetTable.Name]; !exists {
+			diff.NewTables = append(diff.NewTables, targetTable)
+		}
+	}
+
+	// Find dropped tables (tables that exist in last snapshot but not in target)
+	for _, lastTable := range lastSchema {
+		if _, exists := targetTables[lastTable.Name]; !exists {
+			diff.DroppedTables = append(diff.DroppedTables, lastTable.Name)
+		}
+	}
+
+	// Find modified tables (tables that exist in both but have different columns)
+	for tableName, targetTable := range targetTables {
+		if lastTable, exists := lastTables[tableName]; exists {
+			tableDiff := compareTableColumns(lastTable, targetTable)
+			if len(tableDiff.NewColumns) > 0 || len(tableDiff.DroppedColumns) > 0 || len(tableDiff.ModifiedColumns) > 0 {
+				diff.ModifiedTables = append(diff.ModifiedTables, tableDiff)
+			}
+		}
+	}
+
+	return diff, nil
+}
+
+// saveSchemaSnapshot saves the current schema state for future comparisons
+func (m *Migrator) saveSchemaSnapshot(schemaPath, migrationID string) error {
+	if schemaPath == "" {
+		return nil
+	}
+
+	// Create snapshots directory
+	snapshotsDir := filepath.Join(m.migrationsPath, ".snapshots")
+	if err := os.MkdirAll(snapshotsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create snapshots directory: %w", err)
+	}
+
+	// Parse current schema
+	schema, err := parseSchemaFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse schema file: %w", err)
+	}
+
+	// Create snapshot data
+	snapshot := SchemaSnapshot{
+		MigrationID: migrationID,
+		Timestamp:   time.Now(),
+		Schema:      schema,
+	}
+
+	// Save snapshot
+	snapshotPath := filepath.Join(snapshotsDir, fmt.Sprintf("%s.json", migrationID))
+	file, err := os.Create(snapshotPath)
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot file: %w", err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(snapshot); err != nil {
+		return fmt.Errorf("failed to write snapshot: %w", err)
+	}
+
+	log.Printf("📸 Schema snapshot saved: %s", snapshotPath)
+	return nil
+}
+
+// getLastSchemaSnapshot retrieves the most recent schema snapshot
+func (m *Migrator) getLastSchemaSnapshot() ([]SchemaTable, error) {
+	snapshotsDir := filepath.Join(m.migrationsPath, ".snapshots")
+	
+	// Check if snapshots directory exists
+	if _, err := os.Stat(snapshotsDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("no snapshots directory found")
+	}
+
+	// Get all snapshot files
+	files, err := os.ReadDir(snapshotsDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read snapshots directory: %w", err)
+	}
+
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no schema snapshots found")
+	}
+
+	// Sort files by name (which includes timestamp) to get the latest
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Name() > files[j].Name() // Descending order for latest first
+	})
+
+	// Read the latest snapshot
+	latestFile := files[0]
+	snapshotPath := filepath.Join(snapshotsDir, latestFile.Name())
+	
+	file, err := os.Open(snapshotPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open snapshot file: %w", err)
+	}
+	defer file.Close()
+
+	var snapshot SchemaSnapshot
+	if err := json.NewDecoder(file).Decode(&snapshot); err != nil {
+		return nil, fmt.Errorf("failed to decode snapshot: %w", err)
+	}
+
+	log.Printf("📸 Using schema snapshot from migration: %s", snapshot.MigrationID)
+	return snapshot.Schema, nil
+}
+
+// SchemaSnapshot represents a saved schema state
+type SchemaSnapshot struct {
+	MigrationID string        `json:"migration_id"`
+	Timestamp   time.Time     `json:"timestamp"`
+	Schema      []SchemaTable `json:"schema"`
 }

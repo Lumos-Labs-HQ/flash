@@ -25,6 +25,9 @@ go.work
 # Database backups
 db/backup/
 
+# Schema snapshots (internal state)
+db/migrations/.snapshots/
+
 # IDE files
 .vscode/
 .idea/
