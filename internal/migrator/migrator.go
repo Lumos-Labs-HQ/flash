@@ -119,39 +119,261 @@ func (m *Migrator) getAppliedMigrations(ctx context.Context) (map[string]*time.T
 	return applied, nil
 }
 
-// hasConflicts checks for migration conflicts
-func (m *Migrator) hasConflicts(ctx context.Context, migrations []Migration) (bool, []string, error) {
-	var conflicts []string
+// MigrationConflict represents a specific type of migration conflict
+type MigrationConflict struct {
+	Type        string // "table_exists", "not_null_constraint", "foreign_key", etc.
+	TableName   string
+	ColumnName  string
+	Description string
+	Solutions   []string // Suggested solutions
+	Severity    string   // "error", "warning"
+}
 
-	// Check for table conflicts by reading migration files
+// hasConflicts checks for migration conflicts with comprehensive detection
+func (m *Migrator) hasConflicts(ctx context.Context, migrations []Migration) (bool, []MigrationConflict, error) {
+	var conflicts []MigrationConflict
+
 	for _, migration := range migrations {
 		migrationSQL, err := parseMigrationFile(migration.FilePath)
 		if err != nil {
 			continue
 		}
 
-		if strings.Contains(strings.ToUpper(migrationSQL.Up), "CREATE TABLE") {
-			tableRegex := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)`)
-			matches := tableRegex.FindStringSubmatch(migrationSQL.Up)
-			if len(matches) >= 2 {
-				tableName := matches[1]
+		// Check for table existence conflicts
+		if conflicts1, err := m.checkTableConflicts(ctx, migrationSQL); err == nil {
+			conflicts = append(conflicts, conflicts1...)
+		}
+
+		// Check for NOT NULL column conflicts
+		if conflicts2, err := m.checkNotNullConflicts(ctx, migrationSQL); err == nil {
+			conflicts = append(conflicts, conflicts2...)
+		}
+
+		// Check for foreign key conflicts
+		if conflicts3, err := m.checkForeignKeyConflicts(ctx, migrationSQL); err == nil {
+			conflicts = append(conflicts, conflicts3...)
+		}
+
+		// Check for unique constraint conflicts
+		if conflicts4, err := m.checkUniqueConflicts(ctx, migrationSQL); err == nil {
+			conflicts = append(conflicts, conflicts4...)
+		}
+	}
+
+	return len(conflicts) > 0, conflicts, nil
+}
+
+// checkTableConflicts checks for table existence conflicts
+func (m *Migrator) checkTableConflicts(ctx context.Context, migrationSQL *MigrationSQL) ([]MigrationConflict, error) {
+	var conflicts []MigrationConflict
+
+	if strings.Contains(strings.ToUpper(migrationSQL.Up), "CREATE TABLE") {
+		tableRegex := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?"?(\w+)"?`)
+		matches := tableRegex.FindAllStringSubmatch(migrationSQL.Up, -1)
+
+		for _, match := range matches {
+			if len(match) >= 2 {
+				tableName := match[1]
 
 				var exists bool
 				err := m.db.QueryRow(ctx,
 					"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public')",
 					tableName).Scan(&exists)
 				if err != nil {
-					return false, nil, err
+					return nil, err
 				}
 
 				if exists && tableName != "_graft_migrations" {
-					conflicts = append(conflicts, fmt.Sprintf("Table '%s' already exists", tableName))
+					conflicts = append(conflicts, MigrationConflict{
+						Type:        "table_exists",
+						TableName:   tableName,
+						Description: fmt.Sprintf("Table '%s' already exists in the database", tableName),
+						Solutions: []string{
+							"Drop the existing table manually if it's safe to do so",
+							"Modify the migration to use 'CREATE TABLE IF NOT EXISTS'",
+							"Rename the table in your schema to avoid the conflict",
+						},
+						Severity: "error",
+					})
 				}
 			}
 		}
 	}
 
-	return len(conflicts) > 0, conflicts, nil
+	return conflicts, nil
+}
+
+// checkNotNullConflicts checks for NOT NULL column addition conflicts
+func (m *Migrator) checkNotNullConflicts(ctx context.Context, migrationSQL *MigrationSQL) ([]MigrationConflict, error) {
+	var conflicts []MigrationConflict
+
+	// Look for ALTER TABLE ADD COLUMN statements with NOT NULL
+	addColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+"?(\w+)"?\s+ADD\s+COLUMN\s+"?(\w+)"?\s+([^;]+)`)
+	matches := addColumnRegex.FindAllStringSubmatch(migrationSQL.Up, -1)
+
+	for _, match := range matches {
+		if len(match) >= 4 {
+			tableName := match[1]
+			columnName := match[2]
+			columnDef := strings.ToUpper(match[3])
+
+			// Check if the column is NOT NULL and no default is provided
+			hasNotNull := strings.Contains(columnDef, "NOT NULL")
+			hasDefault := strings.Contains(columnDef, "DEFAULT")
+
+			if hasNotNull && !hasDefault {
+				// Check if the table has existing data
+				var rowCount int
+				err := m.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", tableName)).Scan(&rowCount)
+				if err != nil {
+					// If table doesn't exist yet, it's not a conflict
+					continue
+				}
+
+				if rowCount > 0 {
+					conflicts = append(conflicts, MigrationConflict{
+						Type:        "not_null_constraint",
+						TableName:   tableName,
+						ColumnName:  columnName,
+						Description: fmt.Sprintf("Cannot add NOT NULL column '%s' to table '%s' which contains %d existing rows", columnName, tableName, rowCount),
+						Solutions: []string{
+							fmt.Sprintf("Add a DEFAULT value: ALTER TABLE \"%s\" ADD COLUMN \"%s\" <type> DEFAULT <value> NOT NULL;", tableName, columnName),
+							fmt.Sprintf("Make the column nullable first: ALTER TABLE \"%s\" ADD COLUMN \"%s\" <type>;", tableName, columnName),
+							"Update existing rows first, then add NOT NULL constraint in separate migration",
+							"Consider if this column really needs to be NOT NULL for existing data",
+						},
+						Severity: "error",
+					})
+				}
+			}
+		}
+	}
+
+	return conflicts, nil
+}
+
+// checkForeignKeyConflicts checks for foreign key constraint conflicts
+func (m *Migrator) checkForeignKeyConflicts(ctx context.Context, migrationSQL *MigrationSQL) ([]MigrationConflict, error) {
+	var conflicts []MigrationConflict
+
+	// Look for FOREIGN KEY constraints
+	fkRegex := regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\([^)]+\)\s*REFERENCES\s+"?(\w+)"?`)
+	matches := fkRegex.FindAllStringSubmatch(migrationSQL.Up, -1)
+
+	for _, match := range matches {
+		if len(match) >= 2 {
+			referencedTable := match[1]
+
+			// Check if referenced table exists
+			var exists bool
+			err := m.db.QueryRow(ctx,
+				"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public')",
+				referencedTable).Scan(&exists)
+			if err != nil {
+				return nil, err
+			}
+
+			if !exists {
+				conflicts = append(conflicts, MigrationConflict{
+					Type:        "foreign_key",
+					TableName:   referencedTable,
+					Description: fmt.Sprintf("Foreign key references table '%s' which does not exist", referencedTable),
+					Solutions: []string{
+						fmt.Sprintf("Create table '%s' first in a separate migration", referencedTable),
+						"Remove the foreign key constraint and add it later",
+						"Check if the referenced table name is correct",
+					},
+					Severity: "error",
+				})
+			}
+		}
+	}
+
+	return conflicts, nil
+}
+
+// checkUniqueConflicts checks for unique constraint conflicts
+func (m *Migrator) checkUniqueConflicts(ctx context.Context, migrationSQL *MigrationSQL) ([]MigrationConflict, error) {
+	var conflicts []MigrationConflict
+
+	// Look for UNIQUE constraints on existing tables
+	uniqueRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+"?(\w+)"?\s+ADD\s+CONSTRAINT\s+\w+\s+UNIQUE\s*\(([^)]+)\)`)
+	matches := uniqueRegex.FindAllStringSubmatch(migrationSQL.Up, -1)
+
+	for _, match := range matches {
+		if len(match) >= 3 {
+			tableName := match[1]
+			columns := strings.Trim(match[2], " \"")
+
+			// Check if table has existing data with duplicates
+			query := fmt.Sprintf("SELECT COUNT(*) FROM (SELECT %s, COUNT(*) FROM \"%s\" GROUP BY %s HAVING COUNT(*) > 1) duplicates",
+				columns, tableName, columns)
+
+			var duplicateCount int
+			err := m.db.QueryRow(ctx, query).Scan(&duplicateCount)
+			if err != nil {
+				// Table might not exist or query might be invalid, skip
+				continue
+			}
+
+			if duplicateCount > 0 {
+				conflicts = append(conflicts, MigrationConflict{
+					Type:        "unique_constraint",
+					TableName:   tableName,
+					ColumnName:  columns,
+					Description: fmt.Sprintf("Cannot add UNIQUE constraint on column(s) '%s' in table '%s' - duplicate values exist", columns, tableName),
+					Solutions: []string{
+						fmt.Sprintf("Remove duplicate values first: DELETE FROM \"%s\" WHERE ...", tableName),
+						"Update duplicate values to make them unique",
+						"Consider if the unique constraint is necessary",
+						"Use a partial unique index if only some rows should be unique",
+					},
+					Severity: "error",
+				})
+			}
+		}
+	}
+
+	return conflicts, nil
+}
+
+// displayConflicts shows detailed information about migration conflicts
+func (m *Migrator) displayConflicts(conflicts []MigrationConflict) {
+	fmt.Println()
+	fmt.Println("🚨 Migration Conflicts Detected!")
+	fmt.Println("================================")
+	fmt.Println()
+
+	for i, conflict := range conflicts {
+		var icon string
+		switch conflict.Severity {
+		case "error":
+			icon = "❌"
+		case "warning":
+			icon = "⚠️"
+		default:
+			icon = "ℹ️"
+		}
+
+		fmt.Printf("%s Conflict %d: %s\n", icon, i+1, conflict.Type)
+		fmt.Printf("   Table: %s\n", conflict.TableName)
+		if conflict.ColumnName != "" {
+			fmt.Printf("   Column: %s\n", conflict.ColumnName)
+		}
+		fmt.Printf("   Issue: %s\n", conflict.Description)
+		fmt.Println()
+		fmt.Println("   💡 Suggested Solutions:")
+		for j, solution := range conflict.Solutions {
+			fmt.Printf("      %d. %s\n", j+1, solution)
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("🔧 How to resolve:")
+	fmt.Println("   1. Edit your schema or migration files to fix the conflicts")
+	fmt.Println("   2. Run the migration again after making changes")
+	fmt.Println("   3. Use 'graft apply --force' to skip conflict checks (not recommended)")
+	fmt.Println()
 }
 
 // askUserConfirmation prompts user for confirmation
@@ -166,6 +388,8 @@ func (m *Migrator) askUserConfirmation(message string) bool {
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "yes" || response == "y"
 }
+
+// createBackup creates a backup of the database
 
 // createBackup creates a backup of the database
 func (m *Migrator) createBackup(ctx context.Context, comment string) (string, error) {
@@ -198,14 +422,14 @@ func (m *Migrator) createBackup(ctx context.Context, comment string) (string, er
 		if table == "_graft_migrations" {
 			continue
 		}
-		
+
 		var count int
 		err := m.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count)
 		if err != nil {
 			log.Printf("⚠️  Warning: Failed to count rows in table %s: %v", table, err)
 			continue
 		}
-		
+
 		if count > 0 {
 			hasData = true
 			break
@@ -324,20 +548,20 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 				log.Printf("⚠️  Warning: Failed to generate schema diff: %v", err)
 				upSQL, downSQL = generateTemplateSQL(name), generateTemplateDownSQL()
 			} else {
-				log.Printf("🔄 Schema diff: %d new tables, %d dropped tables, %d modified tables", 
+				log.Printf("🔄 Schema diff: %d new tables, %d dropped tables, %d modified tables",
 					len(diff.NewTables), len(diff.DroppedTables), len(diff.ModifiedTables))
-				
+
 				for _, table := range diff.NewTables {
 					log.Printf("  + New table: %s", table.Name)
 				}
 				for _, table := range diff.ModifiedTables {
-					log.Printf("  ~ Modified table: %s (%d new cols, %d dropped cols)", 
+					log.Printf("  ~ Modified table: %s (%d new cols, %d dropped cols)",
 						table.Name, len(table.NewColumns), len(table.DroppedColumns))
 					for _, col := range table.NewColumns {
 						log.Printf("    + New column: %s %s", col.Name, col.Type)
 					}
 				}
-				
+
 				upSQL, downSQL = generateMigrationSQL(diff)
 				if upSQL == "" {
 					log.Println("ℹ️  No schema changes detected, creating empty migration")
@@ -387,7 +611,7 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	} else {
 		log.Printf("📝 Edit the migration file to add your SQL commands")
 	}
-	
+
 	return nil
 }
 
@@ -413,7 +637,7 @@ func generateMigrationSQL(diff *SchemaDiff) (string, string) {
 	for _, tableDiff := range diff.ModifiedTables {
 		// Add new columns - use clean format
 		for _, newCol := range tableDiff.NewColumns {
-			alterSQL := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s", 
+			alterSQL := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s",
 				tableDiff.Name, newCol.Name, formatColumnType(newCol))
 			upStatements = append(upStatements, fmt.Sprintf("-- AddColumn\n%s;", alterSQL))
 			downStatements = append(downStatements, fmt.Sprintf("-- DropColumn\nALTER TABLE \"%s\" DROP COLUMN IF EXISTS \"%s\";", tableDiff.Name, newCol.Name))
@@ -437,7 +661,7 @@ func generateMigrationSQL(diff *SchemaDiff) (string, string) {
 				} else if strings.Contains(change, "DEFAULT") {
 					changeType = "AlterColumnDefault"
 				}
-				
+
 				upStatements = append(upStatements, fmt.Sprintf("-- %s\n%s", changeType, change))
 			}
 		}
@@ -469,15 +693,15 @@ func generateCreateTableSQL(table SchemaTable) string {
 // formatColumnType formats a column type with constraints
 func formatColumnType(col SchemaColumn) string {
 	typeStr := col.Type
-	
+
 	if !col.Nullable {
 		typeStr += " NOT NULL"
 	}
-	
+
 	if col.Default != "" {
 		typeStr += " DEFAULT " + col.Default
 	}
-	
+
 	return typeStr
 }
 
@@ -507,7 +731,7 @@ func generateTemplateDownSQL() string {
 func generateDownSQL(upSQL string) string {
 	lines := strings.Split(upSQL, "\n")
 	var downStatements []string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(strings.ToUpper(line), "CREATE TABLE") {
@@ -526,11 +750,11 @@ func generateDownSQL(upSQL string) string {
 			}
 		}
 	}
-	
+
 	if len(downStatements) == 0 {
 		return generateTemplateDownSQL()
 	}
-	
+
 	return strings.Join(downStatements, "\n")
 }
 
@@ -561,7 +785,7 @@ func (m *Migrator) loadMigrationsFromDir() ([]Migration, error) {
 
 		// Extract migration ID from filename (remove .sql extension)
 		migrationID := strings.TrimSuffix(file.Name(), ".sql")
-		
+
 		// Extract name from ID (everything after the timestamp)
 		parts := strings.SplitN(migrationID, "_", 2)
 		name := migrationID
@@ -570,7 +794,7 @@ func (m *Migrator) loadMigrationsFromDir() ([]Migration, error) {
 		}
 
 		fileInfo, _ := file.Info()
-		
+
 		migration := Migration{
 			ID:        migrationID,
 			Name:      name,
@@ -603,7 +827,7 @@ func parseMigrationFile(filePath string) (*MigrationSQL, error) {
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		if strings.HasPrefix(trimmed, "-- +migrate Up") {
 			currentSection = "up"
 			continue
@@ -640,18 +864,18 @@ func parseSchemaFile(schemaPath string) ([]SchemaTable, error) {
 
 	var tables []SchemaTable
 	lines := strings.Split(string(content), "\n")
-	
+
 	var currentTable *SchemaTable
 	inTableDef := false
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
-		
+
 		upperLine := strings.ToUpper(line)
-		
+
 		// Detect CREATE TABLE
 		if strings.HasPrefix(upperLine, "CREATE TABLE") {
 			parts := strings.Fields(line)
@@ -678,32 +902,32 @@ func parseSchemaFile(schemaPath string) ([]SchemaTable, error) {
 			}
 		}
 	}
-	
+
 	return tables, nil
 }
 
 // parseColumnDefinition parses a column definition line
 func parseColumnDefinition(line string) SchemaColumn {
 	line = strings.TrimSpace(strings.TrimSuffix(line, ","))
-	if line == "" || strings.HasPrefix(strings.ToUpper(line), "PRIMARY KEY") || 
-	   strings.HasPrefix(strings.ToUpper(line), "FOREIGN KEY") ||
-	   strings.HasPrefix(strings.ToUpper(line), "CONSTRAINT") {
+	if line == "" || strings.HasPrefix(strings.ToUpper(line), "PRIMARY KEY") ||
+		strings.HasPrefix(strings.ToUpper(line), "FOREIGN KEY") ||
+		strings.HasPrefix(strings.ToUpper(line), "CONSTRAINT") {
 		return SchemaColumn{}
 	}
-	
+
 	parts := strings.Fields(line)
 	if len(parts) < 2 {
 		return SchemaColumn{}
 	}
-	
+
 	col := SchemaColumn{
 		Name:     parts[0],
 		Nullable: true,
 	}
-	
+
 	// Parse type - handle compound types like "SERIAL PRIMARY KEY"
 	upperLine := strings.ToUpper(line)
-	
+
 	// Extract base type
 	if strings.Contains(upperLine, "SERIAL") {
 		if strings.Contains(upperLine, "PRIMARY KEY") {
@@ -715,12 +939,12 @@ func parseColumnDefinition(line string) SchemaColumn {
 		// Find the type (second word, but might be compound)
 		typeStart := 1
 		col.Type = parts[typeStart]
-		
+
 		// Handle VARCHAR(255), etc.
 		if typeStart+1 < len(parts) && strings.HasPrefix(parts[typeStart+1], "(") {
 			col.Type += parts[typeStart+1]
 		}
-		
+
 		// Add constraints to type
 		if strings.Contains(upperLine, "PRIMARY KEY") {
 			col.Type += " PRIMARY KEY"
@@ -729,12 +953,12 @@ func parseColumnDefinition(line string) SchemaColumn {
 			col.Type += " UNIQUE"
 		}
 	}
-	
+
 	// Check for NOT NULL
 	if strings.Contains(upperLine, "NOT NULL") {
 		col.Nullable = false
 	}
-	
+
 	// Extract default value
 	if strings.Contains(upperLine, "DEFAULT") {
 		defaultIdx := strings.Index(upperLine, "DEFAULT")
@@ -748,14 +972,14 @@ func parseColumnDefinition(line string) SchemaColumn {
 			}
 		}
 	}
-	
+
 	return col
 }
 
 // getCurrentSchema gets current database schema
 func (m *Migrator) getCurrentSchema(ctx context.Context) ([]SchemaTable, error) {
 	var tables []SchemaTable
-	
+
 	// Get all tables
 	query := `
 		SELECT table_name 
@@ -765,14 +989,14 @@ func (m *Migrator) getCurrentSchema(ctx context.Context) ([]SchemaTable, error) 
 		AND table_name != '_graft_migrations'
 		ORDER BY table_name
 	`
-	
+
 	rows, err := m.db.Query(ctx, query)
 	if err != nil {
 		log.Printf("❌ Error querying tables: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var tableNames []string
 	for rows.Next() {
 		var tableName string
@@ -782,9 +1006,9 @@ func (m *Migrator) getCurrentSchema(ctx context.Context) ([]SchemaTable, error) 
 		}
 		tableNames = append(tableNames, tableName)
 	}
-	
+
 	log.Printf("🗃️  Found %d tables in database: %v", len(tableNames), tableNames)
-	
+
 	// Get columns for each table
 	for _, tableName := range tableNames {
 		columns, err := m.getTableColumns(ctx, tableName)
@@ -792,19 +1016,19 @@ func (m *Migrator) getCurrentSchema(ctx context.Context) ([]SchemaTable, error) 
 			log.Printf("❌ Error getting columns for table %s: %v", tableName, err)
 			continue
 		}
-		
+
 		log.Printf("📋 Table '%s' has %d columns", tableName, len(columns))
 		for _, col := range columns {
 			log.Printf("  - %s: %s (nullable: %v)", col.Name, col.Type, col.Nullable)
 		}
-		
+
 		tables = append(tables, SchemaTable{
 			Name:    tableName,
 			Columns: columns,
 			Indexes: []SchemaIndex{}, // TODO: implement index detection
 		})
 	}
-	
+
 	return tables, nil
 }
 
@@ -816,7 +1040,7 @@ func (m *Migrator) getTableColumns(ctx context.Context, tableName string) ([]Sch
 		WHERE table_schema = 'public' AND table_name = $1
 		ORDER BY ordinal_position
 	`
-	
+
 	log.Printf("🔍 Querying columns for table: %s", tableName)
 	rows, err := m.db.Query(ctx, query, tableName)
 	if err != nil {
@@ -824,31 +1048,31 @@ func (m *Migrator) getTableColumns(ctx context.Context, tableName string) ([]Sch
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var columns []SchemaColumn
 	for rows.Next() {
 		var colName, dataType, isNullable string
 		var colDefault *string
-		
+
 		if err := rows.Scan(&colName, &dataType, &isNullable, &colDefault); err != nil {
 			log.Printf("❌ Error scanning column for table %s: %v", tableName, err)
 			continue
 		}
-		
+
 		col := SchemaColumn{
 			Name:     colName,
 			Type:     dataType,
 			Nullable: isNullable == "YES",
 		}
-		
+
 		if colDefault != nil {
 			col.Default = *colDefault
 		}
-		
+
 		log.Printf("  📝 Column: %s %s (nullable: %v, default: %v)", colName, dataType, col.Nullable, colDefault)
 		columns = append(columns, col)
 	}
-	
+
 	log.Printf("✅ Found %d columns for table %s", len(columns), tableName)
 	return columns, nil
 }
@@ -859,12 +1083,12 @@ func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath stri
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current schema: %w", err)
 	}
-	
+
 	targetSchema, err := parseSchemaFile(targetSchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target schema: %w", err)
 	}
-	
+
 	diff := &SchemaDiff{
 		NewTables:      []SchemaTable{},
 		DroppedTables:  []string{},
@@ -872,32 +1096,32 @@ func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath stri
 		NewIndexes:     []SchemaIndex{},
 		DroppedIndexes: []string{},
 	}
-	
+
 	// Create maps for easier lookup
 	currentTables := make(map[string]SchemaTable)
 	for _, table := range currentSchema {
 		currentTables[table.Name] = table
 	}
-	
+
 	targetTables := make(map[string]SchemaTable)
 	for _, table := range targetSchema {
 		targetTables[table.Name] = table
 	}
-	
+
 	// Find new tables (tables that exist in target but not in current)
 	for _, targetTable := range targetSchema {
 		if _, exists := currentTables[targetTable.Name]; !exists {
 			diff.NewTables = append(diff.NewTables, targetTable)
 		}
 	}
-	
+
 	// Find dropped tables (tables that exist in current but not in target)
 	for _, currentTable := range currentSchema {
 		if _, exists := targetTables[currentTable.Name]; !exists {
 			diff.DroppedTables = append(diff.DroppedTables, currentTable.Name)
 		}
 	}
-	
+
 	// Find modified tables (tables that exist in both but have different columns)
 	for tableName, targetTable := range targetTables {
 		if currentTable, exists := currentTables[tableName]; exists {
@@ -907,7 +1131,7 @@ func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath stri
 			}
 		}
 	}
-	
+
 	return diff, nil
 }
 
@@ -919,40 +1143,40 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 		DroppedColumns:  []string{},
 		ModifiedColumns: []ColumnDiff{},
 	}
-	
+
 	currentCols := make(map[string]SchemaColumn)
 	for _, col := range current.Columns {
 		currentCols[col.Name] = col
 	}
-	
+
 	targetCols := make(map[string]SchemaColumn)
 	for _, col := range target.Columns {
 		targetCols[col.Name] = col
 	}
-	
+
 	// Find new columns
 	for _, targetCol := range target.Columns {
 		if _, exists := currentCols[targetCol.Name]; !exists {
 			diff.NewColumns = append(diff.NewColumns, targetCol)
 		}
 	}
-	
+
 	// Find dropped columns
 	for _, currentCol := range current.Columns {
 		if _, exists := targetCols[currentCol.Name]; !exists {
 			diff.DroppedColumns = append(diff.DroppedColumns, currentCol.Name)
 		}
 	}
-	
+
 	// Find modified columns - only include actual meaningful differences
 	for colName, targetCol := range targetCols {
 		if currentCol, exists := currentCols[colName]; exists {
 			var changes []string
-			
+
 			// Check type changes - be more intelligent about type comparison
 			currentNormalized := normalizeTypeForComparison(currentCol.Type)
 			targetNormalized := normalizeTypeForComparison(targetCol.Type)
-			
+
 			if currentNormalized != targetNormalized {
 				// Handle SERIAL types specially - they cannot be altered after creation
 				if strings.Contains(strings.ToUpper(targetCol.Type), "SERIAL") {
@@ -962,34 +1186,34 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 					// Only generate type change if it's actually different and meaningful
 					if !isEquivalentType(currentCol.Type, targetCol.Type) {
 						targetType := extractDataType(targetCol.Type)
-						changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;", 
+						changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;",
 							target.Name, colName, targetType))
 					}
 				}
 			}
-			
+
 			// Check nullable changes - but skip for primary key columns
 			if !isPrimaryKeyColumn(targetCol) && currentCol.Nullable != targetCol.Nullable {
 				if targetCol.Nullable {
-					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP NOT NULL;", 
+					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP NOT NULL;",
 						target.Name, colName))
 				} else {
-					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET NOT NULL;", 
+					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET NOT NULL;",
 						target.Name, colName))
 				}
 			}
-			
+
 			// Check default changes - but skip for SERIAL columns and be smarter about defaults
 			if !strings.Contains(strings.ToUpper(targetCol.Type), "SERIAL") && !isEquivalentDefault(currentCol.Default, targetCol.Default) {
 				if targetCol.Default != "" {
-					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET DEFAULT %s;", 
+					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET DEFAULT %s;",
 						target.Name, colName, targetCol.Default))
 				} else {
-					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP DEFAULT;", 
+					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP DEFAULT;",
 						target.Name, colName))
 				}
 			}
-			
+
 			if len(changes) > 0 {
 				diff.ModifiedColumns = append(diff.ModifiedColumns, ColumnDiff{
 					Name:    colName,
@@ -1000,14 +1224,14 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 			}
 		}
 	}
-	
+
 	return diff
 }
 
 // isPrimaryKeyColumn checks if a column is a primary key
 func isPrimaryKeyColumn(col SchemaColumn) bool {
-	return strings.Contains(strings.ToUpper(col.Type), "PRIMARY KEY") || 
-		   strings.Contains(strings.ToUpper(col.Type), "SERIAL")
+	return strings.Contains(strings.ToUpper(col.Type), "PRIMARY KEY") ||
+		strings.Contains(strings.ToUpper(col.Type), "SERIAL")
 }
 
 // isEquivalentType checks if two types are equivalent (handles PostgreSQL type variations)
@@ -1022,21 +1246,21 @@ func isEquivalentDefault(currentDefault, targetDefault string) bool {
 	// Handle common default variations
 	current := strings.TrimSpace(currentDefault)
 	target := strings.TrimSpace(targetDefault)
-	
+
 	// Both empty
 	if current == "" && target == "" {
 		return true
 	}
-	
+
 	// Handle NOW() variations
 	currentUpper := strings.ToUpper(current)
 	targetUpper := strings.ToUpper(target)
-	
+
 	nowVariations := []string{"NOW()", "CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP()"}
-	
+
 	currentIsNow := false
 	targetIsNow := false
-	
+
 	for _, variation := range nowVariations {
 		if strings.Contains(currentUpper, variation) {
 			currentIsNow = true
@@ -1045,11 +1269,11 @@ func isEquivalentDefault(currentDefault, targetDefault string) bool {
 			targetIsNow = true
 		}
 	}
-	
+
 	if currentIsNow && targetIsNow {
 		return true
 	}
-	
+
 	return current == target
 }
 
@@ -1059,7 +1283,7 @@ func normalizeTypeForComparison(pgType string) string {
 	cleaned := strings.ReplaceAll(pgType, "PRIMARY KEY", "")
 	cleaned = strings.TrimSpace(cleaned)
 	normalized := strings.ToUpper(cleaned)
-	
+
 	// Handle SERIAL types - they become integer in the database
 	if strings.Contains(normalized, "SERIAL") {
 		if strings.Contains(normalized, "BIGSERIAL") {
@@ -1067,7 +1291,7 @@ func normalizeTypeForComparison(pgType string) string {
 		}
 		return "INTEGER"
 	}
-	
+
 	// Handle timestamp variations
 	if strings.Contains(normalized, "TIMESTAMP WITH TIME ZONE") {
 		return "TIMESTAMP WITH TIME ZONE"
@@ -1075,7 +1299,7 @@ func normalizeTypeForComparison(pgType string) string {
 	if strings.Contains(normalized, "TIMESTAMP WITHOUT TIME ZONE") || normalized == "TIMESTAMP" {
 		return "TIMESTAMP"
 	}
-	
+
 	// Handle varchar variations
 	if strings.HasPrefix(normalized, "VARCHAR") || strings.HasPrefix(normalized, "CHARACTER VARYING") {
 		// Extract length if present
@@ -1084,7 +1308,7 @@ func normalizeTypeForComparison(pgType string) string {
 		}
 		return "VARCHAR"
 	}
-	
+
 	return normalized
 }
 
@@ -1092,7 +1316,7 @@ func normalizeTypeForComparison(pgType string) string {
 func extractDataType(columnType string) string {
 	// Remove PRIMARY KEY constraint
 	typeStr := strings.ReplaceAll(columnType, "PRIMARY KEY", "")
-	
+
 	// Handle SERIAL types - convert to their underlying integer types
 	upperType := strings.ToUpper(strings.TrimSpace(typeStr))
 	if strings.Contains(upperType, "SERIAL") {
@@ -1101,7 +1325,7 @@ func extractDataType(columnType string) string {
 		}
 		return "INTEGER"
 	}
-	
+
 	// Return cleaned type
 	return strings.TrimSpace(typeStr)
 }
@@ -1110,20 +1334,20 @@ func extractDataType(columnType string) string {
 func normalizeType(pgType string) string {
 	// Map PostgreSQL information_schema types to schema file types
 	typeMap := map[string]string{
-		"character varying": "VARCHAR",
-		"integer":          "INTEGER", // Both SERIAL and INTEGER normalize to INTEGER
-		"bigint":           "BIGINT",  // Both BIGSERIAL and BIGINT normalize to BIGINT
-		"text":             "TEXT",
-		"boolean":          "BOOLEAN",
-		"timestamp with time zone": "TIMESTAMP WITH TIME ZONE",
+		"character varying":           "VARCHAR",
+		"integer":                     "INTEGER", // Both SERIAL and INTEGER normalize to INTEGER
+		"bigint":                      "BIGINT",  // Both BIGSERIAL and BIGINT normalize to BIGINT
+		"text":                        "TEXT",
+		"boolean":                     "BOOLEAN",
+		"timestamp with time zone":    "TIMESTAMP WITH TIME ZONE",
 		"timestamp without time zone": "TIMESTAMP",
 	}
-	
+
 	// Clean up the type string - remove constraints like PRIMARY KEY
 	cleaned := strings.ReplaceAll(pgType, "PRIMARY KEY", "")
 	cleaned = strings.TrimSpace(cleaned)
 	normalized := strings.ToUpper(cleaned)
-	
+
 	// Handle SERIAL types - they become integer in the database
 	if strings.Contains(normalized, "SERIAL") {
 		if strings.Contains(normalized, "BIGSERIAL") {
@@ -1131,7 +1355,7 @@ func normalizeType(pgType string) string {
 		}
 		return "INTEGER"
 	}
-	
+
 	// Handle parentheses in types like VARCHAR(255)
 	if strings.Contains(normalized, "(") {
 		baseType := strings.Split(normalized, "(")[0]
@@ -1140,12 +1364,12 @@ func normalizeType(pgType string) string {
 		}
 		return baseType
 	}
-	
+
 	// Direct mapping
 	if mapped, exists := typeMap[strings.ToLower(cleaned)]; exists {
 		return mapped
 	}
-	
+
 	return normalized
 }
 
@@ -1174,18 +1398,18 @@ type SchemaIndex struct {
 
 // SchemaDiff represents differences between schemas
 type SchemaDiff struct {
-	NewTables     []SchemaTable
-	DroppedTables []string
+	NewTables      []SchemaTable
+	DroppedTables  []string
 	ModifiedTables []TableDiff
-	NewIndexes    []SchemaIndex
+	NewIndexes     []SchemaIndex
 	DroppedIndexes []string
 }
 
 // TableDiff represents changes to a table
 type TableDiff struct {
-	Name          string
-	NewColumns    []SchemaColumn
-	DroppedColumns []string
+	Name            string
+	NewColumns      []SchemaColumn
+	DroppedColumns  []string
 	ModifiedColumns []ColumnDiff
 }
 
@@ -1307,7 +1531,7 @@ func (m *Migrator) saveSchemaSnapshot(schemaPath, migrationID string) error {
 // getLastSchemaSnapshot retrieves the most recent schema snapshot
 func (m *Migrator) getLastSchemaSnapshot() ([]SchemaTable, error) {
 	snapshotsDir := filepath.Join(m.migrationsPath, ".snapshots")
-	
+
 	// Check if snapshots directory exists
 	if _, err := os.Stat(snapshotsDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("no snapshots directory found")
@@ -1331,7 +1555,7 @@ func (m *Migrator) getLastSchemaSnapshot() ([]SchemaTable, error) {
 	// Read the latest snapshot
 	latestFile := files[0]
 	snapshotPath := filepath.Join(snapshotsDir, latestFile.Name())
-	
+
 	file, err := os.Open(snapshotPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open snapshot file: %w", err)
