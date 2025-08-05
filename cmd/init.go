@@ -153,7 +153,7 @@ RETURNING id, name, email, created_at, updated_at;
 	fmt.Println("2. Edit db/schema/schema.sql with your database schema")
 	fmt.Println("3. Edit db/queries/users.sql with your SQL queries")
 	fmt.Println("4. Run 'graft migrate \"initial migration\"' to create your first migration")
-	fmt.Println("5. Run 'graft sqlc-migrate' to apply migrations and generate Go types")
+	fmt.Println("5. Run 'graft gen' to generate Go types using SQLC")
 
 	return nil
 }

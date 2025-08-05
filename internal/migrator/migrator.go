@@ -82,7 +82,7 @@ func NewMigrator(db *pgxpool.Pool, migrationsPath, backupPath string, force bool
 func (m *Migrator) createMigrationsTable(ctx context.Context) error {
 	query := `
         CREATE TABLE IF NOT EXISTS _graft_migrations (
-            id VARCHAR(36) PRIMARY KEY,
+            id VARCHAR(255) PRIMARY KEY,
             checksum VARCHAR(64) NOT NULL,
             finished_at TIMESTAMP WITH TIME ZONE,
             migration_name VARCHAR(255) NOT NULL,
@@ -93,7 +93,95 @@ func (m *Migrator) createMigrationsTable(ctx context.Context) error {
         );
     `
 	_, err := m.db.Exec(ctx, query)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create migrations table: %w", err)
+	}
+
+	// Check if we need to alter existing table for larger id column
+	if err := m.ensureMigrationTableCompatibility(ctx); err != nil {
+		return fmt.Errorf("failed to update migrations table: %w", err)
+	}
+
+	return nil
+}
+
+// ensureMigrationTableCompatibility updates the migrations table if needed
+func (m *Migrator) ensureMigrationTableCompatibility(ctx context.Context) error {
+	// Check current column size
+	var columnType string
+	err := m.db.QueryRow(ctx, `
+		SELECT data_type || CASE 
+			WHEN character_maximum_length IS NOT NULL 
+			THEN '(' || character_maximum_length || ')' 
+			ELSE '' 
+		END as column_type
+		FROM information_schema.columns 
+		WHERE table_name = '_graft_migrations' 
+		AND column_name = 'id'
+		AND table_schema = current_schema()
+	`).Scan(&columnType)
+
+	if err != nil {
+		// Table doesn't exist yet, that's fine
+		return nil
+	}
+
+	// If column is VARCHAR(36) or smaller, update it
+	if strings.Contains(columnType, "character varying(36)") || strings.Contains(columnType, "varchar(36)") {
+		log.Println("🔧 Updating migrations table to support longer migration IDs...")
+		_, err := m.db.Exec(ctx, "ALTER TABLE _graft_migrations ALTER COLUMN id TYPE VARCHAR(255)")
+		if err != nil {
+			return fmt.Errorf("failed to update migration ID column: %w", err)
+		}
+		log.Println("✅ Migrations table updated successfully")
+	}
+
+	return nil
+}
+
+// sanitizeMigrationName cleans and validates migration names
+func sanitizeMigrationName(name string) string {
+	// Convert to lowercase and replace spaces with underscores
+	cleanName := strings.ToLower(name)
+	cleanName = strings.ReplaceAll(cleanName, " ", "_")
+
+	// Remove special characters that could cause issues, keep only alphanumeric and underscores
+	reg := regexp.MustCompile(`[^a-z0-9_]`)
+	cleanName = reg.ReplaceAllString(cleanName, "_")
+
+	// Remove consecutive underscores
+	reg = regexp.MustCompile(`_+`)
+	cleanName = reg.ReplaceAllString(cleanName, "_")
+
+	// Remove leading/trailing underscores
+	cleanName = strings.Trim(cleanName, "_")
+
+	// Ensure it's not empty
+	if cleanName == "" {
+		cleanName = "migration"
+	}
+
+	return cleanName
+}
+
+// cleanupBrokenMigrationRecords removes migration records that have issues
+func (m *Migrator) cleanupBrokenMigrationRecords(ctx context.Context) error {
+	// Remove records with null finished_at (incomplete migrations)
+	result, err := m.db.Exec(ctx, `
+		DELETE FROM _graft_migrations 
+		WHERE finished_at IS NULL 
+		AND started_at < NOW() - INTERVAL '1 hour'
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup incomplete migrations: %w", err)
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Printf("🧹 Cleaned up %d incomplete migration records", rowsAffected)
+	}
+
+	return nil
 }
 
 // getAppliedMigrations returns list of applied migrations
@@ -534,8 +622,16 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	}
 
 	timestamp := time.Now().Format("20060102150405")
-	cleanName := strings.ReplaceAll(strings.ToLower(name), " ", "_")
+	cleanName := sanitizeMigrationName(name)
 	migrationID := fmt.Sprintf("%s_%s", timestamp, cleanName)
+
+	// Ensure migration ID doesn't exceed database limits (max 200 chars for safety)
+	if len(migrationID) > 200 {
+		maxNameLength := 200 - len(timestamp) - 1 // -1 for underscore
+		cleanName = cleanName[:maxNameLength]
+		migrationID = fmt.Sprintf("%s_%s", timestamp, cleanName)
+		log.Printf("⚠️  Migration name truncated to fit database limits: %s", cleanName)
+	}
 
 	var upSQL, downSQL string
 

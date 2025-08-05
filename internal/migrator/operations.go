@@ -3,7 +3,6 @@ package migrator
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -31,6 +30,11 @@ func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) er
 
 // ApplyWithConflictDetection applies migrations with comprehensive conflict checking
 func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
+	// First, clean up any broken migration records
+	if err := m.cleanupBrokenMigrationRecords(ctx); err != nil {
+		log.Printf("⚠️  Warning: Failed to cleanup broken migration records: %v", err)
+	}
+
 	migrations, err := m.loadMigrationsFromDir()
 	if err != nil {
 		return fmt.Errorf("failed to load migrations: %w", err)
@@ -315,49 +319,6 @@ func (m *Migrator) applySingleMigration(ctx context.Context, migration Migration
 	return nil
 }
 
-// Deploy applies all pending migrations
-func (m *Migrator) Deploy(ctx context.Context) error {
-	log.Println("🚀 Running graft deploy...")
-
-	if err := m.createMigrationsTable(ctx); err != nil {
-		return fmt.Errorf("failed to create migrations table: %w", err)
-	}
-
-	migrations, err := m.loadMigrationsFromDir()
-	if err != nil {
-		return fmt.Errorf("failed to load migrations: %w", err)
-	}
-
-	applied, err := m.getAppliedMigrations(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get applied migrations: %w", err)
-	}
-
-	var pendingMigrations []Migration
-	for _, migration := range migrations {
-		if _, exists := applied[migration.ID]; !exists {
-			pendingMigrations = append(pendingMigrations, migration)
-		}
-	}
-
-	if len(pendingMigrations) == 0 {
-		log.Println("✅ No pending migrations")
-		return nil
-	}
-
-	log.Printf("📋 Found %d pending migrations", len(pendingMigrations))
-
-	// Apply migrations one by one (no conflict detection in deploy mode)
-	for _, migration := range pendingMigrations {
-		if err := m.applySingleMigration(ctx, migration); err != nil {
-			return err
-		}
-	}
-
-	log.Println("🎉 All migrations applied successfully")
-	return nil
-}
-
 // Status shows migration status
 func (m *Migrator) Status(ctx context.Context) error {
 	log.Println("📊 Graft Migration Status")
@@ -375,6 +336,19 @@ func (m *Migrator) Status(ctx context.Context) error {
 	applied, err := m.getAppliedMigrations(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get applied migrations: %w", err)
+	}
+
+	// Check for missing migration files
+	var missingMigrations []string
+	migrationMap := make(map[string]bool)
+	for _, migration := range migrations {
+		migrationMap[migration.ID] = true
+	}
+
+	for appliedID := range applied {
+		if !migrationMap[appliedID] {
+			missingMigrations = append(missingMigrations, appliedID)
+		}
 	}
 
 	var statusItems []MigrationStatusItem
@@ -410,7 +384,17 @@ func (m *Migrator) Status(ctx context.Context) error {
 	fmt.Printf("Database: Connected\n")
 	fmt.Printf("Total Migrations: %d\n", status.TotalMigrations)
 	fmt.Printf("Applied: %d\n", status.AppliedMigrations)
-	fmt.Printf("Pending: %d\n\n", status.PendingMigrations)
+	fmt.Printf("Pending: %d\n", status.PendingMigrations)
+
+	// Report missing migrations
+	if len(missingMigrations) > 0 {
+		fmt.Printf("⚠️  Missing Migration Files: %d\n", len(missingMigrations))
+		for _, missingID := range missingMigrations {
+			fmt.Printf("   ❌ %s (applied but file missing)\n", missingID)
+		}
+	}
+
+	fmt.Println()
 
 	if len(statusItems) == 0 {
 		fmt.Println("No migrations found.")
@@ -501,130 +485,5 @@ func (m *Migrator) Backup(ctx context.Context, comment string) error {
 	}
 
 	fmt.Printf("✅ Backup completed: %s\n", backupPath)
-	return nil
-}
-
-// Restore restores from backup
-func (m *Migrator) Restore(ctx context.Context, backupPath string) error {
-	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		return fmt.Errorf("backup file does not exist: %s", backupPath)
-	}
-
-	log.Println("🔄 WARNING: This will overwrite all existing data!")
-
-	if !m.askUserConfirmation("Are you sure you want to restore from backup?") {
-		log.Println("❌ Restore cancelled")
-		return nil
-	}
-
-	return m.restoreFromBackup(ctx, backupPath)
-}
-
-// restoreFromBackup restores database from backup file
-func (m *Migrator) restoreFromBackup(ctx context.Context, backupPath string) error {
-	log.Printf("🔄 Restoring database from backup: %s", backupPath)
-
-	file, err := os.Open(backupPath)
-	if err != nil {
-		return fmt.Errorf("failed to open backup file: %w", err)
-	}
-	defer file.Close()
-
-	var backup BackupData
-	if err := json.NewDecoder(file).Decode(&backup); err != nil {
-		return fmt.Errorf("failed to decode backup file: %w", err)
-	}
-
-	tx, err := m.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	tables, err := m.getAllTableNames(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get table names: %w", err)
-	}
-
-	// Restore tables
-	for _, tableName := range tables {
-		if tableName == "_graft_migrations" {
-			continue
-		}
-
-		tableData, exists := backup.Tables[tableName]
-		if !exists {
-			log.Printf("⚠️  Table %s not found in backup, skipping...", tableName)
-			continue
-		}
-
-		tableMap := tableData.(map[string]interface{})
-		columns := tableMap["columns"].([]interface{})
-		data := tableMap["data"].([]interface{})
-
-		if len(data) == 0 {
-			log.Printf("ℹ️  No data to restore for table %s", tableName)
-			continue
-		}
-
-		// Clear existing data
-		if _, err := tx.Exec(ctx, fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", tableName)); err != nil {
-			log.Printf("⚠️  Warning: Failed to truncate %s: %v", tableName, err)
-		}
-
-		// Prepare column names for INSERT
-		columnNames := make([]string, len(columns))
-		for i, col := range columns {
-			columnNames[i] = col.(string)
-		}
-
-		// Restore data
-		for _, row := range data {
-			rowMap := row.(map[string]interface{})
-			values := make([]interface{}, len(columnNames))
-			placeholders := make([]string, len(columnNames))
-
-			for i, colName := range columnNames {
-				values[i] = rowMap[colName]
-				placeholders[i] = fmt.Sprintf("$%d", i+1)
-			}
-
-			columnStr := strings.Join(columnNames, ", ")
-			placeholderStr := strings.Join(placeholders, ", ")
-			query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", tableName, columnStr, placeholderStr)
-
-			if _, err := tx.Exec(ctx, query, values...); err != nil {
-				log.Printf("⚠️  Warning: Failed to restore row in %s: %v", tableName, err)
-			}
-		}
-
-		log.Printf("✅ Restored table %s with %d rows", tableName, len(data))
-	}
-
-	// Restore _graft_migrations table
-	if migrationsData, exists := backup.Tables["_graft_migrations"]; exists {
-		tableMap := migrationsData.(map[string]interface{})
-		data := tableMap["data"].([]interface{})
-
-		for _, row := range data {
-			rowMap := row.(map[string]interface{})
-			_, err := tx.Exec(ctx, `
-				INSERT INTO _graft_migrations (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count) 
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-				ON CONFLICT (id) DO NOTHING
-			`, rowMap["id"], rowMap["checksum"], rowMap["finished_at"], rowMap["migration_name"],
-				rowMap["logs"], rowMap["rolled_back_at"], rowMap["started_at"], rowMap["applied_steps_count"])
-
-			if err != nil {
-				log.Printf("⚠️  Warning: Failed to restore migration record: %v", err)
-			}
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit restore transaction: %w", err)
-	}
-
-	log.Printf("✅ Database restored successfully from backup created at %s", backup.Timestamp)
 	return nil
 }
