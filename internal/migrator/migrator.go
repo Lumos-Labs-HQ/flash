@@ -164,9 +164,7 @@ func sanitizeMigrationName(name string) string {
 	return cleanName
 }
 
-// cleanupBrokenMigrationRecords removes migration records that have issues
 func (m *Migrator) cleanupBrokenMigrationRecords(ctx context.Context) error {
-	// Remove records with null finished_at (incomplete migrations)
 	result, err := m.db.Exec(ctx, `
 		DELETE FROM _graft_migrations 
 		WHERE finished_at IS NULL 
@@ -184,7 +182,6 @@ func (m *Migrator) cleanupBrokenMigrationRecords(ctx context.Context) error {
 	return nil
 }
 
-// getAppliedMigrations returns list of applied migrations
 func (m *Migrator) getAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	applied := make(map[string]*time.Time)
 
@@ -207,17 +204,15 @@ func (m *Migrator) getAppliedMigrations(ctx context.Context) (map[string]*time.T
 	return applied, nil
 }
 
-// MigrationConflict represents a specific type of migration conflict
 type MigrationConflict struct {
-	Type        string // "table_exists", "not_null_constraint", "foreign_key", etc.
+	Type        string 
 	TableName   string
 	ColumnName  string
 	Description string
-	Solutions   []string // Suggested solutions
-	Severity    string   // "error", "warning"
+	Solutions   []string 
+	Severity    string  
 }
 
-// hasConflicts checks for migration conflicts with comprehensive detection
 func (m *Migrator) hasConflicts(ctx context.Context, migrations []Migration) (bool, []MigrationConflict, error) {
 	var conflicts []MigrationConflict
 
