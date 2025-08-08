@@ -205,12 +205,12 @@ func (m *Migrator) getAppliedMigrations(ctx context.Context) (map[string]*time.T
 }
 
 type MigrationConflict struct {
-	Type        string 
+	Type        string
 	TableName   string
 	ColumnName  string
 	Description string
-	Solutions   []string 
-	Severity    string  
+	Solutions   []string
+	Severity    string
 }
 
 func (m *Migrator) hasConflicts(ctx context.Context, migrations []Migration) (bool, []MigrationConflict, error) {
@@ -420,45 +420,6 @@ func (m *Migrator) checkUniqueConflicts(ctx context.Context, migrationSQL *Migra
 	return conflicts, nil
 }
 
-// displayConflicts shows detailed information about migration conflicts
-func (m *Migrator) displayConflicts(conflicts []MigrationConflict) {
-	fmt.Println()
-	fmt.Println("🚨 Migration Conflicts Detected!")
-	fmt.Println("================================")
-	fmt.Println()
-
-	for i, conflict := range conflicts {
-		var icon string
-		switch conflict.Severity {
-		case "error":
-			icon = "❌"
-		case "warning":
-			icon = "⚠️"
-		default:
-			icon = "ℹ️"
-		}
-
-		fmt.Printf("%s Conflict %d: %s\n", icon, i+1, conflict.Type)
-		fmt.Printf("   Table: %s\n", conflict.TableName)
-		if conflict.ColumnName != "" {
-			fmt.Printf("   Column: %s\n", conflict.ColumnName)
-		}
-		fmt.Printf("   Issue: %s\n", conflict.Description)
-		fmt.Println()
-		fmt.Println("   💡 Suggested Solutions:")
-		for j, solution := range conflict.Solutions {
-			fmt.Printf("      %d. %s\n", j+1, solution)
-		}
-		fmt.Println()
-	}
-
-	fmt.Println("🔧 How to resolve:")
-	fmt.Println("   1. Edit your schema or migration files to fix the conflicts")
-	fmt.Println("   2. Run the migration again after making changes")
-	fmt.Println("   3. Use 'graft apply --force' to skip conflict checks (not recommended)")
-	fmt.Println()
-}
-
 // askUserConfirmation prompts user for confirmation
 func (m *Migrator) askUserConfirmation(message string) bool {
 	if m.force {
@@ -628,19 +589,29 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 		log.Printf("⚠️  Migration name truncated to fit database limits: %s", cleanName)
 	}
 
-	var upSQL, downSQL string
+	var upSQL string
+	var hasChanges bool
 
 	// Generate schema diff if schema file exists
 	if schemaPath != "" {
 		if _, err := os.Stat(schemaPath); err == nil {
 			log.Printf("🔍 Analyzing schema changes...")
-			diff, err := m.generateIncrementalSchemaDiff(ctx, schemaPath)
+			diff, err := m.generateSchemaDiff(ctx, schemaPath)
 			if err != nil {
 				log.Printf("⚠️  Warning: Failed to generate schema diff: %v", err)
-				upSQL, downSQL = generateTemplateSQL(name), generateTemplateDownSQL()
+				return fmt.Errorf("failed to analyze schema changes: %w", err)
 			} else {
 				log.Printf("🔄 Schema diff: %d new tables, %d dropped tables, %d modified tables",
 					len(diff.NewTables), len(diff.DroppedTables), len(diff.ModifiedTables))
+
+				// Check if there are any actual changes
+				hasChanges = len(diff.NewTables) > 0 || len(diff.DroppedTables) > 0 || hasRealTableChanges(diff.ModifiedTables)
+
+				if !hasChanges {
+					fmt.Println("ℹ️  No meaningful schema changes detected - skipping migration creation")
+					fmt.Println("💡 Only create migrations when you have actual schema changes to apply")
+					return fmt.Errorf("no meaningful schema changes detected")
+				}
 
 				for _, table := range diff.NewTables {
 					log.Printf("  + New table: %s", table.Name)
@@ -653,18 +624,13 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 					}
 				}
 
-				upSQL, downSQL = generateMigrationSQL(diff)
-				if upSQL == "" {
-					log.Println("ℹ️  No schema changes detected, creating empty migration")
-					upSQL = fmt.Sprintf("-- %s\n-- No changes detected\n", name)
-					downSQL = "-- No changes to revert\n"
-				}
+				upSQL, _ = generateMigrationSQL(diff)
 			}
 		} else {
-			upSQL, downSQL = generateTemplateSQL(name), generateTemplateDownSQL()
+			return fmt.Errorf("schema file not found: %s", schemaPath)
 		}
 	} else {
-		upSQL, downSQL = generateTemplateSQL(name), generateTemplateDownSQL()
+		return fmt.Errorf("schema path is required for migration generation")
 	}
 
 	// Create SQL migration file
@@ -674,12 +640,8 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	migrationContent := fmt.Sprintf(`-- Migration: %s
 -- Created: %s
 
--- +migrate Up
 %s
-
--- +migrate Down
-%s
-`, name, time.Now().Format("2006-01-02 15:04:05"), upSQL, downSQL)
+`, name, time.Now().Format("2006-01-02 15:04:05"), upSQL)
 
 	if err := os.WriteFile(filePath, []byte(migrationContent), 0644); err != nil {
 		return fmt.Errorf("failed to create migration file: %w", err)
@@ -689,11 +651,6 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	// Create migrations table if it doesn't exist
 	if err := m.createMigrationsTable(ctx); err != nil {
 		log.Printf("⚠️  Warning: Failed to create migrations table: %v", err)
-	}
-
-	// Save current schema state for future comparisons
-	if err := m.saveSchemaSnapshot(schemaPath, migrationID); err != nil {
-		log.Printf("⚠️  Warning: Failed to save schema snapshot: %v", err)
 	}
 
 	log.Printf("✨ Generated migration: %s", filePath)
@@ -709,19 +666,16 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 // generateMigrationSQL generates SQL from schema diff (Prisma-style)
 func generateMigrationSQL(diff *SchemaDiff) (string, string) {
 	var upStatements []string
-	var downStatements []string
 
 	// Generate CREATE TABLE statements for new tables only
 	for _, table := range diff.NewTables {
 		createSQL := generateCreateTableSQL(table)
 		upStatements = append(upStatements, fmt.Sprintf("-- CreateTable\n%s", createSQL))
-		downStatements = append(downStatements, fmt.Sprintf("-- DropTable\nDROP TABLE IF EXISTS \"%s\" CASCADE;", table.Name))
 	}
 
 	// Generate DROP TABLE statements for dropped tables
 	for _, tableName := range diff.DroppedTables {
 		upStatements = append(upStatements, fmt.Sprintf("-- DropTable\nDROP TABLE IF EXISTS \"%s\" CASCADE;", tableName))
-		downStatements = append(downStatements, fmt.Sprintf("-- TODO: Recreate table %s", tableName))
 	}
 
 	// Generate ALTER TABLE statements for modified tables
@@ -731,13 +685,11 @@ func generateMigrationSQL(diff *SchemaDiff) (string, string) {
 			alterSQL := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s",
 				tableDiff.Name, newCol.Name, formatColumnType(newCol))
 			upStatements = append(upStatements, fmt.Sprintf("-- AddColumn\n%s;", alterSQL))
-			downStatements = append(downStatements, fmt.Sprintf("-- DropColumn\nALTER TABLE \"%s\" DROP COLUMN IF EXISTS \"%s\";", tableDiff.Name, newCol.Name))
 		}
 
 		// Drop columns
 		for _, droppedCol := range tableDiff.DroppedColumns {
 			upStatements = append(upStatements, fmt.Sprintf("-- DropColumn\nALTER TABLE \"%s\" DROP COLUMN IF EXISTS \"%s\";", tableDiff.Name, droppedCol))
-			downStatements = append(downStatements, fmt.Sprintf("-- TODO: Recreate column %s in table %s", droppedCol, tableDiff.Name))
 		}
 
 		// Modify columns - only include meaningful changes
@@ -759,9 +711,8 @@ func generateMigrationSQL(diff *SchemaDiff) (string, string) {
 	}
 
 	upSQL := strings.Join(upStatements, "\n\n")
-	downSQL := strings.Join(downStatements, "\n\n")
 
-	return upSQL, downSQL
+	return upSQL, ""
 }
 
 // generateCreateTableSQL generates CREATE TABLE SQL from SchemaTable
@@ -794,59 +745,6 @@ func formatColumnType(col SchemaColumn) string {
 	}
 
 	return typeStr
-}
-
-// generateTemplateSQL creates template SQL for migration
-func generateTemplateSQL(name string) string {
-	return fmt.Sprintf(`-- CreateTable or AlterTable: %s
--- Add your SQL commands here
-
--- Example:
--- CREATE TABLE example (
---     id SERIAL PRIMARY KEY,
---     name VARCHAR(255) NOT NULL,
---     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
--- );`, name)
-}
-
-// generateTemplateDownSQL creates template down SQL
-func generateTemplateDownSQL() string {
-	return `-- Drop or alter statements to reverse the migration
--- Add your reverse SQL commands here
-
--- Example:
--- DROP TABLE IF EXISTS example CASCADE;`
-}
-
-// generateDownSQL generates reverse SQL from up SQL
-func generateDownSQL(upSQL string) string {
-	lines := strings.Split(upSQL, "\n")
-	var downStatements []string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(strings.ToUpper(line), "CREATE TABLE") {
-			// Extract table name
-			parts := strings.Fields(line)
-			if len(parts) >= 3 {
-				tableName := strings.Trim(parts[2], "();")
-				downStatements = append(downStatements, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE;", tableName))
-			}
-		} else if strings.HasPrefix(strings.ToUpper(line), "CREATE INDEX") {
-			// Extract index name
-			parts := strings.Fields(line)
-			if len(parts) >= 3 {
-				indexName := parts[2]
-				downStatements = append(downStatements, fmt.Sprintf("DROP INDEX IF EXISTS %s;", indexName))
-			}
-		}
-	}
-
-	if len(downStatements) == 0 {
-		return generateTemplateDownSQL()
-	}
-
-	return strings.Join(downStatements, "\n")
 }
 
 // loadMigrationsFromDir loads migrations from directory (SQL files)
@@ -912,31 +810,35 @@ func parseMigrationFile(filePath string) (*MigrationSQL, error) {
 		return nil, err
 	}
 
-	lines := strings.Split(string(content), "\n")
-	var upSQL, downSQL []string
-	var currentSection string
+	contentStr := string(content)
+	lines := strings.Split(contentStr, "\n")
+
+	// New format - everything after header comments is the migration SQL
+	var sqlLines []string
+	inHeader := true
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		if strings.HasPrefix(trimmed, "-- +migrate Up") {
-			currentSection = "up"
-			continue
-		} else if strings.HasPrefix(trimmed, "-- +migrate Down") {
-			currentSection = "down"
+		// Skip header comments (lines starting with -- Migration: or -- Created:)
+		if inHeader && (strings.HasPrefix(trimmed, "-- Migration:") ||
+			strings.HasPrefix(trimmed, "-- Created:") ||
+			trimmed == "") {
+			if strings.HasPrefix(trimmed, "-- Created:") {
+				inHeader = false
+			}
 			continue
 		}
 
-		if currentSection == "up" {
-			upSQL = append(upSQL, line)
-		} else if currentSection == "down" {
-			downSQL = append(downSQL, line)
-		}
+		inHeader = false
+		sqlLines = append(sqlLines, line)
 	}
 
+	upSQL := strings.TrimSpace(strings.Join(sqlLines, "\n"))
+
 	return &MigrationSQL{
-		Up:   strings.TrimSpace(strings.Join(upSQL, "\n")),
-		Down: strings.TrimSpace(strings.Join(downSQL, "\n")),
+		Up:   upSQL,
+		Down: "", // New format doesn't have down migrations
 	}, nil
 }
 
@@ -1265,21 +1167,20 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 			var changes []string
 
 			// Check type changes - be more intelligent about type comparison
-			currentNormalized := normalizeTypeForComparison(currentCol.Type)
-			targetNormalized := normalizeTypeForComparison(targetCol.Type)
+			if !isEquivalentType(currentCol.Type, targetCol.Type) {
+				// Debug logging to understand what's happening
+				log.Printf("🔍 Type difference detected for column %s.%s:", target.Name, colName)
+				log.Printf("  Current (DB): %s -> normalized: %s", currentCol.Type, normalizeTypeForComparison(currentCol.Type))
+				log.Printf("  Target (Schema): %s -> normalized: %s", targetCol.Type, normalizeTypeForComparison(targetCol.Type))
 
-			if currentNormalized != targetNormalized {
 				// Handle SERIAL types specially - they cannot be altered after creation
 				if strings.Contains(strings.ToUpper(targetCol.Type), "SERIAL") {
 					// Skip SERIAL type changes as they cannot be altered
 					log.Printf("⚠️  Warning: Cannot alter column %s.%s to SERIAL type - SERIAL columns must be created initially", target.Name, colName)
 				} else {
-					// Only generate type change if it's actually different and meaningful
-					if !isEquivalentType(currentCol.Type, targetCol.Type) {
-						targetType := extractDataType(targetCol.Type)
-						changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;",
-							target.Name, colName, targetType))
-					}
+					targetType := extractDataType(targetCol.Type)
+					changes = append(changes, fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;",
+						target.Name, colName, targetType))
 				}
 			}
 
@@ -1317,6 +1218,24 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 	}
 
 	return diff
+}
+
+// hasRealTableChanges checks if table changes contain meaningful modifications
+func hasRealTableChanges(modifiedTables []TableDiff) bool {
+	for _, tableDiff := range modifiedTables {
+		// New or dropped columns are always real changes
+		if len(tableDiff.NewColumns) > 0 || len(tableDiff.DroppedColumns) > 0 {
+			return true
+		}
+
+		// Check if modified columns have real changes
+		for _, modCol := range tableDiff.ModifiedColumns {
+			if len(modCol.Changes) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isPrimaryKeyColumn checks if a column is a primary key
@@ -1370,15 +1289,24 @@ func isEquivalentDefault(currentDefault, targetDefault string) bool {
 
 // normalizeTypeForComparison normalizes types specifically for comparison
 func normalizeTypeForComparison(pgType string) string {
-	// Clean up the type string - remove constraints like PRIMARY KEY
-	cleaned := strings.ReplaceAll(pgType, "PRIMARY KEY", "")
+	// Clean up the type string - remove constraints like PRIMARY KEY, UNIQUE, NOT NULL
+	cleaned := pgType
+	cleaned = strings.ReplaceAll(cleaned, "PRIMARY KEY", "")
+	cleaned = strings.ReplaceAll(cleaned, "UNIQUE", "")
+	cleaned = strings.ReplaceAll(cleaned, "NOT NULL", "")
+
+	// Remove DEFAULT clauses
+	if idx := strings.Index(strings.ToUpper(cleaned), "DEFAULT"); idx != -1 {
+		cleaned = cleaned[:idx]
+	}
+
 	cleaned = strings.TrimSpace(cleaned)
 	normalized := strings.ToUpper(cleaned)
 
 	// Handle SERIAL types - they become integer in the database
 	if strings.Contains(normalized, "SERIAL") {
 		if strings.Contains(normalized, "BIGSERIAL") {
-			return "BIGINT"
+			return "INTEGER" // Normalize to common type
 		}
 		return "INTEGER"
 	}
@@ -1388,25 +1316,44 @@ func normalizeTypeForComparison(pgType string) string {
 		return "TIMESTAMP WITH TIME ZONE"
 	}
 	if strings.Contains(normalized, "TIMESTAMP WITHOUT TIME ZONE") || normalized == "TIMESTAMP" {
-		return "TIMESTAMP"
+		return "TIMESTAMP WITHOUT TIME ZONE"
 	}
 
-	// Handle varchar variations
+	// Handle varchar variations - this is key for the issue
 	if strings.HasPrefix(normalized, "VARCHAR") || strings.HasPrefix(normalized, "CHARACTER VARYING") {
-		// Extract length if present
-		if strings.Contains(normalized, "(") {
-			return "VARCHAR" + normalized[strings.Index(normalized, "("):]
-		}
+		// For VARCHAR, ignore length differences for now to avoid unnecessary migrations
+		// Both VARCHAR(255) and CHARACTER VARYING should normalize to VARCHAR
 		return "VARCHAR"
 	}
 
-	return normalized
-}
+	// Handle TEXT type
+	if normalized == "TEXT" {
+		return "TEXT"
+	}
 
-// extractDataType extracts just the data type part from a column definition
+	// Handle INTEGER variations
+	if normalized == "INTEGER" || normalized == "INT" || normalized == "INT4" {
+		return "INTEGER"
+	}
+
+	// Handle BIGINT variations
+	if normalized == "BIGINT" || normalized == "INT8" {
+		return "BIGINT"
+	}
+
+	return normalized
+} // extractDataType extracts just the data type part from a column definition
 func extractDataType(columnType string) string {
-	// Remove PRIMARY KEY constraint
-	typeStr := strings.ReplaceAll(columnType, "PRIMARY KEY", "")
+	// Remove constraints that shouldn't be part of the data type
+	typeStr := columnType
+	typeStr = strings.ReplaceAll(typeStr, "PRIMARY KEY", "")
+	typeStr = strings.ReplaceAll(typeStr, "UNIQUE", "")
+	typeStr = strings.ReplaceAll(typeStr, "NOT NULL", "")
+
+	// Remove DEFAULT clauses
+	if idx := strings.Index(strings.ToUpper(typeStr), "DEFAULT"); idx != -1 {
+		typeStr = typeStr[:idx]
+	}
 
 	// Handle SERIAL types - convert to their underlying integer types
 	upperType := strings.ToUpper(strings.TrimSpace(typeStr))
@@ -1419,49 +1366,6 @@ func extractDataType(columnType string) string {
 
 	// Return cleaned type
 	return strings.TrimSpace(typeStr)
-}
-
-// normalizeType normalizes PostgreSQL type names for comparison
-func normalizeType(pgType string) string {
-	// Map PostgreSQL information_schema types to schema file types
-	typeMap := map[string]string{
-		"character varying":           "VARCHAR",
-		"integer":                     "INTEGER", // Both SERIAL and INTEGER normalize to INTEGER
-		"bigint":                      "BIGINT",  // Both BIGSERIAL and BIGINT normalize to BIGINT
-		"text":                        "TEXT",
-		"boolean":                     "BOOLEAN",
-		"timestamp with time zone":    "TIMESTAMP WITH TIME ZONE",
-		"timestamp without time zone": "TIMESTAMP",
-	}
-
-	// Clean up the type string - remove constraints like PRIMARY KEY
-	cleaned := strings.ReplaceAll(pgType, "PRIMARY KEY", "")
-	cleaned = strings.TrimSpace(cleaned)
-	normalized := strings.ToUpper(cleaned)
-
-	// Handle SERIAL types - they become integer in the database
-	if strings.Contains(normalized, "SERIAL") {
-		if strings.Contains(normalized, "BIGSERIAL") {
-			return "BIGINT"
-		}
-		return "INTEGER"
-	}
-
-	// Handle parentheses in types like VARCHAR(255)
-	if strings.Contains(normalized, "(") {
-		baseType := strings.Split(normalized, "(")[0]
-		if mapped, exists := typeMap[strings.ToLower(baseType)]; exists {
-			return mapped
-		}
-		return baseType
-	}
-
-	// Direct mapping
-	if mapped, exists := typeMap[strings.ToLower(cleaned)]; exists {
-		return mapped
-	}
-
-	return normalized
 }
 
 // SchemaTable represents a table in the schema
@@ -1510,161 +1414,4 @@ type ColumnDiff struct {
 	OldType string
 	NewType string
 	Changes []string
-}
-
-// generateIncrementalSchemaDiff compares the current schema file with the last known schema state
-func (m *Migrator) generateIncrementalSchemaDiff(ctx context.Context, targetSchemaPath string) (*SchemaDiff, error) {
-	// Parse current schema file
-	targetSchema, err := parseSchemaFile(targetSchemaPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse target schema: %w", err)
-	}
-
-	// Get the last known schema state from snapshots
-	lastSchema, err := m.getLastSchemaSnapshot()
-	if err != nil {
-		log.Printf("⚠️  No previous schema snapshot found, treating as initial migration")
-		// If no previous snapshot, compare with current database state
-		return m.generateSchemaDiff(ctx, targetSchemaPath)
-	}
-
-	log.Printf("📸 Comparing with last schema snapshot")
-
-	diff := &SchemaDiff{
-		NewTables:      []SchemaTable{},
-		DroppedTables:  []string{},
-		ModifiedTables: []TableDiff{},
-		NewIndexes:     []SchemaIndex{},
-		DroppedIndexes: []string{},
-	}
-
-	// Create maps for easier lookup
-	lastTables := make(map[string]SchemaTable)
-	for _, table := range lastSchema {
-		lastTables[table.Name] = table
-	}
-
-	targetTables := make(map[string]SchemaTable)
-	for _, table := range targetSchema {
-		targetTables[table.Name] = table
-	}
-
-	// Find new tables (tables that exist in target but not in last snapshot)
-	for _, targetTable := range targetSchema {
-		if _, exists := lastTables[targetTable.Name]; !exists {
-			diff.NewTables = append(diff.NewTables, targetTable)
-		}
-	}
-
-	// Find dropped tables (tables that exist in last snapshot but not in target)
-	for _, lastTable := range lastSchema {
-		if _, exists := targetTables[lastTable.Name]; !exists {
-			diff.DroppedTables = append(diff.DroppedTables, lastTable.Name)
-		}
-	}
-
-	// Find modified tables (tables that exist in both but have different columns)
-	for tableName, targetTable := range targetTables {
-		if lastTable, exists := lastTables[tableName]; exists {
-			tableDiff := compareTableColumns(lastTable, targetTable)
-			if len(tableDiff.NewColumns) > 0 || len(tableDiff.DroppedColumns) > 0 || len(tableDiff.ModifiedColumns) > 0 {
-				diff.ModifiedTables = append(diff.ModifiedTables, tableDiff)
-			}
-		}
-	}
-
-	return diff, nil
-}
-
-// saveSchemaSnapshot saves the current schema state for future comparisons
-func (m *Migrator) saveSchemaSnapshot(schemaPath, migrationID string) error {
-	if schemaPath == "" {
-		return nil
-	}
-
-	// Create snapshots directory
-	snapshotsDir := filepath.Join(m.migrationsPath, ".snapshots")
-	if err := os.MkdirAll(snapshotsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create snapshots directory: %w", err)
-	}
-
-	// Parse current schema
-	schema, err := parseSchemaFile(schemaPath)
-	if err != nil {
-		return fmt.Errorf("failed to parse schema file: %w", err)
-	}
-
-	// Create snapshot data
-	snapshot := SchemaSnapshot{
-		MigrationID: migrationID,
-		Timestamp:   time.Now(),
-		Schema:      schema,
-	}
-
-	// Save snapshot
-	snapshotPath := filepath.Join(snapshotsDir, fmt.Sprintf("%s.json", migrationID))
-	file, err := os.Create(snapshotPath)
-	if err != nil {
-		return fmt.Errorf("failed to create snapshot file: %w", err)
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(snapshot); err != nil {
-		return fmt.Errorf("failed to write snapshot: %w", err)
-	}
-
-	log.Printf("📸 Schema snapshot saved: %s", snapshotPath)
-	return nil
-}
-
-// getLastSchemaSnapshot retrieves the most recent schema snapshot
-func (m *Migrator) getLastSchemaSnapshot() ([]SchemaTable, error) {
-	snapshotsDir := filepath.Join(m.migrationsPath, ".snapshots")
-
-	// Check if snapshots directory exists
-	if _, err := os.Stat(snapshotsDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("no snapshots directory found")
-	}
-
-	// Get all snapshot files
-	files, err := os.ReadDir(snapshotsDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read snapshots directory: %w", err)
-	}
-
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no schema snapshots found")
-	}
-
-	// Sort files by name (which includes timestamp) to get the latest
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].Name() > files[j].Name() // Descending order for latest first
-	})
-
-	// Read the latest snapshot
-	latestFile := files[0]
-	snapshotPath := filepath.Join(snapshotsDir, latestFile.Name())
-
-	file, err := os.Open(snapshotPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open snapshot file: %w", err)
-	}
-	defer file.Close()
-
-	var snapshot SchemaSnapshot
-	if err := json.NewDecoder(file).Decode(&snapshot); err != nil {
-		return nil, fmt.Errorf("failed to decode snapshot: %w", err)
-	}
-
-	log.Printf("📸 Using schema snapshot from migration: %s", snapshot.MigrationID)
-	return snapshot.Schema, nil
-}
-
-// SchemaSnapshot represents a saved schema state
-type SchemaSnapshot struct {
-	MigrationID string        `json:"migration_id"`
-	Timestamp   time.Time     `json:"timestamp"`
-	Schema      []SchemaTable `json:"schema"`
 }
