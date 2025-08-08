@@ -7,25 +7,25 @@ import (
 	"os"
 	"strings"
 
-	"Rana718/Graft/internal/config"
-	"Rana718/Graft/internal/migrator"
+	"github.com/Rana718/Graft/internal/config"
+	"github.com/Rana718/Graft/internal/migrator"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
 
-// migrateCmd represents the migrate command
 var migrateCmd = &cobra.Command{
 	Use:   "migrate [name]",
 	Short: "Create a new migration",
 	Long: `Create a new migration file with the specified name.
-If no name is provided, you will be prompted to enter one.
+	If no name is provided, you will be prompted to enter one.
 
-Examples:
-  graft migrate "create users table"
-  graft migrate "add email index"
-  graft migrate  # Interactive mode`,
+	Examples:
+	  graft migrate "create users table"
+	  graft migrate "add email index"
+	  graft migrate  # Interactive mode`,
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -44,7 +44,6 @@ Examples:
 		if len(args) > 0 {
 			migrationName = strings.Join(args, " ")
 		} else {
-			// Interactive mode
 			fmt.Print("Enter migration name: ")
 			reader := bufio.NewReader(os.Stdin)
 			input, err := reader.ReadString('\n')
@@ -58,7 +57,6 @@ Examples:
 			return fmt.Errorf("migration name cannot be empty")
 		}
 
-		// Connect to database
 		dbURL, err := cfg.GetDatabaseURL()
 		if err != nil {
 			return err

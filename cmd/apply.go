@@ -4,25 +4,25 @@ import (
 	"context"
 	"fmt"
 
-	"Rana718/Graft/internal/config"
-	"Rana718/Graft/internal/migrator"
+	"github.com/Rana718/Graft/internal/config"
+	"github.com/Rana718/Graft/internal/migrator"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
 
-// applyCmd represents the apply command
 var applyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "Apply pending migrations",
 	Long: `Apply all pending migrations to the database.
-This command will:
-1. Check for migration conflicts
-2. Prompt for backup if conflicts are detected
-3. Apply all pending migrations in order
-4. Update migration tracking table
+	This command will:
+	1. Check for migration conflicts
+	2. Prompt for backup if conflicts are detected
+	3. Apply all pending migrations in order
+	4. Update migration tracking table
 
-Use --force to skip confirmation prompts.`,
+	Use --force to skip confirmation prompts.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -37,7 +37,6 @@ Use --force to skip confirmation prompts.`,
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		// Connect to database
 		dbURL, err := cfg.GetDatabaseURL()
 		if err != nil {
 			return err

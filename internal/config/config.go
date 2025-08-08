@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Config represents the graft configuration
 type Config struct {
 	SchemaPath     string   `json:"schema_path" mapstructure:"schema_path"`
 	MigrationsPath string   `json:"migrations_path" mapstructure:"migrations_path"`
@@ -17,21 +16,18 @@ type Config struct {
 	Database       Database `json:"database" mapstructure:"database"`
 }
 
-// Database represents database configuration
 type Database struct {
 	Provider string `json:"provider" mapstructure:"provider"`
 	URLEnv   string `json:"url_env" mapstructure:"url_env"`
 }
 
-// Load loads the configuration from file
 func Load() (*Config, error) {
 	var cfg Config
-	
+
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// Set defaults if not specified
 	if cfg.SchemaPath == "" {
 		cfg.SchemaPath = "db/schema.sql"
 	}
@@ -51,7 +47,6 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-// GetDatabaseURL returns the database URL from environment
 func (c *Config) GetDatabaseURL() (string, error) {
 	dbURL := os.Getenv(c.Database.URLEnv)
 	if dbURL == "" {
@@ -60,7 +55,6 @@ func (c *Config) GetDatabaseURL() (string, error) {
 	return dbURL, nil
 }
 
-// EnsureDirectories creates necessary directories
 func (c *Config) EnsureDirectories() error {
 	dirs := []string{
 		c.MigrationsPath,
@@ -80,7 +74,6 @@ func (c *Config) EnsureDirectories() error {
 	return nil
 }
 
-// Validate validates the configuration
 func (c *Config) Validate() error {
 	if c.Database.Provider != "postgresql" {
 		return fmt.Errorf("unsupported database provider: %s", c.Database.Provider)

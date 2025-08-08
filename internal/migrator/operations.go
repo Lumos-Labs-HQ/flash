@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-// Apply applies pending migrations for development
 func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) error {
 	log.Println("🚀 Running graft apply...")
 
@@ -17,20 +16,16 @@ func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) er
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
 
-	// Generate new migration if name provided
 	if name != "" {
 		if err := m.GenerateMigration(ctx, name, schemaPath); err != nil {
 			return fmt.Errorf("failed to generate migration: %w", err)
 		}
 	}
 
-	// Apply all pending migrations with conflict detection
 	return m.ApplyWithConflictDetection(ctx)
 }
 
-// ApplyWithConflictDetection applies migrations with comprehensive conflict checking
 func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
-	// First, clean up any broken migration records
 	if err := m.cleanupBrokenMigrationRecords(ctx); err != nil {
 		log.Printf("⚠️  Warning: Failed to cleanup broken migration records: %v", err)
 	}
@@ -59,7 +54,6 @@ func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
 
 	log.Printf("📋 Found %d pending migrations", len(pendingMigrations))
 
-	// Check for conflicts before applying any migrations
 	log.Println("🔍 Checking for migration conflicts...")
 	hasConflicts, conflicts, err := m.hasConflicts(ctx, pendingMigrations)
 	if err != nil {
@@ -67,11 +61,9 @@ func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
 	}
 
 	if hasConflicts {
-		// Handle conflicts interactively like Prisma
 		return m.handleConflictsInteractively(ctx, conflicts, pendingMigrations)
 	}
 
-	// Apply migrations one by one
 	for _, migration := range pendingMigrations {
 		if err := m.applySingleMigration(ctx, migration); err != nil {
 			return err
@@ -82,7 +74,6 @@ func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
 	return nil
 }
 
-// handleConflictsInteractively provides Prisma-like interactive conflict resolution
 func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts []MigrationConflict, pendingMigrations []Migration) error {
 	fmt.Println("\n⚠️  There are conflicts that need to be resolved:")
 	fmt.Println()
@@ -99,7 +90,6 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 		}
 	}
 
-	// Handle NOT NULL conflicts with interactive options
 	if len(notNullConflicts) > 0 {
 		for _, conflict := range notNullConflicts {
 			fmt.Printf("❌ %s\n", conflict.Description)
@@ -127,7 +117,6 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 		}
 	}
 
-	// Handle other conflicts with warnings
 	if len(otherConflicts) > 0 {
 		fmt.Println("⚠️  Other warnings detected:")
 		for _, conflict := range otherConflicts {
@@ -141,7 +130,6 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 		}
 	}
 
-	// Apply migrations if we get here
 	for _, migration := range pendingMigrations {
 		if err := m.applySingleMigration(ctx, migration); err != nil {
 			return err
@@ -152,7 +140,6 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 	return nil
 }
 
-// handleResetAndApply handles the reset database option
 func (m *Migrator) handleResetAndApply(ctx context.Context, pendingMigrations []Migration) error {
 	fmt.Println()
 	fmt.Println("🗑️  This will:")
@@ -166,7 +153,6 @@ func (m *Migrator) handleResetAndApply(ctx context.Context, pendingMigrations []
 		return fmt.Errorf("reset cancelled")
 	}
 
-	// Offer backup before reset
 	if m.askUserConfirmation("Create a backup before reset?") {
 		backupPath, err := m.createBackup(ctx, "Pre-migration-reset backup")
 		if err != nil {
@@ -180,7 +166,6 @@ func (m *Migrator) handleResetAndApply(ctx context.Context, pendingMigrations []
 		}
 	}
 
-	// Get all tables and drop them
 	tables, err := m.getAllTableNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get table names: %w", err)
@@ -194,7 +179,6 @@ func (m *Migrator) handleResetAndApply(ctx context.Context, pendingMigrations []
 		}
 	}
 
-	// Recreate migrations table
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("failed to recreate migrations table: %w", err)
 	}

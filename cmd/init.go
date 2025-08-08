@@ -9,18 +9,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize graft in the current project",
 	Long: `Initialize graft in the current project by creating:
-- graft.config.json - Configuration file
-- db/schema/ - Schema directory with example schema
-- db/queries/ - SQL queries directory for SQLC
-- sqlc.yml - SQLC configuration file
-- .env.example - Environment variables template
+	- graft.config.json - Configuration file
+	- db/schema/ - Schema directory with example schema
+	- db/queries/ - SQL queries directory for SQLC
+	- sqlc.yml - SQLC configuration file
+	- .env - Environment variables template
 
-Note: Migration and backup directories are created automatically when needed.`,
+	Note: Migration and backup directories are created automatically when needed.`,
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return initializeProject()
 	},
@@ -33,7 +33,6 @@ func init() {
 func initializeProject() error {
 	fmt.Println("🚀 Initializing Graft in current project...")
 
-	// Create default configuration
 	config := map[string]interface{}{
 		"schema_path":      "db/schema/schema.sql",
 		"migrations_path":  "db/migrations",
@@ -45,7 +44,6 @@ func initializeProject() error {
 		},
 	}
 
-	// Create config file
 	configFile, err := os.Create("graft.config.json")
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
@@ -60,7 +58,6 @@ func initializeProject() error {
 
 	fmt.Println("✅ Created graft.config.json")
 
-	// Create directories (only essential ones, others created on demand)
 	directories := []string{
 		"db/schema",
 		"db/queries",
@@ -73,7 +70,6 @@ func initializeProject() error {
 		fmt.Printf("✅ Created directory: %s/\n", dir)
 	}
 
-	// Create SQLC configuration file
 	sqlcConfig := `version: "2"
 sql:
   - engine: "postgresql"
@@ -91,7 +87,6 @@ sql:
 	}
 	fmt.Println("✅ Created sqlc.yml")
 
-	// Create example schema file
 	schemaPath := filepath.Join("db", "schema", "schema.sql")
 	schemaContent := `-- Example schema file
 -- Add your database schema here
@@ -112,7 +107,6 @@ CREATE TABLE users (
 	}
 	fmt.Printf("✅ Created example schema: %s\n", schemaPath)
 
-	// Create example queries file
 	queriesPath := filepath.Join("db", "queries", "users.sql")
 	queriesContent := `-- Example queries for SQLC
 -- Add your SQL queries here
@@ -134,7 +128,6 @@ RETURNING id, name, email, created_at, updated_at;
 	}
 	fmt.Printf("✅ Created example queries: %s\n", queriesPath)
 
-	// Create .env example
 	envContent := `# Database connection URL
 		# Replace with your actual database credentials
 		DATABASE_URL=postgres://username:password@localhost:5432/database_name
