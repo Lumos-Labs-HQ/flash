@@ -680,9 +680,9 @@ func generateMigrationSQL(diff *SchemaDiff) (string, string) {
 
 	// Generate ALTER TABLE statements for modified tables
 	for _, tableDiff := range diff.ModifiedTables {
-		// Add new columns - use clean format
+		// Add new columns - use clean format with IF NOT EXISTS for safety
 		for _, newCol := range tableDiff.NewColumns {
-			alterSQL := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s",
+			alterSQL := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN IF NOT EXISTS \"%s\" %s",
 				tableDiff.Name, newCol.Name, formatColumnType(newCol))
 			upStatements = append(upStatements, fmt.Sprintf("-- AddColumn\n%s;", alterSQL))
 		}
@@ -1072,15 +1072,21 @@ func (m *Migrator) getTableColumns(ctx context.Context, tableName string) ([]Sch
 
 // generateSchemaDiff compares current schema with target schema
 func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath string) (*SchemaDiff, error) {
+	log.Printf("🔍 Getting current database schema...")
 	currentSchema, err := m.getCurrentSchema(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current schema: %w", err)
 	}
 
+	log.Printf("🔍 Parsing target schema file: %s", targetSchemaPath)
 	targetSchema, err := parseSchemaFile(targetSchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target schema: %w", err)
 	}
+
+	log.Printf("📊 Schema comparison:")
+	log.Printf("  Current schema has %d tables", len(currentSchema))
+	log.Printf("  Target schema has %d tables", len(targetSchema))
 
 	diff := &SchemaDiff{
 		NewTables:      []SchemaTable{},
@@ -1118,6 +1124,10 @@ func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath stri
 	// Find modified tables (tables that exist in both but have different columns)
 	for tableName, targetTable := range targetTables {
 		if currentTable, exists := currentTables[tableName]; exists {
+			log.Printf("🔍 Comparing table: %s", tableName)
+			log.Printf("  Current columns (%d): %v", len(currentTable.Columns), getColumnNames(currentTable.Columns))
+			log.Printf("  Target columns (%d): %v", len(targetTable.Columns), getColumnNames(targetTable.Columns))
+
 			tableDiff := compareTableColumns(currentTable, targetTable)
 			if len(tableDiff.NewColumns) > 0 || len(tableDiff.DroppedColumns) > 0 || len(tableDiff.ModifiedColumns) > 0 {
 				diff.ModifiedTables = append(diff.ModifiedTables, tableDiff)
@@ -1126,6 +1136,15 @@ func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath stri
 	}
 
 	return diff, nil
+}
+
+// getColumnNames extracts column names from a slice of SchemaColumn for debugging
+func getColumnNames(columns []SchemaColumn) []string {
+	names := make([]string, len(columns))
+	for i, col := range columns {
+		names[i] = col.Name
+	}
+	return names
 }
 
 // compareTableColumns compares columns between two tables
@@ -1150,6 +1169,7 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 	// Find new columns
 	for _, targetCol := range target.Columns {
 		if _, exists := currentCols[targetCol.Name]; !exists {
+			log.Printf("🔍 New column detected: %s.%s (%s)", target.Name, targetCol.Name, targetCol.Type)
 			diff.NewColumns = append(diff.NewColumns, targetCol)
 		}
 	}
@@ -1157,6 +1177,7 @@ func compareTableColumns(current, target SchemaTable) TableDiff {
 	// Find dropped columns
 	for _, currentCol := range current.Columns {
 		if _, exists := targetCols[currentCol.Name]; !exists {
+			log.Printf("🔍 Dropped column detected: %s.%s", target.Name, currentCol.Name)
 			diff.DroppedColumns = append(diff.DroppedColumns, currentCol.Name)
 		}
 	}

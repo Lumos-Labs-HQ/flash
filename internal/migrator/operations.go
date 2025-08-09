@@ -108,9 +108,9 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 
 		switch choice {
 		case "1":
-			return m.handleResetAndApply(ctx, pendingMigrations)
+			return m.handleResetAndApply(ctx)
 		case "2":
-			return m.handleAddDefaultValue(ctx, notNullConflicts, pendingMigrations)
+			return m.handleAddDefaultValue(notNullConflicts, pendingMigrations)
 		case "3":
 			log.Println("❌ Migration cancelled by user")
 			return fmt.Errorf("migration cancelled")
@@ -140,7 +140,7 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 	return nil
 }
 
-func (m *Migrator) handleResetAndApply(ctx context.Context, pendingMigrations []Migration) error {
+func (m *Migrator) handleResetAndApply(ctx context.Context) error {
 	fmt.Println()
 	fmt.Println("🗑️  This will:")
 	fmt.Println("   • Drop all tables and data")
@@ -201,7 +201,7 @@ func (m *Migrator) handleResetAndApply(ctx context.Context, pendingMigrations []
 }
 
 // handleAddDefaultValue guides user through adding default values
-func (m *Migrator) handleAddDefaultValue(ctx context.Context, conflicts []MigrationConflict, pendingMigrations []Migration) error {
+func (m *Migrator) handleAddDefaultValue(conflicts []MigrationConflict, pendingMigrations []Migration) error {
 	fmt.Println()
 	fmt.Println("📝 To proceed, you need to add DEFAULT values to the following columns:")
 	fmt.Println()
