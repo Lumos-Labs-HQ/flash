@@ -1,0 +1,10 @@
+{
+  "backup_path": "db/backup",
+  "database": {
+    "provider": "postgresql",
+    "url_env": "DATABASE_URL"
+  },
+  "migrations_path": "db/migrations",
+  "schema_path": "db/schema/schema.sql",
+  "sqlc_config_path": "sqlc.yml"
+}

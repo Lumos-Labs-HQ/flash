@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-08-09_18-06-37",
+  "version": "1_migrations",
+  "tables": {
+    "users": [
+      {
+        "created_at": "2025-08-09T12:35:18.549258Z",
+        "email": "johnss.doe@example.com",
+        "id": 1,
+        "name": "Johns Doe",
+        "updated_at": "2025-08-09T12:35:18.549258Z"
+      },
+      {
+        "created_at": "2025-08-09T12:35:18.770029Z",
+        "email": "janeee.smith@example.com",
+        "id": 2,
+        "name": "Janeee Smith",
+        "updated_at": "2025-08-09T12:35:18.770029Z"
+      }
+    ]
+  },
+  "comment": "Pre-migration-reset backup"
+}
