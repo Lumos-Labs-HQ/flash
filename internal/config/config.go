@@ -58,7 +58,6 @@ func (c *Config) GetDatabaseURL() (string, error) {
 func (c *Config) EnsureDirectories() error {
 	dirs := []string{
 		c.MigrationsPath,
-		c.BackupPath,
 		filepath.Dir(c.SchemaPath),
 	}
 

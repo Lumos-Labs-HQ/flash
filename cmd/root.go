@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var (
+	cfgFile string
+	Version = "1.0.0"
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "graft",
@@ -24,6 +27,14 @@ var rootCmd = &cobra.Command{
 	- Migration tracking and validation
 	- Automatic backup system
 	- SQLC integration`,
+
+	Run: func(cmd *cobra.Command, args []string) {
+		showVersion, _ := cmd.Flags().GetBool("version")
+		if showVersion {
+			fmt.Printf("Graft CLI version %s\n", Version)
+			os.Exit(0)
+		}
+	},
 }
 
 func Execute() error {
@@ -36,6 +47,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./graft.config.json)")
 	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+
+	rootCmd.Flags().BoolP("version", "v", false, "Show CLI version")
 }
 
 func initConfig() {

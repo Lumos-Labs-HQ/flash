@@ -4,52 +4,41 @@
 BINARY_NAME=graft
 BINARY_UNIX=$(BINARY_NAME)_unix
 BINARY_WINDOWS=$(BINARY_NAME).exe
-VERSION=1.0.0
 BUILD_DIR=build
 
-# Default target
+# Default target now builds for all platforms
 .PHONY: all
-all: clean build
-
-# Build the binary
-.PHONY: build
-build:
-	@echo "Building $(BINARY_NAME)..."
-	go build -ldflags "-X main.version=$(VERSION)" -o $(BINARY_NAME) .
-	@echo "Build complete: $(BINARY_NAME)"
+all: clean build-all
 
 # Build for multiple platforms
 .PHONY: build-all
-build-all: clean
+build-all:
 	@echo "Building for multiple platforms..."
 	@mkdir -p $(BUILD_DIR)
-	
+
 	# Linux
-	GOOS=linux GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_UNIX) .
-	
+	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_UNIX) .
+
 	# Windows
-	GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_WINDOWS) .
-	
+	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_WINDOWS) .
+
 	# macOS
-	GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)_darwin .
-	
+	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)_darwin .
+
 	@echo "Cross-platform build complete in $(BUILD_DIR)/"
 
-# Install the binary to GOPATH/bin
+# Install the binary to GOPATH/bin (Linux build used by default)
 .PHONY: install
-install: build
-	@echo "Installing $(BINARY_NAME) to $(GOPATH)/bin..."
-	cp $(BINARY_NAME) $(GOPATH)/bin/
+install: build-all
+	@echo "Installing $(BINARY_NAME) (Linux version) to $(GOPATH)/bin..."
+	cp $(BUILD_DIR)/$(BINARY_UNIX) $(GOPATH)/bin/$(BINARY_NAME)
 	@echo "Installation complete"
 
 # Clean build artifacts
 .PHONY: clean
 clean:
 	@echo "Cleaning build artifacts..."
-	@rm -f $(BINARY_NAME)
-	@rm -f $(BINARY_UNIX)
-	@rm -f $(BINARY_WINDOWS)
-	@rm -rf $(BUILD_DIR)
+	@rm -rf $(BINARY_NAME) $(BINARY_UNIX) $(BINARY_WINDOWS) $(BUILD_DIR) release
 	@echo "Clean complete"
 
 # Run tests
@@ -77,10 +66,10 @@ lint:
 	@echo "Linting code..."
 	golangci-lint run
 
-# Run the CLI with help
+# Run the CLI with help (Linux binary used by default)
 .PHONY: run
-run: build
-	./$(BINARY_NAME) --help
+run: build-all
+	./$(BUILD_DIR)/$(BINARY_UNIX) --help
 
 # Development setup
 .PHONY: dev-setup
@@ -95,24 +84,24 @@ dev-setup: deps
 # Create a release
 .PHONY: release
 release: clean build-all
-	@echo "Creating release $(VERSION)..."
+	@echo "Creating release..."
 	@mkdir -p release
 	@cp $(BUILD_DIR)/* release/
-	@echo "Release $(VERSION) created in release/"
+	@echo "Release created in release/"
 
 # Show help
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  build      - Build the binary"
-	@echo "  build-all  - Build for multiple platforms"
-	@echo "  install    - Install binary to GOPATH/bin"
-	@echo "  clean      - Clean build artifacts"
-	@echo "  test       - Run tests"
-	@echo "  deps       - Download dependencies"
-	@echo "  fmt        - Format code"
-	@echo "  lint       - Lint code"
-	@echo "  run        - Build and run with --help"
-	@echo "  dev-setup  - Setup development environment"
-	@echo "  release    - Create release build"
-	@echo "  help       - Show this help"
+	@echo "  all         - Clean and build for all platforms"
+	@echo "  build-all   - Build for multiple platforms"
+	@echo "  install     - Install Linux binary to GOPATH/bin"
+	@echo "  clean       - Clean build artifacts"
+	@echo "  test        - Run tests"
+	@echo "  deps        - Download dependencies"
+	@echo "  fmt         - Format code"
+	@echo "  lint        - Lint code"
+	@echo "  run         - Build and run Linux binary with --help"
+	@echo "  dev-setup   - Setup development environment"
+	@echo "  release     - Create release build"
+	@echo "  help        - Show this help"

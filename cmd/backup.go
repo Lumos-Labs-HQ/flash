@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Rana718/Graft/internal/backup"
 	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/migrator"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -69,10 +69,19 @@ var backupCmd = &cobra.Command{
 			return fmt.Errorf("failed to connect to database: %w", err)
 		}
 
-		force, _ := cmd.Flags().GetBool("force")
-		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
+		// Perform backup using backup package
+		backupPath, err := backup.PerformBackup(ctx, db, cfg.BackupPath, comment)
+		if err != nil {
+			return err
+		}
 
-		return m.Backup(ctx, comment)
+		if backupPath != "" {
+			fmt.Printf("✅ Backup completed: %s\n", backupPath)
+		} else {
+			fmt.Println("No backup created (database is empty)")
+		}
+
+		return nil
 	},
 }
 

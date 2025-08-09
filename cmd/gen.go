@@ -24,6 +24,7 @@ var genCmd = &cobra.Command{
 	This command will:
 	1. Run 'sqlc generate' to update Go types
 	2. Report any errors from the generation process`,
+
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

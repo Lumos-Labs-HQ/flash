@@ -88,10 +88,10 @@ sql:
 	fmt.Println("✅ Created sqlc.yml")
 
 	schemaPath := filepath.Join("db", "schema", "schema.sql")
-	schemaContent := `-- Example schema file
+	schemaContent := `
 -- Add your database schema here
 
--- Example table:
+-- User table:
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -108,10 +108,9 @@ CREATE TABLE users (
 	fmt.Printf("✅ Created example schema: %s\n", schemaPath)
 
 	queriesPath := filepath.Join("db", "queries", "users.sql")
-	queriesContent := `-- Example queries for SQLC
+	queriesContent := `
 -- Add your SQL queries here
 
--- Example queries:
 -- name: GetUser :one
 SELECT id, name, email, created_at, updated_at FROM users
 WHERE id = $1 LIMIT 1;
