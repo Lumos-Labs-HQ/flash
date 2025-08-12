@@ -721,3 +721,201 @@ func (m *Migrator) generateSchemaDiff(ctx context.Context, targetSchemaPath stri
 
 	return diff, nil
 }
+
+// PullSchema gets the current database schema (public method for pull command)
+func (m *Migrator) PullSchema(ctx context.Context) ([]types.SchemaTable, error) {
+	return m.getCurrentSchemaWithConstraints(ctx)
+}
+
+// getCurrentSchemaWithConstraints gets the current database schema including constraints and indexes
+func (m *Migrator) getCurrentSchemaWithConstraints(ctx context.Context) ([]types.SchemaTable, error) {
+	var tables []types.SchemaTable
+
+	query := `
+		SELECT table_name 
+		FROM information_schema.tables 
+		WHERE table_schema = 'public' 
+		AND table_type = 'BASE TABLE'
+		AND table_name != '_graft_migrations'
+		ORDER BY table_name`
+
+	rows, err := m.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tableNames []string
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			continue
+		}
+		tableNames = append(tableNames, tableName)
+	}
+
+	for _, tableName := range tableNames {
+		columns, err := m.getTableColumnsWithConstraints(ctx, tableName)
+		if err != nil {
+			continue
+		}
+
+		indexes, err := m.getTableIndexes(ctx, tableName)
+		if err != nil {
+			// Don't fail if we can't get indexes, just log and continue
+			continue
+		}
+
+		tables = append(tables, types.SchemaTable{
+			Name:    tableName,
+			Columns: columns,
+			Indexes: indexes,
+		})
+	}
+
+	return tables, nil
+}
+
+// getTableColumnsWithConstraints gets columns for specific table including constraints
+func (m *Migrator) getTableColumnsWithConstraints(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
+	query := `
+		SELECT 
+			c.column_name, 
+			c.data_type, 
+			c.is_nullable, 
+			c.column_default,
+			CASE 
+				WHEN pk.column_name IS NOT NULL THEN true 
+				ELSE false 
+			END as is_primary_key,
+			CASE 
+				WHEN uq.column_name IS NOT NULL THEN true 
+				ELSE false 
+			END as is_unique
+		FROM information_schema.columns c
+		LEFT JOIN (
+			SELECT ku.column_name
+			FROM information_schema.table_constraints tc
+			JOIN information_schema.key_column_usage ku 
+				ON tc.constraint_name = ku.constraint_name
+			WHERE tc.constraint_type = 'PRIMARY KEY' 
+				AND tc.table_schema = 'public' 
+				AND tc.table_name = $1
+		) pk ON c.column_name = pk.column_name
+		LEFT JOIN (
+			SELECT ku.column_name
+			FROM information_schema.table_constraints tc
+			JOIN information_schema.key_column_usage ku 
+				ON tc.constraint_name = ku.constraint_name
+			WHERE tc.constraint_type = 'UNIQUE' 
+				AND tc.table_schema = 'public' 
+				AND tc.table_name = $1
+		) uq ON c.column_name = uq.column_name
+		WHERE c.table_schema = 'public' AND c.table_name = $1
+		ORDER BY c.ordinal_position`
+
+	rows, err := m.db.Query(ctx, query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []types.SchemaColumn
+	for rows.Next() {
+		var colName, dataType, isNullable string
+		var colDefault *string
+		var isPrimaryKey, isUnique bool
+
+		if err := rows.Scan(&colName, &dataType, &isNullable, &colDefault, &isPrimaryKey, &isUnique); err != nil {
+			continue
+		}
+
+		// Build the type string with constraints
+		typeStr := dataType
+		if isPrimaryKey {
+			typeStr += " PRIMARY KEY"
+		} else if isUnique {
+			typeStr += " UNIQUE"
+		}
+
+		col := types.SchemaColumn{
+			Name:     colName,
+			Type:     typeStr,
+			Nullable: isNullable == "YES" && !isPrimaryKey, // Primary keys are never nullable
+		}
+
+		if colDefault != nil {
+			col.Default = *colDefault
+		}
+
+		columns = append(columns, col)
+	}
+
+	return columns, nil
+}
+
+// getTableIndexes gets indexes for specific table
+func (m *Migrator) getTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
+	query := `
+		SELECT 
+			i.indexname,
+			i.indexdef,
+			CASE 
+				WHEN i.indexdef LIKE '%UNIQUE%' THEN true 
+				ELSE false 
+			END as is_unique
+		FROM pg_indexes i
+		WHERE i.schemaname = 'public' 
+		AND i.tablename = $1
+		AND i.indexname NOT LIKE '%_pkey'  -- Exclude primary key indexes
+		ORDER BY i.indexname`
+
+	rows, err := m.db.Query(ctx, query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes []types.SchemaIndex
+	for rows.Next() {
+		var indexName, indexDef string
+		var isUnique bool
+
+		if err := rows.Scan(&indexName, &indexDef, &isUnique); err != nil {
+			continue
+		}
+
+		// Parse column names from index definition
+		columns := parseIndexColumns(indexDef)
+
+		indexes = append(indexes, types.SchemaIndex{
+			Name:    indexName,
+			Table:   tableName,
+			Columns: columns,
+			Unique:  isUnique,
+		})
+	}
+
+	return indexes, nil
+}
+
+// parseIndexColumns extracts column names from index definition
+func parseIndexColumns(indexDef string) []string {
+	// Simple parsing - look for column names in parentheses
+	start := strings.Index(indexDef, "(")
+	end := strings.LastIndex(indexDef, ")")
+
+	if start == -1 || end == -1 || start >= end {
+		return []string{}
+	}
+
+	colsStr := indexDef[start+1 : end]
+	columns := strings.Split(colsStr, ",")
+
+	// Clean up column names
+	for i, col := range columns {
+		columns[i] = strings.TrimSpace(col)
+	}
+
+	return columns
+}
