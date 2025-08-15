@@ -1,17 +1,20 @@
 ﻿package migrator
 
 import (
-	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Rana718/Graft/internal/types"
+	"github.com/Rana718/Graft/internal/utils"
 )
 
-func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) error {
+// Apply runs migrations with optional generation
+func (m *Migrator) Apply(ctx context.Context, name, schemaPath string) error {
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("failed to create migrations table: %w", err)
 	}
@@ -25,10 +28,9 @@ func (m *Migrator) Apply(ctx context.Context, name string, schemaPath string) er
 	return m.ApplyWithConflictDetection(ctx)
 }
 
+// ApplyWithConflictDetection applies pending migrations with conflict detection
 func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
-	if err := m.cleanupBrokenMigrationRecords(ctx); err != nil {
-		log.Printf("Warning: Failed to cleanup broken migration records: %v", err)
-	}
+	_ = m.cleanupBrokenMigrationRecords(ctx) // Warning only
 
 	migrations, err := m.loadMigrationsFromDir()
 	if err != nil {
@@ -40,116 +42,164 @@ func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
 		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
-	var pendingMigrations []types.Migration
-	for _, migration := range migrations {
-		if _, exists := applied[migration.ID]; !exists {
-			pendingMigrations = append(pendingMigrations, migration)
-		}
-	}
-
-	if len(pendingMigrations) == 0 {
-		log.Println("No pending migrations")
+	pending := utils.FilterPendingMigrations(migrations, applied)
+	if len(pending) == 0 {
+		fmt.Println("No pending migrations")
 		return nil
 	}
 
-	log.Printf("Found %d pending migrations", len(pendingMigrations))
+	fmt.Printf("Found %d pending migrations\n", len(pending))
 
-	hasConflicts, conflicts, err := m.hasConflicts(ctx, pendingMigrations)
-	if err != nil {
+	if hasConflicts, conflicts, err := m.hasConflicts(ctx, pending); err != nil {
 		return fmt.Errorf("failed to check for conflicts: %w", err)
+	} else if hasConflicts {
+		return m.handleConflictsInteractively(ctx, conflicts, pending)
 	}
 
-	if hasConflicts {
-		return m.handleConflictsInteractively(ctx, conflicts, pendingMigrations)
-	}
-
-	for _, migration := range pendingMigrations {
-		if err := m.applySingleMigration(ctx, migration); err != nil {
-			return fmt.Errorf("failed to apply migration %s: %w", migration.ID, err)
-		}
-	}
-
-	log.Println("All migrations applied successfully")
-	return nil
+	return m.applyMigrations(ctx, pending)
 }
 
-func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts []types.MigrationConflict, pendingMigrations []types.Migration) error {
-	fmt.Println("\n  Conflicts detected:")
+// handleConflictsInteractively handles migration conflicts interactively
+func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts []types.MigrationConflict, pending []types.Migration) error {
+	fmt.Println("⚠️  Migration conflicts detected:")
+	for _, c := range conflicts {
+		fmt.Printf("  - %s\n", c.Description)
+	}
 	fmt.Println()
 
-	notNullConflicts := []types.MigrationConflict{}
-	otherConflicts := []types.MigrationConflict{}
+	if m.force {
+		fmt.Println("🚀 Force flag detected - resetting database and applying migrations...")
+		return m.handleResetAndApply(ctx)
+	}
 
-	for _, conflict := range conflicts {
-		if conflict.Type == "not_null_constraint" {
-			notNullConflicts = append(notNullConflicts, conflict)
+	input := &utils.InputUtils{}
+	choice := input.GetUserChoice([]string{"y", "n"}, "Reset database to resolve conflicts? This will drop all tables and data (Y/N)", false)
+
+	if strings.ToLower(choice) != "y" {
+		fmt.Println("Migration aborted due to conflicts")
+		return fmt.Errorf("migration aborted due to conflicts")
+	}
+
+	if input.GetUserChoice([]string{"y", "n"}, "Create backup before reset? (Y/N)", false) == "y" {
+		fmt.Println("📦 Creating backup...")
+		if err := m.createBackup(); err != nil {
+			fmt.Printf("⚠️  Backup failed: %v\n   Continuing without backup...\n", err)
 		} else {
-			otherConflicts = append(otherConflicts, conflict)
+			fmt.Println("✅ Backup created successfully")
 		}
 	}
 
-	if len(notNullConflicts) > 0 {
-		for _, conflict := range notNullConflicts {
-			fmt.Printf(" %s: %s\n", conflict.Type, conflict.Description)
-			for _, solution := range conflict.Solutions {
-				fmt.Printf("    %s\n", solution)
-			}
-			fmt.Println()
-		}
+	return m.handleResetAndApply(ctx)
+}
 
-		choice := m.getUserChoice([]string{"add-defaults", "skip", "reset"}, "Choose action for NOT NULL conflicts")
-		switch choice {
-		case "add-defaults":
-			return m.handleAddDefaultValue(notNullConflicts)
-		case "skip":
-			log.Println("Skipping migrations due to conflicts")
-			return nil
-		case "reset":
-			return m.handleResetAndApply(ctx)
+// handleResetAndApply resets DB and applies all migrations
+func (m *Migrator) handleResetAndApply(ctx context.Context) error {
+	fmt.Println("🔄 Resetting database and applying all migrations...")
+	tables, err := m.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names: %w", err)
+	}
+
+	for _, table := range tables {
+		if err := m.adapter.DropTable(ctx, table); err != nil {
+			fmt.Printf("Warning: Failed to drop table %s: %v\n", table, err)
 		}
 	}
 
-	if len(otherConflicts) > 0 {
-		for _, conflict := range otherConflicts {
-			fmt.Printf("❌ %s: %s\n", conflict.Type, conflict.Description)
-			for _, solution := range conflict.Solutions {
-				fmt.Printf("   💡 %s\n", solution)
-			}
-			fmt.Println()
-		}
-
-		choice := m.getUserChoice([]string{"continue", "skip", "reset"}, "Choose action for other conflicts")
-		switch choice {
-		case "continue":
-			log.Println("  Continuing despite conflicts...")
-		case "skip":
-			log.Println("Skipping migrations due to conflicts")
-			return nil
-		case "reset":
-			return m.handleResetAndApply(ctx)
-		}
+	if err := m.createMigrationsTable(ctx); err != nil {
+		return fmt.Errorf("failed to recreate migrations table: %w", err)
 	}
 
-	for _, migration := range pendingMigrations {
+	allMigrations, err := m.loadMigrationsFromDir()
+	if err != nil {
+		return fmt.Errorf("failed to load migrations: %w", err)
+	}
+
+	return m.applyMigrations(ctx, allMigrations)
+}
+
+// applyMigrations applies a list of migrations
+func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migration) error {
+	for _, migration := range migrations {
 		if err := m.applySingleMigration(ctx, migration); err != nil {
 			return fmt.Errorf("failed to apply migration %s: %w", migration.ID, err)
 		}
 	}
-
-	log.Println(" All migrations applied successfully")
+	fmt.Println("✅ Migrations applied successfully")
 	return nil
 }
 
-func (m *Migrator) handleResetAndApply(ctx context.Context) error {
-	fmt.Println("  This will drop all tables and apply all migrations")
-	fmt.Println()
+// createBackup creates a database backup using the adapter
+func (m *Migrator) createBackup() error {
+	ctx := context.Background()
+
+	tables, err := m.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get table names: %w", err)
+	}
+
+	var dataTables []string
+	for _, table := range tables {
+		if table != "_graft_migrations" {
+			dataTables = append(dataTables, table)
+		}
+	}
+
+	if len(dataTables) == 0 {
+		return nil 
+	}
+
+	backup := types.BackupData{
+		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+		Version:   "1.0",
+		Tables:    make(map[string]interface{}),
+		Comment:   "Pre-reset backup",
+	}
+
+	for _, table := range dataTables {
+		data, err := m.adapter.GetTableData(ctx, table)
+		if err != nil {
+			fmt.Printf("Warning: Failed to backup table %s: %v\n", table, err)
+			continue
+		}
+		if len(data) > 0 {
+			backup.Tables[table] = data
+		}
+	}
+
+	backupDir := "db/backup"
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		return fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	filename := fmt.Sprintf("backup_%s.json",
+		time.Now().Format("2006-01-02_15-04-05"))
+	backupPath := filepath.Join(backupDir, filename)
+
+	data, err := json.MarshalIndent(backup, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal backup data: %w", err)
+	}
+
+	if err := os.WriteFile(backupPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write backup file: %w", err)
+	}
+
+	fmt.Printf("✅ Backup saved to: %s\n", backupPath)
+	return nil
+}
+
+// Reset drops all tables and optionally backs up
+func (m *Migrator) Reset(ctx context.Context) error {
+	fmt.Println("🗑️  This will drop all tables and data!")
 
 	if !m.askUserConfirmation("Are you sure you want to reset the database?") {
-		return fmt.Errorf("database reset cancelled by user")
+		fmt.Println("Database reset cancelled")
+		return nil
 	}
 
 	if m.askUserConfirmation("Create backup before reset?") {
-		log.Println("  Backup creation not yet implemented with adapter pattern")
+		fmt.Println("⚠️  Backup creation not yet implemented")
 	}
 
 	tables, err := m.adapter.GetAllTableNames(ctx)
@@ -157,75 +207,17 @@ func (m *Migrator) handleResetAndApply(ctx context.Context) error {
 		return fmt.Errorf("failed to get table names: %w", err)
 	}
 
-	log.Println("Dropping tables...")
 	for _, table := range tables {
 		if err := m.adapter.DropTable(ctx, table); err != nil {
-			log.Printf("Warning: Failed to drop table %s: %v", table, err)
+			fmt.Printf("Warning: Failed to drop table %s: %v\n", table, err)
 		}
 	}
 
-	log.Println("Applying all migrations...")
-	allMigrations, err := m.loadMigrationsFromDir()
-	if err != nil {
-		return fmt.Errorf("failed to load migrations: %w", err)
-	}
-
-	for _, migration := range allMigrations {
-		if err := m.applySingleMigration(ctx, migration); err != nil {
-			return fmt.Errorf("failed to apply migration %s: %w", migration.ID, err)
-		}
-	}
-
-	log.Println("Database reset and migrations applied")
+	fmt.Println("Database reset completed")
 	return nil
 }
 
-func (m *Migrator) handleAddDefaultValue(conflicts []types.MigrationConflict) error {
-	fmt.Println()
-	fmt.Println("Add DEFAULT values to these columns:")
-	fmt.Println()
-
-	for _, conflict := range conflicts {
-		fmt.Printf("📋 Table: %s, Column: %s\n", conflict.TableName, conflict.ColumnName)
-	}
-
-	fmt.Println()
-	fmt.Println("Steps:")
-	fmt.Println("1. Edit schema/migration file")
-	fmt.Println("2. Add DEFAULT values for new columns")
-	fmt.Println("3. Run migration again")
-	fmt.Println()
-	fmt.Println("Example:")
-	if len(conflicts) > 0 {
-		fmt.Printf("   ALTER TABLE \"%s\" ADD COLUMN \"%s\" VARCHAR(255) DEFAULT '' NOT NULL;\n",
-			conflicts[0].TableName, conflicts[0].ColumnName)
-	}
-	fmt.Println()
-
-	return fmt.Errorf("add DEFAULT values and run migration again")
-}
-
-func (m *Migrator) getUserChoice(validOptions []string, prompt string) string {
-	if m.force {
-		return validOptions[0]
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Printf("%s (%s): ", prompt, strings.Join(validOptions, "/"))
-		input, _ := reader.ReadString('\n')
-		choice := strings.TrimSpace(strings.ToLower(input))
-
-		for _, option := range validOptions {
-			if choice == option {
-				return choice
-			}
-		}
-
-		fmt.Printf("Invalid option. Please choose from: %s\n", strings.Join(validOptions, ", "))
-	}
-}
-
+// Status prints migration status
 func (m *Migrator) Status(ctx context.Context) error {
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("failed to create migrations table: %w", err)
@@ -241,12 +233,9 @@ func (m *Migrator) Status(ctx context.Context) error {
 		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
-	fmt.Printf("� Migration Status\n")
-	fmt.Printf("==================\n\n")
-	fmt.Printf("Total migrations: %d\n", len(migrations))
-	fmt.Printf("Applied: %d\n", len(applied))
-	fmt.Printf("Pending: %d\n", len(migrations)-len(applied))
-	fmt.Println()
+	fmt.Println("🗂️  Migration Status")
+	fmt.Println("==================")
+	fmt.Printf("Total: %d | Applied: %d | Pending: %d\n\n", len(migrations), len(applied), len(migrations)-len(applied))
 
 	if len(migrations) == 0 {
 		fmt.Println("No migrations found")
@@ -254,48 +243,15 @@ func (m *Migrator) Status(ctx context.Context) error {
 	}
 
 	fmt.Println("Migration Details:")
-	fmt.Println("------------------")
-
 	for _, migration := range migrations {
-		status := " Pending"
+		status := "Pending"
 		timestamp := ""
-
-		if appliedTime, exists := applied[migration.ID]; exists && appliedTime != nil {
-			status = " Applied"
-			timestamp = fmt.Sprintf(" (applied: %s)", appliedTime.Format("2006-01-02 15:04:05"))
+		if t, exists := applied[migration.ID]; exists && t != nil {
+			status = "Applied"
+			timestamp = fmt.Sprintf(" (applied: %s)", t.Format("2006-01-02 15:04:05"))
 		}
-
 		fmt.Printf("%-50s %s%s\n", migration.ID, status, timestamp)
 	}
 
-	return nil
-}
-
-func (m *Migrator) Reset(ctx context.Context) error {
-	fmt.Println("🗑️  This will drop all tables and data in your database!")
-	fmt.Println()
-
-	if !m.askUserConfirmation("Are you sure you want to reset the database?") {
-		fmt.Println("Database reset cancelled")
-		return nil
-	}
-
-	if m.askUserConfirmation("Create backup before reset?") {
-		log.Println("⚠️  Backup creation not yet implemented with adapter pattern")
-	}
-
-	tables, err := m.adapter.GetAllTableNames(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get table names: %w", err)
-	}
-
-	log.Println("Dropping tables...")
-	for _, table := range tables {
-		if err := m.adapter.DropTable(ctx, table); err != nil {
-			log.Printf("Warning: Failed to drop table %s: %v", table, err)
-		}
-	}
-
-	log.Println("Database reset completed")
 	return nil
 }

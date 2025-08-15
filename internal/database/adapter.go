@@ -8,9 +8,7 @@ import (
 	"github.com/Rana718/Graft/internal/types"
 )
 
-// DatabaseAdapter interface defines the contract for different database providers
 type DatabaseAdapter interface {
-	// Connection management
 	Connect(ctx context.Context, url string) error
 	Close() error
 	Ping(ctx context.Context) error
@@ -54,7 +52,6 @@ type DatabaseAdapter interface {
 	FormatColumnType(column types.SchemaColumn) string
 }
 
-// DatabaseConnection interface for raw database operations
 type DatabaseConnection interface {
 	Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row
@@ -62,7 +59,6 @@ type DatabaseConnection interface {
 	Begin(ctx context.Context) (*sql.Tx, error)
 }
 
-// NewAdapter creates a new database adapter based on the provider
 func NewAdapter(provider string) DatabaseAdapter {
 	switch provider {
 	case "postgresql", "postgres":
@@ -72,6 +68,6 @@ func NewAdapter(provider string) DatabaseAdapter {
 	case "sqlite", "sqlite3":
 		return NewSQLiteAdapter()
 	default:
-		return NewPostgresAdapter() // Default to PostgreSQL
+		return NewPostgresAdapter() 
 	}
 }

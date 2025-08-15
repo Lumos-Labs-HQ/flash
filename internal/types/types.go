@@ -17,9 +17,9 @@ type SchemaColumn struct {
 	Default          string
 	IsPrimary        bool
 	IsUnique         bool
-	ForeignKeyTable  string // Referenced table name
-	ForeignKeyColumn string // Referenced column name
-	OnDeleteAction   string // CASCADE, SET NULL, etc.
+	ForeignKeyTable  string 
+	ForeignKeyColumn string 
+	OnDeleteAction   string 
 }
 
 type SchemaIndex struct {

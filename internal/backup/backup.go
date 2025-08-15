@@ -15,21 +15,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// BackupManager
 type BackupManager struct {
 	db         *pgxpool.Pool
 	backupPath string
 }
 
-// NewBackupManager creates backup manager
 func NewBackupManager(db *pgxpool.Pool, backupPath string) *BackupManager {
-	return &BackupManager{
-		db:         db,
-		backupPath: backupPath,
-	}
+	return &BackupManager{db: db, backupPath: backupPath}
 }
 
-// CreateBackup
 func (bm *BackupManager) CreateBackup(ctx context.Context, comment string, getAppliedMigrations func(context.Context) (map[string]*time.Time, error)) (string, error) {
 	applied, err := getAppliedMigrations(ctx)
 	if err != nil {
@@ -48,22 +42,7 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, comment string, getAp
 		return "", fmt.Errorf("failed to get table names: %w", err)
 	}
 
-	hasData := false
-	for _, table := range tables {
-		if table == "_graft_migrations" {
-			continue
-		}
-		var count int
-		if err := bm.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err != nil {
-			continue
-		}
-		if count > 0 {
-			hasData = true
-			break
-		}
-	}
-
-	if !hasData && !strings.Contains(comment, "Manual backup") && !strings.Contains(comment, "Pre-reset") {
+	if !bm.shouldCreateBackup(ctx, tables, comment) {
 		return "", nil
 	}
 
@@ -71,43 +50,60 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, comment string, getAp
 		if table == "_graft_migrations" {
 			continue
 		}
-
-		rows, err := bm.db.Query(ctx, fmt.Sprintf("SELECT * FROM %s", table))
-		if err != nil {
-			continue
-		}
-
-		var tableData []map[string]interface{}
-		for rows.Next() {
-			values, err := rows.Values()
-			if err != nil {
-				continue
-			}
-
-			fieldDescriptions := rows.FieldDescriptions()
-			rowData := make(map[string]interface{})
-			for i, fd := range fieldDescriptions {
-				columnName := string(fd.Name)
-				rowData[columnName] = values[i]
-			}
-			tableData = append(tableData, rowData)
-		}
-		rows.Close()
-
-		backup.Tables[table] = tableData
+		bm.backupTable(ctx, table, &backup)
 	}
 
 	return bm.writeBackupFile(backup)
 }
 
-// writeBackupFile
+func (bm *BackupManager) shouldCreateBackup(ctx context.Context, tables []string, comment string) bool {
+	if strings.Contains(comment, "Manual backup") || strings.Contains(comment, "Pre-reset") {
+		return true
+	}
+
+	for _, table := range tables {
+		if table != "_graft_migrations" {
+			var count int
+			if err := bm.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err == nil && count > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (bm *BackupManager) backupTable(ctx context.Context, table string, backup *types.BackupData) {
+	rows, err := bm.db.Query(ctx, fmt.Sprintf("SELECT * FROM %s", table))
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var tableData []map[string]interface{}
+	fieldDescriptions := rows.FieldDescriptions()
+
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			continue
+		}
+
+		rowData := make(map[string]interface{}, len(fieldDescriptions))
+		for i, fd := range fieldDescriptions {
+			rowData[string(fd.Name)] = values[i]
+		}
+		tableData = append(tableData, rowData)
+	}
+
+	backup.Tables[table] = tableData
+}
+
 func (bm *BackupManager) writeBackupFile(backup types.BackupData) (string, error) {
 	if err := os.MkdirAll(bm.backupPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	filename := fmt.Sprintf("backup_%s.json", backup.Timestamp)
-	backupPath := filepath.Join(bm.backupPath, filename)
+	backupPath := filepath.Join(bm.backupPath, fmt.Sprintf("backup_%s.json", backup.Timestamp))
 
 	file, err := os.Create(backupPath)
 	if err != nil {
@@ -125,17 +121,12 @@ func (bm *BackupManager) writeBackupFile(backup types.BackupData) (string, error
 	return backupPath, nil
 }
 
-// getAllTableNames
 func (bm *BackupManager) getAllTableNames(ctx context.Context) ([]string, error) {
-	query := `
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_type = 'BASE TABLE'
-        ORDER BY table_name
-    `
-
-	rows, err := bm.db.Query(ctx, query)
+	rows, err := bm.db.Query(ctx, `
+		SELECT table_name 
+		FROM information_schema.tables 
+		WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+		ORDER BY table_name`)
 	if err != nil {
 		return nil, err
 	}
@@ -149,60 +140,57 @@ func (bm *BackupManager) getAllTableNames(ctx context.Context) ([]string, error)
 		}
 		tables = append(tables, tableName)
 	}
-
 	return tables, nil
 }
 
-// GetAllTableNames
 func (bm *BackupManager) GetAllTableNames(ctx context.Context) ([]string, error) {
 	return bm.getAllTableNames(ctx)
 }
 
-// PerformBackup
-func PerformBackup(ctx context.Context, db *pgxpool.Pool, backupPath, comment string) (string, error) {
-	backupManager := NewBackupManager(db, backupPath)
+// func PerformBackup(ctx context.Context, db *pgxpool.Pool, backupPath, comment string) (string, error) {
+// 	backupManager := NewBackupManager(db, backupPath)
+// 	return backupManager.CreateBackup(ctx, comment, createMigrationGetter(db))
+// }
 
-	getAppliedMigrations := func(ctx context.Context) (map[string]*time.Time, error) {
-		_, err := db.Exec(ctx, `
-			CREATE TABLE IF NOT EXISTS _graft_migrations (
-				id VARCHAR(255) PRIMARY KEY,
-				checksum VARCHAR(64) NOT NULL,
-				finished_at TIMESTAMP WITH TIME ZONE,
-				migration_name VARCHAR(255) NOT NULL,
-				logs TEXT,
-				rolled_back_at TIMESTAMP WITH TIME ZONE,
-				started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-				applied_steps_count INTEGER NOT NULL DEFAULT 0
-			);`)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create migrations table: %w", err)
-		}
+// func createMigrationGetter(db *pgxpool.Pool) func(context.Context) (map[string]*time.Time, error) {
+// 	return func(ctx context.Context) (map[string]*time.Time, error) {
+// 		if _, err := db.Exec(ctx, `
+// 			CREATE TABLE IF NOT EXISTS _graft_migrations (
+// 				id VARCHAR(255) PRIMARY KEY,
+// 				checksum VARCHAR(64) NOT NULL,
+// 				finished_at TIMESTAMP WITH TIME ZONE,
+// 				migration_name VARCHAR(255) NOT NULL,
+// 				logs TEXT,
+// 				rolled_back_at TIMESTAMP WITH TIME ZONE,
+// 				started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+// 				applied_steps_count INTEGER NOT NULL DEFAULT 0
+// 			)`); err != nil {
+// 			return nil, fmt.Errorf("failed to create migrations table: %w", err)
+// 		}
 
-		applied := make(map[string]*time.Time)
-		rows, err := db.Query(ctx,
-			`SELECT id, finished_at FROM _graft_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
+// 		applied := make(map[string]*time.Time)
+// 		rows, err := db.Query(ctx, `
+// 			SELECT id, finished_at
+// 			FROM _graft_migrations
+// 			WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		defer rows.Close()
 
-		for rows.Next() {
-			var id string
-			var finishedAt *time.Time
-			if err := rows.Scan(&id, &finishedAt); err != nil {
-				return nil, err
-			}
-			applied[id] = finishedAt
-		}
-		return applied, nil
-	}
+// 		for rows.Next() {
+// 			var id string
+// 			var finishedAt *time.Time
+// 			if err := rows.Scan(&id, &finishedAt); err != nil {
+// 				return nil, err
+// 			}
+// 			applied[id] = finishedAt
+// 		}
+// 		return applied, nil
+// 	}
+// }
 
-	return backupManager.CreateBackup(ctx, comment, getAppliedMigrations)
-}
-
-// PerformBackupWithAdapter performs backup using database adapter
 func PerformBackupWithAdapter(ctx context.Context, adapter database.DatabaseAdapter, backupPath, comment string) (string, error) {
-	// Get all table names
 	tables, err := adapter.GetAllTableNames(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to get table names: %w", err)
@@ -213,49 +201,36 @@ func PerformBackupWithAdapter(ctx context.Context, adapter database.DatabaseAdap
 		return "", nil
 	}
 
-	// Create backup data structure
 	backupData := types.BackupData{
 		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
 		Version:   "1.0",
-		Tables:    make(map[string]interface{}),
+		Tables:    make(map[string]interface{}, len(tables)),
 		Comment:   comment,
 	}
 
-	// Get data from each table
 	for _, tableName := range tables {
-		// Skip internal migration table
 		if tableName == "_graft_migrations" {
 			continue
 		}
 
-		tableData, err := adapter.GetTableData(ctx, tableName)
-		if err != nil {
+		if tableData, err := adapter.GetTableData(ctx, tableName); err != nil {
 			log.Printf("Warning: Failed to get data for table %s: %v", tableName, err)
-			continue
+		} else {
+			backupData.Tables[tableName] = tableData
 		}
-
-		backupData.Tables[tableName] = tableData
 	}
 
-	// Get applied migrations
-	appliedMigrations, err := adapter.GetAppliedMigrations(ctx)
-	if err != nil {
-		log.Printf("Warning: Failed to get applied migrations: %v", err)
-	} else {
-		backupData.Tables["_graft_migrations"] = appliedMigrations
-	}
+	return writeBackupToFile(backupData, backupPath)
+}
 
-	// Create backup directory if it doesn't exist
+func writeBackupToFile(backupData types.BackupData, backupPath string) (string, error) {
 	if err := os.MkdirAll(backupPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	// Generate backup filename
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	filename := fmt.Sprintf("backup_%s.json", timestamp)
-	backupFilePath := filepath.Join(backupPath, filename)
+	backupFilePath := filepath.Join(backupPath, fmt.Sprintf("backup_%s.json", timestamp))
 
-	// Write backup to file
 	jsonData, err := json.MarshalIndent(backupData, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal backup data: %w", err)
