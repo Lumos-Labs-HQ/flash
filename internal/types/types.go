@@ -11,10 +11,15 @@ type SchemaTable struct {
 }
 
 type SchemaColumn struct {
-	Name     string
-	Type     string
-	Nullable bool
-	Default  string
+	Name             string
+	Type             string
+	Nullable         bool
+	Default          string
+	IsPrimary        bool
+	IsUnique         bool
+	ForeignKeyTable  string // Referenced table name
+	ForeignKeyColumn string // Referenced column name
+	OnDeleteAction   string // CASCADE, SET NULL, etc.
 }
 
 type SchemaIndex struct {

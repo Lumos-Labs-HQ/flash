@@ -7,8 +7,7 @@ import (
 
 	"github.com/Rana718/Graft/internal/backup"
 	"github.com/Rana718/Graft/internal/config"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/Rana718/Graft/internal/database"
 	"github.com/spf13/cobra"
 )
 
@@ -46,31 +45,27 @@ var backupCmd = &cobra.Command{
 			comment = "Manual backup"
 		}
 
+		ctx := context.Background()
+
+		// Create database adapter based on provider
+		adapter := database.NewAdapter(cfg.Database.Provider)
+
 		dbURL, err := cfg.GetDatabaseURL()
 		if err != nil {
 			return err
 		}
 
-		ctx := context.Background()
-		config, err := pgxpool.ParseConfig(dbURL)
-		if err != nil {
-			return fmt.Errorf("failed to parse database URL: %w", err)
+		if err := adapter.Connect(ctx, dbURL); err != nil {
+			return fmt.Errorf("failed to connect to database: %w", err)
 		}
+		defer adapter.Close()
 
-		config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
-
-		db, err := pgxpool.NewWithConfig(ctx, config)
-		if err != nil {
-			return fmt.Errorf("failed to create connection pool: %w", err)
-		}
-		defer db.Close()
-
-		if err := db.Ping(ctx); err != nil {
+		if err := adapter.Ping(ctx); err != nil {
 			return fmt.Errorf("failed to connect to database: %w", err)
 		}
 
 		// Perform backup using backup package
-		backupPath, err := backup.PerformBackup(ctx, db, cfg.BackupPath, comment)
+		backupPath, err := backup.PerformBackupWithAdapter(ctx, adapter, cfg.BackupPath, comment)
 		if err != nil {
 			return err
 		}

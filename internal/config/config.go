@@ -74,8 +74,16 @@ func (c *Config) EnsureDirectories() error {
 }
 
 func (c *Config) Validate() error {
-	if c.Database.Provider != "postgresql" {
-		return fmt.Errorf("unsupported database provider: %s", c.Database.Provider)
+	supportedProviders := []string{"postgresql", "postgres", "mysql", "sqlite", "sqlite3"}
+	supported := false
+	for _, provider := range supportedProviders {
+		if c.Database.Provider == provider {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return fmt.Errorf("unsupported database provider: %s. Supported providers: %v", c.Database.Provider, supportedProviders)
 	}
 
 	if c.MigrationsPath == "" {

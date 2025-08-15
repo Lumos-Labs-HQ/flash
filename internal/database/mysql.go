@@ -1,0 +1,595 @@
+package database
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"github.com/Rana718/Graft/internal/types"
+	_ "github.com/go-sql-driver/mysql"
+)
+
+type MySQLAdapter struct {
+	db *sql.DB
+}
+
+func NewMySQLAdapter() *MySQLAdapter {
+	return &MySQLAdapter{}
+}
+
+func (m *MySQLAdapter) Connect(ctx context.Context, url string) error {
+	db, err := sql.Open("mysql", url)
+	if err != nil {
+		return fmt.Errorf("failed to open MySQL connection: %w", err)
+	}
+	m.db = db
+	return nil
+}
+
+func (m *MySQLAdapter) Close() error {
+	if m.db != nil {
+		return m.db.Close()
+	}
+	return nil
+}
+
+func (m *MySQLAdapter) Ping(ctx context.Context) error {
+	return m.db.PingContext(ctx)
+}
+
+func (m *MySQLAdapter) CreateMigrationsTable(ctx context.Context) error {
+	query := `
+		CREATE TABLE IF NOT EXISTS _graft_migrations (
+			id VARCHAR(255) PRIMARY KEY,
+			checksum VARCHAR(64) NOT NULL,
+			finished_at TIMESTAMP NULL,
+			migration_name VARCHAR(255) NOT NULL,
+			logs TEXT,
+			rolled_back_at TIMESTAMP NULL,
+			started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			applied_steps_count INTEGER NOT NULL DEFAULT 0
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+
+	_, err := m.db.ExecContext(ctx, query)
+	return err
+}
+
+func (m *MySQLAdapter) EnsureMigrationTableCompatibility(ctx context.Context) error {
+	// Check if logs column exists, add if missing
+	var exists bool
+	err := m.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) > 0 FROM information_schema.columns 
+		WHERE table_schema = DATABASE()
+		AND table_name = '_graft_migrations' 
+		AND column_name = 'logs'
+	`).Scan(&exists)
+
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		_, err = m.db.ExecContext(ctx, "ALTER TABLE _graft_migrations ADD COLUMN logs TEXT")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *MySQLAdapter) CleanupBrokenMigrationRecords(ctx context.Context) error {
+	_, err := m.db.ExecContext(ctx, `
+		DELETE FROM _graft_migrations 
+		WHERE finished_at IS NULL 
+		AND started_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)
+	`)
+	return err
+}
+
+func (m *MySQLAdapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
+	applied := make(map[string]*time.Time)
+
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT id, finished_at 
+		FROM _graft_migrations 
+		WHERE finished_at IS NOT NULL
+		ORDER BY started_at
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		var finishedAt *time.Time
+		if err := rows.Scan(&id, &finishedAt); err != nil {
+			return nil, err
+		}
+		applied[id] = finishedAt
+	}
+
+	return applied, nil
+}
+
+func (m *MySQLAdapter) RecordMigration(ctx context.Context, migrationID, name, checksum string) error {
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Insert migration record
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO _graft_migrations (id, migration_name, checksum, started_at)
+		VALUES (?, ?, ?, NOW())
+	`, migrationID, name, checksum)
+	if err != nil {
+		return err
+	}
+
+	// Mark as finished
+	_, err = tx.ExecContext(ctx, `
+		UPDATE _graft_migrations 
+		SET finished_at = NOW(), applied_steps_count = 1
+		WHERE id = ?
+	`, migrationID)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (m *MySQLAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
+	_, err := m.db.ExecContext(ctx, migrationSQL)
+	return err
+}
+
+func (m *MySQLAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error) {
+	tables := []types.SchemaTable{}
+
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT table_name 
+		FROM information_schema.tables 
+		WHERE table_schema = DATABASE()
+		AND table_type = 'BASE TABLE'
+		AND table_name != '_graft_migrations'
+		ORDER BY table_name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return nil, err
+		}
+
+		columns, err := m.GetTableColumns(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+
+		indexes, err := m.GetTableIndexes(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+
+		tables = append(tables, types.SchemaTable{
+			Name:    tableName,
+			Columns: columns,
+			Indexes: indexes,
+		})
+	}
+
+	return tables, nil
+}
+
+func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
+	columns := []types.SchemaColumn{}
+
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT 
+			c.column_name,
+			c.data_type,
+			c.is_nullable,
+			c.column_default,
+			c.character_maximum_length,
+			c.numeric_precision,
+			c.numeric_scale,
+			c.column_type,
+			CASE WHEN c.column_key = 'PRI' THEN 1 ELSE 0 END as is_primary_key,
+			CASE WHEN c.column_key = 'UNI' THEN 1 ELSE 0 END as is_unique
+		FROM information_schema.columns c
+		WHERE c.table_name = ? 
+		AND c.table_schema = DATABASE()
+		ORDER BY c.ordinal_position
+	`, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var column types.SchemaColumn
+		var dataType string
+		var isNullable string
+		var columnDefault sql.NullString
+		var charMaxLength sql.NullInt64
+		var numericPrecision sql.NullInt64
+		var numericScale sql.NullInt64
+		var columnType string
+		var isPrimary int
+		var isUnique int
+
+		err := rows.Scan(
+			&column.Name,
+			&dataType,
+			&isNullable,
+			&columnDefault,
+			&charMaxLength,
+			&numericPrecision,
+			&numericScale,
+			&columnType,
+			&isPrimary,
+			&isUnique,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		column.Type = m.formatMySQLType(dataType, columnType, charMaxLength, numericPrecision, numericScale)
+		column.Nullable = isNullable == "YES"
+		column.IsPrimary = isPrimary == 1
+		column.IsUnique = isUnique == 1
+
+		if columnDefault.Valid {
+			column.Default = columnDefault.String
+		}
+
+		columns = append(columns, column)
+	}
+
+	return columns, nil
+}
+
+func (m *MySQLAdapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
+	indexes := []types.SchemaIndex{}
+	indexMap := make(map[string]*types.SchemaIndex)
+
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT 
+			index_name,
+			column_name,
+			non_unique
+		FROM information_schema.statistics
+		WHERE table_name = ?
+		AND table_schema = DATABASE()
+		AND index_name != 'PRIMARY'
+		ORDER BY index_name, seq_in_index
+	`, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var indexName, columnName string
+		var nonUnique int
+
+		if err := rows.Scan(&indexName, &columnName, &nonUnique); err != nil {
+			return nil, err
+		}
+
+		if idx, exists := indexMap[indexName]; exists {
+			idx.Columns = append(idx.Columns, columnName)
+		} else {
+			indexMap[indexName] = &types.SchemaIndex{
+				Name:    indexName,
+				Table:   tableName,
+				Columns: []string{columnName},
+				Unique:  nonUnique == 0,
+			}
+		}
+	}
+
+	for _, idx := range indexMap {
+		indexes = append(indexes, *idx)
+	}
+
+	return indexes, nil
+}
+
+func (m *MySQLAdapter) GetAllTableNames(ctx context.Context) ([]string, error) {
+	var tables []string
+
+	rows, err := m.db.QueryContext(ctx, `
+		SELECT table_name 
+		FROM information_schema.tables 
+		WHERE table_schema = DATABASE()
+		AND table_type = 'BASE TABLE'
+		ORDER BY table_name
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return nil, err
+		}
+		tables = append(tables, tableName)
+	}
+
+	return tables, nil
+}
+
+func (m *MySQLAdapter) CheckTableExists(ctx context.Context, tableName string) (bool, error) {
+	var exists bool
+	err := m.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) > 0 FROM information_schema.tables 
+		WHERE table_name = ? AND table_schema = DATABASE()
+	`, tableName).Scan(&exists)
+	return exists, err
+}
+
+func (m *MySQLAdapter) CheckColumnExists(ctx context.Context, tableName, columnName string) (bool, error) {
+	var exists bool
+	err := m.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) > 0 FROM information_schema.columns 
+		WHERE table_name = ? AND column_name = ? AND table_schema = DATABASE()
+	`, tableName, columnName).Scan(&exists)
+	return exists, err
+}
+
+func (m *MySQLAdapter) CheckNotNullConstraint(ctx context.Context, tableName, columnName string) (bool, error) {
+	var isNullable string
+	err := m.db.QueryRowContext(ctx, `
+		SELECT is_nullable
+		FROM information_schema.columns 
+		WHERE table_name = ? AND column_name = ? AND table_schema = DATABASE()
+	`, tableName, columnName).Scan(&isNullable)
+
+	if err != nil {
+		return false, err
+	}
+
+	return isNullable == "NO", nil
+}
+
+func (m *MySQLAdapter) CheckForeignKeyConstraint(ctx context.Context, tableName, constraintName string) (bool, error) {
+	var exists bool
+	err := m.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) > 0 FROM information_schema.table_constraints 
+		WHERE table_name = ? 
+		AND constraint_name = ? 
+		AND constraint_type = 'FOREIGN KEY'
+		AND table_schema = DATABASE()
+	`, tableName, constraintName).Scan(&exists)
+	return exists, err
+}
+
+func (m *MySQLAdapter) CheckUniqueConstraint(ctx context.Context, tableName, constraintName string) (bool, error) {
+	var exists bool
+	err := m.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) > 0 FROM information_schema.table_constraints 
+		WHERE table_name = ? 
+		AND constraint_name = ? 
+		AND constraint_type = 'UNIQUE'
+		AND table_schema = DATABASE()
+	`, tableName, constraintName).Scan(&exists)
+	return exists, err
+}
+
+func (m *MySQLAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
+	rows, err := m.db.QueryContext(ctx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var result []map[string]interface{}
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			row[col] = values[i]
+		}
+
+		result = append(result, row)
+	}
+
+	return result, nil
+}
+
+func (m *MySQLAdapter) DropTable(ctx context.Context, tableName string) error {
+	_, err := m.db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", tableName))
+	if err != nil {
+		log.Printf("Error dropping table %s: %v", tableName, err)
+		return err
+	}
+	return nil
+}
+
+func (m *MySQLAdapter) GenerateCreateTableSQL(table types.SchemaTable) string {
+	var builder strings.Builder
+	var foreignKeys []string
+
+	builder.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (\n", table.Name))
+
+	for i, column := range table.Columns {
+		if i > 0 {
+			builder.WriteString(",\n")
+		}
+		builder.WriteString(fmt.Sprintf("    `%s` %s", column.Name, m.FormatColumnType(column)))
+
+		// Collect foreign key constraints for table-level definition
+		if column.ForeignKeyTable != "" && column.ForeignKeyColumn != "" {
+			fkConstraint := fmt.Sprintf("FOREIGN KEY (`%s`) REFERENCES `%s`(`%s`)",
+				column.Name, column.ForeignKeyTable, column.ForeignKeyColumn)
+			if column.OnDeleteAction != "" {
+				fkConstraint += fmt.Sprintf(" ON DELETE %s", column.OnDeleteAction)
+			}
+			foreignKeys = append(foreignKeys, fkConstraint)
+		}
+	}
+
+	// Add foreign key constraints
+	for _, fk := range foreignKeys {
+		builder.WriteString(",\n    ")
+		builder.WriteString(fk)
+	}
+
+	builder.WriteString("\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;")
+	return builder.String()
+}
+
+func (m *MySQLAdapter) GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string {
+	return fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN IF NOT EXISTS `%s` %s;",
+		tableName, column.Name, m.FormatColumnType(column))
+}
+
+func (m *MySQLAdapter) GenerateDropColumnSQL(tableName, columnName string) string {
+	return fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN IF EXISTS `%s`;",
+		tableName, columnName)
+}
+
+func (m *MySQLAdapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
+	uniqueStr := ""
+	if index.Unique {
+		uniqueStr = "UNIQUE "
+	}
+
+	columnsStr := "`" + strings.Join(index.Columns, "`, `") + "`"
+	return fmt.Sprintf("CREATE %sINDEX `%s` ON `%s` (%s);",
+		uniqueStr, index.Name, index.Table, columnsStr)
+}
+
+func (m *MySQLAdapter) GenerateDropIndexSQL(indexName string) string {
+	return fmt.Sprintf("DROP INDEX `%s`;", indexName)
+}
+
+func (m *MySQLAdapter) MapColumnType(dbType string) string {
+	switch strings.ToLower(dbType) {
+	case "varchar":
+		return "VARCHAR"
+	case "char":
+		return "CHAR"
+	case "text", "longtext", "mediumtext", "tinytext":
+		return "TEXT"
+	case "int", "integer":
+		return "INT"
+	case "bigint":
+		return "BIGINT"
+	case "smallint":
+		return "SMALLINT"
+	case "tinyint":
+		return "TINYINT"
+	case "boolean", "bool":
+		return "BOOLEAN"
+	case "datetime":
+		return "DATETIME"
+	case "timestamp":
+		return "TIMESTAMP"
+	case "date":
+		return "DATE"
+	case "time":
+		return "TIME"
+	case "decimal", "numeric":
+		return "DECIMAL"
+	case "float":
+		return "FLOAT"
+	case "double":
+		return "DOUBLE"
+	case "json":
+		return "JSON"
+	default:
+		return strings.ToUpper(dbType)
+	}
+}
+
+func (m *MySQLAdapter) FormatColumnType(column types.SchemaColumn) string {
+	var parts []string
+
+	// Add the base type
+	parts = append(parts, column.Type)
+
+	// Add PRIMARY KEY constraint
+	if column.IsPrimary {
+		parts = append(parts, "PRIMARY KEY")
+		// MySQL PRIMARY KEY columns are AUTO_INCREMENT if they're integers
+		if strings.Contains(strings.ToUpper(column.Type), "INT") {
+			parts = append(parts, "AUTO_INCREMENT")
+		}
+	}
+
+	// Add UNIQUE constraint (only if not primary key)
+	if column.IsUnique && !column.IsPrimary {
+		parts = append(parts, "UNIQUE")
+	}
+
+	// Add NOT NULL constraint (only if not primary key, as PRIMARY KEY implies NOT NULL)
+	if !column.Nullable && !column.IsPrimary {
+		parts = append(parts, "NOT NULL")
+	}
+
+	// Add default value
+	if column.Default != "" {
+		parts = append(parts, fmt.Sprintf("DEFAULT %s", column.Default))
+	}
+
+	return strings.Join(parts, " ")
+}
+
+func (m *MySQLAdapter) formatMySQLType(dataType, columnType string, charMaxLength, numericPrecision, numericScale sql.NullInt64) string {
+	switch dataType {
+	case "varchar":
+		if charMaxLength.Valid {
+			return fmt.Sprintf("VARCHAR(%d)", charMaxLength.Int64)
+		}
+		return "VARCHAR(255)"
+	case "char":
+		if charMaxLength.Valid {
+			return fmt.Sprintf("CHAR(%d)", charMaxLength.Int64)
+		}
+		return "CHAR(1)"
+	case "decimal":
+		if numericPrecision.Valid && numericScale.Valid {
+			return fmt.Sprintf("DECIMAL(%d,%d)", numericPrecision.Int64, numericScale.Int64)
+		} else if numericPrecision.Valid {
+			return fmt.Sprintf("DECIMAL(%d)", numericPrecision.Int64)
+		}
+		return "DECIMAL"
+	default:
+		// For other types, use the full column_type which includes length/precision
+		if columnType != "" {
+			return strings.ToUpper(columnType)
+		}
+		return m.MapColumnType(dataType)
+	}
+}

@@ -7,8 +7,6 @@ import (
 	"github.com/Rana718/Graft/internal/config"
 	"github.com/Rana718/Graft/internal/migrator"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
 
@@ -37,31 +35,13 @@ var applyCmd = &cobra.Command{
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		dbURL, err := cfg.GetDatabaseURL()
-		if err != nil {
-			return err
-		}
-
 		ctx := context.Background()
-		config, err := pgxpool.ParseConfig(dbURL)
+
+		m, err := migrator.NewMigrator(cfg)
 		if err != nil {
-			return fmt.Errorf("failed to parse database URL: %w", err)
+			return fmt.Errorf("failed to create migrator: %w", err)
 		}
-
-		config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
-
-		db, err := pgxpool.NewWithConfig(ctx, config)
-		if err != nil {
-			return fmt.Errorf("failed to create connection pool: %w", err)
-		}
-		defer db.Close()
-
-		if err := db.Ping(ctx); err != nil {
-			return fmt.Errorf("failed to connect to database: %w", err)
-		}
-
-		force, _ := cmd.Flags().GetBool("force")
-		m := migrator.NewMigrator(db, cfg.MigrationsPath, cfg.BackupPath, force)
+		defer m.Close()
 
 		return m.Apply(ctx, "", cfg.SchemaPath)
 	},

@@ -11,7 +11,6 @@ import (
 	"github.com/Rana718/Graft/internal/config"
 	"github.com/Rana718/Graft/internal/migrator"
 	"github.com/Rana718/Graft/internal/types"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 )
 
@@ -46,27 +45,7 @@ var pullCmd = &cobra.Command{
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		dbURL, err := cfg.GetDatabaseURL()
-		if err != nil {
-			return err
-		}
-
 		ctx := context.Background()
-		poolConfig, err := pgxpool.ParseConfig(dbURL)
-		if err != nil {
-			return fmt.Errorf("failed to parse database URL: %w", err)
-		}
-
-		pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
-		if err != nil {
-			return fmt.Errorf("failed to connect to database: %w", err)
-		}
-		defer pool.Close()
-
-		// Test connection
-		if err := pool.Ping(ctx); err != nil {
-			return fmt.Errorf("failed to ping database: %w", err)
-		}
 
 		force, _ := cmd.Flags().GetBool("force")
 		backup, _ := cmd.Flags().GetBool("backup")
@@ -82,7 +61,11 @@ var pullCmd = &cobra.Command{
 		fmt.Println("🔍 Introspecting database schema...")
 
 		// Create migrator instance
-		m := migrator.NewMigrator(pool, cfg.MigrationsPath, cfg.BackupPath, force)
+		m, err := migrator.NewMigrator(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to create migrator: %w", err)
+		}
+		defer m.Close()
 
 		// Pull the current schema from database
 		schema, err := pullDatabaseSchema(ctx, m)

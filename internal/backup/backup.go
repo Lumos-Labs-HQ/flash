@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Rana718/Graft/internal/database"
 	"github.com/Rana718/Graft/internal/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -197,4 +198,73 @@ func PerformBackup(ctx context.Context, db *pgxpool.Pool, backupPath, comment st
 	}
 
 	return backupManager.CreateBackup(ctx, comment, getAppliedMigrations)
+}
+
+// PerformBackupWithAdapter performs backup using database adapter
+func PerformBackupWithAdapter(ctx context.Context, adapter database.DatabaseAdapter, backupPath, comment string) (string, error) {
+	// Get all table names
+	tables, err := adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get table names: %w", err)
+	}
+
+	if len(tables) == 0 {
+		log.Println("No tables found in database, skipping backup")
+		return "", nil
+	}
+
+	// Create backup data structure
+	backupData := types.BackupData{
+		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+		Version:   "1.0",
+		Tables:    make(map[string]interface{}),
+		Comment:   comment,
+	}
+
+	// Get data from each table
+	for _, tableName := range tables {
+		// Skip internal migration table
+		if tableName == "_graft_migrations" {
+			continue
+		}
+
+		tableData, err := adapter.GetTableData(ctx, tableName)
+		if err != nil {
+			log.Printf("Warning: Failed to get data for table %s: %v", tableName, err)
+			continue
+		}
+
+		backupData.Tables[tableName] = tableData
+	}
+
+	// Get applied migrations
+	appliedMigrations, err := adapter.GetAppliedMigrations(ctx)
+	if err != nil {
+		log.Printf("Warning: Failed to get applied migrations: %v", err)
+	} else {
+		backupData.Tables["_graft_migrations"] = appliedMigrations
+	}
+
+	// Create backup directory if it doesn't exist
+	if err := os.MkdirAll(backupPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create backup directory: %w", err)
+	}
+
+	// Generate backup filename
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	filename := fmt.Sprintf("backup_%s.json", timestamp)
+	backupFilePath := filepath.Join(backupPath, filename)
+
+	// Write backup to file
+	jsonData, err := json.MarshalIndent(backupData, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal backup data: %w", err)
+	}
+
+	if err := os.WriteFile(backupFilePath, jsonData, 0644); err != nil {
+		return "", fmt.Errorf("failed to write backup file: %w", err)
+	}
+
+	log.Printf("Backup created successfully: %s", backupFilePath)
+	return backupFilePath, nil
 }
