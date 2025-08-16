@@ -50,12 +50,19 @@ cd "$TEST_DIR"
 
 log_success "Test directory: $TEST_DIR"
 
-# Verify graft is available
-if ! command -v graft &> /dev/null; then
-    log_error "graft command not found in PATH"
+# Determine graft binary path
+if [ -f "../graft" ]; then
+    GRAFT_CMD="../graft"
+elif [ -f "./graft" ]; then
+    GRAFT_CMD="./graft"
+elif command -v graft &> /dev/null; then
+    GRAFT_CMD="graft"
+else
+    log_error "graft binary not found. Please build the project first with 'go build -o graft .'"
 fi
 
-GRAFT_VERSION=$(graft --version 2>/dev/null || echo "Unknown")
+GRAFT_VERSION=$($GRAFT_CMD --version 2>/dev/null || echo "Unknown")
+log_success "Graft binary: $GRAFT_CMD"
 log_success "Graft version: $GRAFT_VERSION"
 
 echo ""
@@ -64,7 +71,7 @@ echo "==============================="
 
 # Test 1: Initialize project
 log_step "Initialize project"
-graft init --postgresql --force >/dev/null 2>&1
+$GRAFT_CMD init --postgresql --force >/dev/null 2>&1
 echo "DATABASE_URL=$DATABASE_URL" > .env
 log_success "Project initialized"
 
@@ -95,8 +102,8 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 SCHEMA
 
-graft migrate "create users table" --force >/dev/null 2>&1
-graft apply --force >/dev/null 2>&1
+$GRAFT_CMD migrate "create users table" --force >/dev/null 2>&1
+$GRAFT_CMD apply --force >/dev/null 2>&1
 log_success "Initial schema created and applied"
 
 # Test 3: Insert test data
@@ -108,12 +115,12 @@ INSERT INTO users (name, email) VALUES
 ('Charlie Brown', 'charlie@test.com');
 DATA
 
-graft raw insert_data.sql >/dev/null 2>&1
+$GRAFT_CMD raw insert_data.sql >/dev/null 2>&1
 log_success "Test data inserted"
 
 # Test 4: Create backup
 log_step "Create backup"
-graft backup "test backup" --force >/dev/null 2>&1
+$GRAFT_CMD backup "test backup" --force >/dev/null 2>&1
 log_success "Backup created"
 
 # Test 5: Add posts table
@@ -140,8 +147,8 @@ CREATE TABLE posts (
 CREATE INDEX idx_posts_user_id ON posts(user_id);
 SCHEMA2
 
-graft migrate "add posts table" --force >/dev/null 2>&1
-graft apply --force >/dev/null 2>&1
+$GRAFT_CMD migrate "add posts table" --force >/dev/null 2>&1
+$GRAFT_CMD apply --force >/dev/null 2>&1
 log_success "Posts table added"
 
 # Test 6: Insert posts data
@@ -153,7 +160,7 @@ INSERT INTO posts (user_id, title, content, published) VALUES
 (3, 'Third Post', 'Content of third post', true);
 POSTS
 
-graft raw insert_posts.sql >/dev/null 2>&1
+$GRAFT_CMD raw insert_posts.sql >/dev/null 2>&1
 log_success "Posts data inserted"
 
 echo ""
@@ -175,13 +182,13 @@ ORDER BY u.name;
 QUERY
 
 echo "📊 Query Results:"
-graft raw complex_query.sql
+$GRAFT_CMD raw complex_query.sql
 log_success "Complex query executed"
 
 # Test 8: Check migration status
 log_step "Check migration status"
 echo "📋 Migration Status:"
-graft status
+$GRAFT_CMD status
 log_success "Migration status checked"
 
 # Test 9: Verify backup files
@@ -226,7 +233,7 @@ RESPONSES
 
 # Execute reset with automated responses
 echo "🔄 Executing database reset..."
-graft reset < reset_responses.txt
+$GRAFT_CMD reset < reset_responses.txt
 
 log_success "Database reset completed with automated responses"
 
@@ -242,13 +249,13 @@ WHERE table_schema = 'public'
 AND table_type = 'BASE TABLE';
 CHECK
 
-graft raw check_tables.sql
+$GRAFT_CMD raw check_tables.sql
 log_success "Database reset verification completed"
 
 # Test 12: Final status check
 log_step "Final migration status check"
 echo "📋 Final Migration Status:"
-graft status
+$GRAFT_CMD status
 log_success "Final status checked"
 
 echo ""

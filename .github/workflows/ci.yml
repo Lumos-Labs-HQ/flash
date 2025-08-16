@@ -42,17 +42,19 @@ jobs:
         done
 
     - name: Build project
-      run: go build -o graft .
-
-    - name: Install project
-      run: go install .
-
-    - name: Verify installation
       run: |
-        which graft
-        graft --version
+        go build -o graft .
+        chmod +x graft
+        ls -la graft
+
+    - name: Verify build
+      run: |
+        ./graft --version
+        echo "Graft binary built successfully"
 
     - name: Run integration tests
       env:
         DATABASE_URL: postgres://testuser:testpass@localhost:5432/graft_test?sslmode=disable
-      run: ./test/github-workflow-test.sh
+      run: |
+        cd ${{ github.workspace }}
+        ./test/github-workflow-test.sh
