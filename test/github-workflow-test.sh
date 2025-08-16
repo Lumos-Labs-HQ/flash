@@ -43,6 +43,10 @@ fi
 
 log_success "Database URL: $DATABASE_URL"
 
+# Store the original directory (workspace) before changing to test directory
+WORKSPACE_DIR="$(pwd)"
+log_success "Workspace directory: $WORKSPACE_DIR"
+
 # Setup test directory
 TEST_DIR="/tmp/graft-github-test-$(date +%s)"
 mkdir -p "$TEST_DIR"
@@ -50,8 +54,10 @@ cd "$TEST_DIR"
 
 log_success "Test directory: $TEST_DIR"
 
-# Determine graft binary path
-if [ -f "../graft" ]; then
+# Determine graft binary path (check workspace first)
+if [ -f "$WORKSPACE_DIR/graft" ]; then
+    GRAFT_CMD="$WORKSPACE_DIR/graft"
+elif [ -f "../graft" ]; then
     GRAFT_CMD="../graft"
 elif [ -f "./graft" ]; then
     GRAFT_CMD="./graft"
