@@ -52,6 +52,12 @@ jobs:
         ./graft --version
         echo "Graft binary built successfully"
 
+    - name: Prepare test script
+      run: |
+        chmod +x test/github-workflow-test.sh
+        chmod +x test/db-helper.sh
+        ls -la test/
+
     - name: Run integration tests
       env:
         DATABASE_URL: postgres://testuser:testpass@localhost:5432/graft_test?sslmode=disable
