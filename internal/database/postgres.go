@@ -139,8 +139,22 @@ func (p *PostgresAdapter) RecordMigration(ctx context.Context, migrationID, name
 }
 
 func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-	_, err := p.pool.Exec(ctx, migrationSQL)
-	return err
+	// Split SQL into individual statements and execute them
+	statements := strings.Split(migrationSQL, ";")
+	
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue // Skip empty lines and comments
+		}
+		
+		_, err := p.pool.Exec(ctx, stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+	
+	return nil
 }
 
 // Schema introspection
@@ -506,4 +520,193 @@ func (p *PostgresAdapter) formatPostgresType(dataType string, charMaxLength, num
 	default:
 		return p.MapColumnType(dataType)
 	}
+}
+
+func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
+	query := `
+	SELECT 
+		c.table_name,
+		c.column_name,
+		c.data_type,
+		c.is_nullable,
+		c.column_default,
+		c.character_maximum_length,
+		c.numeric_precision,
+		c.numeric_scale,
+		c.ordinal_position,
+		CASE WHEN pk.column_name IS NOT NULL THEN 'PRIMARY KEY' ELSE NULL END as is_primary,
+		CASE WHEN uq.column_name IS NOT NULL THEN 'UNIQUE' ELSE NULL END as is_unique,
+		fk.foreign_table_name,
+		fk.foreign_column_name,
+		fk.delete_rule
+	FROM information_schema.columns c
+	LEFT JOIN (
+		SELECT kcu.table_name, kcu.column_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu 
+			ON tc.constraint_name = kcu.constraint_name 
+			AND tc.table_schema = kcu.table_schema
+		WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public'
+	) pk ON c.table_name = pk.table_name AND c.column_name = pk.column_name
+	LEFT JOIN (
+		SELECT kcu.table_name, kcu.column_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu 
+			ON tc.constraint_name = kcu.constraint_name 
+			AND tc.table_schema = kcu.table_schema
+		WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = 'public'
+	) uq ON c.table_name = uq.table_name AND c.column_name = uq.column_name
+	LEFT JOIN (
+		SELECT 
+			kcu.table_name, 
+			kcu.column_name,
+			ccu.table_name AS foreign_table_name,
+			ccu.column_name AS foreign_column_name,
+			rc.delete_rule
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu 
+			ON tc.constraint_name = kcu.constraint_name 
+			AND tc.table_schema = kcu.table_schema
+		JOIN information_schema.constraint_column_usage ccu 
+			ON tc.constraint_name = ccu.constraint_name 
+			AND tc.table_schema = ccu.table_schema
+		JOIN information_schema.referential_constraints rc 
+			ON tc.constraint_name = rc.constraint_name 
+			AND tc.table_schema = rc.constraint_schema
+		WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
+	) fk ON c.table_name = fk.table_name AND c.column_name = fk.column_name
+	WHERE c.table_schema = 'public' 
+		AND c.table_name NOT LIKE '_graft_%'
+	ORDER BY c.table_name, c.ordinal_position`
+
+	rows, err := p.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query schema: %w", err)
+	}
+	defer rows.Close()
+
+	tableMap := make(map[string]*types.SchemaTable)
+	columnsSeen := make(map[string]map[string]bool) // table -> column -> seen
+	
+	for rows.Next() {
+		var tableName, columnName, dataType, isNullable string
+		var ordinalPosition int
+		var columnDefault, isPrimary, isUnique, foreignTable, foreignColumn, deleteRule sql.NullString
+		var charMaxLength, numericPrecision, numericScale sql.NullInt64
+
+		err := rows.Scan(&tableName, &columnName, &dataType, &isNullable, &columnDefault,
+			&charMaxLength, &numericPrecision, &numericScale, &ordinalPosition, &isPrimary, &isUnique,
+			&foreignTable, &foreignColumn, &deleteRule)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		// Initialize table if not exists
+		if _, exists := tableMap[tableName]; !exists {
+			tableMap[tableName] = &types.SchemaTable{
+				Name:    tableName,
+				Columns: []types.SchemaColumn{},
+			}
+			columnsSeen[tableName] = make(map[string]bool)
+		}
+
+		// Skip if column already processed for this table
+		if columnsSeen[tableName][columnName] {
+			continue
+		}
+		columnsSeen[tableName][columnName] = true
+
+		// Format column type properly
+		columnType := p.formatPullColumnType(dataType, charMaxLength, numericPrecision, numericScale, columnDefault.String, isPrimary.Valid)
+
+		column := types.SchemaColumn{
+			Name:     columnName,
+			Type:     columnType,
+			Nullable: isNullable == "YES",
+			Default:  p.formatDefaultValue(columnDefault.String, columnType),
+			IsPrimary: isPrimary.Valid,
+			IsUnique: isUnique.Valid,
+		}
+
+		if foreignTable.Valid && foreignColumn.Valid {
+			column.ForeignKeyTable = foreignTable.String
+			column.ForeignKeyColumn = foreignColumn.String
+			if deleteRule.Valid {
+				column.OnDeleteAction = deleteRule.String
+			}
+		}
+
+		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
+	}
+
+	var tables []types.SchemaTable
+	for _, table := range tableMap {
+		tables = append(tables, *table)
+	}
+
+	return tables, nil
+}
+
+func (p *PostgresAdapter) formatPullColumnType(dataType string, charMaxLength, numericPrecision, numericScale sql.NullInt64, defaultValue string, isPrimary bool) string {
+	switch dataType {
+	case "integer":
+		if isPrimary && strings.Contains(defaultValue, "nextval(") {
+			return "SERIAL"
+		}
+		return "INT"
+	case "bigint":
+		if isPrimary && strings.Contains(defaultValue, "nextval(") {
+			return "BIGSERIAL"
+		}
+		return "BIGINT"
+	case "character varying":
+		if charMaxLength.Valid {
+			return fmt.Sprintf("VARCHAR(%d)", charMaxLength.Int64)
+		}
+		return "VARCHAR(255)"
+	case "character":
+		if charMaxLength.Valid {
+			return fmt.Sprintf("CHAR(%d)", charMaxLength.Int64)
+		}
+		return "CHAR"
+	case "text":
+		return "TEXT"
+	case "boolean":
+		return "BOOLEAN"
+	case "timestamp without time zone":
+		return "TIMESTAMP"
+	case "timestamp with time zone":
+		return "TIMESTAMP WITH TIME ZONE"
+	case "date":
+		return "DATE"
+	case "time":
+		return "TIME"
+	case "numeric":
+		if numericPrecision.Valid && numericScale.Valid {
+			return fmt.Sprintf("NUMERIC(%d,%d)", numericPrecision.Int64, numericScale.Int64)
+		} else if numericPrecision.Valid {
+			return fmt.Sprintf("NUMERIC(%d)", numericPrecision.Int64)
+		}
+		return "NUMERIC"
+	default:
+		return strings.ToUpper(dataType)
+	}
+}
+
+func (p *PostgresAdapter) formatDefaultValue(defaultValue, columnType string) string {
+	if defaultValue == "" {
+		return ""
+	}
+	
+	// Skip sequence defaults for SERIAL columns
+	if strings.Contains(defaultValue, "nextval(") {
+		return ""
+	}
+	
+	// Format common defaults
+	if strings.Contains(strings.ToLower(defaultValue), "now()") {
+		return "NOW()"
+	}
+	
+	return defaultValue
 }

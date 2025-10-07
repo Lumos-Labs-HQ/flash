@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	// "context"
+	"context"
 	"fmt"
 
-	// "github.com/Rana718/Graft/internal/config"
-	// "github.com/Rana718/Graft/internal/pull"
+	"github.com/Rana718/Graft/internal/config"
+	"github.com/Rana718/Graft/internal/pull"
 	"github.com/spf13/cobra"
 )
 
@@ -27,59 +27,38 @@ var pullCmd = &cobra.Command{
 	4. Optionally create a backup of the existing schema file`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO: Pull feature implementation
-		fmt.Println("🚧 Pull feature is coming soon in the next update!")
-		fmt.Println("📋 This feature will allow you to:")
-		fmt.Println("   • Pull complete database schema with all constraints")
-		fmt.Println("   • Extract PRIMARY KEY, FOREIGN KEY, and UNIQUE constraints")
-		fmt.Println("   • Preserve original data types (SERIAL, TIMESTAMP WITH TIME ZONE, etc.)")
-		fmt.Println("   • Include all table relationships and references")
-		fmt.Println("   • Support for PostgreSQL, MySQL, and SQLite databases")
-		fmt.Println("")
-		fmt.Println("Stay tuned for the next release! 🎉")
-		return nil
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
 
-		/*
-			// Original implementation - temporarily commented out
-			cfg, err := config.Load()
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
+		if err := cfg.Validate(); err != nil {
+			return fmt.Errorf("invalid config: %w", err)
+		}
 
-			if err := cfg.Validate(); err != nil {
-				return fmt.Errorf("invalid config: %w", err)
-			}
+		if err := cfg.EnsureDirectories(); err != nil {
+			return fmt.Errorf("failed to create directories: %w", err)
+		}
 
-			if err := cfg.EnsureDirectories(); err != nil {
-				return fmt.Errorf("failed to create directories: %w", err)
-			}
+		ctx := context.Background()
 
-			ctx := context.Background()
+		force, _ := cmd.Flags().GetBool("force")
+		backup, _ := cmd.Flags().GetBool("backup")
+		outputPath, _ := cmd.Flags().GetString("output")
 
-			// Parse flags
-			force, _ := cmd.Flags().GetBool("force")
-			backup, _ := cmd.Flags().GetBool("backup")
-			indexes, _ := cmd.Flags().GetBool("indexes")
-			outputPath, _ := cmd.Flags().GetString("output")
+		pullService, err := pull.NewService(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to create pull service: %w", err)
+		}
+		defer pullService.Close()
 
-			// Create pull service
-			pullService, err := pull.NewService(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create pull service: %w", err)
-			}
-			defer pullService.Close()
+		opts := pull.Options{
+			Force:      force,
+			Backup:     backup,
+			OutputPath: outputPath,
+		}
 
-			// Set up options
-			opts := pull.Options{
-				Force:      force,
-				Backup:     backup,
-				Indexes:    indexes,
-				OutputPath: outputPath,
-			}
-
-			// Execute pull operation
-			return pullService.PullSchema(ctx, opts)
-		*/
+		return pullService.PullSchema(ctx, opts)
 	},
 }
 
@@ -88,6 +67,5 @@ func init() {
 
 	pullCmd.Flags().BoolP("backup", "b", false, "Create backup of existing schema file before overwriting")
 	pullCmd.Flags().BoolP("force", "f", false, "Skip confirmations and overwrite existing schema file")
-	pullCmd.Flags().BoolP("indexes", "i", false, "Include indexes in the generated schema (disabled by default)")
 	pullCmd.Flags().StringP("output", "o", "", "Custom output file path (overrides config schema_path)")
 }

@@ -28,6 +28,7 @@ type DatabaseAdapter interface {
 	GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error)
 	GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)
 	GetAllTableNames(ctx context.Context) ([]string, error)
+	PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
 
 	// Conflict detection
 	CheckTableExists(ctx context.Context, tableName string) (bool, error)

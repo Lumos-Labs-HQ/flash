@@ -136,8 +136,22 @@ func (m *MySQLAdapter) RecordMigration(ctx context.Context, migrationID, name, c
 }
 
 func (m *MySQLAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-	_, err := m.db.ExecContext(ctx, migrationSQL)
-	return err
+	// Split SQL into individual statements and execute them
+	statements := strings.Split(migrationSQL, ";")
+	
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue // Skip empty lines and comments
+		}
+		
+		_, err := m.db.ExecContext(ctx, stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+	
+	return nil
 }
 
 // Schema introspection
@@ -412,12 +426,12 @@ func (m *MySQLAdapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 }
 
 func (m *MySQLAdapter) GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string {
-	return fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN IF NOT EXISTS `%s` %s;",
+	return fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s;",
 		tableName, column.Name, m.FormatColumnType(column))
 }
 
 func (m *MySQLAdapter) GenerateDropColumnSQL(tableName, columnName string) string {
-	return fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN IF EXISTS `%s`;", tableName, columnName)
+	return fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN `%s`;", tableName, columnName)
 }
 
 func (m *MySQLAdapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
@@ -492,4 +506,132 @@ func (m *MySQLAdapter) formatMySQLType(dataType, columnType string, charMaxLengt
 		}
 		return m.MapColumnType(dataType)
 	}
+}
+
+func (m *MySQLAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
+	query := `
+	SELECT
+		c.TABLE_NAME,
+		c.COLUMN_NAME,
+		c.COLUMN_TYPE,
+		c.IS_NULLABLE,
+		c.COLUMN_DEFAULT,
+		c.EXTRA,
+		c.ORDINAL_POSITION,
+		CASE WHEN c.COLUMN_KEY = 'PRI' THEN 'PRIMARY KEY' ELSE NULL END as is_primary,
+		CASE WHEN c.COLUMN_KEY = 'UNI' THEN 'UNIQUE' ELSE NULL END as is_unique,
+		k.REFERENCED_TABLE_NAME AS REFERENCES_TABLE,
+		k.REFERENCED_COLUMN_NAME AS REFERENCES_COLUMN,
+		r.DELETE_RULE AS ON_DELETE
+	FROM INFORMATION_SCHEMA.COLUMNS c
+	LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
+		ON c.TABLE_SCHEMA = k.TABLE_SCHEMA
+		AND c.TABLE_NAME = k.TABLE_NAME
+		AND c.COLUMN_NAME = k.COLUMN_NAME
+		AND k.REFERENCED_TABLE_NAME IS NOT NULL
+	LEFT JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS r
+		ON k.CONSTRAINT_NAME = r.CONSTRAINT_NAME
+		AND k.TABLE_SCHEMA = r.CONSTRAINT_SCHEMA
+	WHERE c.TABLE_SCHEMA = DATABASE()
+		AND c.TABLE_NAME NOT LIKE '_graft_%'
+	ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION`
+
+	rows, err := m.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query schema: %w", err)
+	}
+	defer rows.Close()
+
+	tableMap := make(map[string]*types.SchemaTable)
+	columnsSeen := make(map[string]map[string]bool)
+	
+	for rows.Next() {
+		var tableName, columnName, columnType, isNullable string
+		var ordinalPosition int
+		var columnDefault, extra, isPrimary, isUnique, referencesTable, referencesColumn, onDelete sql.NullString
+
+		err := rows.Scan(&tableName, &columnName, &columnType, &isNullable, &columnDefault,
+			&extra, &ordinalPosition, &isPrimary, &isUnique, &referencesTable, &referencesColumn, &onDelete)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		if _, exists := tableMap[tableName]; !exists {
+			tableMap[tableName] = &types.SchemaTable{
+				Name:    tableName,
+				Columns: []types.SchemaColumn{},
+			}
+			columnsSeen[tableName] = make(map[string]bool)
+		}
+
+		if columnsSeen[tableName][columnName] {
+			continue
+		}
+		columnsSeen[tableName][columnName] = true
+
+		// Format column type
+		formattedType := m.formatMySQLPullType(columnType)
+
+		column := types.SchemaColumn{
+			Name:     columnName,
+			Type:     formattedType,
+			Nullable: isNullable == "YES",
+			Default:  m.formatMySQLDefault(columnDefault.String, formattedType),
+			IsPrimary: isPrimary.Valid,
+			IsUnique: isUnique.Valid,
+		}
+
+		if referencesTable.Valid && referencesColumn.Valid {
+			column.ForeignKeyTable = referencesTable.String
+			column.ForeignKeyColumn = referencesColumn.String
+			if onDelete.Valid {
+				column.OnDeleteAction = onDelete.String
+			}
+		}
+
+		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
+	}
+
+	var tables []types.SchemaTable
+	for _, table := range tableMap {
+		tables = append(tables, *table)
+	}
+
+	return tables, nil
+}
+
+func (m *MySQLAdapter) formatMySQLPullType(columnType string) string {
+	columnType = strings.ToUpper(columnType)
+	
+	// Handle common MySQL types
+	if strings.HasPrefix(columnType, "INT(") {
+		return "INT"
+	}
+	if strings.HasPrefix(columnType, "BIGINT(") {
+		return "BIGINT"
+	}
+	if strings.HasPrefix(columnType, "SMALLINT(") {
+		return "SMALLINT"
+	}
+	if strings.HasPrefix(columnType, "TINYINT(1)") {
+		return "BOOLEAN"
+	}
+	if strings.HasPrefix(columnType, "TINYINT(") {
+		return "TINYINT"
+	}
+	
+	return columnType
+}
+
+func (m *MySQLAdapter) formatMySQLDefault(defaultValue, columnType string) string {
+	if defaultValue == "" {
+		return ""
+	}
+	
+	// Handle MySQL specific defaults
+	if strings.Contains(strings.ToLower(defaultValue), "current_timestamp") {
+		return "CURRENT_TIMESTAMP"
+	}
+	
+	return defaultValue
 }

@@ -19,9 +19,16 @@ var migrateCmd = &cobra.Command{
 	Long: `Create a new migration file with the specified name.
 	If no name is provided, you will be prompted to enter one.
 
+	The migration file will include:
+	- Timestamp and migration name header
+	- Up migration section (forward changes)
+	- Down migration section (rollback changes)
+	- Auto-generated SQL based on schema differences (if --auto flag is used)
+
 	Examples:
 	  graft migrate "create users table"
-	  graft migrate "add email index"
+	  graft migrate "add email index" --auto
+	  graft migrate --empty "custom migration"
 	  graft migrate  # Interactive mode`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -63,12 +70,24 @@ var migrateCmd = &cobra.Command{
 		}
 		defer m.Close()
 
-		if err := m.GenerateMigration(ctx, migrationName, cfg.SchemaPath); err != nil {
-			return err
+		empty, _ := cmd.Flags().GetBool("empty")
+
+		if empty {
+			// Force empty migration template
+			if err := m.GenerateEmptyMigration(ctx, migrationName); err != nil {
+				return err
+			}
+		} else {
+			// Default behavior - try schema diff, fallback to empty
+			if err := m.GenerateMigration(ctx, migrationName, cfg.SchemaPath); err != nil {
+				return err
+			}
 		}
 
 		fmt.Println("✅ Migration generated successfully")
-		fmt.Println("💡 Run 'graft gen' to generate SQLC types after applying migrations")
+		fmt.Println("📝 Edit the migration file to add your SQL statements")
+		fmt.Println("💡 Run 'graft apply' to apply the migration")
+		fmt.Println("🔧 Run 'graft gen' to generate SQLC types after applying migrations")
 
 		return nil
 	},
@@ -76,4 +95,6 @@ var migrateCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(migrateCmd)
+	
+	migrateCmd.Flags().BoolP("empty", "e", false, "Create an empty migration template without schema diff")
 }

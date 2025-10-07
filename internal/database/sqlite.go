@@ -134,8 +134,22 @@ func (s *SQLiteAdapter) RecordMigration(ctx context.Context, migrationID, name, 
 }
 
 func (s *SQLiteAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-	_, err := s.db.ExecContext(ctx, migrationSQL)
-	return err
+	// Split SQL into individual statements and execute them
+	statements := strings.Split(migrationSQL, ";")
+	
+	for _, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue // Skip empty lines and comments
+		}
+		
+		_, err := s.db.ExecContext(ctx, stmt)
+		if err != nil {
+			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
+		}
+	}
+	
+	return nil
 }
 
 // Schema introspection
@@ -528,4 +542,124 @@ func (s *SQLiteAdapter) FormatColumnType(column types.SchemaColumn) string {
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func (s *SQLiteAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
+	// Get all table names first
+	tableQuery := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_graft_%'`
+	rows, err := s.db.QueryContext(ctx, tableQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tables: %w", err)
+	}
+	defer rows.Close()
+
+	var tableNames []string
+	for rows.Next() {
+		var tableName string
+		if err := rows.Scan(&tableName); err != nil {
+			return nil, fmt.Errorf("failed to scan table name: %w", err)
+		}
+		tableNames = append(tableNames, tableName)
+	}
+
+	var tables []types.SchemaTable
+	for _, tableName := range tableNames {
+		// Get column info using PRAGMA
+		columnQuery := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
+		columnRows, err := s.db.QueryContext(ctx, columnQuery)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query columns for table %s: %w", tableName, err)
+		}
+
+		var columns []types.SchemaColumn
+		for columnRows.Next() {
+			var cid int
+			var name, dataType string
+			var notNull, pk int
+			var defaultValue sql.NullString
+
+			err := columnRows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk)
+			if err != nil {
+				columnRows.Close()
+				return nil, fmt.Errorf("failed to scan column info: %w", err)
+			}
+
+			column := types.SchemaColumn{
+				Name:      name,
+				Type:      s.formatSQLiteType(dataType),
+				Nullable:  notNull == 0,
+				IsPrimary: pk == 1,
+				Default:   s.formatSQLiteDefault(defaultValue.String),
+			}
+
+			columns = append(columns, column)
+		}
+		columnRows.Close()
+
+		// Get foreign key info
+		fkQuery := fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName)
+		fkRows, err := s.db.QueryContext(ctx, fkQuery)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query foreign keys for table %s: %w", tableName, err)
+		}
+
+		for fkRows.Next() {
+			var id, seq int
+			var table, from, to, onUpdate, onDelete, match string
+
+			err := fkRows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match)
+			if err != nil {
+				fkRows.Close()
+				return nil, fmt.Errorf("failed to scan foreign key info: %w", err)
+			}
+
+			// Find the column and update its foreign key info
+			for i := range columns {
+				if columns[i].Name == from {
+					columns[i].ForeignKeyTable = table
+					columns[i].ForeignKeyColumn = to
+					columns[i].OnDeleteAction = onDelete
+					break
+				}
+			}
+		}
+		fkRows.Close()
+
+		tables = append(tables, types.SchemaTable{
+			Name:    tableName,
+			Columns: columns,
+		})
+	}
+
+	return tables, nil
+}
+
+func (s *SQLiteAdapter) formatSQLiteType(dataType string) string {
+	switch strings.ToUpper(dataType) {
+	case "INTEGER":
+		return "INTEGER"
+	case "TEXT":
+		return "TEXT"
+	case "REAL":
+		return "REAL"
+	case "BLOB":
+		return "BLOB"
+	case "NUMERIC":
+		return "NUMERIC"
+	default:
+		return strings.ToUpper(dataType)
+	}
+}
+
+func (s *SQLiteAdapter) formatSQLiteDefault(defaultValue string) string {
+	if defaultValue == "" {
+		return ""
+	}
+	
+	// Handle SQLite specific defaults
+	if strings.Contains(strings.ToLower(defaultValue), "current_timestamp") {
+		return "CURRENT_TIMESTAMP"
+	}
+	
+	return defaultValue
 }

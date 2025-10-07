@@ -121,19 +121,16 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 		return fmt.Errorf("failed to generate schema diff: %w", err)
 	}
 
-	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 {
-		fmt.Println("No changes detected in schema")
-		return nil
-	}
-
-	sqlContent := m.generateSQLFromDiff(diff)
-	if sqlContent == "" {
-		fmt.Println("No SQL generated from diff")
-		return nil
-	}
-
 	filename := m.fileUtils.GenerateMigrationFilename(name)
 	filepath := filepath.Join(m.migrationsDir, filename)
+
+	var sqlContent string
+	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 {
+		fmt.Println("No changes detected in schema, creating empty migration template")
+		sqlContent = m.generateEmptyMigrationTemplate(name)
+	} else {
+		sqlContent = m.generateSQLFromDiff(diff, name)
+	}
 
 	if err := os.WriteFile(filepath, []byte(sqlContent), 0644); err != nil {
 		return fmt.Errorf("failed to write migration file: %w", err)
@@ -144,13 +141,14 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 }
 
 // generateSQLFromDiff creates SQL from schema differences - simplified
-func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff) string {
-	var sqlStatements []string
+func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) string {
+	var upStatements []string
 
+	// Generate UP migration only
 	for _, table := range diff.NewTables {
 		sql := m.adapter.GenerateCreateTableSQL(table)
 		if sql != "" {
-			sqlStatements = append(sqlStatements, sql)
+			upStatements = append(upStatements, sql)
 		}
 	}
 
@@ -159,27 +157,73 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff) string {
 		for _, column := range tableDiff.NewColumns {
 			sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
 			if sql != "" {
-				sqlStatements = append(sqlStatements, sql)
+				upStatements = append(upStatements, sql)
 			}
 		}
 
 		for _, columnName := range tableDiff.DroppedColumns {
 			sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, columnName)
 			if sql != "" {
-				sqlStatements = append(sqlStatements, sql)
+				upStatements = append(upStatements, sql)
 			}
 		}
 	}
 
 	for _, tableName := range diff.DroppedTables {
-		sqlStatements = append(sqlStatements, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName))
+		upStatements = append(upStatements, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName))
 	}
 
-	return strings.Join(sqlStatements, "\n\n")
+	return m.formatMigrationFile(name, upStatements)
+}
+
+func (m *Migrator) generateEmptyMigrationTemplate(name string) string {
+	upStatements := []string{
+		"-- Add your SQL statements here",
+		"-- Example: CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);",
+	}
+	
+	return m.formatMigrationFile(name, upStatements)
+}
+
+func (m *Migrator) formatMigrationFile(name string, upStatements []string) string {
+	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
+	
+	var builder strings.Builder
+	
+	builder.WriteString(fmt.Sprintf("-- Migration: %s\n", name))
+	builder.WriteString(fmt.Sprintf("-- Created: %s\n\n", timestamp))
+	
+	if len(upStatements) > 0 {
+		for _, stmt := range upStatements {
+			builder.WriteString(stmt)
+			if !strings.HasSuffix(stmt, ";") {
+				builder.WriteString(";")
+			}
+			builder.WriteString("\n")
+		}
+	} else {
+		builder.WriteString("-- No migration statements\n")
+	}
+	
+	return builder.String()
 }
 
 func (m *Migrator) PullSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	return m.adapter.GetCurrentSchema(ctx)
+}
+
+func (m *Migrator) GenerateEmptyMigration(ctx context.Context, name string) error {
+	filename := m.fileUtils.GenerateMigrationFilename(name)
+	filepath := filepath.Join(m.migrationsDir, filename)
+
+	sqlContent := m.generateEmptyMigrationTemplate(name)
+
+	if err := os.WriteFile(filepath, []byte(sqlContent), 0644); err != nil {
+		return fmt.Errorf("failed to write migration file: %w", err)
+	}
+
+	fmt.Printf("Generated empty migration: %s\n", filename)
+	return nil
 }
 
 func (m *Migrator) askUserConfirmation(message string) bool {
