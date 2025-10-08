@@ -12,7 +12,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "1.1.0"
+	Version = "1.5.0"
 )
 
 func showBanner() {
@@ -41,7 +41,6 @@ func showBanner() {
 		greenColor.Println(line)
 	}
 
-	// Version info with colors
 	fmt.Print("                        ")
 	color.New(color.FgCyan, color.Bold).Print("Version: ")
 	color.New(color.FgYellow, color.Bold).Printf("%s\n", Version)
@@ -50,16 +49,17 @@ func showBanner() {
 var rootCmd = &cobra.Command{
 	Use:   "graft",
 	Short: "A database migration CLI tool",
-	Long: `Graft is a Go-based CLI tool that provides database migration capabilities 
-	similar to Prisma, with support for schema comparison, backup management, 
-	and optional SQLC integration.
+	Long: `
+Graft is a Go-based CLI tool that provides database migration capabilities 
+similar to Prisma, with support for schema comparison, backup management, 
+and optional SQLC integration.
 
-	Features:
-	- Project-aware configuration management
-	- Database-agnostic design (currently supports PostgreSQL)
-	- Migration tracking and validation
-	- Automatic backup system
-	- SQLC integration`,
+Features:
+- Project-aware configuration management
+- Database-agnostic design (currently supports PostgreSQL)
+- Migration tracking and validation
+- Automatic backup system
+- SQLC integration`,
 
 	Run: func(cmd *cobra.Command, args []string) {
 		showVersion, _ := cmd.Flags().GetBool("version")

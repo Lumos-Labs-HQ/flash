@@ -1,3 +1,6 @@
+-- Migration: test init
+-- Created: 2025-10-08T17:30:52Z
+
 CREATE TABLE IF NOT EXISTS "users" (
   "id" SERIAL PRIMARY KEY,
   "name" VARCHAR(255) NOT NULL,
@@ -6,13 +9,11 @@ CREATE TABLE IF NOT EXISTS "users" (
   "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
   "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
 );
-
 CREATE TABLE IF NOT EXISTS "categories" (
   "id" SERIAL PRIMARY KEY,
   "name" VARCHAR(255) UNIQUE NOT NULL,
   "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
 );
-
 CREATE TABLE IF NOT EXISTS "posts" (
   "id" SERIAL PRIMARY KEY,
   "user_id" INT NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -24,7 +25,6 @@ CREATE TABLE IF NOT EXISTS "posts" (
   FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE,
   FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE SET NULL
 );
-
 CREATE TABLE IF NOT EXISTS "comments" (
   "id" SERIAL PRIMARY KEY,
   "post_id" INT NOT NULL REFERENCES "posts"("id") ON DELETE CASCADE,

@@ -14,7 +14,8 @@ import (
 var rawCmd = &cobra.Command{
 	Use:   "raw <sql-file>",
 	Short: "Execute a raw SQL file against the database",
-	Long: `Execute a raw SQL file directly against the database using the configured database adapter.
+	Long: `
+Execute a raw SQL file directly against the database using the configured database adapter.
 	
 Examples:
   graft raw script.sql

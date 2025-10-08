@@ -11,7 +11,6 @@ import (
 )
 
 type Options struct {
-	Force      bool
 	Backup     bool
 	OutputPath string
 }
@@ -55,7 +54,6 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 
 	fmt.Println("🔍 Introspecting database schema...")
 
-	// Get database schema
 	dbTables, err := s.adapter.PullCompleteSchema(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to pull database schema: %w", err)
@@ -66,13 +64,11 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		return nil
 	}
 
-	// Read existing schema file
 	var existingSQL string
 	if content, err := os.ReadFile(schemaPath); err == nil {
 		existingSQL = string(content)
 	}
 
-	// Smart comparison - only structural differences matter
 	hasChanges, updatedSQL := s.comparator.CompareWithDatabase(existingSQL, dbTables)
 	
 	if !hasChanges {
@@ -80,7 +76,6 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		return nil
 	}
 
-	// Create backup if requested and file exists
 	if opts.Backup && existingSQL != "" {
 		if err := s.createBackup(schemaPath); err != nil {
 			fmt.Printf("⚠️  Warning: Failed to create backup: %v\n", err)
@@ -89,7 +84,6 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		}
 	}
 
-	// Write updated schema
 	if err := os.WriteFile(schemaPath, []byte(updatedSQL), 0644); err != nil {
 		return fmt.Errorf("failed to write schema file: %w", err)
 	}

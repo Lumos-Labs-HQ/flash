@@ -16,18 +16,14 @@ func NewSQLComparator() *SQLComparator {
 
 // CompareWithDatabase compares existing SQL file with database tables
 func (sc *SQLComparator) CompareWithDatabase(existingSQL string, dbTables []types.SchemaTable) (bool, string) {
-	// Parse existing SQL into normalized structure (ignoring comments)
 	existingTables := sc.parseSQL(existingSQL)
 	
-	// Convert database tables to normalized structure
 	dbTablesNorm := sc.normalizeDBTables(dbTables)
 	
-	// Compare structures
 	if sc.areEqual(existingTables, dbTablesNorm) {
-		return false, "" // No changes needed
+		return false, "" 
 	}
 	
-	// Generate updated SQL preserving original formatting where possible
 	updatedSQL := sc.generateUpdatedSQL(existingSQL, existingTables, dbTablesNorm)
 	return true, updatedSQL
 }
@@ -36,10 +32,8 @@ func (sc *SQLComparator) CompareWithDatabase(existingSQL string, dbTables []type
 func (sc *SQLComparator) parseSQL(sql string) map[string]*TableStructure {
 	tables := make(map[string]*TableStructure)
 	
-	// Remove all commented lines first
 	cleanSQL := sc.removeAllComments(sql)
 	
-	// Find all CREATE TABLE statements in clean SQL only
 	createTableRegex := regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\);`)
 	matches := createTableRegex.FindAllStringSubmatch(cleanSQL, -1)
 	
@@ -71,12 +65,10 @@ func (sc *SQLComparator) removeAllComments(sql string) string {
 	for _, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
 		
-		// Skip any line that starts with --
 		if strings.HasPrefix(trimmedLine, "--") {
 			continue
 		}
 		
-		// Keep non-comment lines
 		cleanLines = append(cleanLines, line)
 	}
 	
@@ -88,7 +80,6 @@ func (sc *SQLComparator) parseColumnsWithOrder(columnsDef string) (map[string]*C
 	columns := make(map[string]*ColumnStructure)
 	var columnOrder []string
 	
-	// Split by comma, handling nested parentheses
 	parts := sc.smartSplit(columnsDef, ',')
 	
 	for _, part := range parts {
@@ -109,7 +100,6 @@ func (sc *SQLComparator) parseColumnsWithOrder(columnsDef string) (map[string]*C
 
 // parseColumn parses individual column definition
 func (sc *SQLComparator) parseColumn(def string) *ColumnStructure {
-	// Extract column name (first word)
 	parts := strings.Fields(def)
 	if len(parts) < 2 {
 		return nil
@@ -121,7 +111,6 @@ func (sc *SQLComparator) parseColumn(def string) *ColumnStructure {
 	
 	defUpper := strings.ToUpper(def)
 	
-	// Extract and normalize properties
 	col.Properties = sc.extractProperties(defUpper)
 	
 	return col
@@ -131,12 +120,10 @@ func (sc *SQLComparator) parseColumn(def string) *ColumnStructure {
 func (sc *SQLComparator) extractProperties(def string) map[string]string {
 	props := make(map[string]string)
 	
-	// Extract data type
 	if typeMatch := regexp.MustCompile(`^\s*\w+\s+([A-Z]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(typeMatch) > 1 {
 		props["TYPE"] = sc.normalizeType(typeMatch[1])
 	}
 	
-	// Extract constraints
 	if strings.Contains(def, "PRIMARY KEY") {
 		props["PRIMARY"] = "true"
 	}
@@ -151,12 +138,10 @@ func (sc *SQLComparator) extractProperties(def string) map[string]string {
 		props["NULLABLE"] = "true"
 	}
 	
-	// Extract default value
 	if defaultMatch := regexp.MustCompile(`DEFAULT\s+([^,\s]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(defaultMatch) > 1 {
 		props["DEFAULT"] = sc.normalizeDefault(defaultMatch[1])
 	}
 	
-	// Extract foreign key
 	if refMatch := regexp.MustCompile(`REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(\w+(?:\s+\w+)?))?`).FindStringSubmatch(def); len(refMatch) > 2 {
 		fkRef := strings.ToLower(refMatch[1]) + "." + strings.ToLower(refMatch[2])
 		if len(refMatch) > 3 && refMatch[3] != "" {
@@ -179,7 +164,6 @@ func (sc *SQLComparator) normalizeDBTables(dbTables []types.SchemaTable) map[str
 			ColumnOrder: make([]string, 0, len(dbTable.Columns)),
 		}
 		
-		// Preserve the original column order from database
 		for _, dbCol := range dbTable.Columns {
 			colName := strings.ToLower(dbCol.Name)
 			table.ColumnOrder = append(table.ColumnOrder, colName)
@@ -189,7 +173,6 @@ func (sc *SQLComparator) normalizeDBTables(dbTables []types.SchemaTable) map[str
 				Properties: make(map[string]string),
 			}
 			
-			// Set properties
 			col.Properties["TYPE"] = sc.normalizeType(dbCol.Type)
 			
 			if dbCol.IsPrimary {
@@ -269,7 +252,6 @@ func (sc *SQLComparator) areTablesEqual(existing, db *TableStructure) bool {
 
 // areColumnsEqual compares column properties
 func (sc *SQLComparator) areColumnsEqual(existing, db *ColumnStructure) bool {
-	// Compare all properties
 	for key, dbValue := range db.Properties {
 		existingValue, exists := existing.Properties[key]
 		if !exists && dbValue != "" {
@@ -280,7 +262,6 @@ func (sc *SQLComparator) areColumnsEqual(existing, db *ColumnStructure) bool {
 		}
 	}
 	
-	// Check for extra properties in existing that shouldn't be there
 	for key, existingValue := range existing.Properties {
 		dbValue, exists := db.Properties[key]
 		if !exists && existingValue != "" {
@@ -303,11 +284,10 @@ func (sc *SQLComparator) generateUpdatedSQL(originalSQL string, existing, db map
 	return sc.updateExistingSQL(originalSQL, existing, db)
 }
 
-// updateExistingSQL updates only non-commented CREATE TABLE statements
+// only non-commented CREATE TABLE statements
 func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[string]*TableStructure) string {
 	result := originalSQL
 	
-	// Only match CREATE TABLE that are NOT commented (not starting with --)
 	createTableRegex := regexp.MustCompile(`(?m)^(\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(((?:[^)]|\([^)]*\))*)\);)`)
 	
 	result = createTableRegex.ReplaceAllStringFunc(result, func(match string) string {
@@ -318,7 +298,6 @@ func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[
 		
 		tableName := strings.ToLower(strings.TrimSpace(submatches[2]))
 		
-		// Check if this table exists in database
 		dbTable, dbExists := db[tableName]
 		existingTable, existingExists := existing[tableName]
 		
@@ -333,7 +312,6 @@ func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[
 		return match
 	})
 	
-	// Add any new tables that don't exist in original SQL
 	for tableName, dbTable := range db {
 		if _, exists := existing[tableName]; !exists {
 			if result != "" && !strings.HasSuffix(result, "\n") {
@@ -509,7 +487,6 @@ func (sc *SQLComparator) smartSplit(text string, delimiter rune) []string {
 	return parts
 }
 
-// Data structures
 type TableStructure struct {
 	Name        string
 	Columns     map[string]*ColumnStructure

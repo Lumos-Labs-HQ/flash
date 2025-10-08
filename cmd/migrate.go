@@ -16,20 +16,21 @@ import (
 var migrateCmd = &cobra.Command{
 	Use:   "migrate [name]",
 	Short: "Create a new migration",
-	Long: `Create a new migration file with the specified name.
-	If no name is provided, you will be prompted to enter one.
+	Long: `
+Create a new migration file with the specified name.
+If no name is provided, you will be prompted to enter one.
 
-	The migration file will include:
-	- Timestamp and migration name header
-	- Up migration section (forward changes)
-	- Down migration section (rollback changes)
-	- Auto-generated SQL based on schema differences (if --auto flag is used)
+The migration file will include:
+- Timestamp and migration name header
+- Up migration section (forward changes)
+- Down migration section (rollback changes)
+- Auto-generated SQL based on schema differences (if --auto flag is used)
 
-	Examples:
-	  graft migrate "create users table"
-	  graft migrate "add email index" --auto
-	  graft migrate --empty "custom migration"
-	  graft migrate  # Interactive mode`,
+Examples:
+  graft migrate "create users table"
+  graft migrate "add email index" --auto
+  graft migrate --empty "custom migration"
+  graft migrate  # Interactive mode`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -73,12 +74,10 @@ var migrateCmd = &cobra.Command{
 		empty, _ := cmd.Flags().GetBool("empty")
 
 		if empty {
-			// Force empty migration template
 			if err := m.GenerateEmptyMigration(ctx, migrationName); err != nil {
 				return err
 			}
 		} else {
-			// Default behavior - try schema diff, fallback to empty
 			if err := m.GenerateMigration(ctx, migrationName, cfg.SchemaPath); err != nil {
 				return err
 			}

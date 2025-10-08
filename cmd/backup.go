@@ -14,16 +14,16 @@ import (
 var backupCmd = &cobra.Command{
 	Use:   "backup [comment]",
 	Short: "Create a database backup",
-	Long: `Create a manual backup of the database.
-	The backup includes all table data and migration history in JSON format.
+	Long: `
+Create a manual backup of the database.
+The backup includes all table data and migration history in JSON format.
+The backup will be saved in the backup directory specified in your config
+with a timestamp-based filename.
 
-	The backup will be saved in the backup directory specified in your config
-	with a timestamp-based filename.
-
-	Examples:
-	  graft backup "before major update"
-	  graft backup "pre-production backup"
-	  graft backup  # Creates backup with default comment`,
+Examples:
+  graft backup "before major update"
+  graft backup "pre-production backup"
+  graft backup  # Creates backup with default comment`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

@@ -69,6 +69,7 @@ graft status
 | `graft migrate <name>` | Create a new migration file |
 | `graft apply` | Apply pending migrations |
 | `graft status` | Show migration status |
+| `graft pull` | Extract schema from existing database |
 | `graft backup [comment]` | Create database backup |
 | `graft reset` | Reset database (⚠️ destructive) |
 | `graft gen` | Generate SQLC types |
@@ -252,6 +253,9 @@ graft reset --force
 
 # Create backup before major changes
 graft backup "before refactoring"
+
+# Extract schema from existing database
+graft pull
 ```
 
 ### Raw SQL Execution
@@ -266,11 +270,8 @@ graft raw --file scripts/cleanup.sql
 ## 🚀 Roadmap & Future Features
 
 ### Coming Soon
-- 🔍 **Schema Introspection (`graft pull`)**: Extract schema from existing databases
-- 📊 **Migration Rollback**: Rollback applied migrations
-- 🔄 **Migration Squashing**: Combine multiple migrations
-- 📈 **Performance Monitoring**: Track migration performance
-- 🌐 **Remote Schema Sync**: Sync with remote databases
+- 🟨 **JavaScript/TypeScript Support**: Use Graft with Node.js projects
+- 🐍 **Python Support**: Use Graft with Python projects
 
 ## 🐛 Troubleshooting
 

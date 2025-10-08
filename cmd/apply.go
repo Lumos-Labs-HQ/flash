@@ -13,12 +13,14 @@ import (
 var applyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "Apply pending migrations",
-	Long: `Apply all pending migrations to the database.
-	This command will:
-	1. Check for migration conflicts
-	2. Prompt for backup if conflicts are detected
-	3. Apply all pending migrations in order
-	4. Update migration tracking table
+	Long: `
+Apply all pending migrations to the database.
+
+This command will:
+1. Check for migration conflicts
+2. Prompt for backup if conflicts are detected
+3. Apply all pending migrations in order
+4. Update migration tracking table
 
 	Use --force to skip confirmation prompts.`,
 	RunE: func(cmd *cobra.Command, args []string) error {

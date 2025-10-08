@@ -12,17 +12,18 @@ import (
 var resetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset the database",
-	Long: `Reset the database by dropping all tables and data.
-	This is a destructive operation that will:
+	Long: `
+Reset the database by dropping all tables and data.
+This is a destructive operation that will:
 
-	1. Prompt for confirmation (unless --force is used)
-	2. Offer to create a backup before reset
-	3. Drop all tables in the database
-	4. Optionally remove migration files
+1. Prompt for confirmation (unless --force is used)
+2. Offer to create a backup before reset
+3. Drop all tables in the database
+4. Optionally remove migration files
 
-	⚠️  WARNING: This will permanently delete all data in your database!
+⚠️  WARNING: This will permanently delete all data in your database!
 
-	Use --force to skip all confirmation prompts.`,
+Use --force to skip all confirmation prompts.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

@@ -13,17 +13,18 @@ import (
 var genCmd = &cobra.Command{
 	Use:   "gen",
 	Short: "Generate SQLC types",
-	Long: `Generate Go types from SQL queries using SQLC.
-	This command runs 'sqlc generate' to update Go types based on your SQL schemas and queries.
+	Long: `
+Generate Go types from SQL queries using SQLC.
+This command runs 'sqlc generate' to update Go types based on your SQL schemas and queries.
 
-	Requirements:
-	- SQLC must be installed and available in PATH
-	- sqlc_config_path must be set in graft.config.json
-	- Valid sqlc.yaml configuration file
+Requirements:
+- SQLC must be installed and available in PATH
+- sqlc_config_path must be set in graft.config.json
+- Valid sqlc.yaml configuration file
 
-	This command will:
-	1. Run 'sqlc generate' to update Go types
-	2. Report any errors from the generation process`,
+This command will:
+1. Run 'sqlc generate' to update Go types
+2. Report any errors from the generation process`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()

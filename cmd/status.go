@@ -12,14 +12,15 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show migration status",
-	Long: `Show the current status of all migrations including:
-	- Total number of migrations
-	- Number of applied migrations  
-	- Number of pending migrations
-	- Detailed list of each migration with status and timestamp
+	Long: `
+Show the current status of all migrations including:
+- Total number of migrations
+- Number of applied migrations  
+- Number of pending migrations
+- Detailed list of each migration with status and timestamp
 
-	This command helps you understand which migrations have been applied
-	and which are still pending.`,
+This command helps you understand which migrations have been applied
+and which are still pending.`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()

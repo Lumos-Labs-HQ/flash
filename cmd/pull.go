@@ -12,19 +12,19 @@ import (
 var pullCmd = &cobra.Command{
 	Use:   "pull",
 	Short: "Pull database schema to update local schema file",
-	Long: `Pull the current database schema and update the local schema file.
-	
-	This command introspects the current database and generates a schema.sql file
-	that reflects the current state of the database. This is useful for:
-	- Synchronizing your local schema with the database after manual changes
-	- Creating an initial schema file from an existing database
-	- Keeping your schema file up-to-date with the current database state
+	Long: `
+Pull the current database schema and update the local schema file.
+This command introspects the current database and generates a schema.sql file
+that reflects the current state of the database. This is useful for:
+- Synchronizing your local schema with the database after manual changes
+- Creating an initial schema file from an existing database
+- Keeping your schema file up-to-date with the current database state
 
-	The command will:
-	1. Connect to the database
-	2. Introspect all tables, columns, and constraints
-	3. Generate a comprehensive schema.sql file
-	4. Optionally create a backup of the existing schema file`,
+The command will:
+1. Connect to the database
+2. Introspect all tables, columns, and constraints
+3. Generate a comprehensive schema.sql file
+4. Optionally create a backup of the existing schema file`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -42,7 +42,6 @@ var pullCmd = &cobra.Command{
 
 		ctx := context.Background()
 
-		force, _ := cmd.Flags().GetBool("force")
 		backup, _ := cmd.Flags().GetBool("backup")
 		outputPath, _ := cmd.Flags().GetString("output")
 
@@ -53,7 +52,6 @@ var pullCmd = &cobra.Command{
 		defer pullService.Close()
 
 		opts := pull.Options{
-			Force:      force,
 			Backup:     backup,
 			OutputPath: outputPath,
 		}
@@ -64,8 +62,6 @@ var pullCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(pullCmd)
-
 	pullCmd.Flags().BoolP("backup", "b", false, "Create backup of existing schema file before overwriting")
-	pullCmd.Flags().BoolP("force", "f", false, "Skip confirmations and overwrite existing schema file")
 	pullCmd.Flags().StringP("output", "o", "", "Custom output file path (overrides config schema_path)")
 }
