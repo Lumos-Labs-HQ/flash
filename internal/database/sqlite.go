@@ -134,22 +134,102 @@ func (s *SQLiteAdapter) RecordMigration(ctx context.Context, migrationID, name, 
 }
 
 func (s *SQLiteAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-	// Split SQL into individual statements and execute them
-	statements := strings.Split(migrationSQL, ";")
+	// Start a transaction for the entire migration
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Will be ignored if already committed
+
+	// Parse SQL statements properly handling multi-line statements
+	statements := s.parseSQLStatements(migrationSQL)
 	
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
-		if stmt == "" || strings.HasPrefix(stmt, "--") {
-			continue // Skip empty lines and comments
+		if stmt == "" {
+			continue // Skip empty statements
 		}
 		
-		_, err := s.db.ExecContext(ctx, stmt)
+		_, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
 		}
 	}
 	
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration transaction: %w", err)
+	}
+	
 	return nil
+}
+
+// parseSQLStatements properly parses SQL statements handling multi-line CREATE TABLE statements
+func (s *SQLiteAdapter) parseSQLStatements(sql string) []string {
+	var statements []string
+	var currentStatement strings.Builder
+	var inParentheses int
+	var inQuotes bool
+	var quoteChar rune
+	
+	lines := strings.Split(sql, "\n")
+	
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		
+		// Skip comments and empty lines
+		if line == "" || strings.HasPrefix(line, "--") {
+			continue
+		}
+		
+		// Process each character to track parentheses and quotes
+		for i, char := range line {
+			switch {
+			case !inQuotes && (char == '"' || char == '\'' || char == '`'):
+				inQuotes = true
+				quoteChar = char
+				currentStatement.WriteRune(char)
+			case inQuotes && char == quoteChar:
+				// Check if it's escaped
+				if i > 0 && rune(line[i-1]) == '\\' {
+					currentStatement.WriteRune(char)
+				} else {
+					inQuotes = false
+					currentStatement.WriteRune(char)
+				}
+			case !inQuotes && char == '(':
+				inParentheses++
+				currentStatement.WriteRune(char)
+			case !inQuotes && char == ')':
+				inParentheses--
+				currentStatement.WriteRune(char)
+			case !inQuotes && char == ';' && inParentheses == 0:
+				// End of statement
+				stmt := strings.TrimSpace(currentStatement.String())
+				if stmt != "" {
+					statements = append(statements, stmt)
+				}
+				currentStatement.Reset()
+			default:
+				currentStatement.WriteRune(char)
+			}
+		}
+		
+		// Add newline if we're still building a statement
+		if currentStatement.Len() > 0 {
+			currentStatement.WriteRune('\n')
+		}
+	}
+	
+	// Add any remaining statement
+	if currentStatement.Len() > 0 {
+		stmt := strings.TrimSpace(currentStatement.String())
+		if stmt != "" {
+			statements = append(statements, stmt)
+		}
+	}
+	
+	return statements
 }
 
 // Schema introspection
