@@ -16,7 +16,7 @@ func NewSQLComparator() *SQLComparator {
 
 // CompareWithDatabase compares existing SQL file with database tables
 func (sc *SQLComparator) CompareWithDatabase(existingSQL string, dbTables []types.SchemaTable) (bool, string) {
-	// Parse existing SQL into normalized structure
+	// Parse existing SQL into normalized structure (ignoring comments)
 	existingTables := sc.parseSQL(existingSQL)
 	
 	// Convert database tables to normalized structure
@@ -32,13 +32,16 @@ func (sc *SQLComparator) CompareWithDatabase(existingSQL string, dbTables []type
 	return true, updatedSQL
 }
 
-// parseSQL extracts table structures from SQL preserving original order
+// parseSQL extracts table structures from SQL, completely ignoring commented sections
 func (sc *SQLComparator) parseSQL(sql string) map[string]*TableStructure {
 	tables := make(map[string]*TableStructure)
 	
-	// Find all CREATE TABLE statements
+	// Remove all commented lines first
+	cleanSQL := sc.removeAllComments(sql)
+	
+	// Find all CREATE TABLE statements in clean SQL only
 	createTableRegex := regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\);`)
-	matches := createTableRegex.FindAllStringSubmatch(sql, -1)
+	matches := createTableRegex.FindAllStringSubmatch(cleanSQL, -1)
 	
 	for _, match := range matches {
 		if len(match) >= 3 {
@@ -50,7 +53,7 @@ func (sc *SQLComparator) parseSQL(sql string) map[string]*TableStructure {
 			table := &TableStructure{
 				Name:        tableName,
 				Columns:     columns,
-				ColumnOrder: columnOrder, // This preserves the original SQL file order
+				ColumnOrder: columnOrder,
 			}
 			
 			tables[tableName] = table
@@ -58,6 +61,26 @@ func (sc *SQLComparator) parseSQL(sql string) map[string]*TableStructure {
 	}
 	
 	return tables
+}
+
+// removeAllComments removes all commented lines from SQL
+func (sc *SQLComparator) removeAllComments(sql string) string {
+	lines := strings.Split(sql, "\n")
+	var cleanLines []string
+	
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		
+		// Skip any line that starts with --
+		if strings.HasPrefix(trimmedLine, "--") {
+			continue
+		}
+		
+		// Keep non-comment lines
+		cleanLines = append(cleanLines, line)
+	}
+	
+	return strings.Join(cleanLines, "\n")
 }
 
 // parseColumnsWithOrder extracts column definitions preserving order
@@ -82,28 +105,6 @@ func (sc *SQLComparator) parseColumnsWithOrder(columnsDef string) (map[string]*C
 	}
 	
 	return columns, columnOrder
-}
-
-// parseColumns extracts column definitions
-func (sc *SQLComparator) parseColumns(columnsDef string) map[string]*ColumnStructure {
-	columns := make(map[string]*ColumnStructure)
-	
-	// Split by comma, handling nested parentheses
-	parts := sc.smartSplit(columnsDef, ',')
-	
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" || strings.HasPrefix(strings.ToUpper(part), "FOREIGN KEY") {
-			continue
-		}
-		
-		col := sc.parseColumn(part)
-		if col != nil {
-			columns[col.Name] = col
-		}
-	}
-	
-	return columns
 }
 
 // parseColumn parses individual column definition
@@ -296,20 +297,18 @@ func (sc *SQLComparator) areColumnsEqual(existing, db *ColumnStructure) bool {
 // generateUpdatedSQL creates updated SQL preserving original formatting and order
 func (sc *SQLComparator) generateUpdatedSQL(originalSQL string, existing, db map[string]*TableStructure) string {
 	if originalSQL == "" {
-		// No existing file, generate new one with database order
 		return sc.generateCleanSQL(db)
 	}
 	
-	// Preserve original SQL structure and only update what's different
 	return sc.updateExistingSQL(originalSQL, existing, db)
 }
 
-// updateExistingSQL updates only the different parts while preserving original structure
+// updateExistingSQL updates only non-commented CREATE TABLE statements
 func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[string]*TableStructure) string {
 	result := originalSQL
 	
-	// Find and replace each table definition
-	createTableRegex := regexp.MustCompile(`(?is)(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\);)`)
+	// Only match CREATE TABLE that are NOT commented (not starting with --)
+	createTableRegex := regexp.MustCompile(`(?m)^(\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(((?:[^)]|\([^)]*\))*)\);)`)
 	
 	result = createTableRegex.ReplaceAllStringFunc(result, func(match string) string {
 		submatches := createTableRegex.FindStringSubmatch(match)
@@ -324,17 +323,14 @@ func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[
 		existingTable, existingExists := existing[tableName]
 		
 		if !dbExists {
-			// Table doesn't exist in database, remove it
 			return ""
 		}
 		
-		if !existingExists {
-			// New table, generate fresh
+		if !existingExists || !sc.areTablesEqual(existingTable, dbTable) {
 			return sc.generateTableSQL(dbTable)
 		}
 		
-		// Update existing table definition
-		return sc.updateTableDefinition(match, existingTable, dbTable)
+		return match
 	})
 	
 	// Add any new tables that don't exist in original SQL
@@ -343,154 +339,46 @@ func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[
 			if result != "" && !strings.HasSuffix(result, "\n") {
 				result += "\n"
 			}
-			result += "\n" + sc.generateTableSQL(dbTable)
+			result += "\n" + sc.generateTableSQL(dbTable) + "\n"
 		}
 	}
 	
 	return result
 }
 
-// updateTableDefinition updates a table definition preserving original column order
-func (sc *SQLComparator) updateTableDefinition(originalTableSQL string, existing, db *TableStructure) string {
-	// Extract the table header and footer
-	createTableRegex := regexp.MustCompile(`(?is)(CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\w+\s*\()(.*?)(\);)`)
-	matches := createTableRegex.FindStringSubmatch(originalTableSQL)
+// generateCleanSQL generates clean SQL from database structure preserving order
+func (sc *SQLComparator) generateCleanSQL(tables map[string]*TableStructure) string {
+	var result strings.Builder
 	
-	if len(matches) < 4 {
-		// Fallback to generating new table
-		return sc.generateTableSQL(db)
+	var tableNames []string
+	for name := range tables {
+		tableNames = append(tableNames, name)
 	}
+	sort.Strings(tableNames)
 	
-	header := matches[1]
-	columnsSection := matches[2]
-	footer := matches[3]
-	
-	// Update columns section preserving original order
-	updatedColumns := sc.updateColumnsSection(columnsSection, existing, db)
-	
-	return header + updatedColumns + footer
-}
-
-// updateColumnsSection updates column definitions preserving original order and formatting
-func (sc *SQLComparator) updateColumnsSection(originalColumns string, existing, db *TableStructure) string {
-	// Split original columns while preserving formatting
-	parts := sc.smartSplitPreservingWhitespace(originalColumns, ',')
-	
-	var updatedParts []string
-	processedColumns := make(map[string]bool)
-	
-	// Process existing columns in original order
-	for _, part := range parts {
-		trimmedPart := strings.TrimSpace(part)
-		if trimmedPart == "" || strings.HasPrefix(strings.ToUpper(trimmedPart), "FOREIGN KEY") {
-			updatedParts = append(updatedParts, part)
-			continue
+	for i, tableName := range tableNames {
+		if i > 0 {
+			result.WriteString("\n")
 		}
 		
-		// Extract column name
-		colName := sc.extractColumnName(trimmedPart)
-		if colName == "" {
-			updatedParts = append(updatedParts, part)
-			continue
-		}
-		
-		colNameLower := strings.ToLower(colName)
-		processedColumns[colNameLower] = true
-		
-		// Check if column exists in database
-		dbCol, dbExists := db.Columns[colNameLower]
-		existingCol, existingExists := existing.Columns[colNameLower]
-		
-		if !dbExists {
-			// Column doesn't exist in database, skip it
-			continue
-		}
-		
-		if !existingExists || !sc.areColumnsEqual(existingCol, dbCol) {
-			// Column is new or different, update it
-			// Preserve original indentation
-			indentation := sc.extractIndentation(part)
-			updatedParts = append(updatedParts, indentation+sc.generateColumnSQL(dbCol))
-		} else {
-			// Column is the same, keep original
-			updatedParts = append(updatedParts, part)
-		}
+		table := tables[tableName]
+		result.WriteString(sc.generateTableSQL(table))
+		result.WriteString("\n")
 	}
 	
-	// Add any new columns that weren't in the original
-	for colName, dbCol := range db.Columns {
-		if !processedColumns[colName] {
-			// Add new column with standard indentation
-			updatedParts = append(updatedParts, "    "+sc.generateColumnSQL(dbCol))
-		}
-	}
-	
-	return strings.Join(updatedParts, ",")
-}
-
-// Helper functions for preserving formatting
-func (sc *SQLComparator) smartSplitPreservingWhitespace(text string, delimiter rune) []string {
-	var parts []string
-	var current strings.Builder
-	parenLevel := 0
-	
-	for _, char := range text {
-		switch char {
-		case '(':
-			parenLevel++
-			current.WriteRune(char)
-		case ')':
-			parenLevel--
-			current.WriteRune(char)
-		case delimiter:
-			if parenLevel == 0 {
-				parts = append(parts, current.String())
-				current.Reset()
-			} else {
-				current.WriteRune(char)
-			}
-		default:
-			current.WriteRune(char)
-		}
-	}
-	
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
-	
-	return parts
-}
-
-func (sc *SQLComparator) extractColumnName(columnDef string) string {
-	// Extract first word as column name
-	fields := strings.Fields(strings.TrimSpace(columnDef))
-	if len(fields) > 0 {
-		return fields[0]
-	}
-	return ""
-}
-
-func (sc *SQLComparator) extractIndentation(text string) string {
-	// Extract leading whitespace
-	for i, char := range text {
-		if char != ' ' && char != '\t' && char != '\n' && char != '\r' {
-			return text[:i]
-		}
-	}
-	return ""
+	return result.String()
 }
 
 func (sc *SQLComparator) generateTableSQL(table *TableStructure) string {
 	var result strings.Builder
 	
-	result.WriteString("-- ")
-	result.WriteString(strings.Title(table.Name))
-	result.WriteString(" table\n")
+	// result.WriteString("-- ")
+	// result.WriteString(strings.Title(table.Name))
+	// result.WriteString(" table\n")
 	result.WriteString("CREATE TABLE IF NOT EXISTS ")
 	result.WriteString(table.Name)
 	result.WriteString(" (\n")
 	
-	// Use database column order for new tables
 	columnNames := table.ColumnOrder
 	if len(columnNames) == 0 {
 		for name := range table.Columns {
@@ -511,57 +399,6 @@ func (sc *SQLComparator) generateTableSQL(table *TableStructure) string {
 	}
 	
 	result.WriteString("\n);")
-	return result.String()
-}
-
-// generateCleanSQL generates clean SQL from database structure preserving order
-func (sc *SQLComparator) generateCleanSQL(tables map[string]*TableStructure) string {
-	var result strings.Builder
-	
-	// Sort table names for consistent output
-	var tableNames []string
-	for name := range tables {
-		tableNames = append(tableNames, name)
-	}
-	sort.Strings(tableNames)
-	
-	for i, tableName := range tableNames {
-		if i > 0 {
-			result.WriteString("\n")
-		}
-		
-		table := tables[tableName]
-		result.WriteString("-- ")
-		result.WriteString(strings.Title(table.Name))
-		result.WriteString(" table\n")
-		result.WriteString("CREATE TABLE IF NOT EXISTS ")
-		result.WriteString(table.Name)
-		result.WriteString(" (\n")
-		
-		// Preserve original column order from database (don't sort)
-		columnNames := table.ColumnOrder
-		if len(columnNames) == 0 {
-			// Fallback to map keys if order not preserved
-			for name := range table.Columns {
-				columnNames = append(columnNames, name)
-			}
-		}
-		
-		for j, colName := range columnNames {
-			if j > 0 {
-				result.WriteString(",\n")
-			}
-			
-			col := table.Columns[colName]
-			if col != nil {
-				result.WriteString("    ")
-				result.WriteString(sc.generateColumnSQL(col))
-			}
-		}
-		
-		result.WriteString("\n);\n")
-	}
-	
 	return result.String()
 }
 
@@ -676,10 +513,10 @@ func (sc *SQLComparator) smartSplit(text string, delimiter rune) []string {
 type TableStructure struct {
 	Name        string
 	Columns     map[string]*ColumnStructure
-	ColumnOrder []string // Preserve original column order
+	ColumnOrder []string 
 }
 
 type ColumnStructure struct {
 	Name       string
-	Properties map[string]string // TYPE, PRIMARY, UNIQUE, NOT_NULL, DEFAULT, FOREIGN_KEY, etc.
+	Properties map[string]string 
 }
