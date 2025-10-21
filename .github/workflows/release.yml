@@ -59,21 +59,4 @@ jobs:
         generate_release_notes: true
         files: |
           release/*
-        body: |
-          ## What's Changed
-          
-          See the full changelog and commits for detailed changes.
-          
-          ## Installation
-          
-          ### Download Binary
-          Download the appropriate binary for your platform from the assets below.
-          
-          ### Using Go Install
-          ```bash
-          go install github.com/Rana718/Graft@${{ steps.tag.outputs.TAG_NAME }}
-          ```
-          
-          ## Checksums
-          
-          Verify your download with the checksums provided in `checksums.txt`.
+        body_path: RELEASE_NOTES.md
