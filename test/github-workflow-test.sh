@@ -124,10 +124,10 @@ DATA
 $GRAFT_CMD raw insert_data.sql >/dev/null 2>&1
 log_success "Test data inserted"
 
-# Test 4: Create backup
-log_step "Create backup"
-$GRAFT_CMD backup "test backup" --force >/dev/null 2>&1
-log_success "Backup created"
+# Test 4: Create export
+log_step "Create export"
+$GRAFT_CMD export --json >/dev/null 2>&1
+log_success "JSON export created"
 
 # Test 5: Add posts table
 log_step "Add posts table"
@@ -197,39 +197,53 @@ echo "📋 Migration Status:"
 $GRAFT_CMD status
 log_success "Migration status checked"
 
-# Test 9: Verify backup files
-log_step "Verify backup files"
-if [ -d "db/backup" ] && [ "$(ls -A db/backup 2>/dev/null)" ]; then
-    backup_count=$(ls db/backup/*.json 2>/dev/null | wc -l)
-    log_success "Found $backup_count backup files"
+# Test 9: Test all export formats
+log_step "Test all export formats"
+$GRAFT_CMD export --csv >/dev/null 2>&1
+$GRAFT_CMD export --sqlite >/dev/null 2>&1
+log_success "All export formats tested"
+
+# Test 10: Verify export files
+log_step "Verify export files"
+if [ -d "db/export" ] && [ "$(ls -A db/export 2>/dev/null)" ]; then
+    export_count=$(ls db/export/* 2>/dev/null | wc -l)
+    log_success "Found $export_count export files"
     
-    # Validate backup files
-    for backup_file in db/backup/*.json; do
-        if [ -f "$backup_file" ]; then
-            filename=$(basename "$backup_file")
-            if command -v jq >/dev/null 2>&1; then
-                if jq empty "$backup_file" 2>/dev/null; then
-                    echo "   ✓ $filename - Valid JSON"
+    # Validate export files
+    for export_file in db/export/*; do
+        if [ -f "$export_file" ]; then
+            filename=$(basename "$export_file")
+            if [[ "$filename" == *.json ]]; then
+                if command -v jq >/dev/null 2>&1; then
+                    if jq empty "$export_file" 2>/dev/null; then
+                        echo "   ✓ $filename - Valid JSON"
+                    else
+                        echo "   ✗ $filename - Invalid JSON"
+                    fi
                 else
-                    echo "   ✗ $filename - Invalid JSON"
+                    echo "   ✓ $filename - JSON file exists"
                 fi
+            elif [[ "$filename" == *.db ]]; then
+                echo "   ✓ $filename - SQLite export exists"
+            elif [[ -d "$export_file" ]]; then
+                echo "   ✓ $filename - CSV export directory exists"
             else
-                echo "   ✓ $filename - File exists"
+                echo "   ✓ $filename - Export file exists"
             fi
         fi
     done
-    log_success "Backup files verified"
+    log_success "Export files verified"
 else
-    log_error "No backup files found"
+    log_error "No export files found"
 fi
 
 echo ""
 log_header "PHASE 4: DATABASE RESET TEST"
 echo "============================"
 
-# Test 10: Database reset with automated responses
+# Test 11: Database reset with automated responses
 log_step "Test database reset with automated responses"
-log_info "Sending automated responses: y (reset) and n (no backup)"
+log_info "Sending automated responses: y (reset) and n (no export)"
 
 # Create a script to send the responses
 cat > reset_responses.txt << 'RESPONSES'
@@ -243,7 +257,7 @@ $GRAFT_CMD reset < reset_responses.txt
 
 log_success "Database reset completed with automated responses"
 
-# Test 11: Verify reset worked
+# Test 12: Verify reset worked
 log_step "Verify database was reset"
 echo "📊 Checking table count after reset:"
 
@@ -258,7 +272,7 @@ CHECK
 $GRAFT_CMD raw check_tables.sql
 log_success "Database reset verification completed"
 
-# Test 12: Final status check
+# Test 13: Final status check
 log_step "Final migration status check"
 echo "📋 Final Migration Status:"
 $GRAFT_CMD status
@@ -280,7 +294,7 @@ echo ""
 log_success "✅ Project initialization and configuration"
 log_success "✅ Schema creation and migration management"
 log_success "✅ Data insertion and querying"
-log_success "✅ Backup creation and validation"
+log_success "✅ Export creation and validation (JSON, CSV, SQLite)"
 log_success "✅ Complex SQL queries execution"
 log_success "✅ Migration status tracking"
 log_success "✅ Database reset with automated responses (y/n)"
@@ -290,5 +304,5 @@ log_header "🚀 GRAFT CLI - READY FOR GITHUB WORKFLOW!"
 echo ""
 log_info "✨ All tests passed - GitHub Actions will run successfully"
 log_info "🔧 Reset command works with automated y/n responses"
-log_info "💾 Backup system functioning correctly"
+log_info "📤 Export system functioning correctly (JSON, CSV, SQLite)"
 log_info "📊 Migration tracking working perfectly"
