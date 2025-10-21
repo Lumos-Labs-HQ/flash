@@ -12,7 +12,7 @@ type Config struct {
 	SchemaPath     string   `json:"schema_path" mapstructure:"schema_path"`
 	MigrationsPath string   `json:"migrations_path" mapstructure:"migrations_path"`
 	SqlcConfigPath string   `json:"sqlc_config_path" mapstructure:"sqlc_config_path"`
-	BackupPath     string   `json:"backup_path" mapstructure:"backup_path"`
+	ExportPath     string   `json:"export_path" mapstructure:"export_path"`
 	Database       Database `json:"database" mapstructure:"database"`
 }
 
@@ -34,8 +34,8 @@ func Load() (*Config, error) {
 	if cfg.MigrationsPath == "" {
 		cfg.MigrationsPath = "migrations"
 	}
-	if cfg.BackupPath == "" {
-		cfg.BackupPath = "db_backup"
+	if cfg.ExportPath == "" {
+		cfg.ExportPath = "db_export"
 	}
 	if cfg.Database.Provider == "" {
 		cfg.Database.Provider = "postgresql"
@@ -90,8 +90,8 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("migrations_path cannot be empty")
 	}
 
-	if c.BackupPath == "" {
-		return fmt.Errorf("backup_path cannot be empty")
+	if c.ExportPath == "" {
+		return fmt.Errorf("export_path cannot be empty")
 	}
 
 	return nil

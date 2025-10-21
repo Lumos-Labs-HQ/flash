@@ -63,11 +63,20 @@ func initializeProject(dbType template.DatabaseType) error {
 	}
 
 	files := map[string]string{
-		"graft.config.json":    tmpl.GetGraftConfig(),
-		"sqlc.yml":             tmpl.GetSQLCConfig(),
-		"db/schema/schema.sql": tmpl.GetSchema(),
-		"db/queries/users.sql": tmpl.GetQueries(),
-		".env":                 tmpl.GetEnvTemplate(),
+		"graft.config.json": tmpl.GetGraftConfig(),
+		"sqlc.yml":          tmpl.GetSQLCConfig(),
+	}
+
+	if _, err := os.Stat("db/schema/schema.sql"); os.IsNotExist(err) {
+		files["db/schema/schema.sql"] = tmpl.GetSchema()
+	}
+
+	if _, err := os.Stat("db/queries/users.sql"); os.IsNotExist(err) {
+		files["db/queries/users.sql"] = tmpl.GetQueries()
+	}
+
+	if os.Getenv("DATABASE_URL") == "" {
+		files[".env"] = tmpl.GetEnvTemplate()
 	}
 
 	for filePath, content := range files {
@@ -87,8 +96,23 @@ func initializeProject(dbType template.DatabaseType) error {
 	for filePath := range files {
 		fmt.Printf("   %s\n", filePath)
 	}
+	
+	if os.Getenv("DATABASE_URL") != "" {
+		fmt.Println()
+		fmt.Println("ℹ️  Using existing DATABASE_URL from environment")
+	}
+	
+	if _, err := os.Stat("db/schema/schema.sql"); err == nil {
+		fmt.Println("ℹ️  Skipped db/schema/schema.sql (already exists)")
+	}
+	
+	if _, err := os.Stat("db/queries/users.sql"); err == nil {
+		fmt.Println("ℹ️  Skipped db/queries/users.sql (already exists)")
+	}
+	
 	fmt.Println()
 	fmt.Printf("🚀 Next steps:\n")
+	fmt.Printf("   graft migrate   # Create migrations\n")
 	fmt.Printf("   graft apply     # Apply initial migrations\n")
 	fmt.Printf("   graft gen       # Generate SQLC code\n")
 

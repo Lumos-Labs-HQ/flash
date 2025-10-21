@@ -7,4 +7,3 @@ sql:
       go:
         package: "graft"
         out: "graft_gen/"
-        sql_package: "pgx/v5"

@@ -36,7 +36,8 @@ graft/
 │   ├── database/          # Database adapters
 │   ├── migrator/          # Migration logic
 │   ├── schema/            # Schema management
-│   ├── backup/            # Backup system
+│   ├── export/            # Export system
+│   ├── pull/              # Schema introspection
 │   └── utils/             # Utility functions
 ├── template/              # Project templates
 ├── docs/                  # Documentation
@@ -56,6 +57,7 @@ git checkout -b fix/bug-description
 - Follow Go conventions
 - Add tests for new features
 - Update documentation if needed
+- Test safe migration features
 
 ### 3. Test Your Changes
 ```bash
@@ -67,6 +69,9 @@ make fmt
 
 # Lint code
 make lint
+
+# Test with example project
+cd example && graft apply
 ```
 
 ### 4. Commit and Push
@@ -87,21 +92,25 @@ git push origin feature/your-feature-name
 - Fix existing issues
 - Improve error handling
 - Performance optimizations
+- Safe migration improvements
 
 ### ✨ New Features
 - New database adapters
 - Additional CLI commands
-- Enhanced functionality
+- Enhanced export formats
+- Migration safety features
 
 ### 📚 Documentation
 - Improve README
 - Add examples
 - Write tutorials
+- Update API docs
 
 ### 🧪 Testing
 - Add unit tests
 - Integration tests
 - Performance tests
+- Migration safety tests
 
 ## 🔧 Adding a New Database Adapter
 
@@ -109,9 +118,10 @@ To add support for a new database:
 
 1. **Create adapter file**: `internal/database/newdb.go`
 2. **Implement interface**: All `DatabaseAdapter` methods
-3. **Add to factory**: Update `NewAdapter()` function
-4. **Add template**: Create database-specific templates
-5. **Update docs**: Add to README and examples
+3. **Add transaction safety**: Implement safe migration execution
+4. **Add to factory**: Update `NewAdapter()` function
+5. **Add template**: Create database-specific templates
+6. **Update docs**: Add to README and examples
 
 Example structure:
 ```go
@@ -126,8 +136,41 @@ func NewNewDBAdapter() *NewDBAdapter {
 func (n *NewDBAdapter) Connect(ctx context.Context, url string) error {
     // Implementation
 }
+
+func (n *NewDBAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
+    // Must implement transaction safety
+    tx, err := n.db.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback() // Auto-rollback on error
+    
+    // Execute statements
+    // ...
+    
+    return tx.Commit()
+}
 // ... implement other methods
 ```
+
+## 🔒 Safe Migration Development
+
+When working on migration features:
+
+### Transaction Safety
+- Each migration must run in its own transaction
+- Automatic rollback on any failure
+- Proper error handling and reporting
+
+### Export Integration
+- Ensure export works before destructive operations
+- Support all export formats (JSON, CSV, SQLite)
+- Test export/import roundtrip
+
+### Conflict Detection
+- Implement proper conflict detection
+- Provide clear resolution options
+- Test with various conflict scenarios
 
 ## 📝 Code Style
 
@@ -143,20 +186,29 @@ func (n *NewDBAdapter) Connect(ctx context.Context, url string) error {
 if err := doSomething(); err != nil {
     return fmt.Errorf("failed to do something: %w", err)
 }
+
+// Migration-specific error handling
+if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
+    fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
+    fmt.Printf("   Error: %v\n", err)
+    fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+    return err
+}
 ```
 
 ### Testing
 ```go
-func TestFeature(t *testing.T) {
+func TestSafeMigration(t *testing.T) {
     // Arrange
     setup := createTestSetup()
     
     // Act
-    result, err := feature.Execute()
+    err := migrator.Apply(ctx)
     
     // Assert
     assert.NoError(t, err)
-    assert.Equal(t, expected, result)
+    // Verify migration was recorded
+    // Verify database state is correct
 }
 ```
 
@@ -167,6 +219,8 @@ func TestFeature(t *testing.T) {
 - [ ] Code is formatted (`make fmt`)
 - [ ] Code is linted (`make lint`)
 - [ ] Documentation updated
+- [ ] Migration safety tested
+- [ ] Export functionality tested
 - [ ] Commit messages are clear
 
 ### PR Template
@@ -179,42 +233,49 @@ Brief description of changes
 - [ ] New feature
 - [ ] Documentation update
 - [ ] Performance improvement
+- [ ] Migration safety improvement
 
 ## Testing
 - [ ] Unit tests added/updated
 - [ ] Manual testing completed
+- [ ] Migration safety verified
+- [ ] Export functionality tested
 
 ## Checklist
 - [ ] Code follows style guidelines
 - [ ] Documentation updated
 - [ ] No breaking changes
+- [ ] Transaction safety maintained
 ```
 
 ## 🐛 Reporting Issues
 
 ### Bug Reports
 Include:
-- Graft version
+- Graft version (`graft --version`)
 - Operating system
 - Database type and version
 - Steps to reproduce
 - Expected vs actual behavior
+- Migration files (if applicable)
+- Export/import logs
 
 ### Feature Requests
 Include:
 - Clear description of the feature
 - Use case and benefits
 - Possible implementation approach
+- Impact on migration safety
 
 ## 🏷️ Commit Message Format
 
 Use conventional commits:
 ```
-feat: add MySQL support
-fix: resolve migration rollback issue
-docs: update installation guide
-test: add unit tests for schema parser
-refactor: improve error handling
+feat: add MySQL support with transaction safety
+fix: resolve migration rollback issue in PostgreSQL adapter
+docs: update export system documentation
+test: add unit tests for safe migration execution
+refactor: improve error handling in export system
 ```
 
 ## 🎉 Recognition

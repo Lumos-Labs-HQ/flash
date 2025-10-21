@@ -6,7 +6,8 @@ A powerful, database-agnostic migration CLI tool built in Go that provides Prism
 
 - 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite
 - 🔄 **Migration Management**: Create, apply, and track migrations
-- 💾 **Smart Backup System**: Automatic backups before destructive operations
+- 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
+- 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability
 - 🔧 **SQLC Integration**: Generate Go types from SQL schemas
 - ⚡ **Fast & Reliable**: Built in Go for performance and reliability
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
@@ -51,7 +52,7 @@ echo "DATABASE_URL=postgres://user:password@localhost:5432/mydb" > .env
 graft migrate "create users table"
 ```
 
-### 4. Apply Migrations
+### 4. Apply Migrations Safely
 ```bash
 graft apply
 ```
@@ -67,10 +68,10 @@ graft status
 |---------|-------------|
 | `graft init` | Initialize project with database-specific templates |
 | `graft migrate <name>` | Create a new migration file |
-| `graft apply` | Apply pending migrations |
+| `graft apply` | Apply pending migrations with transaction safety |
 | `graft status` | Show migration status |
 | `graft pull` | Extract schema from existing database |
-| `graft backup [comment]` | Create database backup |
+| `graft export [format]` | Export database (JSON, CSV, SQLite) |
 | `graft reset` | Reset database (⚠️ destructive) |
 | `graft gen` | Generate SQLC types |
 | `graft raw <sql>` | Execute raw SQL |
@@ -109,7 +110,7 @@ Graft uses `graft.config.json` for configuration:
   "schema_path": "db/schema/schema.sql",
   "migrations_path": "db/migrations",
   "sqlc_config_path": "sqlc.yml",
-  "backup_path": "db/backup",
+  "export_path": "db/export",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
@@ -132,7 +133,39 @@ your-project/
     ├── queries/
     │   └── users.sql     # SQL queries for SQLC
     ├── migrations/       # Migration files (auto-created)
-    └── backup/          # Backup files (auto-created)
+    └── export/          # Export files (auto-created)
+```
+
+## 🔒 Safe Migration System
+
+### Transaction-Based Execution
+Each migration runs in its own transaction with automatic rollback on failure:
+
+```bash
+graft apply
+```
+
+Output:
+```
+📦 Applying 2 migration(s)...
+  [1/2] 20251021132902_init
+      ✅ Applied
+  [2/2] 20251021140530_add_users_index
+      ✅ Applied
+✅ All migrations applied successfully
+```
+
+### Error Handling
+If a migration fails, the transaction is automatically rolled back:
+
+```
+📦 Applying 2 migration(s)...
+  [1/2] 20251021132902_init
+      ✅ Applied
+  [2/2] 20251021140530_bad_migration
+❌ Failed at migration: 20251021140530_bad_migration
+   Error: syntax error at or near "INVALID"
+   Transaction rolled back. Fix the error and run 'graft apply' again.
 ```
 
 ## 🔄 Migration Workflow
@@ -144,16 +177,11 @@ graft migrate "add user roles"
 
 Creates a timestamped SQL file:
 ```sql
--- Migration: 20240816060520_add_user_roles
--- Created: 2024-08-16T06:05:20Z
+-- Migration: add_user_roles
+-- Created: 2025-10-21T13:29:02Z
 
--- Up Migration
 ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user';
 CREATE INDEX idx_users_role ON users(role);
-
--- Down Migration
-DROP INDEX IF EXISTS idx_users_role;
-ALTER TABLE users DROP COLUMN role;
 ```
 
 ### 2. Apply Migrations
@@ -174,38 +202,61 @@ Migrations: 3 total, 2 applied, 1 pending
 ┌─────────────────────────────────┬─────────┬─────────────────────┐
 │ Migration                       │ Status  │ Applied At          │
 ├─────────────────────────────────┼─────────┼─────────────────────┤
-│ 20240816_create_users_table     │ Applied │ 2024-08-16 06:00:00 │
-│ 20240816_add_user_email_index   │ Applied │ 2024-08-16 06:01:00 │
-│ 20240816_add_user_roles         │ Pending │ -                   │
+│ 20251021_create_users_table     │ Applied │ 2025-10-21 13:29:02 │
+│ 20251021_add_user_email_index   │ Applied │ 2025-10-21 13:30:15 │
+│ 20251021_add_user_roles         │ Pending │ -                   │
 └─────────────────────────────────┴─────────┴─────────────────────┘
 ```
 
-## 💾 Backup System
+## 📤 Export System
 
-Automatic backups before destructive operations:
+Export your database to multiple formats for portability and analysis:
 
+### JSON Export (Default)
 ```bash
-# Manual backup
-graft backup "before major update"
-
-# Restore from backup
-graft restore db/backup/backup_2024-08-16_06-05-20.json
+graft export
+# or
+graft export --json
 ```
 
-Backup format (JSON):
+Creates structured JSON with metadata:
 ```json
 {
-  "timestamp": "2024-08-16_06-05-20",
-  "comment": "before major update",
+  "timestamp": "2025-10-21 14:00:07",
+  "version": "1.0",
+  "comment": "Database export",
   "tables": {
-    "users": {
-      "columns": ["id", "name", "email"],
-      "data": [
-        {"id": 1, "name": "John", "email": "john@example.com"}
-      ]
-    }
+    "users": [
+      {"id": 1, "name": "Alice", "email": "alice@example.com"}
+    ],
+    "posts": [
+      {"id": 1, "user_id": 1, "title": "Hello World"}
+    ]
   }
 }
+```
+
+### CSV Export
+```bash
+graft export --csv
+```
+
+Creates directory with individual CSV files per table:
+```
+db/export/export_2025-10-21_14-00-07_csv/
+├── users.csv
+├── posts.csv
+└── comments.csv
+```
+
+### SQLite Export
+```bash
+graft export --sqlite
+```
+
+Creates portable SQLite database file:
+```
+db/export/export_2025-10-21_14-00-07.db
 ```
 
 ## 🔗 SQLC Integration
@@ -241,8 +292,8 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 # Deploy without interactive prompts
 graft apply --force
 
-# Create backup before deployment
-graft backup "pre-deployment $(date)"
+# Create export before deployment
+graft export --json
 graft apply --force
 ```
 
@@ -250,9 +301,6 @@ graft apply --force
 ```bash
 # Reset database during development
 graft reset --force
-
-# Create backup before major changes
-graft backup "before refactoring"
 
 # Extract schema from existing database
 graft pull
@@ -264,7 +312,7 @@ graft pull
 graft raw "SELECT COUNT(*) FROM users;"
 
 # Execute SQL file
-graft raw --file scripts/cleanup.sql
+graft raw scripts/cleanup.sql
 ```
 
 ## 🚀 Roadmap & Future Features
@@ -285,12 +333,14 @@ Error: failed to connect to database
 - Verify database is running and accessible
 - Check firewall and network settings
 
-**Migration Already Applied**
+**Migration Failed with Rollback**
 ```bash
-Error: migration already applied
+❌ Failed at migration: 20251021140530_bad_migration
+   Transaction rolled back. Fix the error and run 'graft apply' again.
 ```
-- Use `graft status` to check migration state
-- Use `graft reset` to start fresh (⚠️ destructive)
+- Check the migration SQL syntax
+- Verify table/column names exist
+- Fix the migration file and run `graft apply` again
 
 **SQLC Not Found**
 ```bash
@@ -317,6 +367,7 @@ make build-all
 - Add tests for new features
 - Update documentation
 - Use conventional commit messages
+- Test migration safety features
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 

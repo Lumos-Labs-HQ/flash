@@ -1,10 +1,10 @@
 {
-  "backup_path": "db/backup",
+  "schema_path": "db/schema/schema.sql",
+  "migrations_path": "db/migrations",
+  "sqlc_config_path": "sqlc.yml",
+  "export_path": "db/export",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
-  },
-  "migrations_path": "db/migrations",
-  "schema_path": "db/schema/schema.sql",
-  "sqlc_config_path": "sqlc.yml"
+  }
 }

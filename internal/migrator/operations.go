@@ -80,12 +80,12 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 		return fmt.Errorf("migration aborted due to conflicts")
 	}
 
-	if input.GetUserChoice([]string{"y", "n"}, "Create backup before reset?", false) == "y" {
-		fmt.Println("📦 Creating backup...")
-		if err := m.createBackup(); err != nil {
-			fmt.Printf("⚠️  Backup failed: %v\n   Continuing without backup...\n", err)
+	if input.GetUserChoice([]string{"y", "n"}, "Create export before applying?", false) == "y" {
+		fmt.Println("📦 Creating export...")
+		if err := m.createExport(); err != nil {
+			fmt.Printf("⚠️  Export failed: %v\n   Continuing without export...\n", err)
 		} else {
-			fmt.Println("✅ Backup created successfully")
+			fmt.Println("✅ Export created successfully")
 		}
 	}
 
@@ -163,8 +163,8 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 	return nil
 }
 
-// createBackup creates a database backup using the adapter
-func (m *Migrator) createBackup() error {
+// createExport creates a database export using the adapter
+func (m *Migrator) createExport() error {
 	ctx := context.Background()
 
 	tables, err := m.adapter.GetAllTableNames(ctx)
@@ -183,47 +183,47 @@ func (m *Migrator) createBackup() error {
 		return nil 
 	}
 
-	backup := types.BackupData{
+	exportData := types.BackupData{
 		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
 		Version:   "1.0",
 		Tables:    make(map[string]interface{}),
-		Comment:   "Pre-reset backup",
+		Comment:   "Pre-conflict export",
 	}
 
 	for _, table := range dataTables {
 		data, err := m.adapter.GetTableData(ctx, table)
 		if err != nil {
-			fmt.Printf("Warning: Failed to backup table %s: %v\n", table, err)
+			fmt.Printf("Warning: Failed to export table %s: %v\n", table, err)
 			continue
 		}
 		if len(data) > 0 {
-			backup.Tables[table] = data
+			exportData.Tables[table] = data
 		}
 	}
 
-	backupDir := "db/backup"
-	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		return fmt.Errorf("failed to create backup directory: %w", err)
+	exportDir := "db_export"
+	if err := os.MkdirAll(exportDir, 0755); err != nil {
+		return fmt.Errorf("failed to create export directory: %w", err)
 	}
 
-	filename := fmt.Sprintf("backup_%s.json",
+	filename := fmt.Sprintf("export_%s.json",
 		time.Now().Format("2006-01-02_15-04-05"))
-	backupPath := filepath.Join(backupDir, filename)
+	exportPath := filepath.Join(exportDir, filename)
 
-	data, err := json.MarshalIndent(backup, "", "  ")
+	data, err := json.MarshalIndent(exportData, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal backup data: %w", err)
+		return fmt.Errorf("failed to marshal export data: %w", err)
 	}
 
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write backup file: %w", err)
+	if err := os.WriteFile(exportPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write export file: %w", err)
 	}
 
-	fmt.Printf("✅ Backup saved to: %s\n", backupPath)
+	fmt.Printf("✅ Export saved to: %s\n", exportPath)
 	return nil
 }
 
-// Reset drops all tables and optionally backs up
+// Reset drops all tables and optionally exports data
 func (m *Migrator) Reset(ctx context.Context) error {
 	fmt.Println("🗑️  This will drop all tables and data!")
 
@@ -232,8 +232,11 @@ func (m *Migrator) Reset(ctx context.Context) error {
 		return nil
 	}
 
-	if m.askUserConfirmation("Create backup before reset?") {
-		fmt.Println("⚠️  Backup creation not yet implemented")
+	if m.askUserConfirmation("Create export before reset?") {
+		fmt.Println("📦 Creating export...")
+		if err := m.createExport(); err != nil {
+			fmt.Printf("⚠️  Export failed: %v\n", err)
+		}
 	}
 
 	tables, err := m.adapter.GetAllTableNames(ctx)

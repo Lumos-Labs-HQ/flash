@@ -77,7 +77,7 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
   "schema_path": "db/schema/schema.sql",
   "migrations_path": "db/migrations",
   "sqlc_config_path": "sqlc.yml",
-  "backup_path": "db/backup",
+  "export_path": "db/export",
   "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"

@@ -8,8 +8,9 @@ This document explains the internal architecture and workflow of Graft, a databa
 - [Core Components](#core-components)
 - [Database Adapters](#database-adapters)
 - [Migration Workflow](#migration-workflow)
+- [Safe Migration System](#safe-migration-system)
 - [Schema Management](#schema-management)
-- [Backup System](#backup-system)
+- [Export System](#export-system)
 - [Configuration System](#configuration-system)
 - [Template System](#template-system)
 
@@ -23,7 +24,7 @@ Graft follows a layered architecture with clear separation of concerns:
 │         Cobra Commands & Flags          │
 ├─────────────────────────────────────────┤
 │           Business Logic Layer          │
-│    Migrator, Schema Manager, Backup     │
+│   Migrator, Schema Manager, Export      │
 ├─────────────────────────────────────────┤
 │          Database Adapter Layer         │
 │    PostgreSQL, MySQL, SQLite Adapters   │
@@ -45,14 +46,14 @@ Built using the [Cobra](https://github.com/spf13/cobra) framework, the CLI layer
 - **Error Handling**: Provides user-friendly error messages
 
 **Key Commands:**
-- `init`: Project initialization
-- `migrate`: Migration file creation
-- `apply`: Migration execution
-- `status`: Migration status display
-- `backup`/`restore`: Backup operations
+- `init`: Project initialization with database-specific templates
+- `migrate`: Migration file creation with schema diff
+- `apply`: Safe migration execution with transaction rollback
+- `status`: Migration status display with detailed information
+- `export`: Database export operations (JSON, CSV, SQLite)
 - `gen`: SQLC code generation
-- `reset`: Database reset
-- `pull`: Schema extraction
+- `reset`: Database reset with export option
+- `pull`: Schema extraction from existing database
 - `raw`: Raw SQL execution
 
 ### 2. Configuration System (`internal/config/`)
@@ -64,7 +65,7 @@ type Config struct {
     SchemaPath     string   `json:"schema_path"`
     MigrationsPath string   `json:"migrations_path"`
     SqlcConfigPath string   `json:"sqlc_config_path"`
-    BackupPath     string   `json:"backup_path"`
+    ExportPath     string   `json:"export_path"`
     Database       Database `json:"database"`
 }
 ```
@@ -100,37 +101,34 @@ type DatabaseAdapter interface {
     CheckTableExists(ctx context.Context, tableName string) (bool, error)
     CheckColumnExists(ctx context.Context, tableName, columnName string) (bool, error)
     
-    // Backup operations
+    // Export operations
     GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
+    GetAllTableNames(ctx context.Context) ([]string, error)
 }
 ```
 
 ### 4. Migration System (`internal/migrator/`)
 
-The migrator orchestrates the entire migration process:
+The migrator orchestrates the entire migration process with safe execution:
 
 **Core Responsibilities:**
 - Migration file management
 - Conflict detection and resolution
 - Schema validation
-- Backup coordination
-- Transaction management
+- Export coordination
+- Transaction management with rollback
 
 **Migration File Structure:**
 ```sql
--- Migration: 20240816055529_create_users_table
--- Created: 2024-08-16T05:55:29Z
+-- Migration: create_users_table
+-- Created: 2025-10-21T13:29:02Z
 
--- Up Migration
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS "users" (
+  "id" SERIAL PRIMARY KEY,
+  "name" VARCHAR(255) NOT NULL,
+  "email" VARCHAR(255) UNIQUE NOT NULL,
+  "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
-
--- Down Migration
-DROP TABLE IF EXISTS users CASCADE;
 ```
 
 ### 5. Schema Management (`internal/schema/`)
@@ -155,30 +153,32 @@ type SchemaDiff struct {
 }
 ```
 
-### 6. Backup System (`internal/backup/`)
+### 6. Export System (`internal/export/`)
 
-JSON-based backup system with the following features:
+Multi-format export system with the following features:
 
-**Backup Structure:**
+**Export Formats:**
+- **JSON**: Structured data with metadata
+- **CSV**: Individual files per table
+- **SQLite**: Portable database file
+
+**Export Structure (JSON):**
 ```json
 {
-  "timestamp": "2024-08-16_05-55-29",
-  "version": "5_migrations",
-  "comment": "Pre-migration backup",
+  "timestamp": "2025-10-21 14:00:07",
+  "version": "1.0",
+  "comment": "Database export",
   "tables": {
-    "users": {
-      "columns": ["id", "name", "email", "created_at"],
-      "data": [
-        {"id": 1, "name": "John", "email": "john@example.com"}
-      ]
-    }
+    "users": [
+      {"id": 1, "name": "John", "email": "john@example.com"}
+    ]
   }
 }
 ```
 
-**Backup Triggers:**
+**Export Triggers:**
+- Manual export commands (`graft export`)
 - Before destructive operations
-- Manual backup commands
 - Schema conflict resolution
 - Database reset operations
 
@@ -192,11 +192,11 @@ JSON-based backup system with the following features:
 - **Query Builder**: [Squirrel](https://github.com/Masterminds/squirrel) for dynamic SQL
 
 **Key Features:**
-- Connection pooling for performance
+- Connection pooling optimized for Supabase/PgBouncer
 - Advanced PostgreSQL type support
 - JSONB and UUID support
-- Full-text search capabilities
-- Transaction management
+- Transaction management with rollback
+- Exec mode for pooler compatibility
 
 **Type Mapping:**
 ```go
@@ -243,14 +243,13 @@ var pgTypeMap = map[string]string{
 graph TD
     A[User runs 'graft migrate'] --> B[Load Configuration]
     B --> C[Generate Migration ID]
-    C --> D[Create Migration File]
-    D --> E[Parse Current Schema]
-    E --> F[Generate Schema Diff]
-    F --> G[Create SQL Statements]
-    G --> H[Write Migration File]
+    C --> D[Parse Current Schema]
+    D --> E[Generate Schema Diff]
+    E --> F[Create SQL Statements]
+    F --> G[Write Migration File]
 ```
 
-### 2. Migration Application (`graft apply`)
+### 2. Safe Migration Application (`graft apply`)
 
 ```mermaid
 graph TD
@@ -261,27 +260,75 @@ graph TD
     E --> F[Load Pending Migrations]
     F --> G[Detect Conflicts]
     G --> H{Conflicts Found?}
-    H -->|Yes| I[Prompt for Backup]
-    H -->|No| J[Apply Migrations]
-    I --> K[Create Backup]
-    K --> J
-    J --> L[Update Migration Table]
+    H -->|Yes| I[Prompt for Export]
+    H -->|No| J[Apply Migrations Safely]
+    I --> K[Create Export]
+    K --> L[Reset & Apply All]
+    J --> M[Transaction per Migration]
+    L --> M
+    M --> N[Update Migration Table]
 ```
 
-### 3. Conflict Detection
+## Safe Migration System
 
-Graft detects various types of conflicts:
+### Transaction-Based Execution
 
-**Table Conflicts:**
+Each migration runs in its own transaction with automatic rollback on failure:
+
+```go
+func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
+    tx, err := p.pool.Begin(ctx)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback(ctx) // Auto-rollback on error
+
+    statements := p.parseSQLStatements(migrationSQL)
+    
+    for _, stmt := range statements {
+        if _, err := tx.Exec(ctx, stmt); err != nil {
+            return fmt.Errorf("failed to execute statement: %w", err)
+        }
+    }
+    
+    return tx.Commit(ctx)
+}
+```
+
+### Migration Safety Features
+
+**Corruption Prevention:**
+- Each migration in separate transaction
+- Automatic rollback on any failure
+- Migration state tracking
+- Broken migration cleanup
+
+**Error Recovery:**
+```go
+func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration types.Migration) error {
+    if err := m.adapter.ExecuteMigration(ctx, content); err != nil {
+        fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
+        fmt.Printf("   Error: %v\n", err)
+        fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+        return err
+    }
+    
+    return m.adapter.RecordMigration(ctx, migration.ID, migration.Name, checksum)
+}
+```
+
+### Conflict Detection and Resolution
+
+**Conflict Types:**
 - Table already exists
-- Table being dropped with data
-- Column type changes
+- Column conflicts
 - Constraint violations
+- Data type mismatches
 
 **Resolution Strategies:**
-- Automatic backup creation
-- User confirmation prompts
-- Rollback capabilities
+- Automatic export creation
+- Interactive conflict resolution
+- Database reset with full migration replay
 - Manual intervention options
 
 ## Schema Management
@@ -291,19 +338,18 @@ Graft detects various types of conflicts:
 Graft includes a custom SQL parser that handles:
 
 **Supported SQL Constructs:**
-- CREATE TABLE statements
-- Column definitions with constraints
-- Primary key declarations
-- Foreign key relationships
+- CREATE TABLE statements with all constraints
+- Column definitions with data types
+- Primary key and foreign key relationships
 - Index definitions
-- Data type specifications
+- Complex constraint declarations
 
 **Parsing Process:**
-1. **Tokenization**: Breaks SQL into tokens
+1. **Tokenization**: Breaks SQL into meaningful tokens
 2. **Statement Recognition**: Identifies CREATE TABLE statements
-3. **Column Extraction**: Parses column definitions
-4. **Constraint Analysis**: Identifies constraints and relationships
-5. **Validation**: Ensures SQL correctness
+3. **Column Extraction**: Parses column definitions and constraints
+4. **Relationship Analysis**: Maps foreign key relationships
+5. **Validation**: Ensures SQL syntax correctness
 
 ### Schema Diff Algorithm
 
@@ -320,23 +366,59 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 }
 ```
 
-## Backup System
+## Export System
 
-### Backup Creation Process
+### Export Creation Process
 
-1. **Data Extraction**: Queries all tables for data
-2. **Metadata Collection**: Gathers table structure information
-3. **JSON Serialization**: Converts data to JSON format
-4. **File Writing**: Saves backup to timestamped file
-5. **Verification**: Validates backup integrity
+1. **Table Discovery**: Queries database for all tables
+2. **Data Extraction**: Retrieves data from each table (excluding `_graft_migrations`)
+3. **Format Conversion**: Converts to requested format (JSON/CSV/SQLite)
+4. **File Writing**: Saves export to timestamped file
+5. **Verification**: Validates export integrity
 
-### Restore Process
+### Export Formats
 
-1. **Backup Validation**: Verifies backup file integrity
-2. **Schema Recreation**: Recreates table structures
-3. **Data Insertion**: Restores all table data
-4. **Migration Sync**: Updates migration tracking
-5. **Verification**: Confirms successful restore
+**JSON Export:**
+```json
+{
+  "timestamp": "2025-10-21 14:00:07",
+  "version": "1.0",
+  "comment": "Database export",
+  "tables": {
+    "users": [
+      {"id": 1, "name": "Alice", "email": "alice@example.com"}
+    ],
+    "posts": [
+      {"id": 1, "user_id": 1, "title": "Hello World", "content": "..."}
+    ]
+  }
+}
+```
+
+**CSV Export:**
+- Creates directory with timestamp
+- Individual CSV file per table
+- Headers with column names
+- Proper CSV escaping
+
+**SQLite Export:**
+- Creates portable .db file
+- Preserves table structure
+- Maintains data relationships
+- Cross-platform compatible
+
+### Export Commands
+
+```bash
+# Export as JSON (default)
+graft export
+
+# Export as CSV
+graft export --csv
+
+# Export as SQLite
+graft export --sqlite
+```
 
 ## Configuration System
 
@@ -358,6 +440,21 @@ export GRAFT_MIGRATIONS_PATH="custom/migrations"
 export GRAFT_SCHEMA_PATH="custom/schema.sql"
 ```
 
+### Configuration Structure
+
+```json
+{
+  "schema_path": "db/schema/schema.sql",
+  "migrations_path": "db/migrations",
+  "sqlc_config_path": "sqlc.yml",
+  "export_path": "db/export",
+  "database": {
+    "provider": "postgresql",
+    "url_env": "DATABASE_URL"
+  }
+}
+```
+
 ## Template System
 
 ### Project Initialization Templates
@@ -374,7 +471,7 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
   "schema_path": "db/schema/schema.sql",
   "migrations_path": "db/migrations",
   "sqlc_config_path": "sqlc.yml",
-  "backup_path": "db/backup",
+  "export_path": "db/export",
   "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"
@@ -398,7 +495,6 @@ sql:
       go:
         package: "graft"
         out: "graft_gen/"
-        sql_package: "pgx/v5"
 ```
 
 ## Error Handling and Logging
@@ -423,19 +519,22 @@ func (m *Migrator) Apply(ctx context.Context, migrationName, schemaPath string) 
 
 ### User-Friendly Messages
 
-All errors are wrapped with contextual information:
+All errors include contextual information and recovery suggestions:
 
 ```go
-return fmt.Errorf("failed to connect to %s database: %w", cfg.Database.Provider, err)
+fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
+fmt.Printf("   Error: %v\n", err)
+fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
 ```
 
 ## Performance Considerations
 
 ### Connection Pooling
 
-- PostgreSQL uses pgxpool for efficient connection management
+- PostgreSQL uses pgxpool with optimized settings for poolers
 - MySQL and SQLite use standard database/sql with connection limits
 - Configurable pool sizes and timeouts
+- Supabase/PgBouncer compatibility
 
 ### Query Optimization
 
@@ -443,12 +542,13 @@ return fmt.Errorf("failed to connect to %s database: %w", cfg.Database.Provider,
 - Batch operations for bulk data
 - Index-aware query generation
 - Transaction batching for migrations
+- Streaming for large exports
 
 ### Memory Management
 
 - Streaming for large table data
-- Chunked backup operations
+- Chunked export operations
 - Efficient JSON marshaling
 - Resource cleanup with defer statements
 
-This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust migration experience across multiple database systems.
+This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems.

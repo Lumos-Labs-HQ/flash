@@ -1,34 +1,30 @@
 {
-  "timestamp": "2025-08-15 22:38:43",
+  "timestamp": "2025-10-21 14:00:30",
   "version": "1.0",
   "tables": {
-    "_graft_migrations": {
-      "20250815223619_address": "2025-08-15T22:36:29.495518+05:30",
-      "20250815223701_address_remove": "2025-08-15T22:38:30.623145+05:30"
-    },
     "categories": [
       {
-        "created_at": "2025-08-15T17:06:33.746832Z",
+        "created_at": "2025-10-21T08:24:52.050826Z",
         "id": 1,
         "name": "Technology"
       },
       {
-        "created_at": "2025-08-15T17:06:33.820057Z",
+        "created_at": "2025-10-21T08:24:52.121041Z",
         "id": 2,
         "name": "Lifestyle"
       },
       {
-        "created_at": "2025-08-15T17:06:33.892513Z",
+        "created_at": "2025-10-21T08:24:52.188233Z",
         "id": 3,
         "name": "Travel"
       },
       {
-        "created_at": "2025-08-15T17:06:33.964984Z",
+        "created_at": "2025-10-21T08:24:52.266261Z",
         "id": 4,
         "name": "Food"
       },
       {
-        "created_at": "2025-08-15T17:06:34.038375Z",
+        "created_at": "2025-10-21T08:24:52.350862Z",
         "id": 5,
         "name": "Sports"
       }
@@ -36,42 +32,42 @@
     "comments": [
       {
         "content": "Great insights! AI will rule the world.",
-        "created_at": "2025-08-15T17:06:34.614716Z",
+        "created_at": "2025-10-21T08:24:52.940902Z",
         "id": 1,
         "post_id": 1,
         "user_id": 2
       },
       {
         "content": "Very informative, thanks for sharing.",
-        "created_at": "2025-08-15T17:06:34.688324Z",
+        "created_at": "2025-10-21T08:24:53.011013Z",
         "id": 2,
         "post_id": 1,
         "user_id": 3
       },
       {
         "content": "I love minimalist living too.",
-        "created_at": "2025-08-15T17:06:34.759956Z",
+        "created_at": "2025-10-21T08:24:53.078169Z",
         "id": 3,
         "post_id": 2,
         "user_id": 1
       },
       {
         "content": "Europe is beautiful in spring!",
-        "created_at": "2025-08-15T17:06:34.837118Z",
+        "created_at": "2025-10-21T08:24:53.145918Z",
         "id": 4,
         "post_id": 3,
         "user_id": 4
       },
       {
         "content": "I tried recipe #3, amazing!",
-        "created_at": "2025-08-15T17:06:34.908434Z",
+        "created_at": "2025-10-21T08:24:53.220443Z",
         "id": 5,
         "post_id": 4,
         "user_id": 5
       },
       {
         "content": "Messi is still the GOAT!",
-        "created_at": "2025-08-15T17:06:34.980044Z",
+        "created_at": "2025-10-21T08:24:53.290916Z",
         "id": 6,
         "post_id": 5,
         "user_id": 1
@@ -81,86 +77,91 @@
       {
         "category_id": 1,
         "content": "Artificial Intelligence is transforming industries at a rapid pace.",
-        "created_at": "2025-08-15T17:06:34.181382Z",
+        "created_at": "2025-10-21T08:24:52.498053Z",
         "id": 1,
         "title": "The Future of AI",
-        "updated_at": "2025-08-15T17:06:34.181382Z",
+        "updated_at": "2025-10-21T08:24:52.498053Z",
         "user_id": 1
       },
       {
         "category_id": 2,
         "content": "Living with less can bring more happiness.",
-        "created_at": "2025-08-15T17:06:34.254736Z",
+        "created_at": "2025-10-21T08:24:52.575772Z",
         "id": 2,
         "title": "Minimalist Living",
-        "updated_at": "2025-08-15T17:06:34.254736Z",
+        "updated_at": "2025-10-21T08:24:52.575772Z",
         "user_id": 2
       },
       {
         "category_id": 3,
         "content": "Tips for an affordable trip across Europe.",
-        "created_at": "2025-08-15T17:06:34.327131Z",
+        "created_at": "2025-10-21T08:24:52.649372Z",
         "id": 3,
         "title": "Backpacking Through Europe",
-        "updated_at": "2025-08-15T17:06:34.327131Z",
+        "updated_at": "2025-10-21T08:24:52.649372Z",
         "user_id": 3
       },
       {
         "category_id": 4,
         "content": "From classic Italian to modern fusion.",
-        "created_at": "2025-08-15T17:06:34.400501Z",
+        "created_at": "2025-10-21T08:24:52.725934Z",
         "id": 4,
         "title": "10 Delicious Pasta Recipes",
-        "updated_at": "2025-08-15T17:06:34.400501Z",
+        "updated_at": "2025-10-21T08:24:52.725934Z",
         "user_id": 4
       },
       {
         "category_id": 5,
         "content": "A list of the best players in the world right now.",
-        "created_at": "2025-08-15T17:06:34.472845Z",
+        "created_at": "2025-10-21T08:24:52.801016Z",
         "id": 5,
         "title": "Top 10 Football Players in 2025",
-        "updated_at": "2025-08-15T17:06:34.472845Z",
+        "updated_at": "2025-10-21T08:24:52.801016Z",
         "user_id": 5
       }
     ],
     "users": [
       {
-        "created_at": "2025-08-15T17:06:33.313999Z",
+        "address": null,
+        "created_at": "2025-10-21T08:24:51.63113Z",
         "email": "alice.johnson@example.com",
         "id": 1,
         "name": "Alice Johnson",
-        "updated_at": "2025-08-15T17:06:33.313999Z"
+        "updated_at": "2025-10-21T08:24:51.63113Z"
       },
       {
-        "created_at": "2025-08-15T17:06:33.388412Z",
+        "address": null,
+        "created_at": "2025-10-21T08:24:51.703082Z",
         "email": "bob.smith@example.com",
         "id": 2,
         "name": "Bob Smith",
-        "updated_at": "2025-08-15T17:06:33.388412Z"
+        "updated_at": "2025-10-21T08:24:51.703082Z"
       },
       {
-        "created_at": "2025-08-15T17:06:33.459745Z",
+        "address": null,
+        "created_at": "2025-10-21T08:24:51.77121Z",
         "email": "charlie.brown@example.com",
         "id": 3,
         "name": "Charlie Brown",
-        "updated_at": "2025-08-15T17:06:33.459745Z"
+        "updated_at": "2025-10-21T08:24:51.77121Z"
       },
       {
-        "created_at": "2025-08-15T17:06:33.531217Z",
+        "address": null,
+        "created_at": "2025-10-21T08:24:51.843077Z",
         "email": "diana.prince@example.com",
         "id": 4,
         "name": "Diana Prince",
-        "updated_at": "2025-08-15T17:06:33.531217Z"
+        "updated_at": "2025-10-21T08:24:51.843077Z"
       },
       {
-        "created_at": "2025-08-15T17:06:33.603696Z",
+        "address": null,
+        "created_at": "2025-10-21T08:24:51.911012Z",
         "email": "ethan.hunt@example.com",
         "id": 5,
         "name": "Ethan Hunt",
-        "updated_at": "2025-08-15T17:06:33.603696Z"
+        "updated_at": "2025-10-21T08:24:51.911012Z"
       }
     ]
   },
-  "comment": "Manual backup"
+  "comment": "Database export"
 }
