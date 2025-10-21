@@ -9,6 +9,7 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/Rana718/Graft/internal/types"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
 )
@@ -38,10 +39,24 @@ func NewPostgresAdapter() *PostgresAdapter {
 }
 
 func (p *PostgresAdapter) Connect(ctx context.Context, url string) error {
-	pool, err := pgxpool.New(ctx, url)
+	// Configure pool for Supabase pooler compatibility
+	config, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return fmt.Errorf("failed to parse connection URL: %w", err)
+	}
+
+	// Use exec mode for pooler compatibility (Supabase, PgBouncer)
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
+	
+	// Optimize pool settings
+	config.MaxConns = 5
+	config.MinConns = 1
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return fmt.Errorf("failed to create connection pool: %w", err)
 	}
+	
 	p.pool = pool
 	return nil
 }
@@ -95,15 +110,13 @@ func (p *PostgresAdapter) CleanupBrokenMigrationRecords(ctx context.Context) err
 // Core migration operations
 func (p *PostgresAdapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	applied := make(map[string]*time.Time)
-	query := p.qb.Select("id", "finished_at").From("_graft_migrations").
-		Where(squirrel.NotEq{"finished_at": nil}).OrderBy("started_at")
-
-	sql, args, err := query.ToSql()
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := p.pool.Query(ctx, sql, args...)
+	
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, finished_at 
+		FROM _graft_migrations 
+		WHERE finished_at IS NOT NULL 
+		ORDER BY started_at
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +285,7 @@ func (p *PostgresAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaT
 func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
 	rows, err := p.pool.Query(ctx, `
 		SELECT 
-			c.column_name, c.data_type, c.is_nullable, c.column_default,
+			c.column_name, c.udt_name, c.is_nullable, c.column_default,
 			c.character_maximum_length, c.numeric_precision, c.numeric_scale,
 			CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
 			CASE WHEN uq.column_name IS NOT NULL THEN true ELSE false END as is_unique
@@ -300,18 +313,18 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 	var columns []types.SchemaColumn
 	for rows.Next() {
 		var column types.SchemaColumn
-		var dataType, isNullable string
+		var udtName, isNullable string
 		var columnDefault sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique bool
 
-		err := rows.Scan(&column.Name, &dataType, &isNullable, &columnDefault,
+		err := rows.Scan(&column.Name, &udtName, &isNullable, &columnDefault,
 			&charMaxLength, &numericPrecision, &numericScale, &isPrimary, &isUnique)
 		if err != nil {
 			return nil, err
 		}
 
-		column.Type = p.formatPostgresType(dataType, charMaxLength, numericPrecision, numericScale)
+		column.Type = p.formatPostgresType(udtName, charMaxLength, numericPrecision, numericScale)
 		column.Nullable = isNullable == "YES"
 		column.IsPrimary = isPrimary
 		column.IsUnique = isUnique
@@ -578,14 +591,14 @@ func (p *PostgresAdapter) FormatColumnType(column types.SchemaColumn) string {
 	return strings.Join(parts, " ")
 }
 
-func (p *PostgresAdapter) formatPostgresType(dataType string, charMaxLength, numericPrecision, numericScale sql.NullInt64) string {
-	switch dataType {
-	case "character varying":
+func (p *PostgresAdapter) formatPostgresType(udtName string, charMaxLength, numericPrecision, numericScale sql.NullInt64) string {
+	switch udtName {
+	case "varchar", "character varying":
 		if charMaxLength.Valid {
 			return fmt.Sprintf("VARCHAR(%d)", charMaxLength.Int64)
 		}
 		return "VARCHAR"
-	case "character":
+	case "bpchar", "character":
 		if charMaxLength.Valid {
 			return fmt.Sprintf("CHAR(%d)", charMaxLength.Int64)
 		}
@@ -597,8 +610,12 @@ func (p *PostgresAdapter) formatPostgresType(dataType string, charMaxLength, num
 			return fmt.Sprintf("NUMERIC(%d)", numericPrecision.Int64)
 		}
 		return "NUMERIC"
+	case "timestamptz":
+		return "TIMESTAMP WITH TIME ZONE"
+	case "timestamp":
+		return "TIMESTAMP"
 	default:
-		return p.MapColumnType(dataType)
+		return p.MapColumnType(udtName)
 	}
 }
 
@@ -607,7 +624,7 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 	SELECT 
 		c.table_name,
 		c.column_name,
-		c.data_type,
+		c.udt_name,
 		c.is_nullable,
 		c.column_default,
 		c.character_maximum_length,
@@ -669,12 +686,12 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 	columnsSeen := make(map[string]map[string]bool) // table -> column -> seen
 	
 	for rows.Next() {
-		var tableName, columnName, dataType, isNullable string
+		var tableName, columnName, udtName, isNullable string
 		var ordinalPosition int
 		var columnDefault, isPrimary, isUnique, foreignTable, foreignColumn, deleteRule sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 
-		err := rows.Scan(&tableName, &columnName, &dataType, &isNullable, &columnDefault,
+		err := rows.Scan(&tableName, &columnName, &udtName, &isNullable, &columnDefault,
 			&charMaxLength, &numericPrecision, &numericScale, &ordinalPosition, &isPrimary, &isUnique,
 			&foreignTable, &foreignColumn, &deleteRule)
 		if err != nil {
@@ -697,7 +714,7 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 		columnsSeen[tableName][columnName] = true
 
 		// Format column type properly
-		columnType := p.formatPullColumnType(dataType, charMaxLength, numericPrecision, numericScale, columnDefault.String, isPrimary.Valid)
+		columnType := p.formatPullColumnType(udtName, charMaxLength, numericPrecision, numericScale, columnDefault.String, isPrimary.Valid)
 
 		column := types.SchemaColumn{
 			Name:     columnName,
@@ -729,33 +746,33 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 
 func (p *PostgresAdapter) formatPullColumnType(dataType string, charMaxLength, numericPrecision, numericScale sql.NullInt64, defaultValue string, isPrimary bool) string {
 	switch dataType {
-	case "integer":
+	case "int4", "integer":
 		if isPrimary && strings.Contains(defaultValue, "nextval(") {
 			return "SERIAL"
 		}
 		return "INT"
-	case "bigint":
+	case "int8", "bigint":
 		if isPrimary && strings.Contains(defaultValue, "nextval(") {
 			return "BIGSERIAL"
 		}
 		return "BIGINT"
-	case "character varying":
+	case "varchar", "character varying":
 		if charMaxLength.Valid {
 			return fmt.Sprintf("VARCHAR(%d)", charMaxLength.Int64)
 		}
 		return "VARCHAR(255)"
-	case "character":
+	case "bpchar", "character":
 		if charMaxLength.Valid {
 			return fmt.Sprintf("CHAR(%d)", charMaxLength.Int64)
 		}
 		return "CHAR"
 	case "text":
 		return "TEXT"
-	case "boolean":
+	case "bool", "boolean":
 		return "BOOLEAN"
-	case "timestamp without time zone":
+	case "timestamp":
 		return "TIMESTAMP"
-	case "timestamp with time zone":
+	case "timestamptz":
 		return "TIMESTAMP WITH TIME ZONE"
 	case "date":
 		return "DATE"

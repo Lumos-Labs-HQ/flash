@@ -395,8 +395,20 @@ func (sm *SchemaManager) parseColumnDefinition(colDef string) (types.SchemaColum
 
 	column := types.SchemaColumn{
 		Name:     strings.Trim(parts[0], `"`),
-		Type:     parts[1],
 		Nullable: true,
+	}
+
+	// Handle multi-word types like "TIMESTAMP WITH TIME ZONE"
+	if len(parts) > 4 && strings.ToUpper(parts[1]) == "TIMESTAMP" && strings.ToUpper(parts[2]) == "WITH" && strings.ToUpper(parts[3]) == "TIME" && strings.ToUpper(parts[4]) == "ZONE" {
+		column.Type = "TIMESTAMP WITH TIME ZONE"
+	} else if len(parts) > 4 && strings.ToUpper(parts[1]) == "TIMESTAMP" && strings.ToUpper(parts[2]) == "WITHOUT" && strings.ToUpper(parts[3]) == "TIME" && strings.ToUpper(parts[4]) == "ZONE" {
+		column.Type = "TIMESTAMP WITHOUT TIME ZONE"
+	} else if len(parts) > 2 && strings.ToUpper(parts[1]) == "DOUBLE" && strings.ToUpper(parts[2]) == "PRECISION" {
+		column.Type = "DOUBLE PRECISION"
+	} else if len(parts) > 2 && strings.ToUpper(parts[1]) == "CHARACTER" && strings.ToUpper(parts[2]) == "VARYING" {
+		column.Type = "CHARACTER VARYING"
+	} else {
+		column.Type = parts[1]
 	}
 
 	sm.parseColumnConstraints(&column, colDef)

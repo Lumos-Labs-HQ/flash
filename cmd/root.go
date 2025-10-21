@@ -12,7 +12,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "1.5.0"
+	Version = "1.5.5"
 )
 
 func showBanner() {
@@ -107,6 +107,6 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+		// fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
 }

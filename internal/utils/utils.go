@@ -101,6 +101,7 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 
 	migrationContent := string(content)
 
+	// Check for ALTER TABLE ADD COLUMN NOT NULL without DEFAULT
 	addColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+["\'\x60]?(\w+)["\'\x60]?\s+ADD\s+(?:COLUMN\s+)?["\'\x60]?(\w+)["\'\x60]?\s+[^;]*NOT\s+NULL`)
 	matches := addColumnRegex.FindAllStringSubmatch(migrationContent, -1)
 
@@ -109,15 +110,22 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 			tableName := match[1]
 			columnName := match[2]
 
+			// Skip if has DEFAULT value
 			if strings.Contains(strings.ToUpper(match[0]), "DEFAULT") {
 				continue
+			}
+
+			// Smart check: only report conflict if table exists AND has data
+			hasData := c.tableHasData(ctx, adapter, tableName)
+			if !hasData {
+				continue // No conflict if table is empty or doesn't exist
 			}
 
 			conflicts = append(conflicts, types.MigrationConflict{
 				Type:        "not_null_constraint",
 				TableName:   tableName,
 				ColumnName:  columnName,
-				Description: fmt.Sprintf("Adding NOT NULL column '%s' to table '%s' with existing data", columnName, tableName),
+				Description: fmt.Sprintf("Table '%s' has data: adding NOT NULL column '%s' without DEFAULT will fail", tableName, columnName),
 				Solutions: []string{
 					"Add a DEFAULT value to the column",
 					"Make the column nullable first, then update existing rows",
@@ -130,8 +138,34 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 	return conflicts, nil
 }
 
-type SQLUtils struct{}
+// tableHasData checks if a table exists and has data
+func (c *ConflictUtils) tableHasData(ctx context.Context, adapter interface{}, tableName string) bool {
+	type tableChecker interface {
+		CheckTableExists(ctx context.Context, tableName string) (bool, error)
+		GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
+	}
 
+	checker, ok := adapter.(tableChecker)
+	if !ok {
+		return true // Assume has data if we can't check (safe default)
+	}
+
+	// Check if table exists
+	exists, err := checker.CheckTableExists(ctx, tableName)
+	if err != nil || !exists {
+		return false // Table doesn't exist = no conflict
+	}
+
+	// Check if table has data
+	data, err := checker.GetTableData(ctx, tableName)
+	if err != nil {
+		return true // Assume has data if error (safe default)
+	}
+
+	return len(data) > 0 // Only conflict if table has rows
+}
+
+type SQLUtils struct{}
 
 // FilterPendingMigrations returns migrations that haven't been applied
 func FilterPendingMigrations(migrations []types.Migration, applied map[string]*time.Time) []types.Migration {

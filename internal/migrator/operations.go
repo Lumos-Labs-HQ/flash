@@ -73,14 +73,14 @@ func (m *Migrator) handleConflictsInteractively(ctx context.Context, conflicts [
 	}
 
 	input := &utils.InputUtils{}
-	choice := input.GetUserChoice([]string{"y", "n"}, "Reset database to resolve conflicts? This will drop all tables and data (Y/N)", false)
+	choice := input.GetUserChoice([]string{"y", "n"}, "Reset database to resolve conflicts? This will drop all tables and data", false)
 
 	if strings.ToLower(choice) != "y" {
 		fmt.Println("Migration aborted due to conflicts")
 		return fmt.Errorf("migration aborted due to conflicts")
 	}
 
-	if input.GetUserChoice([]string{"y", "n"}, "Create backup before reset? (Y/N)", false) == "y" {
+	if input.GetUserChoice([]string{"y", "n"}, "Create backup before reset?", false) == "y" {
 		fmt.Println("📦 Creating backup...")
 		if err := m.createBackup(); err != nil {
 			fmt.Printf("⚠️  Backup failed: %v\n   Continuing without backup...\n", err)
@@ -118,14 +118,48 @@ func (m *Migrator) handleResetAndApply(ctx context.Context) error {
 	return m.applyMigrations(ctx, allMigrations)
 }
 
-// applyMigrations applies a list of migrations
+// applyMigrations applies migrations safely - each in its own transaction
 func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migration) error {
-	for _, migration := range migrations {
-		if err := m.applySingleMigration(ctx, migration); err != nil {
-			return fmt.Errorf("failed to apply migration %s: %w", migration.ID, err)
-		}
+	if len(migrations) == 0 {
+		return nil
 	}
-	fmt.Println("✅ Migrations applied successfully")
+
+	fmt.Printf("📦 Applying %d migration(s)...\n", len(migrations))
+
+	for i, migration := range migrations {
+		fmt.Printf("  [%d/%d] %s\n", i+1, len(migrations), migration.ID)
+		
+		// Apply migration with ExecuteMigration + RecordMigration in same transaction
+		if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
+			fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
+			fmt.Printf("   Error: %v\n", err)
+			fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+			return fmt.Errorf("migration %s failed: %w", migration.ID, err)
+		}
+		
+		fmt.Printf("      ✅ Applied\n")
+	}
+
+	fmt.Println("✅ All migrations applied successfully")
+	return nil
+}
+
+// applySingleMigrationSafely applies migration and records it in a single transaction
+func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration types.Migration) error {
+	content, err := os.ReadFile(migration.FilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read migration file: %w", err)
+	}
+	
+	if err := m.adapter.ExecuteMigration(ctx, string(content)); err != nil {
+		return fmt.Errorf("failed to execute: %w", err)
+	}
+
+	checksum := fmt.Sprintf("%x", len(content))
+	if err := m.adapter.RecordMigration(ctx, migration.ID, migration.Name, checksum); err != nil {
+		return fmt.Errorf("failed to record: %w", err)
+	}
+
 	return nil
 }
 
