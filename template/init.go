@@ -15,17 +15,16 @@ type ProjectTemplate struct {
 }
 
 type dbConfig struct {
-	provider     string
-	engine       string
-	primaryKey   string
-	autoIncrement string
-	textType     string
-	timestampType string
-	timestampDefault string
-	queryParam   string
-	returnType   string
-	envExample   string
-
+	provider          string
+	engine            string
+	primaryKey        string
+	autoIncrement     string
+	textType          string
+	timestampType     string
+	timestampDefault  string
+	queryParam        string
+	returnType        string
+	envExample        string
 }
 
 var dbConfigs = map[DatabaseType]dbConfig{
@@ -73,31 +72,36 @@ func NewProjectTemplate(dbType DatabaseType) *ProjectTemplate {
 
 func (pt *ProjectTemplate) GetGraftConfig() string {
 	cfg := dbConfigs[pt.DatabaseType]
+	sqlPackage := ""
+	if pt.DatabaseType == PostgreSQL {
+		sqlPackage = `"sql_package": "pgx/v5"`
+	}
+	
+	genSection := ""
+	if sqlPackage != "" {
+		genSection = fmt.Sprintf(`,
+  "gen": {
+    "go": {
+      %s
+    }
+  }`, sqlPackage)
+	}
+	
 	return fmt.Sprintf(`{
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"
-  }
-}`, cfg.provider)
+  }%s
+}`, cfg.provider, genSection)
 }
 
 func (pt *ProjectTemplate) GetSQLCConfig() string {
-	cfg := dbConfigs[pt.DatabaseType]
-	
-	return fmt.Sprintf(`version: "2"
-sql:
-  - engine: "%s"
-    queries: "db/queries/"
-    schema: "db/schema/"
-    gen:
-      go:
-        package: "graft"
-        out: "graft_gen/"
-`, cfg.engine)
+	return ""
 }
 
 func (pt *ProjectTemplate) GetSchema() string {

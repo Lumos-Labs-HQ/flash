@@ -1,10 +1,16 @@
 {
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
+  },
+  "gen": {
+    "go": {
+      "sql_package": "pgx/v5"
+    }
   }
 }

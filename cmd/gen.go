@@ -3,28 +3,28 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/Rana718/Graft/internal/config"
-
+	"github.com/sqlc-dev/sqlc/pkg/cli"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var genCmd = &cobra.Command{
 	Use:   "gen",
 	Short: "Generate SQLC types",
 	Long: `
-Generate Go types from SQL queries using SQLC.
-This command runs 'sqlc generate' to update Go types based on your SQL schemas and queries.
+Generate Go types from SQL queries using embedded SQLC.
+This command uses built-in SQLC configuration from graft.config.json.
 
 Requirements:
-- SQLC must be installed and available in PATH
-- sqlc_config_path must be set in graft.config.json
-- Valid sqlc.yaml configuration file
+- Configuration in graft.config.json
+- Valid SQL schema and queries
 
 This command will:
-1. Run 'sqlc generate' to update Go types
-2. Report any errors from the generation process`,
+1. Generate temporary SQLC config from graft.config.json
+2. Run embedded SQLC generate to update Go types
+3. Clean up temporary files`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -32,15 +32,7 @@ This command will:
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		if cfg.SqlcConfigPath == "" {
-			return fmt.Errorf("sqlc_config_path not set in configuration")
-		}
-
-		if _, err := os.Stat(cfg.SqlcConfigPath); os.IsNotExist(err) {
-			return fmt.Errorf("SQLC config file not found: %s", cfg.SqlcConfigPath)
-		}
-
-		if err := runSQLCGenerate(cfg.SqlcConfigPath); err != nil {
+		if err := runSQLCGenerate(cfg); err != nil {
 			return fmt.Errorf("failed to run SQLC generate: %w", err)
 		}
 
@@ -49,17 +41,100 @@ This command will:
 	},
 }
 
-func runSQLCGenerate(configPath string) error {
-	if _, err := exec.LookPath("sqlc"); err != nil {
-		return fmt.Errorf("sqlc not found in PATH. Please install SQLC: https://docs.sqlc.dev/en/latest/overview/install.html")
+type sqlcConfig struct {
+	Version string    `yaml:"version"`
+	SQL     []sqlcSQL `yaml:"sql"`
+}
+
+type sqlcSQL struct {
+	Engine  string     `yaml:"engine"`
+	Queries string     `yaml:"queries"`
+	Schema  string     `yaml:"schema"`
+	Gen     sqlcGenCfg `yaml:"gen"`
+}
+
+type sqlcGenCfg struct {
+	Go sqlcGoCfg `yaml:"go"`
+}
+
+type sqlcGoCfg struct {
+	Package                   string `yaml:"package"`
+	Out                       string `yaml:"out"`
+	SqlPackage                string `yaml:"sql_package,omitempty"`
+	EmitInterface             bool   `yaml:"emit_interface,omitempty"`
+	EmitJsonTags              bool   `yaml:"emit_json_tags,omitempty"`
+	EmitDbTags                bool   `yaml:"emit_db_tags,omitempty"`
+	EmitPreparedQueries       bool   `yaml:"emit_prepared_queries,omitempty"`
+	EmitExactTableNames       bool   `yaml:"emit_exact_table_names,omitempty"`
+	EmitEmptySlices           bool   `yaml:"emit_empty_slices,omitempty"`
+	EmitExportedQueries       bool   `yaml:"emit_exported_queries,omitempty"`
+	EmitResultStructPointers  bool   `yaml:"emit_result_struct_pointers,omitempty"`
+	EmitParamsStructPointers  bool   `yaml:"emit_params_struct_pointers,omitempty"`
+	EmitMethodsWithDbArgument bool   `yaml:"emit_methods_with_db_argument,omitempty"`
+	EmitPointersForNullTypes  bool   `yaml:"emit_pointers_for_null_types,omitempty"`
+	EmitEnumValidMethod       bool   `yaml:"emit_enum_valid_method,omitempty"`
+	EmitAllEnumValues         bool   `yaml:"emit_all_enum_values,omitempty"`
+	JsonTagsCaseStyle         string `yaml:"json_tags_case_style,omitempty"`
+	OutputDbFileName          string `yaml:"output_db_file_name,omitempty"`
+	OutputModelsFileName      string `yaml:"output_models_file_name,omitempty"`
+	OutputQuerierFileName     string `yaml:"output_querier_file_name,omitempty"`
+	OutputFilesSuffix         string `yaml:"output_files_suffix,omitempty"`
+}
+
+func runSQLCGenerate(cfg *config.Config) error {
+	tmpFile := ".graft_sqlc_temp.yaml"
+	defer os.Remove(tmpFile)
+
+	goCfg := sqlcGoCfg{
+		Package:                   "graft",
+		Out:                       "graft_gen/",
+		SqlPackage:                cfg.Gen.Go.SqlPackage,
+		EmitInterface:             cfg.Gen.Go.EmitInterface,
+		EmitJsonTags:              cfg.Gen.Go.EmitJsonTags,
+		EmitDbTags:                cfg.Gen.Go.EmitDbTags,
+		EmitPreparedQueries:       cfg.Gen.Go.EmitPreparedQueries,
+		EmitExactTableNames:       cfg.Gen.Go.EmitExactTableNames,
+		EmitEmptySlices:           cfg.Gen.Go.EmitEmptySlices,
+		EmitExportedQueries:       cfg.Gen.Go.EmitExportedQueries,
+		EmitResultStructPointers:  cfg.Gen.Go.EmitResultStructPointers,
+		EmitParamsStructPointers:  cfg.Gen.Go.EmitParamsStructPointers,
+		EmitMethodsWithDbArgument: cfg.Gen.Go.EmitMethodsWithDbArgument,
+		EmitPointersForNullTypes:  cfg.Gen.Go.EmitPointersForNullTypes,
+		EmitEnumValidMethod:       cfg.Gen.Go.EmitEnumValidMethod,
+		EmitAllEnumValues:         cfg.Gen.Go.EmitAllEnumValues,
+		JsonTagsCaseStyle:         cfg.Gen.Go.JsonTagsCaseStyle,
+		OutputDbFileName:          cfg.Gen.Go.OutputDbFileName,
+		OutputModelsFileName:      cfg.Gen.Go.OutputModelsFileName,
+		OutputQuerierFileName:     cfg.Gen.Go.OutputQuerierFileName,
+		OutputFilesSuffix:         cfg.Gen.Go.OutputFilesSuffix,
 	}
 
-	cmd := exec.Command("sqlc", "generate", "-f", configPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	sqlcCfg := sqlcConfig{
+		Version: cfg.Version,
+		SQL: []sqlcSQL{
+			{
+				Engine:  cfg.GetSqlcEngine(),
+				Queries: cfg.Queries,
+				Schema:  cfg.GetSchemaDir(),
+				Gen: sqlcGenCfg{
+					Go: goCfg,
+				},
+			},
+		},
+	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("sqlc generate failed: %w", err)
+	data, err := yaml.Marshal(&sqlcCfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal SQLC config: %w", err)
+	}
+
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		return fmt.Errorf("failed to write temporary SQLC config: %w", err)
+	}
+
+	exitCode := cli.Run([]string{"generate", "-f", tmpFile})
+	if exitCode != 0 {
+		return fmt.Errorf("sqlc generate failed with exit code %d", exitCode)
 	}
 
 	return nil

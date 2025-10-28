@@ -64,7 +64,6 @@ func initializeProject(dbType template.DatabaseType) error {
 
 	files := map[string]string{
 		"graft.config.json": tmpl.GetGraftConfig(),
-		"sqlc.yml":          tmpl.GetSQLCConfig(),
 	}
 
 	if _, err := os.Stat("db/schema/schema.sql"); os.IsNotExist(err) {
@@ -92,10 +91,8 @@ func initializeProject(dbType template.DatabaseType) error {
 		fmt.Printf("   %s/\n", dir)
 	}
 	fmt.Println()
-	fmt.Println("📝 Configuration files created:")
-	for filePath := range files {
-		fmt.Printf("   %s\n", filePath)
-	}
+	fmt.Println("📝 Configuration file created:")
+	fmt.Println("   graft.config.json (includes SQLC configuration)")
 	
 	if os.Getenv("DATABASE_URL") != "" {
 		fmt.Println()
