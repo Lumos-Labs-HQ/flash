@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/Rana718/Graft/internal/config"
+	"github.com/Rana718/Graft/internal/jsgen"
 	"github.com/sqlc-dev/sqlc/pkg/cli"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -12,19 +13,14 @@ import (
 
 var genCmd = &cobra.Command{
 	Use:   "gen",
-	Short: "Generate SQLC types",
+	Short: "Generate code from SQL",
 	Long: `
-Generate Go types from SQL queries using embedded SQLC.
-This command uses built-in SQLC configuration from graft.config.json.
+Generate type-safe code from SQL queries.
+Automatically detects project type and generates appropriate code:
+- Go projects: Generate Go code with SQLC
+- Node.js projects: Generate JavaScript code with type annotations
 
-Requirements:
-- Configuration in graft.config.json
-- Valid SQL schema and queries
-
-This command will:
-1. Generate temporary SQLC config from graft.config.json
-2. Run embedded SQLC generate to update Go types
-3. Clean up temporary files`,
+Configuration is read from graft.config.json`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -32,11 +28,24 @@ This command will:
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		if err := runSQLCGenerate(cfg); err != nil {
-			return fmt.Errorf("failed to run SQLC generate: %w", err)
+		// Generate based on configuration
+		if cfg.Gen.JS.Enabled {
+			fmt.Println("🔨 Generating JavaScript code...")
+			generator := jsgen.New(cfg)
+			if err := generator.Generate(); err != nil {
+				return fmt.Errorf("failed to generate JavaScript code: %w", err)
+			}
+			fmt.Println("🎉 JavaScript code generated successfully!")
+			fmt.Printf("   Output: %s\n", cfg.Gen.JS.Out)
+		} else {
+			fmt.Println("🔨 Generating Go code...")
+			if err := runSQLCGenerateGo(cfg); err != nil {
+				return fmt.Errorf("failed to generate Go code: %w", err)
+			}
+			fmt.Println("🎉 Go code generated successfully!")
+			fmt.Println("   Output: graft_gen/")
 		}
 
-		fmt.Println("🎉 SQLC types generated successfully!")
 		return nil
 	},
 }
@@ -81,7 +90,7 @@ type sqlcGoCfg struct {
 	OutputFilesSuffix         string `yaml:"output_files_suffix,omitempty"`
 }
 
-func runSQLCGenerate(cfg *config.Config) error {
+func runSQLCGenerateGo(cfg *config.Config) error {
 	tmpFile := ".graft_sqlc_temp.yaml"
 	defer os.Remove(tmpFile)
 

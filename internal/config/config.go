@@ -24,7 +24,8 @@ type Database struct {
 }
 
 type Gen struct {
-	Go GoGen `json:"go" mapstructure:"go"`
+	Go GoGen `json:"go,omitempty" mapstructure:"go"`
+	JS JSGen `json:"js,omitempty" mapstructure:"js"`
 }
 
 type GoGen struct {
@@ -47,6 +48,12 @@ type GoGen struct {
 	OutputModelsFileName      string `json:"output_models_file_name,omitempty" mapstructure:"output_models_file_name"`
 	OutputQuerierFileName     string `json:"output_querier_file_name,omitempty" mapstructure:"output_querier_file_name"`
 	OutputFilesSuffix         string `json:"output_files_suffix,omitempty" mapstructure:"output_files_suffix"`
+}
+
+type JSGen struct {
+	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
+	Out     string `json:"out,omitempty" mapstructure:"out"`
+	Package string `json:"package,omitempty" mapstructure:"package"`
 }
 
 func Load() (*Config, error) {
@@ -77,6 +84,12 @@ func Load() (*Config, error) {
 	}
 	if cfg.Database.URLEnv == "" {
 		cfg.Database.URLEnv = "DATABASE_URL"
+	}
+	if cfg.Gen.JS.Out == "" && cfg.Gen.JS.Enabled {
+		cfg.Gen.JS.Out = "graft_gen_js/"
+	}
+	if cfg.Gen.JS.Package == "" && cfg.Gen.JS.Enabled {
+		cfg.Gen.JS.Package = "db"
 	}
 
 	return &cfg, nil
@@ -147,4 +160,9 @@ func (c *Config) GetSqlcEngine() string {
 
 func (c *Config) GetSchemaDir() string {
 	return filepath.Dir(c.SchemaPath)
+}
+
+func (c *Config) IsNodeProject() bool {
+	_, err := os.Stat("package.json")
+	return err == nil
 }

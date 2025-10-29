@@ -11,7 +11,8 @@ const (
 )
 
 type ProjectTemplate struct {
-	DatabaseType DatabaseType
+	DatabaseType  DatabaseType
+	IsNodeProject bool
 }
 
 type dbConfig struct {
@@ -66,38 +67,71 @@ var dbConfigs = map[DatabaseType]dbConfig{
 	},
 }
 
-func NewProjectTemplate(dbType DatabaseType) *ProjectTemplate {
-	return &ProjectTemplate{DatabaseType: dbType}
+func NewProjectTemplate(dbType DatabaseType, isNodeProject bool) *ProjectTemplate {
+	return &ProjectTemplate{
+		DatabaseType:  dbType,
+		IsNodeProject: isNodeProject,
+	}
 }
 
 func (pt *ProjectTemplate) GetGraftConfig() string {
 	cfg := dbConfigs[pt.DatabaseType]
-	sqlPackage := ""
-	if pt.DatabaseType == PostgreSQL {
-		sqlPackage = `"sql_package": "pgx/v5"`
-	}
 	
-	genSection := ""
-	if sqlPackage != "" {
-		genSection = fmt.Sprintf(`,
-  "gen": {
+	var genSection string
+	
+	if pt.IsNodeProject {
+		// Node.js project - enable JS generation
+		genSection = `  "gen": {
+    "js": {
+      "enabled": true,
+      "out": "graft_gen_js/",
+      "package": "db"
+    }
+  }`
+	} else {
+		// Go project - configure Go generation
+		sqlPackage := ""
+		if pt.DatabaseType == PostgreSQL {
+			sqlPackage = `"sql_package": "pgx/v5"`
+		}
+		
+		if sqlPackage != "" {
+			genSection = fmt.Sprintf(`  "gen": {
     "go": {
       %s
     }
   }`, sqlPackage)
+		}
 	}
 	
-	return fmt.Sprintf(`{
-  "version": "2",
-  "schema_path": "db/schema/schema.sql",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
+	configParts := []string{
+		`  "version": "2"`,
+		`  "schema_path": "db/schema/schema.sql"`,
+		`  "queries": "db/queries/"`,
+		`  "migrations_path": "db/migrations"`,
+		`  "export_path": "db/export"`,
+		fmt.Sprintf(`  "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"
-  }%s
-}`, cfg.provider, genSection)
+  }`, cfg.provider),
+	}
+	
+	if genSection != "" {
+		configParts = append(configParts, genSection)
+	}
+	
+	config := "{\n"
+	for i, part := range configParts {
+		config += part
+		if i < len(configParts)-1 {
+			config += ",\n"
+		} else {
+			config += "\n"
+		}
+	}
+	config += "}"
+	
+	return config
 }
 
 func (pt *ProjectTemplate) GetSQLCConfig() string {

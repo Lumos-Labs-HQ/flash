@@ -1,0 +1,60 @@
+{
+  "name": "graft",
+  "version": "1.0.0",
+  "description": "A powerful, database-agnostic migration CLI tool with multi-database support and type-safe code generation",
+  "main": "index.js",
+  "bin": {
+    "graft": "./bin/graft.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "keywords": [
+    "orm",
+    "database",
+    "migration",
+    "sqlc",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "cli",
+    "typescript",
+    "javascript",
+    "type-safe"
+  ],
+  "author": "Rana718",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rana718/Graft.git"
+  },
+  "homepage": "https://github.com/Rana718/Graft#readme",
+  "bugs": {
+    "url": "https://github.com/Rana718/Graft/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "scripts/",
+    "index.js",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "graft-darwin-x64": "1.0.0",
+    "graft-darwin-arm64": "1.0.0",
+    "graft-linux-x64": "1.0.0",
+    "graft-linux-arm64": "1.0.0",
+    "graft-win32-x64": "1.0.0"
+  }
+}
