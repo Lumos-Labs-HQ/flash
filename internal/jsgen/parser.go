@@ -7,7 +7,23 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
+
+var (
+	createTableRegex *regexp.Regexp
+	fromRegex        *regexp.Regexp
+	paramRegex       *regexp.Regexp
+	insertColRegex   *regexp.Regexp
+	regexOnce        sync.Once
+)
+
+func initRegex() {
+	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(([\s\S]*?)\);`)
+	fromRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
+	paramRegex = regexp.MustCompile(`\$\d+|\?`)
+	insertColRegex = regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
+}
 
 type Schema struct {
 	Tables []*Table
@@ -45,6 +61,12 @@ type QueryColumn struct {
 }
 
 func (g *Generator) parseSchema() (*Schema, error) {
+	regexOnce.Do(initRegex)
+
+	if g.cachedSchema != nil {
+		return g.cachedSchema, nil
+	}
+
 	schema := &Schema{Tables: []*Table{}}
 
 	schemaPath := g.Config.SchemaPath
@@ -81,9 +103,7 @@ func (g *Generator) parseSchema() (*Schema, error) {
 }
 
 func (g *Generator) parseCreateTables(sql string) []*Table {
-	tables := []*Table{}
-
-	createTableRegex := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(([\s\S]*?)\);`)
+	tables := make([]*Table, 0, 8)
 	matches := createTableRegex.FindAllStringSubmatch(sql, -1)
 
 	for _, match := range matches {
@@ -91,15 +111,12 @@ func (g *Generator) parseCreateTables(sql string) []*Table {
 			continue
 		}
 
-		tableName := match[1]
-		columnsStr := match[2]
-
 		table := &Table{
-			Name:    tableName,
-			Columns: []*Column{},
+			Name:    match[1],
+			Columns: make([]*Column, 0, 16),
 		}
 
-		lines := splitColumns(columnsStr)
+		lines := splitColumns(match[2])
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if line == "" {
@@ -122,14 +139,10 @@ func (g *Generator) parseCreateTables(sql string) []*Table {
 				continue
 			}
 
-			colName := parts[0]
-			colType := parts[1]
-			nullable := !strings.Contains(strings.ToUpper(line), "NOT NULL")
-
 			table.Columns = append(table.Columns, &Column{
-				Name:     colName,
-				Type:     colType,
-				Nullable: nullable,
+				Name:     parts[0],
+				Type:     parts[1],
+				Nullable: !strings.Contains(lineUpper, "NOT NULL"),
 			})
 		}
 
@@ -174,7 +187,7 @@ func splitColumns(columnsStr string) []string {
 }
 
 func (g *Generator) parseQueries() ([]*Query, error) {
-	queries := []*Query{}
+	regexOnce.Do(initRegex)
 
 	queriesPath := g.Config.Queries
 	if !filepath.IsAbs(queriesPath) {
@@ -182,13 +195,17 @@ func (g *Generator) parseQueries() ([]*Query, error) {
 		queriesPath = filepath.Join(cwd, queriesPath)
 	}
 
-	schema, _ := g.parseSchema()
+	schema := g.cachedSchema
+	if schema == nil {
+		schema, _ = g.parseSchema()
+	}
 
 	files, err := filepath.Glob(filepath.Join(queriesPath, "*.sql"))
 	if err != nil {
 		return nil, err
 	}
 
+	queries := make([]*Query, 0, len(files)*4)
 	for _, file := range files {
 		fileQueries, err := g.parseQueryFile(file, schema)
 		if err != nil {
@@ -258,20 +275,17 @@ func (g *Generator) parseQueryFile(filename string, schema *Schema) ([]*Query, e
 
 func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 	var tableName string
-	fromRegex := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
 	if match := fromRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 		tableName = match[1]
 	}
-	
+
 	if tableName == "" {
-		insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-		if match := insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
+		if match := g.insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 			tableName = match[1]
 		}
 	}
 	if tableName == "" {
-		updateRegex := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-		if match := updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
+		if match := g.updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 			tableName = match[1]
 		}
 	}
@@ -284,11 +298,10 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 		}
 	}
 
-	paramRegex := regexp.MustCompile(`\$\d+|\?`)
 	paramMatches := paramRegex.FindAllString(query.SQL, -1)
+	seen := make(map[string]bool, len(paramMatches))
+	uniqueParams := make([]string, 0, len(paramMatches))
 
-	seen := make(map[string]bool)
-	uniqueParams := []string{}
 	for _, p := range paramMatches {
 		if !seen[p] {
 			seen[p] = true
@@ -302,11 +315,11 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 		paramType := "any"
 
 		if table != nil {
-			inferredName := g.inferParamName(query.SQL, i+1, table)
+			inferredName := g.inferParamName(query.SQL, i+1)
 			if inferredName != "" && inferredName != paramName {
 				paramName = inferredName
 			}
-			
+
 			paramType = g.inferParamType(query.SQL, i+1, table, paramName)
 		}
 
@@ -316,19 +329,31 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 		}
 	}
 
-	if strings.Contains(strings.ToUpper(query.SQL), "SELECT") {
-		selectRegex := regexp.MustCompile(`(?i)SELECT\s+([\s\S]*?)\s+FROM`)
-		if selectMatch := selectRegex.FindStringSubmatch(query.SQL); len(selectMatch) > 1 {
-			columnsStr := selectMatch[1]
+	// Only parse columns for SELECT queries, not for DELETE/UPDATE/INSERT
+	sqlUpper := strings.ToUpper(query.SQL)
+	if strings.HasPrefix(strings.TrimSpace(sqlUpper), "SELECT") &&
+		!strings.HasPrefix(strings.TrimSpace(sqlUpper), "DELETE") &&
+		!strings.HasPrefix(strings.TrimSpace(sqlUpper), "UPDATE") &&
+		!strings.HasPrefix(strings.TrimSpace(sqlUpper), "INSERT") {
+		columnsStr := extractSelectColumns(query.SQL)
+		if columnsStr != "" {
 			if strings.TrimSpace(columnsStr) != "*" {
-				colNames := strings.Split(columnsStr, ",")
+				colNames := smartSplitColumns(columnsStr)
+				query.Columns = make([]*QueryColumn, 0, len(colNames))
+
+				asRegex := regexp.MustCompile(`(?i)\s+AS\s+`)
+
 				for _, colName := range colNames {
 					colName = strings.TrimSpace(colName)
-					if idx := strings.Index(strings.ToUpper(colName), " AS "); idx != -1 {
-						colName = colName[:idx]
-					}
-					if idx := strings.Index(colName, "."); idx != -1 {
-						colName = colName[idx+1:]
+
+					if loc := asRegex.FindStringIndex(colName); loc != nil {
+						colName = strings.TrimSpace(colName[loc[1]:])
+					} else {
+						if !strings.Contains(colName, "(") {
+							if idx := strings.Index(colName, "."); idx != -1 {
+								colName = colName[idx+1:]
+							}
+						}
 					}
 
 					query.Columns = append(query.Columns, &QueryColumn{
@@ -338,18 +363,119 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 					})
 				}
 			} else {
-				query.Columns = append(query.Columns, &QueryColumn{
+				query.Columns = []*QueryColumn{{
 					Name:  "*",
 					Type:  "string",
 					Table: tableName,
-				})
+				}}
 			}
 		}
 	}
 }
 
+func extractSelectColumns(sql string) string {
+	sqlUpper := strings.ToUpper(sql)
+	selectIdx := strings.Index(sqlUpper, "SELECT")
+	if selectIdx == -1 {
+		return ""
+	}
+
+	start := selectIdx + 6
+	for start < len(sql) && (sql[start] == ' ' || sql[start] == '\t' || sql[start] == '\n') {
+		start++
+	}
+
+	parenDepth := 0
+	fromIdx := -1
+
+	for i := start; i < len(sql); i++ {
+		switch sql[i] {
+		case '(':
+			parenDepth++
+		case ')':
+			parenDepth--
+		case 'F', 'f':
+			if parenDepth == 0 && i+4 <= len(sql) {
+				potential := strings.ToUpper(sql[i:min(i+4, len(sql))])
+				if potential == "FROM" {
+					if (i == 0 || !isAlphaNum(sql[i-1])) &&
+						(i+4 >= len(sql) || !isAlphaNum(sql[i+4])) {
+						fromIdx = i
+						break
+					}
+				}
+			}
+		case ';':
+			if parenDepth == 0 && fromIdx == -1 {
+				return strings.TrimSpace(sql[start:i])
+			}
+		}
+
+		if fromIdx != -1 {
+			break
+		}
+	}
+
+	if fromIdx != -1 {
+		return strings.TrimSpace(sql[start:fromIdx])
+	}
+
+	end := len(sql)
+	for i := start; i < len(sql); i++ {
+		if sql[i] == ';' {
+			end = i
+			break
+		}
+	}
+
+	return strings.TrimSpace(sql[start:end])
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func isAlphaNum(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
+}
+
+// smartSplitColumns splits column names by comma, respecting parentheses nesting
+func smartSplitColumns(columnsStr string) []string {
+	var result []string
+	var current strings.Builder
+	parenDepth := 0
+
+	for _, char := range columnsStr {
+		switch char {
+		case '(':
+			parenDepth++
+			current.WriteRune(char)
+		case ')':
+			parenDepth--
+			current.WriteRune(char)
+		case ',':
+			if parenDepth == 0 {
+				result = append(result, current.String())
+				current.Reset()
+			} else {
+				current.WriteRune(char)
+			}
+		default:
+			current.WriteRune(char)
+		}
+	}
+
+	if current.Len() > 0 {
+		result = append(result, current.String())
+	}
+
+	return result
+}
+
 func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, paramName string) string {
-	// If we have a parameter name, look it up in the table
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) {
@@ -357,21 +483,19 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 			}
 		}
 	}
-	
-	// Try pattern matching as fallback
-	whereRegex := regexp.MustCompile(fmt.Sprintf(`(?i)WHERE\s+(\w+)\s*=\s*\$%d`, paramIndex))
-	if match := whereRegex.FindStringSubmatch(sql); len(match) > 1 {
-		colName := match[1]
+
+	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(\w+)\s*=\s*\$%d`, paramIndex)
+	whereRe := regexp.MustCompile(wherePattern)
+	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
-			if strings.EqualFold(col.Name, colName) {
+			if strings.EqualFold(col.Name, match[1]) {
 				return g.mapSQLTypeToJS(col.Type)
 			}
 		}
 	}
 
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
-		insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
-		if match := insertRegex.FindStringSubmatch(sql); len(match) > 1 {
+		if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
 			colNames := strings.Split(match[1], ",")
 			if paramIndex <= len(colNames) {
 				colName := strings.TrimSpace(colNames[paramIndex-1])
@@ -384,11 +508,11 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 		}
 	}
 
-	setRegex := regexp.MustCompile(fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex))
-	if match := setRegex.FindStringSubmatch(sql); len(match) > 1 {
-		colName := match[1]
+	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)
+	setRe := regexp.MustCompile(setPattern)
+	if match := setRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
-			if strings.EqualFold(col.Name, colName) {
+			if strings.EqualFold(col.Name, match[1]) {
 				return g.mapSQLTypeToJS(col.Type)
 			}
 		}
@@ -397,15 +521,15 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 	return "any"
 }
 
-func (g *Generator) inferParamName(sql string, paramIndex int, table *Table) string {
-	whereRegex := regexp.MustCompile(fmt.Sprintf(`(?i)WHERE\s+(\w+)\s*=\s*\$%d`, paramIndex))
-	if match := whereRegex.FindStringSubmatch(sql); len(match) > 1 {
+func (g *Generator) inferParamName(sql string, paramIndex int) string {
+	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(\w+)\s*=\s*\$%d`, paramIndex)
+	whereRe := regexp.MustCompile(wherePattern)
+	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
 
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
-		insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
-		if match := insertRegex.FindStringSubmatch(sql); len(match) > 1 {
+		if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
 			colNames := strings.Split(match[1], ",")
 			if paramIndex <= len(colNames) {
 				return strings.TrimSpace(colNames[paramIndex-1])
@@ -413,8 +537,9 @@ func (g *Generator) inferParamName(sql string, paramIndex int, table *Table) str
 		}
 	}
 
-	setRegex := regexp.MustCompile(fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex))
-	if match := setRegex.FindStringSubmatch(sql); len(match) > 1 {
+	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)
+	setRe := regexp.MustCompile(setPattern)
+	if match := setRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
 

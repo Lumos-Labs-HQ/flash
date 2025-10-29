@@ -11,11 +11,20 @@ import (
 )
 
 type Generator struct {
-	Config *config.Config
+	Config       *config.Config
+	insertRegex  *regexp.Regexp
+	updateRegex  *regexp.Regexp
+	deleteRegex  *regexp.Regexp
+	cachedSchema *Schema
 }
 
 func New(cfg *config.Config) *Generator {
-	return &Generator{Config: cfg}
+	return &Generator{
+		Config:      cfg,
+		insertRegex: regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`),
+		updateRegex: regexp.MustCompile(`(?i)UPDATE\s+(\w+)`),
+		deleteRegex: regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`),
+	}
 }
 
 func (g *Generator) Generate() error {
@@ -23,14 +32,15 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	queries, err := g.parseQueries()
-	if err != nil {
-		return fmt.Errorf("failed to parse queries: %w", err)
-	}
-
 	schema, err := g.parseSchema()
 	if err != nil {
 		return fmt.Errorf("failed to parse schema: %w", err)
+	}
+	g.cachedSchema = schema
+
+	queries, err := g.parseQueries()
+	if err != nil {
+		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
 	if err := g.generateTypes(schema); err != nil {
@@ -41,15 +51,7 @@ func (g *Generator) Generate() error {
 		return err
 	}
 
-	if err := g.generateDatabase(); err != nil {
-		return err
-	}
-
-	if err := g.generatePackageJSON(); err != nil {
-		return err
-	}
-
-	return nil
+	return g.generateDatabase()
 }
 
 func (g *Generator) generateTypes(schema *Schema) error {
@@ -63,7 +65,7 @@ func (g *Generator) generateTypes(schema *Schema) error {
 	for _, table := range schema.Tables {
 		structName := capitalize(table.Name)
 		w.WriteString(fmt.Sprintf("/**\n * @typedef {Object} %s\n", structName))
-		
+
 		for _, col := range table.Columns {
 			jsType := g.mapSQLTypeToJS(col.Type)
 			nullable := ""
@@ -88,10 +90,11 @@ func (g *Generator) generateQueries(queries []*Query) error {
 	w.WriteString("class Queries {\n")
 	w.WriteString("  constructor(db) {\n")
 	w.WriteString("    this.db = db;\n")
+	w.WriteString("    this._stmts = new Map();\n")
 	w.WriteString("  }\n\n")
 
 	for _, query := range queries {
-		g.generateQueryMethod(&w, query)
+		g.generateOptimizedQueryMethod(&w, query)
 	}
 
 	w.WriteString("}\n\nmodule.exports = { Queries };\n")
@@ -100,86 +103,227 @@ func (g *Generator) generateQueries(queries []*Query) error {
 	return os.WriteFile(path, []byte(w.String()), 0644)
 }
 
-func (g *Generator) generateQueryMethod(w *strings.Builder, query *Query) {
+func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *Query) {
 	methodName := uncapitalize(query.Name)
+	sql := g.convertSQL(query.SQL)
+	sql = strings.ReplaceAll(sql, "`", "\\`")
+	sql = strings.ReplaceAll(sql, "${", "\\${")
 
 	w.WriteString("  /**\n")
 	if query.Comment != "" {
 		w.WriteString(fmt.Sprintf("   * %s\n", query.Comment))
 	}
 
-	paramNames := []string{}
+	paramNames := make([]string, len(query.Params))
 	for i, param := range query.Params {
 		paramName := param.Name
 		if paramName == "" {
-			paramName = fmt.Sprintf("param%d", i+1)
+			paramName = fmt.Sprintf("p%d", i+1)
 		}
-		paramNames = append(paramNames, paramName)
+		paramNames[i] = paramName
 		w.WriteString(fmt.Sprintf("   * @param {%s} %s\n", param.Type, paramName))
 	}
 
-	// Determine return type
 	returnType := g.getReturnType(query)
+	hasColumns := len(query.Columns) > 0
+	isSingleColumn := len(query.Columns) == 1 && query.Columns[0].Name != "*"
 
-	if query.Cmd == ":one" {
+	isHotQuery := isSingleColumn && query.Cmd == ":one" && len(query.Params) <= 2
+
+	switch query.Cmd {
+	case ":one":
 		w.WriteString(fmt.Sprintf("   * @returns {Promise<%s|null>}\n", returnType))
-	} else if query.Cmd == ":many" {
+	case ":many":
 		w.WriteString(fmt.Sprintf("   * @returns {Promise<%s[]>}\n", returnType))
-	} else {
+	default:
 		w.WriteString("   * @returns {Promise<number>}\n")
 	}
 	w.WriteString("   */\n")
 
 	w.WriteString(fmt.Sprintf("  async %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
 
-	sql := g.convertSQL(query.SQL)
-	sql = strings.ReplaceAll(sql, "`", "\\`")
-	sql = strings.ReplaceAll(sql, "${", "\\${")
+	w.WriteString(fmt.Sprintf("    let stmt = this._stmts.get('%s');\n", methodName))
+	w.WriteString("    if (!stmt) {\n")
 
-	if len(paramNames) > 0 {
-		w.WriteString(fmt.Sprintf("    const result = await this.db.query(`%s`, [%s]);\n", sql, strings.Join(paramNames, ", ")))
+	provider := g.Config.Database.Provider
+	if (provider == "" || provider == "postgresql" || provider == "postgres") && isHotQuery {
+		w.WriteString(fmt.Sprintf("      stmt = { name: '%s', text: `%s` };\n", methodName, sql))
 	} else {
-		w.WriteString(fmt.Sprintf("    const result = await this.db.query(`%s`);\n", sql))
+		w.WriteString(fmt.Sprintf("      stmt = `%s`;\n", sql))
 	}
 
-	if len(query.Columns) > 0 {
-		if query.Cmd == ":one" {
-			w.WriteString("    return result.rows?.[0] || null;\n")
-		} else {
-			w.WriteString("    return result.rows || [];\n")
-		}
-	} else {
-		w.WriteString("    return result.rowCount || 0;\n")
+	w.WriteString(fmt.Sprintf("      this._stmts.set('%s', stmt);\n", methodName))
+	w.WriteString("    }\n")
+
+	switch provider {
+	case "sqlite", "sqlite3":
+		g.generateSQLiteExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+	case "mysql":
+		g.generateMySQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+	default: // postgresql
+		g.generatePostgreSQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns, isHotQuery)
 	}
 
 	w.WriteString("  }\n\n")
 }
 
+func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*QueryColumn, isHotQuery bool) {
+	if len(paramNames) > 0 {
+		if isHotQuery {
+			w.WriteString("    const r = await this.db.query({ ...stmt, values: [" + strings.Join(paramNames, ", ") + "] });\n")
+		} else {
+			w.WriteString("    const r = await this.db.query(stmt, [" + strings.Join(paramNames, ", ") + "]);\n")
+		}
+	} else {
+		if isHotQuery {
+			w.WriteString("    const r = await this.db.query({ ...stmt, values: [] });\n")
+		} else {
+			w.WriteString("    const r = await this.db.query(stmt);\n")
+		}
+	}
+
+	if hasColumns {
+		if cmd == ":one" {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r.rows[0] ? r.rows[0].%s : null;\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r.rows[0] || null;\n")
+			}
+		} else {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r.rows.map(row => row.%s);\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r.rows;\n")
+			}
+		}
+	} else {
+		w.WriteString("    return r.rowCount;\n")
+	}
+}
+
+func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*QueryColumn) {
+	w.WriteString("    const sql = typeof stmt === 'string' ? stmt : stmt.text;\n")
+	if len(paramNames) > 0 {
+		w.WriteString("    const r = await this.db.execute(sql, [" + strings.Join(paramNames, ", ") + "]);\n")
+	} else {
+		w.WriteString("    const r = await this.db.execute(sql);\n")
+	}
+
+	if hasColumns {
+		if cmd == ":one" {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r[0][0] ? r[0][0].%s : null;\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r[0][0] || null;\n")
+			}
+		} else {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r[0].map(row => row.%s);\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r[0];\n")
+			}
+		}
+	} else {
+		w.WriteString("    return r[0].affectedRows;\n")
+	}
+}
+
+func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*QueryColumn) {
+	w.WriteString("    const sql = typeof stmt === 'string' ? stmt : stmt.text;\n")
+	w.WriteString("    const prepared = this.db.prepare(sql);\n")
+
+	if hasColumns {
+		if cmd == ":one" {
+			if len(paramNames) > 0 {
+				if isSingleColumn && len(columns) > 0 {
+					w.WriteString(fmt.Sprintf("%s", "    const row = prepared.get("+strings.Join(paramNames, ", ")+");\n"))
+					w.WriteString(fmt.Sprintf("    return row ? row.%s : null;\n", columns[0].Name))
+				} else {
+					w.WriteString("    return prepared.get(" + strings.Join(paramNames, ", ") + ") || null;\n")
+				}
+			} else {
+				if isSingleColumn && len(columns) > 0 {
+					w.WriteString("    const row = prepared.get();\n")
+					w.WriteString(fmt.Sprintf("    return row ? row.%s : null;\n", columns[0].Name))
+				} else {
+					w.WriteString("    return prepared.get() || null;\n")
+				}
+			}
+		} else {
+			if len(paramNames) > 0 {
+				if isSingleColumn && len(columns) > 0 {
+					w.WriteString("    const rows = prepared.all(" + strings.Join(paramNames, ", ") + ");\n")
+					w.WriteString(fmt.Sprintf("    return rows.map(row => row.%s);\n", columns[0].Name))
+				} else {
+					w.WriteString("    return prepared.all(" + strings.Join(paramNames, ", ") + ");\n")
+				}
+			} else {
+				if isSingleColumn && len(columns) > 0 {
+					w.WriteString("    const rows = prepared.all();\n")
+					w.WriteString(fmt.Sprintf("    return rows.map(row => row.%s);\n", columns[0].Name))
+				} else {
+					w.WriteString("    return prepared.all();\n")
+				}
+			}
+		}
+	} else {
+		if len(paramNames) > 0 {
+			w.WriteString("    const info = prepared.run(" + strings.Join(paramNames, ", ") + ");\n")
+		} else {
+			w.WriteString("    const info = prepared.run();\n")
+		}
+		w.WriteString("    return info.changes;\n")
+	}
+}
+
 func (g *Generator) getReturnType(query *Query) string {
-	// Check if query has columns (SELECT or RETURNING)
-	if len(query.Columns) > 0 && query.Columns[0].Table != "" {
+	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
+		colName := strings.ToLower(query.Columns[0].Name)
+		if colName == "count" || colName == "sum" || colName == "avg" ||
+			colName == "max" || colName == "min" || colName == "total" ||
+			strings.HasSuffix(colName, "_count") || strings.HasSuffix(colName, "_sum") ||
+			strings.HasPrefix(colName, "avg_") || strings.HasPrefix(colName, "total_") {
+			return "number"
+		}
+
+		if colName == "exists" || strings.HasPrefix(colName, "is") || strings.HasPrefix(colName, "has") {
+			return "boolean"
+		}
+
+		if query.Columns[0].Table != "" && g.cachedSchema != nil {
+			for _, table := range g.cachedSchema.Tables {
+				if strings.EqualFold(table.Name, query.Columns[0].Table) {
+					for _, col := range table.Columns {
+						if strings.EqualFold(col.Name, query.Columns[0].Name) {
+							return g.mapSQLTypeToJS(col.Type)
+						}
+					}
+				}
+			}
+		}
+		return "any"
+	}
+
+	if len(query.Columns) == 1 && query.Columns[0].Name == "*" && query.Columns[0].Table != "" {
 		return capitalize(query.Columns[0].Table)
 	}
-	
-	// For INSERT/UPDATE/DELETE, extract table name from SQL
-	// INSERT INTO table
-	insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-	if match := insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
+
+	if len(query.Columns) > 1 {
+		return "Object"
+	}
+
+	if match := g.insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 		return capitalize(match[1])
 	}
-	
-	// UPDATE table
-	updateRegex := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-	if match := updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
+
+	if match := g.updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 		return capitalize(match[1])
 	}
-	
-	// DELETE FROM table
-	deleteRegex := regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`)
-	if match := deleteRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
+
+	if match := g.deleteRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 		return capitalize(match[1])
 	}
-	
+
 	return "Object"
 }
 
@@ -201,33 +345,6 @@ func (g *Generator) generateDatabase() error {
 
 	path := filepath.Join(g.Config.Gen.JS.Out, "database.js")
 	return os.WriteFile(path, []byte(w.String()), 0644)
-}
-
-func (g *Generator) generatePackageJSON() error {
-	var deps string
-
-	switch g.Config.Database.Provider {
-	case "mysql":
-		deps = `    "mysql2": "^3.6.0"`
-	case "sqlite", "sqlite3":
-		deps = `    "better-sqlite3": "^9.0.0"`
-	default:
-		deps = `    "pg": "^8.11.0"`
-	}
-
-	content := fmt.Sprintf(`{
-  "name": "%s",
-  "version": "1.0.0",
-  "description": "Generated JavaScript database client by Graft",
-  "main": "database.js",
-  "dependencies": {
-%s
-  }
-}
-`, g.Config.Gen.JS.Package, deps)
-
-	path := filepath.Join(g.Config.Gen.JS.Out, "package.json")
-	return os.WriteFile(path, []byte(content), 0644)
 }
 
 func (g *Generator) mapSQLTypeToJS(sqlType string) string {

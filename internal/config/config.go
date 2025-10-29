@@ -53,7 +53,6 @@ type GoGen struct {
 type JSGen struct {
 	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
 	Out     string `json:"out,omitempty" mapstructure:"out"`
-	Package string `json:"package,omitempty" mapstructure:"package"`
 }
 
 func Load() (*Config, error) {
@@ -86,10 +85,7 @@ func Load() (*Config, error) {
 		cfg.Database.URLEnv = "DATABASE_URL"
 	}
 	if cfg.Gen.JS.Out == "" && cfg.Gen.JS.Enabled {
-		cfg.Gen.JS.Out = "graft_gen_js/"
-	}
-	if cfg.Gen.JS.Package == "" && cfg.Gen.JS.Enabled {
-		cfg.Gen.JS.Package = "db"
+		cfg.Gen.JS.Out = "graft_gen"
 	}
 
 	return &cfg, nil

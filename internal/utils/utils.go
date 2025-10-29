@@ -102,7 +102,7 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 	migrationContent := string(content)
 
 	// Check for ALTER TABLE ADD COLUMN NOT NULL without DEFAULT
-	addColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+["\'\x60]?(\w+)["\'\x60]?\s+ADD\s+(?:COLUMN\s+)?["\'\x60]?(\w+)["\'\x60]?\s+[^;]*NOT\s+NULL`)
+	addColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+["\'\x60]?(\w+)["\'\x60]?\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?["\'\x60]?(\w+)["\'\x60]?\s+.*?NOT\s+NULL.*?(?:;|$)`)
 	matches := addColumnRegex.FindAllStringSubmatch(migrationContent, -1)
 
 	for _, match := range matches {

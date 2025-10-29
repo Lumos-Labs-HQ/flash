@@ -80,7 +80,6 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
 	var genSection string
 	
 	if pt.IsNodeProject {
-		// Node.js project - enable JS generation
 		genSection = `  "gen": {
     "js": {
       "enabled": true,
@@ -89,7 +88,6 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
     }
   }`
 	} else {
-		// Go project - configure Go generation
 		sqlPackage := ""
 		if pt.DatabaseType == PostgreSQL {
 			sqlPackage = `"sql_package": "pgx/v5"`
