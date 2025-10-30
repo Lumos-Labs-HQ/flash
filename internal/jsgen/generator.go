@@ -146,7 +146,10 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *Quer
 	w.WriteString("    if (!stmt) {\n")
 
 	provider := g.Config.Database.Provider
-	if (provider == "" || provider == "postgresql" || provider == "postgres") && isHotQuery {
+	useNamedStmt := (provider == "" || provider == "postgresql" || provider == "postgres") &&
+		(isHotQuery || len(query.Params) == 0)
+
+	if useNamedStmt {
 		w.WriteString(fmt.Sprintf("      stmt = { name: '%s', text: `%s` };\n", methodName, sql))
 	} else {
 		w.WriteString(fmt.Sprintf("      stmt = `%s`;\n", sql))
@@ -170,13 +173,16 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *Quer
 func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*QueryColumn, isHotQuery bool) {
 	if len(paramNames) > 0 {
 		if isHotQuery {
-			w.WriteString("    const r = await this.db.query({ ...stmt, values: [" + strings.Join(paramNames, ", ") + "] });\n")
+			// Optimize: Reuse the prepared statement object instead of spreading
+			w.WriteString("    stmt.values = [" + strings.Join(paramNames, ", ") + "];\n")
+			w.WriteString("    const r = await this.db.query(stmt);\n")
 		} else {
 			w.WriteString("    const r = await this.db.query(stmt, [" + strings.Join(paramNames, ", ") + "]);\n")
 		}
 	} else {
 		if isHotQuery {
-			w.WriteString("    const r = await this.db.query({ ...stmt, values: [] });\n")
+			w.WriteString("    stmt.values = [];\n")
+			w.WriteString("    const r = await this.db.query(stmt);\n")
 		} else {
 			w.WriteString("    const r = await this.db.query(stmt);\n")
 		}

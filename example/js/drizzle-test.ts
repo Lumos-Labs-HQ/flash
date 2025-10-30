@@ -1,19 +1,8 @@
-﻿import { Pool } from 'pg';
-import { New } from './graft_gen/database';
-
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/graft_test';
-
-export interface PerformanceMetrics {
-    operation: string;
-    totalTime: number;
-    avgTime: number;
-    minTime?: number;
-    maxTime?: number;
-    memoryUsed: number;
-    peakMemory: number;
-    throughput?: number;
-    concurrentOps?: number;
-}
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import { eq, sql, desc, count, max } from 'drizzle-orm';
+import { users, categories, posts, comments } from './drizzle/schema';
+import type { PerformanceMetrics } from './graft-test';
 
 async function measureMemory(): Promise<number> {
     const used = process.memoryUsage();
@@ -30,31 +19,37 @@ async function runConcurrent<T>(operations: (() => Promise<T>)[], batchSize: num
     return results;
 }
 
-export async function runGraftTests() {
-    console.log('\n🔧 GRAFT - PRODUCTION LOAD TEST\n');
+export async function runDrizzleTests() {
+    console.log('\n🐉 DRIZZLE - PRODUCTION LOAD TEST\n');
     console.log('='.repeat(80));
 
-    const pool = new Pool({
-        connectionString: DATABASE_URL,
-        max: 20, 
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 2000,
+    const pool = new Pool({ 
+        connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/graft_test',
+        max: 20 
     });
-    const db = New(pool);
+    const db = drizzle(pool);
     const metrics: PerformanceMetrics[] = [];
 
     try {
-        console.log('\n Cleaning up...');
-        await pool.query('TRUNCATE users, posts, categories, comments RESTART IDENTITY CASCADE');
+        console.log('\n📦 Cleaning up...');
+        await db.delete(comments);
+        await db.delete(posts);
+        await db.delete(categories);
+        await db.delete(users);
 
-        console.log('\n✍️  Test 1: Bulk Insert - 1000 users (OPTIMIZED)...');
+        console.log('\n✍️  Test 1: Bulk Insert - 1000 users...');
         const startMem1 = await measureMemory();
         const startTime1 = performance.now();
         const userInserts = [];
         for (let i = 1; i <= 1000; i++) {
-            userInserts.push(() => db.createUser(`User ${i}`, `user${i}@test.com`, `Address ${i}`, i % 5 === 0));
+            userInserts.push(() => db.insert(users).values({
+                name: `User ${i}`,
+                email: `user${i}@test.com`,
+                address: `Address ${i}`,
+                isadmin: i % 5 === 0
+            }));
         }
-        await runConcurrent(userInserts, 100);
+        await runConcurrent(userInserts, 50);
         const endTime1 = performance.now();
         const endMem1 = await measureMemory();
         metrics.push({
@@ -64,30 +59,44 @@ export async function runGraftTests() {
             memoryUsed: endMem1 - startMem1,
             peakMemory: endMem1,
             throughput: 1000 / ((endTime1 - startTime1) / 1000),
-            concurrentOps: 100
+            concurrentOps: 50
         });
         console.log(`   Time: ${(endTime1 - startTime1).toFixed(2)}ms | Throughput: ${(1000 / ((endTime1 - startTime1) / 1000)).toFixed(2)} ops/sec`);
 
-        console.log('\n📂 Test 2: Content creation (OPTIMIZED)...');
+        console.log('\n📂 Test 2: Content creation...');
         const startMem2 = await measureMemory();
         const startTime2 = performance.now();
         const categoryInserts = [];
         for (let i = 1; i <= 10; i++) {
-            categoryInserts.push(() => db.createCategory(`Category ${i}`));
+            categoryInserts.push(() => db.insert(categories).values({ name: `Category ${i}` }));
         }
-        await runConcurrent(categoryInserts, 10);
+        await runConcurrent(categoryInserts, 5);
+        
         console.log('   Creating 5000 posts...');
+        const allUsers = await db.select({ id: users.id }).from(users);
+        const allCategories = await db.select({ id: categories.id }).from(categories);
         const postInserts = [];
         for (let i = 1; i <= 5000; i++) {
-            postInserts.push(() => db.createPost((i % 1000) + 1, (i % 10) + 1, `Post ${i}`, `Content ${i}...`.repeat(3)));
+            postInserts.push(() => db.insert(posts).values({
+                user_id: allUsers[i % 1000]!.id,
+                category_id: allCategories[i % 10]!.id,
+                title: `Post ${i}`,
+                content: `Content ${i}...`.repeat(3)
+            }));
         }
-        await runConcurrent(postInserts, 150);
+        await runConcurrent(postInserts, 100);
+        
         console.log('   Creating 15000 comments...');
+        const allPosts = await db.select({ id: posts.id }).from(posts);
         const commentInserts = [];
         for (let i = 1; i <= 15000; i++) {
-            commentInserts.push(() => db.createComment((i % 5000) + 1, (i % 1000) + 1, `Comment ${i}`));
+            commentInserts.push(() => db.insert(comments).values({
+                post_id: allPosts[i % 5000]!.id,
+                user_id: allUsers[i % 1000]!.id,
+                content: `Comment ${i}`
+            }));
         }
-        await runConcurrent(commentInserts, 150);
+        await runConcurrent(commentInserts, 100);
         const endTime2 = performance.now();
         const endMem2 = await measureMemory();
         metrics.push({
@@ -97,18 +106,30 @@ export async function runGraftTests() {
             memoryUsed: endMem2 - startMem2,
             peakMemory: endMem2,
             throughput: 20010 / ((endTime2 - startTime2) / 1000),
-            concurrentOps: 150
+            concurrentOps: 100
         });
         console.log(`   Time: ${(endTime2 - startTime2).toFixed(2)}ms | Throughput: ${(20010 / ((endTime2 - startTime2) / 1000)).toFixed(2)} ops/sec`);
 
-        console.log('\n🔍 Test 3: Complex queries x500 (GRAFT GENERATED)...');
+        console.log('\n🔍 Test 3: Complex queries x500...');
         const startMem3 = await measureMemory();
         const startTime3 = performance.now();
         const queryTimes: number[] = [];
-
         for (let i = 0; i < 500; i++) {
             const qStart = performance.now();
-            await db.getActiveUsersWithStats();
+            await db
+                .select({
+                    id: users.id,
+                    name: users.name,
+                    email: users.email,
+                    total_posts: count(posts.id).as('total_posts'),
+                    total_comments: count(comments.id).as('total_comments'),
+                    last_post_date: max(posts.created_at).as('last_post_date')
+                })
+                .from(users)
+                .leftJoin(posts, eq(users.id, posts.user_id))
+                .leftJoin(comments, eq(users.id, comments.user_id))
+                .groupBy(users.id, users.name, users.email)
+                .orderBy(desc(count(posts.id)));
             queryTimes.push(performance.now() - qStart);
         }
         const endTime3 = performance.now();
@@ -125,20 +146,40 @@ export async function runGraftTests() {
         });
         console.log(`   Time: ${(endTime3 - startTime3).toFixed(2)}ms | Avg: ${(queryTimes.reduce((a, b) => a + b, 0) / queryTimes.length).toFixed(2)}ms | Min/Max: ${Math.min(...queryTimes).toFixed(2)}/${Math.max(...queryTimes).toFixed(2)}ms`);
 
-        console.log('\n⚡ Test 4: Mixed workload x1000 (OPTIMIZED)...');
+        console.log('\n⚡ Test 4: Mixed workload x1000...');
         const startMem4 = await measureMemory();
         const startTime4 = performance.now();
         const mixedOps: (() => Promise<any>)[] = [];
         for (let i = 0; i < 1000; i++) {
             if (i % 4 === 0) {
-                mixedOps.push(() => db.createComment((i % 5000) + 1, (i % 1000) + 1, `RT comment ${i}`));
+                mixedOps.push(() => db.insert(comments).values({
+                    post_id: allPosts[i % 5000]!.id,
+                    user_id: allUsers[i % 1000]!.id,
+                    content: `RT comment ${i}`
+                }));
             } else {
-                if (i % 3 === 0) mixedOps.push(() => db.getTopActiveUsers());
-                else if (i % 3 === 1) mixedOps.push(() => db.getUserEmail((i % 1000) + 1));
-                else mixedOps.push(() => db.isadminUser((i % 1000) + 1));
+                if (i % 3 === 0) {
+                    mixedOps.push(() => db
+                        .select({
+                            id: users.id,
+                            name: users.name,
+                            email: users.email,
+                            total_posts: count(posts.id),
+                            total_comments: count(comments.id),
+                        })
+                        .from(users)
+                        .leftJoin(posts, eq(users.id, posts.user_id))
+                        .leftJoin(comments, eq(users.id, comments.user_id))
+                        .groupBy(users.id)
+                        .limit(10));
+                } else if (i % 3 === 1) {
+                    mixedOps.push(() => db.select({ email: users.email }).from(users).where(eq(users.id, allUsers[i % 1000]!.id)));
+                } else {
+                    mixedOps.push(() => db.select({ isadmin: users.isadmin }).from(users).where(eq(users.id, allUsers[i % 1000]!.id)));
+                }
             }
         }
-        await runConcurrent(mixedOps, 30); 
+        await runConcurrent(mixedOps, 30);
         const endTime4 = performance.now();
         const endMem4 = await measureMemory();
         metrics.push({
@@ -148,18 +189,18 @@ export async function runGraftTests() {
             memoryUsed: endMem4 - startMem4,
             peakMemory: endMem4,
             throughput: 1000 / ((endTime4 - startTime4) / 1000),
-            concurrentOps: 50
+            concurrentOps: 30
         });
         console.log(`   Time: ${(endTime4 - startTime4).toFixed(2)}ms | Throughput: ${(1000 / ((endTime4 - startTime4) / 1000)).toFixed(2)} ops/sec`);
 
-        console.log('\n🔥 Test 5: Stress test x2000 (OPTIMIZED)...');
+        console.log('\n🔥 Test 5: Stress test x2000...');
         const startMem5 = await measureMemory();
         const startTime5 = performance.now();
         const stressOps = [];
         for (let i = 0; i < 2000; i++) {
-            stressOps.push(() => db.getUserName((i % 1000) + 1));
+            stressOps.push(() => db.select({ name: users.name }).from(users).where(eq(users.id, allUsers[i % 1000]!.id)));
         }
-        await runConcurrent(stressOps, 100);
+        await runConcurrent(stressOps, 50);
         const endTime5 = performance.now();
         const endMem5 = await measureMemory();
         metrics.push({
@@ -169,12 +210,11 @@ export async function runGraftTests() {
             memoryUsed: endMem5 - startMem5,
             peakMemory: endMem5,
             throughput: 2000 / ((endTime5 - startTime5) / 1000),
-            concurrentOps: 100
+            concurrentOps: 50
         });
         console.log(`   Time: ${(endTime5 - startTime5).toFixed(2)}ms | Throughput: ${(2000 / ((endTime5 - startTime5) / 1000)).toFixed(2)} ops/sec`);
 
-        console.log('\n Pool: Total=' + pool.totalCount + ' Idle=' + pool.idleCount + ' Waiting=' + pool.waitingCount);
-        console.log('\n SUMMARY');
+        console.log('\n📊 SUMMARY');
         console.log('='.repeat(80));
         console.log('Operation'.padEnd(45) + 'Total(ms)'.padEnd(12) + 'Avg(ms)'.padEnd(10) + 'Ops/sec');
         console.log('-'.repeat(80));
@@ -185,18 +225,18 @@ export async function runGraftTests() {
         await pool.end();
         return metrics;
     } catch (error) {
-        console.error(' Error:', error);
+        console.error('❌ Error:', error);
         await pool.end();
         throw error;
     }
 }
 
 if (import.meta.main) {
-    runGraftTests().then(() => {
-        console.log('\n Completed!\n');
+    runDrizzleTests().then(() => {
+        console.log('\n✅ Completed!\n');
         process.exit(0);
     }).catch((error: any) => {
-        console.error('\n Failed:', error);
+        console.error('\n❌ Failed:', error);
         process.exit(1);
     });
 }

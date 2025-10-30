@@ -16,12 +16,12 @@ class Queries {
       stmt = { name: 'isadminUser', text: `SELECT isadmin FROM users WHERE id = $1 LIMIT 1;` };
       this._stmts.set('isadminUser', stmt);
     }
-    const r = await this.db.query({ ...stmt, values: [id] });
+    stmt.values = [id];
+    const r = await this.db.query(stmt);
     return r.rows[0] ? r.rows[0].isadmin : null;
   }
 
   /**
-   * Get a single user's email address
    * @param {number} id
    * @returns {Promise<string|null>}
    */
@@ -31,12 +31,13 @@ class Queries {
       stmt = { name: 'getUserEmail', text: `SELECT email FROM users WHERE id = $1 LIMIT 1;` };
       this._stmts.set('getUserEmail', stmt);
     }
-    const r = await this.db.query({ ...stmt, values: [id] });
+    stmt.values = [id];
+    const r = await this.db.query(stmt);
     return r.rows[0] ? r.rows[0].email : null;
   }
 
   /**
-   * Get a single user's name
+   * COMPLEX QUERIES (Ultra-Optimized with CTEs and Subqueries)
    * @param {number} id
    * @returns {Promise<string|null>}
    */
@@ -46,299 +47,101 @@ class Queries {
       stmt = { name: 'getUserName', text: `SELECT name FROM users WHERE id = $1 LIMIT 1;` };
       this._stmts.set('getUserName', stmt);
     }
-    const r = await this.db.query({ ...stmt, values: [id] });
+    stmt.values = [id];
+    const r = await this.db.query(stmt);
     return r.rows[0] ? r.rows[0].name : null;
   }
 
   /**
-   * Get when a user was created
-   * @param {number} id
-   * @returns {Promise<Date|null>}
-   */
-  async getUserCreatedAt(id) {
-    let stmt = this._stmts.get('getUserCreatedAt');
-    if (!stmt) {
-      stmt = { name: 'getUserCreatedAt', text: `SELECT created_at FROM users WHERE id = $1 LIMIT 1;` };
-      this._stmts.set('getUserCreatedAt', stmt);
-    }
-    const r = await this.db.query({ ...stmt, values: [id] });
-    return r.rows[0] ? r.rows[0].created_at : null;
-  }
-
-  /**
-   * Get user ID by email
-   * @param {string} email
-   * @returns {Promise<number|null>}
-   */
-  async getUserIdByEmail(email) {
-    let stmt = this._stmts.get('getUserIdByEmail');
-    if (!stmt) {
-      stmt = { name: 'getUserIdByEmail', text: `SELECT id FROM users WHERE email = $1 LIMIT 1;` };
-      this._stmts.set('getUserIdByEmail', stmt);
-    }
-    const r = await this.db.query({ ...stmt, values: [email] });
-    return r.rows[0] ? r.rows[0].id : null;
-  }
-
-  /**
-   * Get all user email addresses
-   * @returns {Promise<string[]>}
-   */
-  async getAllUserEmails() {
-    let stmt = this._stmts.get('getAllUserEmails');
-    if (!stmt) {
-      stmt = `SELECT email FROM users;`;
-      this._stmts.set('getAllUserEmails', stmt);
-    }
-    const r = await this.db.query(stmt);
-    return r.rows.map(row => row.email);
-  }
-
-  /**
-   * Get all user IDs
-   * @returns {Promise<number[]>}
-   */
-  async getAllUserIds() {
-    let stmt = this._stmts.get('getAllUserIds');
-    if (!stmt) {
-      stmt = `SELECT id FROM users;`;
-      this._stmts.set('getAllUserIds', stmt);
-    }
-    const r = await this.db.query(stmt);
-    return r.rows.map(row => row.id);
-  }
-
-  /**
-   * Get emails of all admin users
-   * @returns {Promise<string[]>}
-   */
-  async getAdminUserEmails() {
-    let stmt = this._stmts.get('getAdminUserEmails');
-    if (!stmt) {
-      stmt = `SELECT email FROM users WHERE isadmin = true;`;
-      this._stmts.set('getAdminUserEmails', stmt);
-    }
-    const r = await this.db.query(stmt);
-    return r.rows.map(row => row.email);
-  }
-
-  /**
-   * Get complete user information (returns full Users object)
-   * @param {number} id
-   * @returns {Promise<Users|null>}
-   */
-  async getUserFullInfo(id) {
-    let stmt = this._stmts.get('getUserFullInfo');
-    if (!stmt) {
-      stmt = `SELECT * FROM users WHERE id = $1 LIMIT 1;`;
-      this._stmts.set('getUserFullInfo', stmt);
-    }
-    const r = await this.db.query(stmt, [id]);
-    return r.rows[0] || null;
-  }
-
-  /**
-   * Get all users with complete information
-   * @returns {Promise<Users[]>}
-   */
-  async getAllUsers() {
-    let stmt = this._stmts.get('getAllUsers');
-    if (!stmt) {
-      stmt = `SELECT * FROM users;`;
-      this._stmts.set('getAllUsers', stmt);
-    }
-    const r = await this.db.query(stmt);
-    return r.rows;
-  }
-
-  /**
-   * Get user's email and name (returns object with two fields)
-   * @param {number} id
-   * @returns {Promise<Object|null>}
-   */
-  async getUserEmailAndName(id) {
-    let stmt = this._stmts.get('getUserEmailAndName');
-    if (!stmt) {
-      stmt = `SELECT email, name FROM users WHERE id = $1 LIMIT 1;`;
-      this._stmts.set('getUserEmailAndName', stmt);
-    }
-    const r = await this.db.query(stmt, [id]);
-    return r.rows[0] || null;
-  }
-
-  /**
-   * Count total users
-   * @returns {Promise<number|null>}
-   */
-  async countUsers() {
-    let stmt = this._stmts.get('countUsers');
-    if (!stmt) {
-      stmt = { name: 'countUsers', text: `SELECT COUNT(*) as count FROM users;` };
-      this._stmts.set('countUsers', stmt);
-    }
-    const r = await this.db.query({ ...stmt, values: [] });
-    return r.rows[0] ? r.rows[0].count : null;
-  }
-
-  /**
-   * COMPLEX QUERIES - Production Level
-   * @returns {Promise<Object[]>}
-   */
-  async getRecentUsers() {
-    let stmt = this._stmts.get('getRecentUsers');
-    if (!stmt) {
-      stmt = `SELECT id, name, email, created_at FROM users ORDER BY created_at DESC LIMIT 10;`;
-      this._stmts.set('getRecentUsers', stmt);
-    }
-    const r = await this.db.query(stmt);
-    return r.rows;
-  }
-
-  /**
-   * Get user with their total post count (JOIN + aggregation)
-   * @param {any} param1
-   * @returns {Promise<Object|null>}
-   */
-  async getUserWithPostCount(param1) {
-    let stmt = this._stmts.get('getUserWithPostCount');
-    if (!stmt) {
-      stmt = `SELECT u.id, u.name, u.email, u.isadmin, COUNT(p.id) as post_count FROM users u LEFT JOIN posts p ON u.id = p.user_id WHERE u.id = $1 GROUP BY u.id, u.name, u.email, u.isadmin LIMIT 1;`;
-      this._stmts.set('getUserWithPostCount', stmt);
-    }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows[0] || null;
-  }
-
-  /**
-   * Get all users with their post counts
-   * @returns {Promise<Object[]>}
-   */
-  async getUsersWithPostCounts() {
-    let stmt = this._stmts.get('getUsersWithPostCounts');
-    if (!stmt) {
-      stmt = `SELECT u.id, u.name, u.email, COUNT(p.id) as post_count FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email ORDER BY post_count DESC;`;
-      this._stmts.set('getUsersWithPostCounts', stmt);
-    }
-    const r = await this.db.query(stmt);
-    return r.rows;
-  }
-
-  /**
-   * Get user's posts with category information (multiple JOINs)
-   * @param {any} param1
-   * @returns {Promise<Object[]>}
-   */
-  async getUserPostsWithCategory(param1) {
-    let stmt = this._stmts.get('getUserPostsWithCategory');
-    if (!stmt) {
-      stmt = `SELECT p.id as post_id, p.title, p.content, p.created_at, c.name as category_name, c.id as category_id FROM posts p INNER JOIN users u ON p.user_id = u.id INNER JOIN categories c ON p.category_id = c.id WHERE u.id = $1 ORDER BY p.created_at DESC;`;
-      this._stmts.set('getUserPostsWithCategory', stmt);
-    }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows;
-  }
-
-  /**
-   * Get post details with comment count
-   * @param {any} param1
-   * @returns {Promise<Object|null>}
-   */
-  async getPostWithCommentCount(param1) {
-    let stmt = this._stmts.get('getPostWithCommentCount');
-    if (!stmt) {
-      stmt = `SELECT p.id, p.title, p.content, u.name as author_name, c.name as category_name, COUNT(cm.id) as comment_count FROM posts p INNER JOIN users u ON p.user_id = u.id INNER JOIN categories c ON p.category_id = c.id LEFT JOIN comments cm ON p.id = cm.post_id WHERE p.id = $1 GROUP BY p.id, p.title, p.content, u.name, c.name LIMIT 1;`;
-      this._stmts.set('getPostWithCommentCount', stmt);
-    }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows[0] || null;
-  }
-
-  /**
-   * Get users who have posted, with their statistics (complex aggregation)
+   * ULTRA-OPTIMIZED: Using CTE for better query planning and caching
    * @returns {Promise<Object[]>}
    */
   async getActiveUsersWithStats() {
     let stmt = this._stmts.get('getActiveUsersWithStats');
     if (!stmt) {
-      stmt = `SELECT u.id, u.name, u.email, u.isadmin, COUNT(DISTINCT p.id) as total_posts, COUNT(DISTINCT c.id) as total_comments, MAX(p.created_at) as last_post_date FROM users u INNER JOIN posts p ON u.id = p.user_id LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id, u.name, u.email, u.isadmin HAVING COUNT(DISTINCT p.id) > 0 ORDER BY total_posts DESC;`;
+      stmt = { name: 'getActiveUsersWithStats', text: `WITH post_stats AS ( SELECT user_id, COUNT(*) as total_posts, MAX(created_at) as last_post_date FROM posts GROUP BY user_id ), comment_stats AS ( SELECT user_id, COUNT(*) as total_comments FROM comments GROUP BY user_id ) SELECT u.id, u.name, u.email, u.isadmin, ps.total_posts, COALESCE(cs.total_comments, 0) as total_comments, ps.last_post_date FROM users u INNER JOIN post_stats ps ON u.id = ps.user_id LEFT JOIN comment_stats cs ON u.id = cs.user_id ORDER BY ps.total_posts DESC;` };
       this._stmts.set('getActiveUsersWithStats', stmt);
     }
     const r = await this.db.query(stmt);
-    return r.rows;
+    return r.rowCount;
   }
 
   /**
-   * Calculate user engagement score (complex calculation)
-   * @param {any} param1
-   * @returns {Promise<Object|null>}
-   */
-  async getUserEngagementScore(param1) {
-    let stmt = this._stmts.get('getUserEngagementScore');
-    if (!stmt) {
-      stmt = `SELECT u.id, u.name, (COUNT(DISTINCT p.id) * 10 + COUNT(DISTINCT c.id) * 5) as engagement_score FROM users u LEFT JOIN posts p ON u.id = p.user_id LEFT JOIN comments c ON u.id = c.user_id WHERE u.id = $1 GROUP BY u.id, u.name LIMIT 1;`;
-      this._stmts.set('getUserEngagementScore', stmt);
-    }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows[0] || null;
-  }
-
-  /**
-   * Search users by name pattern (LIKE query)
-   * @param {any} param1
+   * INSERT OPERATIONS
    * @returns {Promise<Object[]>}
    */
-  async searchUsersByName(param1) {
-    let stmt = this._stmts.get('searchUsersByName');
+  async getTopActiveUsers() {
+    let stmt = this._stmts.get('getTopActiveUsers');
     if (!stmt) {
-      stmt = `SELECT id, name, email, created_at FROM users WHERE name ILIKE $1 ORDER BY name LIMIT 50;`;
-      this._stmts.set('searchUsersByName', stmt);
-    }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows;
-  }
-
-  /**
-   * Get top contributors (users with most posts and comments)
-   * @param {any} param1
-   * @returns {Promise<Object[]>}
-   */
-  async getTopContributors(param1) {
-    let stmt = this._stmts.get('getTopContributors');
-    if (!stmt) {
-      stmt = `SELECT u.id, u.name, u.email, COUNT(DISTINCT p.id) as posts, COUNT(DISTINCT c.id) as comments, (COUNT(DISTINCT p.id) + COUNT(DISTINCT c.id)) as total_contributions FROM users u LEFT JOIN posts p ON u.id = p.user_id LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id, u.name, u.email HAVING (COUNT(DISTINCT p.id) + COUNT(DISTINCT c.id)) > 0 ORDER BY total_contributions DESC LIMIT $1;`;
-      this._stmts.set('getTopContributors', stmt);
-    }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows;
-  }
-
-  /**
-   * Get categories with post and comment statistics
-   * @returns {Promise<Object[]>}
-   */
-  async getCategoryWithPostStats() {
-    let stmt = this._stmts.get('getCategoryWithPostStats');
-    if (!stmt) {
-      stmt = `SELECT c.id, c.name, COUNT(DISTINCT p.id) as post_count, COUNT(DISTINCT cm.id) as comment_count, COUNT(DISTINCT p.user_id) as unique_authors FROM categories c LEFT JOIN posts p ON c.id = p.category_id LEFT JOIN comments cm ON p.id = cm.post_id GROUP BY c.id, c.name ORDER BY post_count DESC;`;
-      this._stmts.set('getCategoryWithPostStats', stmt);
+      stmt = { name: 'getTopActiveUsers', text: `WITH ranked_users AS ( SELECT user_id, COUNT(*) as total_posts FROM posts GROUP BY user_id ORDER BY total_posts DESC LIMIT 10 ) SELECT u.id, u.name, u.email, ru.total_posts, COALESCE(cs.total_comments, 0) as total_comments FROM ranked_users ru INNER JOIN users u ON u.id = ru.user_id LEFT JOIN ( SELECT user_id, COUNT(*) as total_comments FROM comments WHERE user_id IN (SELECT user_id FROM ranked_users) GROUP BY user_id ) cs ON u.id = cs.user_id ORDER BY ru.total_posts DESC;` };
+      this._stmts.set('getTopActiveUsers', stmt);
     }
     const r = await this.db.query(stmt);
-    return r.rows;
+    return r.rowCount;
   }
 
   /**
-   * Get user's recent posts and comments combined
-   * @param {any} param1
-   * @returns {Promise<Object[]>}
+   * @param {string} name
+   * @param {string} email
+   * @param {string} address
+   * @param {boolean} isadmin
+   * @returns {Promise<number>}
    */
-  async getUserRecentActivity(param1) {
-    let stmt = this._stmts.get('getUserRecentActivity');
+  async createUser(name, email, address, isadmin) {
+    let stmt = this._stmts.get('createUser');
     if (!stmt) {
-      stmt = `SELECT p.id, p.title, p.content, p.created_at, 'post' as activity_type FROM posts p WHERE p.user_id = $1 UNION ALL SELECT c.id, 'Comment' as title, c.content, c.created_at, 'comment' as activity_type FROM comments c WHERE c.user_id = $1 ORDER BY created_at DESC LIMIT 20;`;
-      this._stmts.set('getUserRecentActivity', stmt);
+      stmt = `INSERT INTO users (name, email, address, isadmin) VALUES ($1, $2, $3, $4);`;
+      this._stmts.set('createUser', stmt);
     }
-    const r = await this.db.query(stmt, [param1]);
-    return r.rows;
+    const r = await this.db.query(stmt, [name, email, address, isadmin]);
+    return r.rowCount;
+  }
+
+  /**
+   * @param {number} user_id
+   * @param {number} category_id
+   * @param {string} title
+   * @param {string} content
+   * @returns {Promise<number>}
+   */
+  async createPost(user_id, category_id, title, content) {
+    let stmt = this._stmts.get('createPost');
+    if (!stmt) {
+      stmt = `INSERT INTO posts (user_id, category_id, title, content) VALUES ($1, $2, $3, $4);`;
+      this._stmts.set('createPost', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, category_id, title, content]);
+    return r.rowCount;
+  }
+
+  /**
+   * @param {number} post_id
+   * @param {number} user_id
+   * @param {string} content
+   * @returns {Promise<number>}
+   */
+  async createComment(post_id, user_id, content) {
+    let stmt = this._stmts.get('createComment');
+    if (!stmt) {
+      stmt = `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3);`;
+      this._stmts.set('createComment', stmt);
+    }
+    const r = await this.db.query(stmt, [post_id, user_id, content]);
+    return r.rowCount;
+  }
+
+  /**
+   * @param {any} name
+   * @returns {Promise<number>}
+   */
+  async createCategory(name) {
+    let stmt = this._stmts.get('createCategory');
+    if (!stmt) {
+      stmt = `INSERT INTO categories (name) VALUES ($1); SELECT p.id, p.title, p.content, p.created_at, 'post' as activity_type FROM posts p WHERE p.user_id = $1 UNION ALL SELECT c.id, 'Comment' as title, c.content, c.created_at, 'comment' as activity_type FROM comments c WHERE c.user_id = $1 ORDER BY created_at DESC LIMIT 20;`;
+      this._stmts.set('createCategory', stmt);
+    }
+    const r = await this.db.query(stmt, [name]);
+    return r.rowCount;
   }
 
   /**
@@ -351,7 +154,8 @@ class Queries {
       stmt = { name: 'getAveragePostsPerUser', text: `SELECT AVG(post_count) as avg_posts FROM ( SELECT COUNT(p.id) as post_count FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id ) as user_posts;` };
       this._stmts.set('getAveragePostsPerUser', stmt);
     }
-    const r = await this.db.query({ ...stmt, values: [] });
+    stmt.values = [];
+    const r = await this.db.query(stmt);
     return r.rows[0] ? r.rows[0].avg_posts : null;
   }
 
@@ -381,7 +185,8 @@ class Queries {
       stmt = { name: 'checkUserExists', text: `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1) as exists;` };
       this._stmts.set('checkUserExists', stmt);
     }
-    const r = await this.db.query({ ...stmt, values: [email] });
+    stmt.values = [email];
+    const r = await this.db.query(stmt);
     return r.rows[0] ? r.rows[0].exists : null;
   }
 

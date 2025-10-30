@@ -1,98 +1,115 @@
 ﻿import { runGraftTests } from './graft-test';
 import { runPrismaTests } from './prisma-test';
+import { runDrizzleTests } from './drizzle-test';
 
-async function runComparison() {
-    console.log('\n');
-    console.log('═');
-    console.log('          GRAFT vs PRISMA - PRODUCTION LOAD BENCHMARK');
-    console.log('═');
-    console.log('\n');
+async function compareBenchmarks() {
+    console.log('╔══════════════════════════════════════════════════════════════════════════════╗');
+    console.log('║            GRAFT vs DRIZZLE vs PRISMA - PRODUCTION BENCHMARK                 ║');
+    console.log('╚══════════════════════════════════════════════════════════════════════════════╝\n');
 
     try {
-        console.log('Starting Graft tests...\n');
         const graftMetrics = await runGraftTests();
-
-        console.log('\n' + '='.repeat(80));
-        console.log('\nWaiting 3 seconds before Prisma tests...\n');
+        
+        console.log('\n⏳ Waiting 3 seconds before next test...\n');
         await new Promise(resolve => setTimeout(resolve, 3000));
-
-        console.log('Starting Prisma tests...\n');
+        
+        const drizzleMetrics = await runDrizzleTests();
+        
+        console.log('\n⏳ Waiting 3 seconds before next test...\n');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
         const prismaMetrics = await runPrismaTests();
 
-        console.log('\n\n');
-        console.log('');
-        console.log('                            COMPARISON RESULTS');
-        console.log('');
-        console.log('\n');
+        console.log('\n╔══════════════════════════════════════════════════════════════════════════════╗');
+        console.log('║                        3-WAY PERFORMANCE COMPARISON                          ║');
+        console.log('╚══════════════════════════════════════════════════════════════════════════════╝\n');
 
-        console.log('Operation'.padEnd(45) + 'Graft'.padEnd(15) + 'Prisma'.padEnd(15) + 'Winner');
-        console.log('-'.repeat(80));
+        console.log('Operation'.padEnd(50) + 'Graft(ms)'.padEnd(13) + 'Drizzle(ms)'.padEnd(15) + 'Prisma(ms)'.padEnd(13) + 'Winner');
+        console.log('='.repeat(105));
 
         let graftWins = 0;
+        let drizzleWins = 0;
         let prismaWins = 0;
-        let ties = 0;
+        let totalGraftTime = 0;
+        let totalDrizzleTime = 0;
+        let totalPrismaTime = 0;
 
-        graftMetrics.forEach((gm, idx) => {
-            const pm = prismaMetrics[idx];
-            if (!pm) return;
+        for (let i = 0; i < graftMetrics.length; i++) {
+            const graft = graftMetrics[i]!;
+            const drizzle = drizzleMetrics[i]!;
+            const prisma = prismaMetrics[i]!;
+            
+            totalGraftTime += graft.totalTime;
+            totalDrizzleTime += drizzle.totalTime;
+            totalPrismaTime += prisma.totalTime;
 
-            const graftTime = gm.totalTime;
-            const prismaTime = pm.totalTime;
-            const diff = ((prismaTime - graftTime) / prismaTime) * 100;
-
-            let winner = 'Tie';
-            if (Math.abs(diff) > 5) {
-                winner = graftTime < prismaTime ? 'Graft' : 'Prisma';
-                if (winner === 'Graft') graftWins++;
-                else prismaWins++;
+            const minTime = Math.min(graft.totalTime, drizzle.totalTime, prisma.totalTime);
+            let winner = '';
+            
+            if (graft.totalTime === minTime) {
+                graftWins++;
+                const drizzleDiff = ((drizzle.totalTime - graft.totalTime) / graft.totalTime * 100).toFixed(1);
+                const prismaDiff = ((prisma.totalTime - graft.totalTime) / graft.totalTime * 100).toFixed(1);
+                winner = `🏆 GRAFT (+${drizzleDiff}% vs Drizzle, +${prismaDiff}% vs Prisma)`;
+            } else if (drizzle.totalTime === minTime) {
+                drizzleWins++;
+                const graftDiff = ((graft.totalTime - drizzle.totalTime) / drizzle.totalTime * 100).toFixed(1);
+                const prismaDiff = ((prisma.totalTime - drizzle.totalTime) / drizzle.totalTime * 100).toFixed(1);
+                winner = `🏆 DRIZZLE (+${graftDiff}% vs Graft, +${prismaDiff}% vs Prisma)`;
             } else {
-                ties++;
+                prismaWins++;
+                const graftDiff = ((graft.totalTime - prisma.totalTime) / prisma.totalTime * 100).toFixed(1);
+                const drizzleDiff = ((drizzle.totalTime - prisma.totalTime) / prisma.totalTime * 100).toFixed(1);
+                winner = `🏆 PRISMA (+${graftDiff}% vs Graft, +${drizzleDiff}% vs Drizzle)`;
             }
 
-            const improvement = Math.abs(diff).toFixed(1) + '%';
-
             console.log(
-                gm.operation.padEnd(45) +
-                (gm.totalTime.toFixed(2) + 'ms').padEnd(15) +
-                (pm.totalTime.toFixed(2) + 'ms').padEnd(15) +
-                `${winner} ${diff > 5 ? '(' + improvement + ' faster)' : ''}`
+                graft.operation.padEnd(50) + 
+                graft.totalTime.toFixed(2).padEnd(13) + 
+                drizzle.totalTime.toFixed(2).padEnd(15) + 
+                prisma.totalTime.toFixed(2).padEnd(13) + 
+                winner
             );
-        });
-
-        console.log('\n' + '='.repeat(80));
-        console.log('\nFINAL SCORE');
-        console.log('-'.repeat(80));
-        console.log(`Graft Wins:  ${graftWins}`);
-        console.log(`Prisma Wins: ${prismaWins}`);
-        console.log(`Ties:        ${ties}`);
-
-        const totalGraftTime = graftMetrics.reduce((sum, m) => sum + m.totalTime, 0);
-        const totalPrismaTime = prismaMetrics.reduce((sum, m) => sum + m.totalTime, 0);
-        const overallDiff = ((totalPrismaTime - totalGraftTime) / totalPrismaTime) * 100;
-
-        console.log('\n OVERALL:');
-        console.log(`Graft Total Time:  ${totalGraftTime.toFixed(2)}ms`);
-        console.log(`Prisma Total Time: ${totalPrismaTime.toFixed(2)}ms`);
-
-        if (overallDiff > 0) {
-            console.log(`\n GRAFT IS ${overallDiff.toFixed(1)}% FASTER OVERALL!`);
-        } else {
-            console.log(`\n PRISMA IS ${Math.abs(overallDiff).toFixed(1)}% FASTER OVERALL!`);
         }
 
-        console.log('\n═\n');
+        console.log('='.repeat(105));
+        console.log('TOTAL'.padEnd(50) + 
+                    totalGraftTime.toFixed(2).padEnd(13) + 
+                    totalDrizzleTime.toFixed(2).padEnd(15) + 
+                    totalPrismaTime.toFixed(2).padEnd(13));
+        
+        console.log('\n📊 FINAL SCORE:');
+        console.log(`   Graft wins: ${graftWins}/5`);
+        console.log(`   Drizzle wins: ${drizzleWins}/5`);
+        console.log(`   Prisma wins: ${prismaWins}/5`);
+        
+        const minTotalTime = Math.min(totalGraftTime, totalDrizzleTime, totalPrismaTime);
+        if (totalGraftTime === minTotalTime) {
+            const drizzleDiff = ((totalDrizzleTime - totalGraftTime) / totalGraftTime * 100).toFixed(1);
+            const prismaDiff = ((totalPrismaTime - totalGraftTime) / totalGraftTime * 100).toFixed(1);
+            console.log(`\n🏆 OVERALL WINNER: GRAFT (${drizzleDiff}% faster than Drizzle, ${prismaDiff}% faster than Prisma)`);
+        } else if (totalDrizzleTime === minTotalTime) {
+            const graftDiff = ((totalGraftTime - totalDrizzleTime) / totalDrizzleTime * 100).toFixed(1);
+            const prismaDiff = ((totalPrismaTime - totalDrizzleTime) / totalDrizzleTime * 100).toFixed(1);
+            console.log(`\n🏆 OVERALL WINNER: DRIZZLE (${graftDiff}% faster than Graft, ${prismaDiff}% faster than Prisma)`);
+        } else {
+            const graftDiff = ((totalGraftTime - totalPrismaTime) / totalPrismaTime * 100).toFixed(1);
+            const drizzleDiff = ((totalDrizzleTime - totalPrismaTime) / totalPrismaTime * 100).toFixed(1);
+            console.log(`\n🏆 OVERALL WINNER: PRISMA (${graftDiff}% faster than Graft, ${drizzleDiff}% faster than Drizzle)`);
+        }
 
     } catch (error) {
-        console.error(' Error running benchmark:', error);
+        console.error('❌ Error running benchmark:', error);
         process.exit(1);
     }
 }
 
 if (import.meta.main) {
-    runComparison().then(() => {
+    compareBenchmarks().then(() => {
+        console.log('\n✅ Benchmark completed!\n');
         process.exit(0);
     }).catch((error: any) => {
-        console.error('Benchmark failed:', error);
+        console.error('❌ Benchmark failed:', error);
         process.exit(1);
     });
 }
