@@ -446,7 +446,7 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		}
 	}
 
-	defaultRegex := regexp.MustCompile(`(?i)DEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
+	defaultRegex := regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
 	if matches := defaultRegex.FindStringSubmatch(colDef); len(matches) > 1 {
 		column.Default = matches[1]
 	}

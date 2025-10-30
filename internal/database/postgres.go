@@ -720,7 +720,7 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 			Name:     columnName,
 			Type:     columnType,
 			Nullable: isNullable == "YES",
-			Default:  p.formatDefaultValue(columnDefault.String, columnType),
+			Default:  p.formatDefaultValue(columnDefault.String),
 			IsPrimary: isPrimary.Valid,
 			IsUnique: isUnique.Valid,
 		}
@@ -790,7 +790,7 @@ func (p *PostgresAdapter) formatPullColumnType(dataType string, charMaxLength, n
 	}
 }
 
-func (p *PostgresAdapter) formatDefaultValue(defaultValue, columnType string) string {
+func (p *PostgresAdapter) formatDefaultValue(defaultValue string) string {
 	if defaultValue == "" {
 		return ""
 	}
