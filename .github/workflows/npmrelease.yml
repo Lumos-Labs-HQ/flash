@@ -1,0 +1,38 @@
+name: NPM Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Build binaries
+        run: |
+          mkdir -p npm/bin
+          GOOS=linux GOARCH=amd64 go build -o npm/bin/graft-linux-x64 .
+          GOOS=linux GOARCH=arm64 go build -o npm/bin/graft-linux-arm64 .
+          GOOS=darwin GOARCH=amd64 go build -o npm/bin/graft-darwin-x64 .
+          GOOS=darwin GOARCH=arm64 go build -o npm/bin/graft-darwin-arm64 .
+          GOOS=windows GOARCH=amd64 go build -o npm/bin/graft-win32-x64.exe .
+      
+      - name: Publish to npm
+        working-directory: ./npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
