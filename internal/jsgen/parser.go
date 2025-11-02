@@ -329,12 +329,16 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 		}
 	}
 
-	// Only parse columns for SELECT queries, not for DELETE/UPDATE/INSERT
+	// Parse columns for SELECT queries (including CTEs)
 	sqlUpper := strings.ToUpper(query.SQL)
-	if strings.HasPrefix(strings.TrimSpace(sqlUpper), "SELECT") &&
-		!strings.HasPrefix(strings.TrimSpace(sqlUpper), "DELETE") &&
-		!strings.HasPrefix(strings.TrimSpace(sqlUpper), "UPDATE") &&
-		!strings.HasPrefix(strings.TrimSpace(sqlUpper), "INSERT") {
+	sqlTrimmed := strings.TrimSpace(sqlUpper)
+	
+	isSelectQuery := strings.HasPrefix(sqlTrimmed, "SELECT") || strings.HasPrefix(sqlTrimmed, "WITH")
+	isNotModifying := !strings.Contains(sqlTrimmed, "DELETE") && 
+	                  !strings.Contains(sqlTrimmed, "UPDATE") && 
+	                  !strings.Contains(sqlTrimmed, "INSERT")
+	
+	if isSelectQuery && isNotModifying {
 		columnsStr := extractSelectColumns(query.SQL)
 		if columnsStr != "" {
 			if strings.TrimSpace(columnsStr) != "*" {
@@ -375,11 +379,48 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 
 func extractSelectColumns(sql string) string {
 	sqlUpper := strings.ToUpper(sql)
+	
+	// For CTE queries, find the main SELECT after the CTE definitions
+	if strings.HasPrefix(strings.TrimSpace(sqlUpper), "WITH") {
+		// Find all SELECT positions
+		var selectPositions []int
+		parenDepth := 0
+		
+		for i := 0; i < len(sqlUpper)-6; i++ {
+			switch sql[i] {
+			case '(':
+				parenDepth++
+			case ')':
+				parenDepth--
+			case 'S', 's':
+				if parenDepth == 0 && i+6 <= len(sqlUpper) {
+					if strings.ToUpper(sql[i:i+6]) == "SELECT" {
+						if (i == 0 || !isAlphaNum(sql[i-1])) &&
+							(i+6 >= len(sql) || !isAlphaNum(sql[i+6])) {
+							selectPositions = append(selectPositions, i)
+						}
+					}
+				}
+			}
+		}
+		
+		// Use the last SELECT (main query)
+		if len(selectPositions) > 0 {
+			selectIdx := selectPositions[len(selectPositions)-1]
+			return extractColumnsFromSelect(sql, selectIdx)
+		}
+	}
+	
+	// Regular SELECT query
 	selectIdx := strings.Index(sqlUpper, "SELECT")
 	if selectIdx == -1 {
 		return ""
 	}
+	
+	return extractColumnsFromSelect(sql, selectIdx)
+}
 
+func extractColumnsFromSelect(sql string, selectIdx int) string {
 	start := selectIdx + 6
 	for start < len(sql) && (sql[start] == ' ' || sql[start] == '\t' || sql[start] == '\n') {
 		start++
@@ -478,13 +519,14 @@ func smartSplitColumns(columnsStr string) []string {
 func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, paramName string) string {
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
-			if strings.EqualFold(col.Name, paramName) {
+			if strings.EqualFold(col.Name, paramName) || 
+			   strings.EqualFold(col.Name, strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")) {
 				return g.mapSQLTypeToJS(col.Type)
 			}
 		}
 	}
 
-	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(\w+)\s*=\s*\$%d`, paramIndex)
+	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
 	whereRe := regexp.MustCompile(wherePattern)
 	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
@@ -518,16 +560,53 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 		}
 	}
 
+	// Check for LIMIT clause
+	limitPattern := fmt.Sprintf(`(?i)LIMIT\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(limitPattern, sql); matched {
+		return "number"
+	}
+
+	// Check for BETWEEN clause (dates)
+	betweenPattern := fmt.Sprintf(`(?i)(\w+)\s+BETWEEN\s+\$%d`, paramIndex)
+	betweenRe := regexp.MustCompile(betweenPattern)
+	if match := betweenRe.FindStringSubmatch(sql); len(match) > 1 {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, match[1]) {
+				return g.mapSQLTypeToJS(col.Type)
+			}
+		}
+	}
+	
+	betweenEndPattern := fmt.Sprintf(`(?i)BETWEEN\s+\$\d+\s+AND\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(betweenEndPattern, sql); matched {
+		betweenStartRe := regexp.MustCompile(`(?i)(\w+)\s+BETWEEN`)
+		if match := betweenStartRe.FindStringSubmatch(sql); len(match) > 1 {
+			for _, col := range table.Columns {
+				if strings.EqualFold(col.Name, match[1]) {
+					return g.mapSQLTypeToJS(col.Type)
+				}
+			}
+		}
+	}
+
+	// Check for date comparisons
+	datePattern := fmt.Sprintf(`(?i)(created_at|updated_at|date|time)\s*[<>=]+\s*\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(datePattern, sql); matched {
+		return "Date | string"
+	}
+
 	return "any"
 }
 
 func (g *Generator) inferParamName(sql string, paramIndex int) string {
-	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(\w+)\s*=\s*\$%d`, paramIndex)
+	// WHERE clause
+	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
 	whereRe := regexp.MustCompile(wherePattern)
 	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
 
+	// INSERT clause
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
 		if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
 			colNames := strings.Split(match[1], ",")
@@ -537,9 +616,38 @@ func (g *Generator) inferParamName(sql string, paramIndex int) string {
 		}
 	}
 
+	// SET clause
 	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)
 	setRe := regexp.MustCompile(setPattern)
 	if match := setRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// LIMIT clause
+	limitPattern := fmt.Sprintf(`(?i)LIMIT\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(limitPattern, sql); matched {
+		return "limit"
+	}
+
+	// BETWEEN clause
+	betweenPattern := fmt.Sprintf(`(?i)(\w+)\s+BETWEEN\s+\$%d`, paramIndex)
+	betweenRe := regexp.MustCompile(betweenPattern)
+	if match := betweenRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1] + "_start"
+	}
+	
+	betweenEndPattern := fmt.Sprintf(`(?i)BETWEEN\s+\$\d+\s+AND\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(betweenEndPattern, sql); matched {
+		betweenStartRe := regexp.MustCompile(`(?i)(\w+)\s+BETWEEN`)
+		if match := betweenStartRe.FindStringSubmatch(sql); len(match) > 1 {
+			return match[1] + "_end"
+		}
+	}
+
+	// Comparison operators
+	compPattern := fmt.Sprintf(`(?i)(\w+)\s*[<>=]+\s*\$%d`, paramIndex)
+	compRe := regexp.MustCompile(compPattern)
+	if match := compRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
 

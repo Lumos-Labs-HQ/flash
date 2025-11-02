@@ -6,10 +6,6 @@ class Queries {
     this._stmts = new Map();
   }
 
-  /**
-   * @param {number} id
-   * @returns {Promise<boolean|null>}
-   */
   async isadminUser(id) {
     let stmt = this._stmts.get('isadminUser');
     if (!stmt) {
@@ -21,10 +17,6 @@ class Queries {
     return r.rows[0] ? r.rows[0].isadmin : null;
   }
 
-  /**
-   * @param {number} id
-   * @returns {Promise<string|null>}
-   */
   async getUserEmail(id) {
     let stmt = this._stmts.get('getUserEmail');
     if (!stmt) {
@@ -36,11 +28,6 @@ class Queries {
     return r.rows[0] ? r.rows[0].email : null;
   }
 
-  /**
-   * COMPLEX QUERIES (Ultra-Optimized with CTEs and Subqueries)
-   * @param {number} id
-   * @returns {Promise<string|null>}
-   */
   async getUserName(id) {
     let stmt = this._stmts.get('getUserName');
     if (!stmt) {
@@ -52,10 +39,16 @@ class Queries {
     return r.rows[0] ? r.rows[0].name : null;
   }
 
-  /**
-   * ULTRA-OPTIMIZED: Using CTE for better query planning and caching
-   * @returns {Promise<Object[]>}
-   */
+  async getUserByEmail(email) {
+    let stmt = this._stmts.get('getUserByEmail');
+    if (!stmt) {
+      stmt = `SELECT * FROM users WHERE email = $1 LIMIT 1;`;
+      this._stmts.set('getUserByEmail', stmt);
+    }
+    const r = await this.db.query(stmt, [email]);
+    return r.rows[0] || null;
+  }
+
   async getActiveUsersWithStats() {
     let stmt = this._stmts.get('getActiveUsersWithStats');
     if (!stmt) {
@@ -63,13 +56,9 @@ class Queries {
       this._stmts.set('getActiveUsersWithStats', stmt);
     }
     const r = await this.db.query(stmt);
-    return r.rowCount;
+    return r.rows;
   }
 
-  /**
-   * INSERT OPERATIONS
-   * @returns {Promise<Object[]>}
-   */
   async getTopActiveUsers() {
     let stmt = this._stmts.get('getTopActiveUsers');
     if (!stmt) {
@@ -77,16 +66,9 @@ class Queries {
       this._stmts.set('getTopActiveUsers', stmt);
     }
     const r = await this.db.query(stmt);
-    return r.rowCount;
+    return r.rows;
   }
 
-  /**
-   * @param {string} name
-   * @param {string} email
-   * @param {string} address
-   * @param {boolean} isadmin
-   * @returns {Promise<number>}
-   */
   async createUser(name, email, address, isadmin) {
     let stmt = this._stmts.get('createUser');
     if (!stmt) {
@@ -97,13 +79,6 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * @param {number} user_id
-   * @param {number} category_id
-   * @param {string} title
-   * @param {string} content
-   * @returns {Promise<number>}
-   */
   async createPost(user_id, category_id, title, content) {
     let stmt = this._stmts.get('createPost');
     if (!stmt) {
@@ -114,12 +89,6 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * @param {number} post_id
-   * @param {number} user_id
-   * @param {string} content
-   * @returns {Promise<number>}
-   */
   async createComment(post_id, user_id, content) {
     let stmt = this._stmts.get('createComment');
     if (!stmt) {
@@ -130,24 +99,16 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * @param {any} name
-   * @returns {Promise<number>}
-   */
-  async createCategory(name) {
+  async createCategory(user_id) {
     let stmt = this._stmts.get('createCategory');
     if (!stmt) {
       stmt = `INSERT INTO categories (name) VALUES ($1); SELECT p.id, p.title, p.content, p.created_at, 'post' as activity_type FROM posts p WHERE p.user_id = $1 UNION ALL SELECT c.id, 'Comment' as title, c.content, c.created_at, 'comment' as activity_type FROM comments c WHERE c.user_id = $1 ORDER BY created_at DESC LIMIT 20;`;
       this._stmts.set('createCategory', stmt);
     }
-    const r = await this.db.query(stmt, [name]);
+    const r = await this.db.query(stmt, [user_id]);
     return r.rowCount;
   }
 
-  /**
-   * Calculate average posts per user (aggregate function)
-   * @returns {Promise<number|null>}
-   */
   async getAveragePostsPerUser() {
     let stmt = this._stmts.get('getAveragePostsPerUser');
     if (!stmt) {
@@ -159,26 +120,16 @@ class Queries {
     return r.rows[0] ? r.rows[0].avg_posts : null;
   }
 
-  /**
-   * Get posts with most comments (subquery)
-   * @param {any} param1
-   * @returns {Promise<Object[]>}
-   */
-  async getMostCommentedPosts(param1) {
+  async getMostCommentedPosts(limit) {
     let stmt = this._stmts.get('getMostCommentedPosts');
     if (!stmt) {
       stmt = `SELECT p.id, p.title, u.name as author, COUNT(c.id) as comment_count FROM posts p INNER JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id GROUP BY p.id, p.title, u.name ORDER BY comment_count DESC LIMIT $1;`;
       this._stmts.set('getMostCommentedPosts', stmt);
     }
-    const r = await this.db.query(stmt, [param1]);
+    const r = await this.db.query(stmt, [limit]);
     return r.rows;
   }
 
-  /**
-   * Check if user exists by email (boolean result)
-   * @param {string} email
-   * @returns {Promise<boolean|null>}
-   */
   async checkUserExists(email) {
     let stmt = this._stmts.get('checkUserExists');
     if (!stmt) {
@@ -190,28 +141,16 @@ class Queries {
     return r.rows[0] ? r.rows[0].exists : null;
   }
 
-  /**
-   * Get users created within a date range
-   * @param {any} param1
-   * @param {any} param2
-   * @returns {Promise<Object[]>}
-   */
-  async getUsersCreatedBetween(param1, param2) {
+  async getUsersCreatedBetween(created_at_start, created_at_end) {
     let stmt = this._stmts.get('getUsersCreatedBetween');
     if (!stmt) {
       stmt = `SELECT id, name, email, created_at FROM users WHERE created_at BETWEEN $1 AND $2 ORDER BY created_at DESC;`;
       this._stmts.set('getUsersCreatedBetween', stmt);
     }
-    const r = await this.db.query(stmt, [param1, param2]);
+    const r = await this.db.query(stmt, [created_at_start, created_at_end]);
     return r.rows;
   }
 
-  /**
-   * Update user admin status
-   * @param {number} id
-   * @param {boolean} isadmin
-   * @returns {Promise<number>}
-   */
   async updateUserAdminStatus(id, isadmin) {
     let stmt = this._stmts.get('updateUserAdminStatus');
     if (!stmt) {
@@ -222,29 +161,16 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * Delete users with no posts or comments
-   * @param {any} param1
-   * @returns {Promise<number>}
-   */
-  async deleteInactiveUsers(param1) {
+  async deleteInactiveUsers(created_at) {
     let stmt = this._stmts.get('deleteInactiveUsers');
     if (!stmt) {
       stmt = `DELETE FROM users WHERE id NOT IN ( SELECT DISTINCT user_id FROM posts UNION SELECT DISTINCT user_id FROM comments ) AND created_at < $1;`;
       this._stmts.set('deleteInactiveUsers', stmt);
     }
-    const r = await this.db.query(stmt, [param1]);
+    const r = await this.db.query(stmt, [created_at]);
     return r.rowCount;
   }
 
-  /**
-   * Insert a new user
-   * @param {string} name
-   * @param {string} email
-   * @param {string} address
-   * @param {boolean} isadmin
-   * @returns {Promise<number>}
-   */
   async createUser(name, email, address, isadmin) {
     let stmt = this._stmts.get('createUser');
     if (!stmt) {
@@ -255,14 +181,6 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * Insert a new post
-   * @param {number} user_id
-   * @param {number} category_id
-   * @param {string} title
-   * @param {string} content
-   * @returns {Promise<number>}
-   */
   async createPost(user_id, category_id, title, content) {
     let stmt = this._stmts.get('createPost');
     if (!stmt) {
@@ -273,13 +191,6 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * Insert a new comment
-   * @param {number} post_id
-   * @param {number} user_id
-   * @param {string} content
-   * @returns {Promise<number>}
-   */
   async createComment(post_id, user_id, content) {
     let stmt = this._stmts.get('createComment');
     if (!stmt) {
@@ -290,11 +201,6 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * Insert a new category
-   * @param {string} name
-   * @returns {Promise<number>}
-   */
   async createCategory(name) {
     let stmt = this._stmts.get('createCategory');
     if (!stmt) {
@@ -305,18 +211,13 @@ class Queries {
     return r.rowCount;
   }
 
-  /**
-   * Get all posts for a specific category
-   * @param {any} param1
-   * @returns {Promise<Object[]>}
-   */
-  async getPostsByCategory(param1) {
+  async getPostsByCategory(category_id) {
     let stmt = this._stmts.get('getPostsByCategory');
     if (!stmt) {
       stmt = `SELECT p.id, p.title, p.content, u.name as author_name, p.created_at FROM posts p INNER JOIN users u ON p.user_id = u.id WHERE p.category_id = $1 ORDER BY p.created_at DESC;`;
       this._stmts.set('getPostsByCategory', stmt);
     }
-    const r = await this.db.query(stmt, [param1]);
+    const r = await this.db.query(stmt, [category_id]);
     return r.rows;
   }
 

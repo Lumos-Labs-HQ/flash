@@ -7,9 +7,11 @@ SELECT email FROM users WHERE id = $1 LIMIT 1;
 -- name: GetUserName :one
 SELECT name FROM users WHERE id = $1 LIMIT 1;
 
+-- name: GetUserByEmail :one
+SELECT * FROM users WHERE email = $1 LIMIT 1;
+
 
 -- name: GetActiveUsersWithStats :many
--- ULTRA-OPTIMIZED: Using CTE for better query planning and caching
 WITH post_stats AS (
     SELECT 
         user_id, 
@@ -39,7 +41,6 @@ LEFT JOIN comment_stats cs ON u.id = cs.user_id
 ORDER BY ps.total_posts DESC;
 
 -- name: GetTopActiveUsers :many
--- ULTRA-OPTIMIZED: Using subqueries with LIMIT push-down
 WITH ranked_users AS (
     SELECT 
         user_id,
@@ -65,7 +66,6 @@ LEFT JOIN (
 ) cs ON u.id = cs.user_id
 ORDER BY ru.total_posts DESC;
 
--- INSERT OPERATIONS
 
 -- name: CreateUser :exec
 INSERT INTO users (name, email, address, isadmin)
@@ -104,7 +104,6 @@ ORDER BY created_at DESC
 LIMIT 20;
 
 -- name: GetAveragePostsPerUser :one
--- Calculate average posts per user (aggregate function)
 SELECT 
     AVG(post_count) as avg_posts
 FROM (
@@ -115,7 +114,6 @@ FROM (
 ) as user_posts;
 
 -- name: GetMostCommentedPosts :many
--- Get posts with most comments (subquery)
 SELECT 
     p.id,
     p.title,
@@ -129,24 +127,20 @@ ORDER BY comment_count DESC
 LIMIT $1;
 
 -- name: CheckUserExists :one
--- Check if user exists by email (boolean result)
 SELECT EXISTS(SELECT 1 FROM users WHERE email = $1) as exists;
 
 -- name: GetUsersCreatedBetween :many
--- Get users created within a date range
 SELECT id, name, email, created_at
 FROM users
 WHERE created_at BETWEEN $1 AND $2
 ORDER BY created_at DESC;
 
 -- name: UpdateUserAdminStatus :exec
--- Update user admin status
 UPDATE users 
 SET isadmin = $2, updated_at = NOW()
 WHERE id = $1;
 
 -- name: DeleteInactiveUsers :exec
--- Delete users with no posts or comments
 DELETE FROM users 
 WHERE id NOT IN (
     SELECT DISTINCT user_id FROM posts
@@ -156,27 +150,22 @@ WHERE id NOT IN (
 AND created_at < $1;
 
 -- name: CreateUser :exec
--- Insert a new user
 INSERT INTO users (name, email, address, isadmin)
 VALUES ($1, $2, $3, $4);
 
 -- name: CreatePost :exec
--- Insert a new post
 INSERT INTO posts (user_id, category_id, title, content)
 VALUES ($1, $2, $3, $4);
 
 -- name: CreateComment :exec
--- Insert a new comment
 INSERT INTO comments (post_id, user_id, content)
 VALUES ($1, $2, $3);
 
 -- name: CreateCategory :exec
--- Insert a new category
 INSERT INTO categories (name)
 VALUES ($1);
 
 -- name: GetPostsByCategory :many
--- Get all posts for a specific category
 SELECT 
     p.id,
     p.title,
