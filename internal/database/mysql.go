@@ -145,24 +145,24 @@ func (m *MySQLAdapter) ExecuteMigration(ctx context.Context, migrationSQL string
 
 	// Parse SQL statements properly handling multi-line statements
 	statements := m.parseSQLStatements(migrationSQL)
-	
+
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
 			continue // Skip empty statements
 		}
-		
+
 		_, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
 		}
 	}
-	
+
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit migration transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -173,17 +173,17 @@ func (m *MySQLAdapter) parseSQLStatements(sql string) []string {
 	var inParentheses int
 	var inQuotes bool
 	var quoteChar rune
-	
+
 	lines := strings.Split(sql, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
-		
+
 		// Process each character to track parentheses and quotes
 		for i, char := range line {
 			switch {
@@ -216,13 +216,13 @@ func (m *MySQLAdapter) parseSQLStatements(sql string) []string {
 				currentStatement.WriteRune(char)
 			}
 		}
-		
+
 		// Add newline if we're still building a statement
 		if currentStatement.Len() > 0 {
 			currentStatement.WriteRune('\n')
 		}
 	}
-	
+
 	// Add any remaining statement
 	if currentStatement.Len() > 0 {
 		stmt := strings.TrimSpace(currentStatement.String())
@@ -230,7 +230,7 @@ func (m *MySQLAdapter) parseSQLStatements(sql string) []string {
 			statements = append(statements, stmt)
 		}
 	}
-	
+
 	return statements
 }
 
@@ -264,6 +264,11 @@ func (m *MySQLAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTabl
 		})
 	}
 	return tables, nil
+}
+
+func (m *MySQLAdapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error) {
+	// MySQL doesn't have native ENUM types like PostgreSQL
+	return []types.SchemaEnum{}, nil
 }
 
 func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
@@ -624,7 +629,7 @@ func (m *MySQLAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTa
 
 	tableMap := make(map[string]*types.SchemaTable)
 	columnsSeen := make(map[string]map[string]bool)
-	
+
 	for rows.Next() {
 		var tableName, columnName, columnType, isNullable string
 		var ordinalPosition int
@@ -653,12 +658,12 @@ func (m *MySQLAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTa
 		formattedType := m.formatMySQLPullType(columnType)
 
 		column := types.SchemaColumn{
-			Name:     columnName,
-			Type:     formattedType,
-			Nullable: isNullable == "YES",
-			Default:  m.formatMySQLDefault(columnDefault.String, formattedType),
+			Name:      columnName,
+			Type:      formattedType,
+			Nullable:  isNullable == "YES",
+			Default:   m.formatMySQLDefault(columnDefault.String, formattedType),
 			IsPrimary: isPrimary.Valid,
-			IsUnique: isUnique.Valid,
+			IsUnique:  isUnique.Valid,
 		}
 
 		if referencesTable.Valid && referencesColumn.Valid {
@@ -682,7 +687,7 @@ func (m *MySQLAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTa
 
 func (m *MySQLAdapter) formatMySQLPullType(columnType string) string {
 	columnType = strings.ToUpper(columnType)
-	
+
 	// Handle common MySQL types
 	if strings.HasPrefix(columnType, "INT(") {
 		return "INT"
@@ -699,7 +704,7 @@ func (m *MySQLAdapter) formatMySQLPullType(columnType string) string {
 	if strings.HasPrefix(columnType, "TINYINT(") {
 		return "TINYINT"
 	}
-	
+
 	return columnType
 }
 
@@ -707,11 +712,11 @@ func (m *MySQLAdapter) formatMySQLDefault(defaultValue, columnType string) strin
 	if defaultValue == "" {
 		return ""
 	}
-	
+
 	// Handle MySQL specific defaults
 	if strings.Contains(strings.ToLower(defaultValue), "current_timestamp") {
 		return "CURRENT_TIMESTAMP"
 	}
-	
+
 	return defaultValue
 }

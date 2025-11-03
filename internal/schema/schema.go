@@ -29,22 +29,40 @@ func (sm *SchemaManager) ParseSchemaFile(schemaPath string) ([]types.SchemaTable
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file: %w", err)
 	}
+	tables, _, _ := sm.parseSchemaContent(string(content))
+	return tables, nil
+}
+
+func (sm *SchemaManager) ParseSchemaFileWithEnums(schemaPath string) ([]types.SchemaTable, []types.SchemaEnum, error) {
+	content, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read schema file: %w", err)
+	}
 	return sm.parseSchemaContent(string(content))
 }
 
-func (sm *SchemaManager) parseSchemaContent(content string) ([]types.SchemaTable, error) {
+func (sm *SchemaManager) parseSchemaContent(content string) ([]types.SchemaTable, []types.SchemaEnum, error) {
 	var tables []types.SchemaTable
+	var enums []types.SchemaEnum
 	statements := sm.splitStatements(sm.cleanSQL(content))
 
 	for _, stmt := range statements {
-		if stmt = strings.TrimSpace(stmt); stmt == "" || !sm.isCreateTableStatement(stmt) {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
 			continue
 		}
-		if table, err := sm.parseCreateTableStatement(stmt); err == nil {
-			tables = append(tables, table)
+
+		if sm.isCreateTypeStatement(stmt) {
+			if enum, err := sm.parseCreateTypeStatement(stmt); err == nil {
+				enums = append(enums, enum)
+			}
+		} else if sm.isCreateTableStatement(stmt) {
+			if table, err := sm.parseCreateTableStatement(stmt); err == nil {
+				tables = append(tables, table)
+			}
 		}
 	}
-	return tables, nil
+	return tables, enums, nil
 }
 
 func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string) (*types.SchemaDiff, error) {
@@ -53,12 +71,19 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 		return nil, fmt.Errorf("failed to get current schema: %w", err)
 	}
 
-	targetTables, err := sm.ParseSchemaFile(targetSchemaPath)
+	targetTables, targetEnums, err := sm.ParseSchemaFileWithEnums(targetSchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target schema: %w", err)
 	}
 
-	return sm.compareSchemas(currentTables, targetTables), nil
+	// Get current enums from database
+	currentEnums, err := sm.adapter.GetCurrentEnums(ctx)
+	if err != nil {
+		// If the adapter doesn't support enums, just continue with empty list
+		currentEnums = []types.SchemaEnum{}
+	}
+
+	return sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums), nil
 }
 
 func (sm *SchemaManager) GenerateSchemaSQL(tables []types.SchemaTable) string {
@@ -77,8 +102,22 @@ func (sm *SchemaManager) GenerateSchemaSQL(tables []types.SchemaTable) string {
 func (sm *SchemaManager) GenerateMigrationSQL(diff *types.SchemaDiff) string {
 	var parts []string
 
+	// Drop enums that are no longer needed (must be done before dropping tables)
+	for _, enumName := range diff.DroppedEnums {
+		parts = append(parts, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
+	}
+
 	for _, tableName := range diff.DroppedTables {
 		parts = append(parts, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName))
+	}
+
+	// Create new enums (must be done before creating tables that use them)
+	for _, enum := range diff.NewEnums {
+		values := make([]string, len(enum.Values))
+		for i, v := range enum.Values {
+			values[i] = fmt.Sprintf("'%s'", v)
+		}
+		parts = append(parts, fmt.Sprintf("CREATE TYPE \"%s\" AS ENUM (%s);", enum.Name, strings.Join(values, ", ")))
 	}
 
 	for _, table := range diff.NewTables {
@@ -107,7 +146,7 @@ func (sm *SchemaManager) GenerateMigrationSQL(diff *types.SchemaDiff) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable) *types.SchemaDiff {
+func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, currentEnums, targetEnums []types.SchemaEnum) *types.SchemaDiff {
 	diff := &types.SchemaDiff{}
 	currentMap, targetMap := sm.buildTableMaps(current, target)
 
@@ -126,6 +165,7 @@ func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable) *ty
 	}
 
 	sm.compareIndexes(current, target, diff)
+	sm.compareEnums(currentEnums, targetEnums, diff)
 	return diff
 }
 
@@ -204,6 +244,32 @@ func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, dif
 	}
 }
 
+func (sm *SchemaManager) compareEnums(current, target []types.SchemaEnum, diff *types.SchemaDiff) {
+	currentMap := make(map[string]types.SchemaEnum)
+	targetMap := make(map[string]types.SchemaEnum)
+
+	for _, enum := range current {
+		currentMap[enum.Name] = enum
+	}
+	for _, enum := range target {
+		targetMap[enum.Name] = enum
+	}
+
+	// Find new enums
+	for _, targetEnum := range target {
+		if _, exists := currentMap[targetEnum.Name]; !exists {
+			diff.NewEnums = append(diff.NewEnums, targetEnum)
+		}
+	}
+
+	// Find dropped enums
+	for _, currentEnum := range current {
+		if _, exists := targetMap[currentEnum.Name]; !exists {
+			diff.DroppedEnums = append(diff.DroppedEnums, currentEnum.Name)
+		}
+	}
+}
+
 func (sm *SchemaManager) buildIndexMaps(current, target []types.SchemaTable) (map[string]types.SchemaIndex, map[string]types.SchemaIndex) {
 	currentIndexes := make(map[string]types.SchemaIndex)
 	targetIndexes := make(map[string]types.SchemaIndex)
@@ -245,6 +311,44 @@ func (sm *SchemaManager) splitStatements(sql string) []string {
 func (sm *SchemaManager) isCreateTableStatement(stmt string) bool {
 	matched, _ := regexp.MatchString(`(?i)^\s*CREATE\s+TABLE`, stmt)
 	return matched
+}
+
+func (sm *SchemaManager) isCreateTypeStatement(stmt string) bool {
+	matched, _ := regexp.MatchString(`(?i)^\s*CREATE\s+TYPE\s+\w+\s+AS\s+ENUM`, stmt)
+	return matched
+}
+
+func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum, error) {
+	// Match: CREATE TYPE enum_name AS ENUM ('value1', 'value2', ...)
+	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(?:"?(\w+)"?|(\w+))\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
+	matches := enumRegex.FindStringSubmatch(stmt)
+
+	if len(matches) < 4 {
+		return types.SchemaEnum{}, fmt.Errorf("could not parse CREATE TYPE statement: %s", stmt)
+	}
+
+	// Extract enum name
+	enumName := matches[1]
+	if enumName == "" {
+		enumName = matches[2]
+	}
+
+	// Extract values
+	valuesStr := matches[3]
+	valueRegex := regexp.MustCompile(`'([^']+)'`)
+	valueMatches := valueRegex.FindAllStringSubmatch(valuesStr, -1)
+
+	values := make([]string, 0, len(valueMatches))
+	for _, match := range valueMatches {
+		if len(match) > 1 {
+			values = append(values, match[1])
+		}
+	}
+
+	return types.SchemaEnum{
+		Name:   enumName,
+		Values: values,
+	}, nil
 }
 
 func (sm *SchemaManager) parseCreateTableStatement(stmt string) (types.SchemaTable, error) {

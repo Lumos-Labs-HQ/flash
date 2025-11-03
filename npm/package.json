@@ -1,5 +1,5 @@
 {
-  "name": "graft",
+  "name": "graft-orm",
   "version": "1.0.0",
   "description": "A powerful, database-agnostic migration CLI tool with multi-database support and type-safe code generation",
   "main": "index.js",
@@ -26,11 +26,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Rana718/Graft.git"
+    "url": "https://github.com/Lumos-Labs-HQ/graftt.git"
   },
-  "homepage": "https://github.com/Rana718/Graft#readme",
+  "homepage": "https://github.com/Lumos-Labs-HQ/graftt#readme",
   "bugs": {
-    "url": "https://github.com/Rana718/Graft/issues"
+    "url": "https://github.com/Lumos-Labs-HQ/graftt/issues"
   },
   "engines": {
     "node": ">=14.0.0"
@@ -49,12 +49,5 @@
     "scripts/",
     "index.js",
     "README.md"
-  ],
-  "optionalDependencies": {
-    "graft-darwin-x64": "1.0.0",
-    "graft-darwin-arm64": "1.0.0",
-    "graft-linux-x64": "1.0.0",
-    "graft-linux-arm64": "1.0.0",
-    "graft-win32-x64": "1.0.0"
-  }
+  ]
 }

@@ -139,28 +139,26 @@ func (s *SQLiteAdapter) ExecuteMigration(ctx context.Context, migrationSQL strin
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Will be ignored if already committed
+	defer tx.Rollback() 
 
-	// Parse SQL statements properly handling multi-line statements
 	statements := s.parseSQLStatements(migrationSQL)
-	
+
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
-			continue // Skip empty statements
+			continue 
 		}
-		
+
 		_, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
 			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
 		}
 	}
-	
-	// Commit the transaction
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit migration transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -171,17 +169,16 @@ func (s *SQLiteAdapter) parseSQLStatements(sql string) []string {
 	var inParentheses int
 	var inQuotes bool
 	var quoteChar rune
-	
+
 	lines := strings.Split(sql, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
-		// Skip comments and empty lines
+
 		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
-		
+
 		// Process each character to track parentheses and quotes
 		for i, char := range line {
 			switch {
@@ -190,7 +187,6 @@ func (s *SQLiteAdapter) parseSQLStatements(sql string) []string {
 				quoteChar = char
 				currentStatement.WriteRune(char)
 			case inQuotes && char == quoteChar:
-				// Check if it's escaped
 				if i > 0 && rune(line[i-1]) == '\\' {
 					currentStatement.WriteRune(char)
 				} else {
@@ -204,7 +200,6 @@ func (s *SQLiteAdapter) parseSQLStatements(sql string) []string {
 				inParentheses--
 				currentStatement.WriteRune(char)
 			case !inQuotes && char == ';' && inParentheses == 0:
-				// End of statement
 				stmt := strings.TrimSpace(currentStatement.String())
 				if stmt != "" {
 					statements = append(statements, stmt)
@@ -214,21 +209,19 @@ func (s *SQLiteAdapter) parseSQLStatements(sql string) []string {
 				currentStatement.WriteRune(char)
 			}
 		}
-		
-		// Add newline if we're still building a statement
+
 		if currentStatement.Len() > 0 {
 			currentStatement.WriteRune('\n')
 		}
 	}
-	
-	// Add any remaining statement
+
 	if currentStatement.Len() > 0 {
 		stmt := strings.TrimSpace(currentStatement.String())
 		if stmt != "" {
 			statements = append(statements, stmt)
 		}
 	}
-	
+
 	return statements
 }
 
@@ -262,6 +255,11 @@ func (s *SQLiteAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTab
 		})
 	}
 	return tables, nil
+}
+
+func (s *SQLiteAdapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error) {
+	// SQLite doesn't have native ENUM types
+	return []types.SchemaEnum{}, nil
 }
 
 func (s *SQLiteAdapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
@@ -735,11 +733,11 @@ func (s *SQLiteAdapter) formatSQLiteDefault(defaultValue string) string {
 	if defaultValue == "" {
 		return ""
 	}
-	
+
 	// Handle SQLite specific defaults
 	if strings.Contains(strings.ToLower(defaultValue), "current_timestamp") {
 		return "CURRENT_TIMESTAMP"
 	}
-	
+
 	return defaultValue
 }

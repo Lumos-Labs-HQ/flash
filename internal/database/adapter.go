@@ -25,6 +25,7 @@ type DatabaseAdapter interface {
 
 	// Schema operations
 	GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error)
+	GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error)
 	GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error)
 	GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)
 	GetAllTableNames(ctx context.Context) ([]string, error)
@@ -69,6 +70,6 @@ func NewAdapter(provider string) DatabaseAdapter {
 	case "sqlite", "sqlite3":
 		return NewSQLiteAdapter()
 	default:
-		return NewPostgresAdapter() 
+		return NewPostgresAdapter()
 	}
 }

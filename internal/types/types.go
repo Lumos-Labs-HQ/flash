@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+type SchemaEnum struct {
+	Name   string
+	Values []string
+}
+
 type SchemaTable struct {
 	Name    string
 	Columns []SchemaColumn
@@ -35,6 +40,8 @@ type SchemaDiff struct {
 	ModifiedTables []TableDiff
 	NewIndexes     []SchemaIndex
 	DroppedIndexes []string
+	NewEnums       []SchemaEnum
+	DroppedEnums   []string
 }
 
 type TableDiff struct {

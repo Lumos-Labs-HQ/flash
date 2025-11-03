@@ -1,38 +1,45 @@
 name: NPM Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
       
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-      
-      - name: Build binaries
+      - name: Get version from tag
+        id: version
         run: |
-          mkdir -p npm/bin
-          GOOS=linux GOARCH=amd64 go build -o npm/bin/graft-linux-x64 .
-          GOOS=linux GOARCH=arm64 go build -o npm/bin/graft-linux-arm64 .
-          GOOS=darwin GOARCH=amd64 go build -o npm/bin/graft-darwin-x64 .
-          GOOS=darwin GOARCH=arm64 go build -o npm/bin/graft-darwin-arm64 .
-          GOOS=windows GOARCH=amd64 go build -o npm/bin/graft-win32-x64.exe .
+          TAG=$(git describe --tags --abbrev=0)
+          VERSION=${TAG#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+      
+      - name: Update package.json version
+        run: |
+          cd npm
+          npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+      
+      - name: Update install.js version
+        run: |
+          cd npm/scripts
+          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}'/" install.js
       
       - name: Publish to npm
         working-directory: ./npm
-        run: npm publish
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

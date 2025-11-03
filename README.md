@@ -1,5 +1,59 @@
 # Graft - Database Migration CLI Tool
 
+A powerful, database-agnostic migration CLI tool built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
+
+## ✨ Features
+
+- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite
+- 🔄 **Migration Management**: Create, apply, and track migrations
+- 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
+- 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability
+- 🔧 **Code Generation**: Generate type-safe code for Go (SQLC) and JavaScript/TypeScript
+- 🟢 **Node.js Support**: First-class JavaScript/TypeScript support with type definitions
+- 🎨 **Enum Support**: PostgreSQL ENUM types with full migration support
+- ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
+- 🎯 **Prisma-like Commands**: Familiar CLI interface
+- 🔍 **Schema Introspection**: Pull schema from existing databases
+- 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
+
+## 📊 Performance Benchmarks
+
+Graft significantly outperforms popular ORMs in real-world scenarios:
+
+| Operation | Graft | Drizzle | Prisma |
+|-----------|-------|---------|--------|
+| Insert 1000 Users | **158ms** | 224ms | 230ms |
+| Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms |
+| Complex Query x500 | **4071ms** | 12500ms | 56322ms |
+| Mixed Workload x1000 (75% read, 25% write) | **186ms** | 1174ms | 10863ms |
+| Stress Test Simple Query x2000 | **122ms** | 160ms | 223ms |
+| **TOTAL** | **6947ms** | **17149ms** | **71551ms** |
+
+*Benchmarks run on PostgreSQL with identical schemas and queries. Graft is **2.5x faster** than Drizzle and **10x faster** than Prisma.*
+
+## 🚀 Installation
+
+### NPM (Node.js/TypeScript Projects)
+```bash
+npm install -g graft-orm
+```
+
+### Go Install
+```bash
+go install github.com/Rana718/Graft@latest
+```
+
+### From Source
+```bash
+git clone https://github.com/Lumos-Labs-HQ/graftt.git
+cd Graft
+make build-all
+```
+
+### Download Binary
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graftt/releases).
+# Graft - Database Migration CLI Tool
+
 A powerful, database-agnostic migration CLI tool built in Go that provides Prisma-like functionality with multi-database support and SQLC integration.
 
 ## ✨ Features
@@ -21,14 +75,14 @@ go install github.com/Rana718/Graft@latest
 
 ### From Source
 ```bash
-git clone https://github.com/Rana718/Graft.git
+git clone https://github.com/Lumos-Labs-HQ/graftt.git
 cd Graft
 make build-all
 # Binary will be in build/ directory
 ```
 
 ### Download Binary
-Download the latest binary from [Releases](https://github.com/Rana718/Graft/releases) for your platform.
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graftt/releases) for your platform.
 
 ## 🏁 Quick Start
 
@@ -382,7 +436,7 @@ Error: sqlc not found in PATH
 We welcome contributions! Here's how to get started:
 
 ```bash
-git clone https://github.com/Rana718/Graft.git
+git clone https://github.com/Lumos-Labs-HQ/graftt.git
 cd Graft
 
 make dev-setup
@@ -408,9 +462,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Inspired by [Prisma](https://www.prisma.io/) migration system
 - Built with [Cobra](https://github.com/spf13/cobra) CLI framework
 - Database drivers: [pgx](https://github.com/jackc/pgx), [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql), [go-sqlite3](https://github.com/mattn/go-sqlite3)
-
----
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
