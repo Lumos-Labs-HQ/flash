@@ -81,18 +81,59 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, e
 }
 
 func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
+	// Get primary key column
+	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
+	if err != nil {
+		return err
+	}
+	
+	pkColumn := "id"
+	for _, col := range schema {
+		if col.IsPrimary {
+			pkColumn = col.Name
+			break
+		}
+	}
+	
+	// Execute each change
 	for _, change := range changes {
-		switch change.Action {
-		case "update":
-			if err := s.updateRow(tableName, change); err != nil {
-				return err
-			}
-		case "delete":
-			if err := s.deleteRow(tableName, change.RowID); err != nil {
-				return err
+		if change.Action == "update" {
+			// Build and execute UPDATE query
+			query := fmt.Sprintf("UPDATE %s SET %s = '%s' WHERE %s = '%s'",
+				tableName, change.Column, change.Value, pkColumn, change.RowID)
+			
+			if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
+				return fmt.Errorf("failed to update %s.%s: %w", tableName, change.Column, err)
 			}
 		}
 	}
+	
+	return nil
+}
+
+func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
+	// Get primary key column
+	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
+	if err != nil {
+		return err
+	}
+	
+	pkColumn := "id"
+	for _, col := range schema {
+		if col.IsPrimary {
+			pkColumn = col.Name
+			break
+		}
+	}
+	
+	// Delete each row
+	for _, rowID := range rowIDs {
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", tableName, pkColumn, rowID)
+		if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
+			return fmt.Errorf("failed to delete row %s: %w", rowID, err)
+		}
+	}
+	
 	return nil
 }
 

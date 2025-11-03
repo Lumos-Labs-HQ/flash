@@ -59,6 +59,7 @@ func (s *Server) setupRoutes() {
 	api.Get("/tables/:name", s.handleGetTableData)
 	api.Post("/tables/:name/save", s.handleSaveChanges)
 	api.Post("/tables/:name/add", s.handleAddRow)
+	api.Post("/tables/:name/delete", s.handleDeleteRows)
 	api.Delete("/tables/:name/rows/:id", s.handleDeleteRow)
 }
 
@@ -196,5 +197,32 @@ func (s *Server) handleDeleteRow(c *fiber.Ctx) error {
 	return c.JSON(Response{
 		Success: true,
 		Message: "Row deleted successfully",
+	})
+}
+
+func (s *Server) handleDeleteRows(c *fiber.Ctx) error {
+	tableName := c.Params("name")
+	
+	var req struct {
+		RowIDs []string `json:"row_ids"`
+	}
+	
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(Response{
+			Success: false,
+			Message: "Invalid request",
+		})
+	}
+
+	if err := s.service.DeleteRows(tableName, req.RowIDs); err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Message: fmt.Sprintf("Deleted %d row(s) successfully", len(req.RowIDs)),
 	})
 }

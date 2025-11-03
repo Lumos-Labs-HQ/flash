@@ -19,6 +19,7 @@ function setupEventListeners() {
     document.getElementById('save-btn').addEventListener('click', saveChanges);
     document.getElementById('add-btn').addEventListener('click', addRow);
     document.getElementById('refresh-btn').addEventListener('click', refreshData);
+    document.getElementById('delete-selected-btn').addEventListener('click', deleteSelected);
     document.getElementById('prev-btn').addEventListener('click', () => changePage(-1));
     document.getElementById('next-btn').addEventListener('click', () => changePage(1));
     document.getElementById('search-tables').addEventListener('input', debounce(filterTables, 200));
@@ -169,9 +170,7 @@ function renderRow(row, idx, columns) {
     return `
         <tr>
             <td>
-                <button onclick="deleteRow('${rowId}')" style="background: none; border: none; color: #888; cursor: pointer; font-size: 14px;" title="Delete">
-                    ×
-                </button>
+                <input type="checkbox" class="row-checkbox" data-row="${rowId}" style="cursor: pointer;" onchange="toggleRowSelection(this)">
             </td>
             ${columns.map(col => `
                 <td class="cell" data-row="${rowId}" data-column="${col.name}" ondblclick="editCell(this)">
@@ -180,6 +179,49 @@ function renderRow(row, idx, columns) {
             `).join('')}
         </tr>
     `;
+}
+
+// Toggle row selection
+function toggleRowSelection(checkbox) {
+    const row = checkbox.closest('tr');
+    if (checkbox.checked) {
+        row.style.background = '#2a3a4a';
+    } else {
+        row.style.background = '';
+    }
+    
+    // Show/hide delete button
+    const anyChecked = document.querySelectorAll('.row-checkbox:checked').length > 0;
+    document.getElementById('delete-selected-btn').style.display = anyChecked ? 'block' : 'none';
+}
+
+// Delete selected rows
+async function deleteSelected() {
+    const checked = document.querySelectorAll('.row-checkbox:checked');
+    if (checked.length === 0) return;
+    
+    if (!confirm(`Delete ${checked.length} selected row(s)?`)) return;
+    
+    const rowIds = Array.from(checked).map(cb => cb.dataset.row);
+    
+    try {
+        const res = await fetch(`/api/tables/${state.currentTable}/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ row_ids: rowIds })
+        });
+        
+        const json = await res.json();
+        
+        if (json.success) {
+            alert('✓ ' + json.message);
+            refreshData();
+        } else {
+            alert('Error: ' + json.message);
+        }
+    } catch (err) {
+        alert('Failed to delete: ' + err.message);
+    }
 }
 
 // Format value
@@ -256,7 +298,12 @@ async function saveChanges() {
     const changes = [];
     state.changes.forEach((cols, rowId) => {
         Object.entries(cols).forEach(([column, value]) => {
-            changes.push({ row_id: rowId, column, value, action: 'update' });
+            changes.push({ 
+                row_id: String(rowId), 
+                column, 
+                value: String(value), 
+                action: 'update' 
+            });
         });
     });
     
@@ -273,13 +320,13 @@ async function saveChanges() {
             state.changes.clear();
             saveBtn.style.display = 'none';
             document.querySelectorAll('.cell-dirty').forEach(c => c.classList.remove('cell-dirty'));
-            alert('✓ Changes saved');
+            alert('✓ Changes saved successfully');
             refreshData();
         } else {
             alert('Error: ' + json.message);
         }
     } catch (err) {
-        alert('Failed: ' + err.message);
+        alert('Failed to save: ' + err.message);
     } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save changes';
