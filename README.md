@@ -70,6 +70,7 @@ graft status
 | `graft migrate <name>` | Create a new migration file |
 | `graft apply` | Apply pending migrations with transaction safety |
 | `graft status` | Show migration status |
+| `graft studio` | Open visual database editor (like Prisma Studio) |
 | `graft pull` | Extract schema from existing database |
 | `graft export [format]` | Export database (JSON, CSV, SQLite) |
 | `graft reset` | Reset database (⚠️ destructive) |
@@ -80,6 +81,33 @@ graft status
 - `--config` - Specify config file path
 - `--force` - Skip confirmation prompts
 - `--help` - Show help
+
+## 🎨 Graft Studio
+
+Visual database editor with a beautiful dark UI, similar to Prisma Studio.
+
+```bash
+# Start studio (uses DATABASE_URL from .env)
+graft studio
+
+# Use custom database URL
+graft studio --db "postgres://user:pass@localhost:5432/mydb"
+
+# Custom port
+graft studio --port 3000
+```
+
+**Features:**
+- 📊 Browse all tables with row counts
+- ✏️ Inline editing (double-click cells)
+- 💾 Batch save changes
+- ☑️ Multi-select rows
+- 🗑️ Delete selected rows
+- 🔍 Search tables
+- 🎨 Dark theme UI
+
+**Database URL Priority:** `--db` flag → `DATABASE_URL` env → `.env` file
+
 
 ## 🗄️ Database Support
 
@@ -382,3 +410,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Database drivers: [pgx](https://github.com/jackc/pgx), [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql), [go-sqlite3](https://github.com/mattn/go-sqlite3)
 
 ---
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
