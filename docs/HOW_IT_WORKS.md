@@ -552,3 +552,194 @@ fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' aga
 - Resource cleanup with defer statements
 
 This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems.
+
+## JavaScript/TypeScript Code Generation
+
+### 7. JavaScript Generator (`internal/jsgen/`)
+
+Graft includes a custom JavaScript/TypeScript code generator for Node.js projects:
+
+**Generator Components:**
+- **Schema Parser**: Parses SQL schema to extract table definitions
+- **Query Parser**: Parses SQLC-style query files
+- **Type Generator**: Generates TypeScript type definitions
+- **Code Generator**: Generates JavaScript query methods
+
+**Generation Process:**
+1. **Project Detection**: Checks for `package.json` to detect Node.js projects
+2. **Schema Parsing**: Extracts tables, columns, and types from SQL schema
+3. **Query Parsing**: Parses query files with SQLC annotations
+4. **Type Mapping**: Maps SQL types to TypeScript types
+5. **Code Generation**: Generates type-safe JavaScript code
+
+**Type Mapping:**
+```go
+var sqlToTSTypeMap = map[string]string{
+    "SERIAL":                      "number",
+    "INTEGER":                     "number",
+    "BIGINT":                      "number",
+    "VARCHAR":                     "string",
+    "TEXT":                        "string",
+    "BOOLEAN":                     "boolean",
+    "TIMESTAMP WITH TIME ZONE":    "Date",
+    "JSONB":                       "any",
+    "UUID":                        "string",
+}
+```
+
+**Generated Code Structure:**
+```
+graft_gen/
+├── database.js       # Database client
+├── queries.js        # Query methods
+└── index.d.ts        # TypeScript definitions
+```
+
+**Query Method Generation:**
+```javascript
+// Generated query method with prepared statement caching
+async getUser(id) {
+  let stmt = this._stmts.get('getUser');
+  if (!stmt) {
+    stmt = await this.db.prepare('SELECT * FROM users WHERE id = $1');
+    this._stmts.set('getUser', stmt);
+  }
+  const result = await stmt.get(id);
+  return result || null;
+}
+```
+
+**TypeScript Definitions:**
+```typescript
+export interface Users {
+  id: number | null;
+  name: string;
+  email: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export class Queries {
+  constructor(db: any);
+  getUser(id: number): Promise<Users | null>;
+  createUser(name: string, email: string): Promise<Users | null>;
+}
+```
+
+**ENUM Support:**
+```typescript
+// PostgreSQL ENUM to TypeScript union type
+export type UserRole = 'admin' | 'user' | 'guest';
+
+export interface Users {
+  id: number | null;
+  role: UserRole;
+}
+```
+
+## NPM Distribution
+
+### Binary Download System
+
+Graft is distributed via NPM with automatic binary download:
+
+**Package Structure:**
+```
+graft-orm/
+├── package.json      # NPM package config
+├── index.js          # Programmatic API
+├── bin/
+│   └── graft.js      # CLI wrapper
+└── scripts/
+    └── install.js    # Postinstall script
+```
+
+**Installation Flow:**
+1. User runs `npm install -g graft-orm`
+2. NPM installs the wrapper package (~3KB)
+3. Postinstall script runs automatically
+4. Script detects platform and architecture
+5. Downloads correct binary from GitHub releases
+6. Installs binary to `node_modules/graft-orm/bin/`
+7. NPM creates symlink in global bin directory
+
+**Platform Detection:**
+```javascript
+const platform = process.platform;  // 'darwin', 'linux', 'win32'
+const arch = process.arch;          // 'x64', 'arm64'
+
+const platformMap = {
+  'darwin': 'darwin',
+  'linux': 'linux',
+  'win32': 'windows'
+};
+
+const archMap = {
+  'x64': 'amd64',
+  'arm64': 'arm64'
+};
+
+const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
+const downloadUrl = `https://github.com/Lumos-Labs-HQ/graft/releases/download/v${VERSION}/graft-${platform}-${arch}`;
+```
+
+**Binary Download:**
+```javascript
+https.get(downloadUrl, (response) => {
+  if (response.statusCode === 302) {
+    // Follow redirect
+    https.get(response.headers.location, (redirectResponse) => {
+      redirectResponse.pipe(file);
+    });
+  } else {
+    response.pipe(file);
+  }
+});
+```
+
+**CLI Wrapper:**
+```javascript
+// bin/graft.js - Spawns the downloaded binary
+const binaryPath = path.join(__dirname, binaryName);
+const child = spawn(binaryPath, process.argv.slice(2), {
+  stdio: 'inherit'
+});
+```
+
+**Programmatic API:**
+```javascript
+const graft = require('graft-orm');
+
+// Execute commands
+graft.exec('status');
+graft.exec('migrate "add users"');
+
+// Get binary path
+const binaryPath = graft.getBinaryPath();
+```
+
+**GitHub Actions Integration:**
+
+The NPM release workflow automatically publishes to NPM after successful GitHub releases:
+
+```yaml
+name: NPM Release
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update package.json version
+        run: npm version $VERSION --no-git-tag-version
+      
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems, with first-class support for both Go and Node.js ecosystems.

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Rana718/Graft/internal/config"
 	"github.com/Rana718/Graft/internal/studio"
@@ -15,7 +16,12 @@ var studioCmd = &cobra.Command{
 Launch Graft Studio, a web-based interface for viewing and editing your database.
 Similar to Prisma Studio, it provides an intuitive UI for managing your data.
 
-The studio will start a local web server and open in your default browser.`,
+The studio will start a local web server and open in your default browser.
+
+Examples:
+  graft studio
+  graft studio --db "postgres://user:pass@localhost:5432/mydb"
+  graft studio --port 3000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -24,6 +30,14 @@ The studio will start a local web server and open in your default browser.`,
 
 		if err := cfg.Validate(); err != nil {
 			return fmt.Errorf("invalid config: %w", err)
+		}
+
+		// Check if DATABASE_URL flag is provided
+		dbURL, _ := cmd.Flags().GetString("db")
+		if dbURL != "" {
+			// Override environment variable with flag value
+			os.Setenv(cfg.Database.URLEnv, dbURL)
+			fmt.Printf("📊 Using database: %s\n", maskDBURL(dbURL))
 		}
 
 		port, _ := cmd.Flags().GetInt("port")
@@ -38,4 +52,17 @@ func init() {
 	rootCmd.AddCommand(studioCmd)
 	studioCmd.Flags().IntP("port", "p", 5555, "Port to run studio on")
 	studioCmd.Flags().BoolP("browser", "b", true, "Open browser automatically")
+	studioCmd.Flags().String("db", "", "Database URL (overrides config/env)")
+}
+
+// maskDBURL masks password in database URL for display
+func maskDBURL(url string) string {
+	if len(url) < 20 {
+		return "***"
+	}
+	// Simple masking - show protocol and host only
+	if idx := len(url) / 2; idx > 0 {
+		return url[:10] + "***" + url[len(url)-10:]
+	}
+	return "***"
 }

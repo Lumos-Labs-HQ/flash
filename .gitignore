@@ -52,3 +52,5 @@ Thumbs.db
 
 # Logs
 *.log
+
+test/speed_test

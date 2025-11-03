@@ -1,32 +1,17 @@
 const { execSync } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 function getBinaryPath() {
   const platform = process.platform;
-  const arch = process.arch;
+  const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
+  const binaryPath = path.join(__dirname, 'bin', binaryName);
   
-  const platformMap = {
-    'darwin': 'darwin',
-    'linux': 'linux',
-    'win32': 'win32'
-  };
-  
-  const archMap = {
-    'x64': 'x64',
-    'arm64': 'arm64'
-  };
-  
-  const mappedPlatform = platformMap[platform];
-  const mappedArch = archMap[arch];
-  
-  if (!mappedPlatform || !mappedArch) {
-    throw new Error(`Unsupported platform: ${platform}-${arch}`);
+  if (!fs.existsSync(binaryPath)) {
+    throw new Error('Graft binary not found. Please reinstall: npm install -g graft-orm');
   }
   
-  const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
-  const packageName = `graft-orm-${mappedPlatform}-${mappedArch}`;
-  
-  return require.resolve(`${packageName}/bin/${binaryName}`);
+  return binaryPath;
 }
 
 function exec(command, options = {}) {

@@ -16,14 +16,20 @@ build-all:
 	@echo "Building for multiple platforms..."
 	@mkdir -p $(BUILD_DIR)
 
-	# Linux
-	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_UNIX) .
+	# Linux AMD64
+	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o $(BUILD_DIR)/graft-linux-x64 .
 
-	# Windows
-	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_WINDOWS) .
+	# Linux ARM64
+	GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o $(BUILD_DIR)/graft-linux-arm64 .
 
-	# macOS
-	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)_darwin .
+	# Windows AMD64
+	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o $(BUILD_DIR)/graft-win32-x64.exe .
+
+	# macOS AMD64
+	GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o $(BUILD_DIR)/graft-darwin-x64 .
+
+	# macOS ARM64
+	GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o $(BUILD_DIR)/graft-darwin-arm64 .
 
 	@echo "Cross-platform build complete in $(BUILD_DIR)/"
 

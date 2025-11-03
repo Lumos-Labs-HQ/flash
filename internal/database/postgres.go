@@ -47,7 +47,7 @@ func (p *PostgresAdapter) Connect(ctx context.Context, url string) error {
 
 	// Use exec mode for pooler compatibility (Supabase, PgBouncer)
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
-	
+
 	// Optimize pool settings
 	config.MaxConns = 5
 	config.MinConns = 1
@@ -56,7 +56,7 @@ func (p *PostgresAdapter) Connect(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create connection pool: %w", err)
 	}
-	
+
 	p.pool = pool
 	return nil
 }
@@ -110,7 +110,7 @@ func (p *PostgresAdapter) CleanupBrokenMigrationRecords(ctx context.Context) err
 // Core migration operations
 func (p *PostgresAdapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	applied := make(map[string]*time.Time)
-	
+
 	rows, err := p.pool.Query(ctx, `
 		SELECT id, finished_at 
 		FROM _graft_migrations 
@@ -161,24 +161,24 @@ func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL str
 
 	// Parse SQL statements properly handling multi-line statements
 	statements := p.parseSQLStatements(migrationSQL)
-	
+
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
 			continue // Skip empty statements
 		}
-		
+
 		_, err := tx.Exec(ctx, stmt)
 		if err != nil {
 			return fmt.Errorf("failed to execute statement '%s': %w", stmt, err)
 		}
 	}
-	
+
 	// Commit the transaction
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("failed to commit migration transaction: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -189,17 +189,17 @@ func (p *PostgresAdapter) parseSQLStatements(sql string) []string {
 	var inParentheses int
 	var inQuotes bool
 	var quoteChar rune
-	
+
 	lines := strings.Split(sql, "\n")
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if line == "" || strings.HasPrefix(line, "--") {
 			continue
 		}
-		
+
 		// Process each character to track parentheses and quotes
 		for i, char := range line {
 			switch {
@@ -232,13 +232,13 @@ func (p *PostgresAdapter) parseSQLStatements(sql string) []string {
 				currentStatement.WriteRune(char)
 			}
 		}
-		
+
 		// Add newline if we're still building a statement
 		if currentStatement.Len() > 0 {
 			currentStatement.WriteRune('\n')
 		}
 	}
-	
+
 	// Add any remaining statement
 	if currentStatement.Len() > 0 {
 		stmt := strings.TrimSpace(currentStatement.String())
@@ -246,7 +246,7 @@ func (p *PostgresAdapter) parseSQLStatements(sql string) []string {
 			statements = append(statements, stmt)
 		}
 	}
-	
+
 	return statements
 }
 
@@ -280,6 +280,42 @@ func (p *PostgresAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaT
 		})
 	}
 	return tables, nil
+}
+
+func (p *PostgresAdapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT 
+			t.typname as enum_name,
+			e.enumlabel as enum_value
+		FROM pg_type t
+		JOIN pg_enum e ON t.oid = e.enumtypid
+		JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+		WHERE n.nspname = 'public'
+		ORDER BY t.typname, e.enumsortorder
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	enumMap := make(map[string][]string)
+	for rows.Next() {
+		var enumName, enumValue string
+		if err := rows.Scan(&enumName, &enumValue); err != nil {
+			return nil, err
+		}
+		enumMap[enumName] = append(enumMap[enumName], enumValue)
+	}
+
+	var enums []types.SchemaEnum
+	for name, values := range enumMap {
+		enums = append(enums, types.SchemaEnum{
+			Name:   name,
+			Values: values,
+		})
+	}
+
+	return enums, nil
 }
 
 func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
@@ -329,7 +365,7 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 		column.IsPrimary = isPrimary
 		column.IsUnique = isUnique
 		if columnDefault.Valid {
-			column.Default = columnDefault.String
+			column.Default = p.cleanDefaultValue(columnDefault.String)
 		}
 
 		columns = append(columns, column)
@@ -615,8 +651,52 @@ func (p *PostgresAdapter) formatPostgresType(udtName string, charMaxLength, nume
 	case "timestamp":
 		return "TIMESTAMP"
 	default:
-		return p.MapColumnType(udtName)
+		// Check if this is a known built-in type
+		if mapped, exists := pgTypeMap[strings.ToLower(udtName)]; exists {
+			return mapped
+		}
+		// For custom types (like enums), keep original case
+		return udtName
 	}
+}
+
+func (p *PostgresAdapter) cleanDefaultValue(defaultVal string) string {
+	if defaultVal == "" {
+		return ""
+	}
+
+	// Remove PostgreSQL type casts like 'value'::enum_type or value::type
+	if idx := strings.Index(defaultVal, "::"); idx != -1 {
+		// Extract everything before the ::
+		value := strings.TrimSpace(defaultVal[:idx])
+
+		// Special case: if it's nextval, remove entirely
+		if strings.Contains(strings.ToLower(value), "nextval") {
+			return ""
+		}
+
+		// Special case: if it's NOW() or timestamp functions
+		if strings.Contains(strings.ToUpper(value), "NOW()") || strings.Contains(strings.ToUpper(value), "CURRENT_TIMESTAMP") {
+			return "NOW()"
+		}
+
+		// For everything else, return the value part (keeps quotes if present)
+		return value
+	}
+
+	// Handle special cases without type casts
+	upper := strings.ToUpper(defaultVal)
+	if strings.Contains(upper, "NEXTVAL") {
+		return "" // Remove serial defaults
+	}
+	if strings.Contains(upper, "NOW()") || strings.Contains(upper, "CURRENT_TIMESTAMP") {
+		return "NOW()"
+	}
+	if upper == "TRUE" || upper == "FALSE" {
+		return upper // Normalize boolean to uppercase
+	}
+
+	return defaultVal
 }
 
 func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
@@ -684,7 +764,7 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 
 	tableMap := make(map[string]*types.SchemaTable)
 	columnsSeen := make(map[string]map[string]bool) // table -> column -> seen
-	
+
 	for rows.Next() {
 		var tableName, columnName, udtName, isNullable string
 		var ordinalPosition int
@@ -717,12 +797,12 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 		columnType := p.formatPullColumnType(udtName, charMaxLength, numericPrecision, numericScale, columnDefault.String, isPrimary.Valid)
 
 		column := types.SchemaColumn{
-			Name:     columnName,
-			Type:     columnType,
-			Nullable: isNullable == "YES",
-			Default:  p.formatDefaultValue(columnDefault.String),
+			Name:      columnName,
+			Type:      columnType,
+			Nullable:  isNullable == "YES",
+			Default:   p.formatDefaultValue(columnDefault.String),
 			IsPrimary: isPrimary.Valid,
-			IsUnique: isUnique.Valid,
+			IsUnique:  isUnique.Valid,
 		}
 
 		if foreignTable.Valid && foreignColumn.Valid {
@@ -794,16 +874,16 @@ func (p *PostgresAdapter) formatDefaultValue(defaultValue string) string {
 	if defaultValue == "" {
 		return ""
 	}
-	
+
 	// Skip sequence defaults for SERIAL columns
 	if strings.Contains(defaultValue, "nextval(") {
 		return ""
 	}
-	
+
 	// Format common defaults
 	if strings.Contains(strings.ToLower(defaultValue), "now()") {
 		return "NOW()"
 	}
-	
+
 	return defaultValue
 }

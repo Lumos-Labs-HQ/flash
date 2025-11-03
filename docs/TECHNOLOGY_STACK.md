@@ -647,3 +647,84 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 - Previous versions: Core migration functionality
 
 This comprehensive technology stack ensures Graft is robust, performant, and maintainable while supporting multiple database systems, providing safe migration execution, and offering flexible export capabilities for an excellent developer experience.
+
+## JavaScript/TypeScript Code Generation
+
+### Custom JS/TS Generator (`internal/jsgen/`)
+
+**Version**: v1.7.0+
+
+**Features:**
+- Type-safe JavaScript/TypeScript code generation
+- Automatic TypeScript definition generation
+- SQLC-style query parsing
+- PostgreSQL ENUM to TypeScript union types
+- Prepared statement caching
+- Zero runtime dependencies
+- Full IntelliSense support
+
+**Type Mapping:**
+```go
+var sqlToTSTypeMap = map[string]string{
+    "SERIAL":                      "number",
+    "INTEGER":                     "number",
+    "BIGINT":                      "number",
+    "VARCHAR":                     "string",
+    "TEXT":                        "string",
+    "BOOLEAN":                     "boolean",
+    "TIMESTAMP WITH TIME ZONE":    "Date",
+    "JSONB":                       "any",
+    "UUID":                        "string",
+}
+```
+
+**Generated Output:**
+```typescript
+// index.d.ts
+export interface Users {
+  id: number | null;
+  name: string;
+  email: string;
+  created_at: Date;
+}
+
+export class Queries {
+  getUser(id: number): Promise<Users | null>;
+  createUser(name: string, email: string): Promise<Users | null>;
+}
+```
+
+## NPM Distribution System
+
+### Package: graft-orm
+
+**Registry**: https://www.npmjs.com/package/graft-orm  
+**Repository**: https://github.com/Lumos-Labs-HQ/graft
+
+**Installation:**
+```bash
+npm install -g graft-orm
+```
+
+**Features:**
+- Automatic binary download from GitHub releases
+- Cross-platform (Linux, macOS, Windows)
+- Multi-architecture (x64, ARM64)
+- Small package (~3KB)
+- Postinstall script for binary setup
+- Programmatic API
+
+**Binary Download System:**
+```javascript
+const VERSION = '1.7.0';
+const REPO = 'Lumos-Labs-HQ/graft';
+const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/graft-${platform}-${arch}`;
+```
+
+**GitHub Actions Automation:**
+- Triggers after successful GitHub release
+- Auto-updates version from git tag
+- Publishes to NPM registry
+- Verifies installation
+
+This comprehensive technology stack ensures Graft is robust, performant, and maintainable while supporting multiple database systems, providing safe migration execution, offering flexible export capabilities, and delivering first-class support for both Go and Node.js ecosystems.

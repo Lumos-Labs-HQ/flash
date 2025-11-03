@@ -109,9 +109,7 @@ func (sc *SQLComparator) parseColumn(def string) *ColumnStructure {
 		Name: strings.ToLower(strings.TrimSpace(parts[0])),
 	}
 
-	defUpper := strings.ToUpper(def)
-
-	col.Properties = sc.extractProperties(defUpper)
+	col.Properties = sc.extractProperties(def)
 
 	return col
 }
@@ -119,30 +117,32 @@ func (sc *SQLComparator) parseColumn(def string) *ColumnStructure {
 // extractProperties extracts all column properties in normalized form
 func (sc *SQLComparator) extractProperties(def string) map[string]string {
 	props := make(map[string]string)
+	defUpper := strings.ToUpper(def)
 
-	if typeMatch := regexp.MustCompile(`^\s*\w+\s+([A-Z]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(typeMatch) > 1 {
+	// Extract type from original def (not uppercased) to preserve enum case
+	if typeMatch := regexp.MustCompile(`^\s*\w+\s+([A-Za-z_]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(typeMatch) > 1 {
 		props["TYPE"] = sc.normalizeType(typeMatch[1])
 	}
 
-	if strings.Contains(def, "PRIMARY KEY") {
+	if strings.Contains(defUpper, "PRIMARY KEY") {
 		props["PRIMARY"] = "true"
 	}
 
-	if strings.Contains(def, "UNIQUE") {
+	if strings.Contains(defUpper, "UNIQUE") {
 		props["UNIQUE"] = "true"
 	}
 
-	if strings.Contains(def, "NOT NULL") {
+	if strings.Contains(defUpper, "NOT NULL") {
 		props["NOT_NULL"] = "true"
-	} else if !strings.Contains(def, "PRIMARY KEY") {
+	} else if !strings.Contains(defUpper, "PRIMARY KEY") {
 		props["NULLABLE"] = "true"
 	}
 
-	if defaultMatch := regexp.MustCompile(`\bDEFAULT\s+([^,\s]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(defaultMatch) > 1 {
+	if defaultMatch := regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(defaultMatch) > 1 {
 		props["DEFAULT"] = sc.normalizeDefault(defaultMatch[1])
 	}
 
-	if refMatch := regexp.MustCompile(`REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(\w+(?:\s+\w+)?))?`).FindStringSubmatch(def); len(refMatch) > 2 {
+	if refMatch := regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(\w+(?:\s+\w+)?))?`).FindStringSubmatch(def); len(refMatch) > 2 {
 		fkRef := strings.ToLower(refMatch[1]) + "." + strings.ToLower(refMatch[2])
 		if len(refMatch) > 3 && refMatch[3] != "" {
 			fkRef += ":" + strings.ToUpper(strings.TrimSpace(refMatch[3]))
@@ -422,20 +422,40 @@ func (sc *SQLComparator) generateColumnSQL(col *ColumnStructure) string {
 
 // Helper functions
 func (sc *SQLComparator) normalizeType(dataType string) string {
-	typeUpper := strings.ToUpper(strings.TrimSpace(dataType))
+	typeTrimmed := strings.TrimSpace(dataType)
+	typeUpper := strings.ToUpper(typeTrimmed)
 
-	switch {
-	case typeUpper == "INTEGER":
+	// Special handling: if the type contains underscore and is mixed/lowercase, it's likely a custom enum
+	if strings.Contains(typeTrimmed, "_") && typeTrimmed != typeUpper {
+		return typeTrimmed
+	}
+
+	// Known SQL types that should be uppercase
+	knownTypes := map[string]bool{
+		"INT": true, "BIGINT": true, "SMALLINT": true, "SERIAL": true, "BIGSERIAL": true,
+		"TEXT": true, "CHAR": true, "BOOLEAN": true, "BOOL": true,
+		"NUMERIC": true, "DECIMAL": true, "REAL": true, "DOUBLE PRECISION": true,
+		"DATE": true, "TIME": true, "TIMESTAMP": true, "TIMESTAMPTZ": true,
+		"JSON": true, "JSONB": true, "UUID": true, "BYTEA": true,
+	}
+
+	// Special normalizations
+	switch typeUpper {
+	case "INTEGER":
 		return "INT"
-	case strings.HasPrefix(typeUpper, "VARCHAR"):
-		return typeUpper
-	case typeUpper == "TIMESTAMP WITHOUT TIME ZONE":
+	case "TIMESTAMP WITHOUT TIME ZONE":
 		return "TIMESTAMP"
-	case typeUpper == "TIMESTAMP WITH TIME ZONE":
+	case "TIMESTAMP WITH TIME ZONE":
 		return "TIMESTAMP WITH TIME ZONE"
-	default:
+	}
+
+	// Check if it's a known type
+	if knownTypes[typeUpper] || strings.HasPrefix(typeUpper, "VARCHAR") || strings.HasPrefix(typeUpper, "CHAR") {
 		return typeUpper
 	}
+
+	// Otherwise it's a custom type (enum) - return lowercase
+	return strings.ToLower(typeTrimmed)
 }
 
 func (sc *SQLComparator) normalizeDefault(defaultVal string) string {
@@ -450,8 +470,15 @@ func (sc *SQLComparator) normalizeDefault(defaultVal string) string {
 		return "NOW()"
 	case strings.Contains(defaultUpper, "NEXTVAL"):
 		return ""
+	case defaultUpper == "TRUE" || defaultUpper == "FALSE":
+		return defaultUpper
 	default:
-		return strings.Trim(defaultVal, "'\"")
+		// The postgres adapter should have already cleaned this, but double-check
+		// Remove type casts if still present
+		if idx := strings.Index(defaultVal, "::"); idx != -1 {
+			return strings.TrimSpace(defaultVal[:idx])
+		}
+		return defaultVal
 	}
 }
 
