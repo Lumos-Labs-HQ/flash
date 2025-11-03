@@ -3,6 +3,8 @@ package studio
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"github.com/Rana718/Graft/internal/config"
 	"github.com/Rana718/Graft/internal/database"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
 )
 
@@ -31,7 +34,9 @@ func NewServer(cfg *config.Config, port int) *Server {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
 
-	engine := html.New("./web/studio/templates", ".html")
+	// Use embedded templates
+	engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
+	
 	app := fiber.New(fiber.Config{
 		Views: engine,
 	})
@@ -47,8 +52,11 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	// Static files
-	s.app.Static("/static", "./web/studio/static")
+	// Serve embedded static files
+	staticFS, _ := fs.Sub(StaticFS, "static")
+	s.app.Use("/static", filesystem.New(filesystem.Config{
+		Root: http.FS(staticFS),
+	}))
 
 	// UI
 	s.app.Get("/", s.handleIndex)
@@ -96,7 +104,7 @@ func (s *Server) openBrowser(url string) {
 
 // Handlers
 func (s *Server) handleIndex(c *fiber.Ctx) error {
-	return c.Render("index", fiber.Map{
+	return c.Render("templates/index", fiber.Map{
 		"Title": "Graft Studio",
 	})
 }
