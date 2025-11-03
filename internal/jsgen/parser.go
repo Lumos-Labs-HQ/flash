@@ -27,6 +27,12 @@ func initRegex() {
 
 type Schema struct {
 	Tables []*Table
+	Enums  []*Enum
+}
+
+type Enum struct {
+	Name   string
+	Values []string
 }
 
 type Table struct {
@@ -67,7 +73,10 @@ func (g *Generator) parseSchema() (*Schema, error) {
 		return g.cachedSchema, nil
 	}
 
-	schema := &Schema{Tables: []*Table{}}
+	schema := &Schema{
+		Tables: []*Table{},
+		Enums:  []*Enum{},
+	}
 
 	schemaPath := g.Config.SchemaPath
 	if !filepath.IsAbs(schemaPath) {
@@ -89,6 +98,8 @@ func (g *Generator) parseSchema() (*Schema, error) {
 			}
 			tables := g.parseCreateTables(string(content))
 			schema.Tables = append(schema.Tables, tables...)
+			enums := g.parseCreateEnums(string(content))
+			schema.Enums = append(schema.Enums, enums...)
 		}
 	} else {
 		content, err := os.ReadFile(schemaPath)
@@ -97,6 +108,8 @@ func (g *Generator) parseSchema() (*Schema, error) {
 		}
 		tables := g.parseCreateTables(string(content))
 		schema.Tables = append(schema.Tables, tables...)
+		enums := g.parseCreateEnums(string(content))
+		schema.Enums = append(schema.Enums, enums...)
 	}
 
 	return schema, nil
@@ -152,6 +165,40 @@ func (g *Generator) parseCreateTables(sql string) []*Table {
 	}
 
 	return tables
+}
+
+func (g *Generator) parseCreateEnums(sql string) []*Enum {
+	enums := make([]*Enum, 0)
+	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
+	matches := enumRegex.FindAllStringSubmatch(sql, -1)
+
+	for _, match := range matches {
+		if len(match) < 3 {
+			continue
+		}
+
+		enumName := match[1]
+		valuesStr := match[2]
+
+		// Parse enum values
+		var values []string
+		for _, v := range strings.Split(valuesStr, ",") {
+			v = strings.TrimSpace(v)
+			v = strings.Trim(v, "'\"")
+			if v != "" {
+				values = append(values, v)
+			}
+		}
+
+		if len(values) > 0 {
+			enums = append(enums, &Enum{
+				Name:   enumName,
+				Values: values,
+			})
+		}
+	}
+
+	return enums
 }
 
 func splitColumns(columnsStr string) []string {
@@ -332,23 +379,32 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 	// Parse columns for SELECT queries (including CTEs)
 	sqlUpper := strings.ToUpper(query.SQL)
 	sqlTrimmed := strings.TrimSpace(sqlUpper)
-	
+
 	isSelectQuery := strings.HasPrefix(sqlTrimmed, "SELECT") || strings.HasPrefix(sqlTrimmed, "WITH")
-	isNotModifying := !strings.Contains(sqlTrimmed, "DELETE") && 
-	                  !strings.Contains(sqlTrimmed, "UPDATE") && 
-	                  !strings.Contains(sqlTrimmed, "INSERT")
-	
+
+	// Check if it's a modifying query (INSERT/UPDATE/DELETE as SQL commands, not in column names)
+	// Use word boundary checks to avoid false positives with column names like "updated_at"
+	isNotModifying := !containsSQLKeyword(sqlTrimmed, "DELETE") &&
+		!containsSQLKeyword(sqlTrimmed, "UPDATE") &&
+		!containsSQLKeyword(sqlTrimmed, "INSERT")
+
 	if isSelectQuery && isNotModifying {
 		columnsStr := extractSelectColumns(query.SQL)
-		if columnsStr != "" {
-			if strings.TrimSpace(columnsStr) != "*" {
-				colNames := smartSplitColumns(columnsStr)
+
+		// Try to parse columns
+		if columnsStr != "" && strings.TrimSpace(columnsStr) != "*" {
+			colNames := smartSplitColumns(columnsStr)
+
+			if len(colNames) > 0 {
 				query.Columns = make([]*QueryColumn, 0, len(colNames))
 
 				asRegex := regexp.MustCompile(`(?i)\s+AS\s+`)
 
 				for _, colName := range colNames {
 					colName = strings.TrimSpace(colName)
+					if colName == "" {
+						continue
+					}
 
 					if loc := asRegex.FindStringIndex(colName); loc != nil {
 						colName = strings.TrimSpace(colName[loc[1]:])
@@ -366,26 +422,28 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 						Table: tableName,
 					})
 				}
-			} else {
-				query.Columns = []*QueryColumn{{
-					Name:  "*",
-					Type:  "string",
-					Table: tableName,
-				}}
 			}
+		}
+
+		if len(query.Columns) == 0 {
+			query.Columns = []*QueryColumn{{
+				Name:  "*",
+				Type:  "string",
+				Table: tableName,
+			}}
 		}
 	}
 }
 
 func extractSelectColumns(sql string) string {
 	sqlUpper := strings.ToUpper(sql)
-	
+
 	// For CTE queries, find the main SELECT after the CTE definitions
 	if strings.HasPrefix(strings.TrimSpace(sqlUpper), "WITH") {
 		// Find all SELECT positions
 		var selectPositions []int
 		parenDepth := 0
-		
+
 		for i := 0; i < len(sqlUpper)-6; i++ {
 			switch sql[i] {
 			case '(':
@@ -403,20 +461,20 @@ func extractSelectColumns(sql string) string {
 				}
 			}
 		}
-		
+
 		// Use the last SELECT (main query)
 		if len(selectPositions) > 0 {
 			selectIdx := selectPositions[len(selectPositions)-1]
 			return extractColumnsFromSelect(sql, selectIdx)
 		}
 	}
-	
+
 	// Regular SELECT query
 	selectIdx := strings.Index(sqlUpper, "SELECT")
 	if selectIdx == -1 {
 		return ""
 	}
-	
+
 	return extractColumnsFromSelect(sql, selectIdx)
 }
 
@@ -436,6 +494,7 @@ func extractColumnsFromSelect(sql string, selectIdx int) string {
 		case ')':
 			parenDepth--
 		case 'F', 'f':
+			// Only match FROM when not inside parentheses (to avoid EXTRACT(... FROM ...) etc.)
 			if parenDepth == 0 && i+4 <= len(sql) {
 				potential := strings.ToUpper(sql[i:min(i+4, len(sql))])
 				if potential == "FROM" {
@@ -483,6 +542,35 @@ func isAlphaNum(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
+// containsSQLKeyword checks if a SQL keyword appears as a standalone word (not part of column names)
+func containsSQLKeyword(sql, keyword string) bool {
+	keyword = strings.ToUpper(keyword)
+	sql = strings.ToUpper(sql)
+
+	index := 0
+	for {
+		pos := strings.Index(sql[index:], keyword)
+		if pos == -1 {
+			return false
+		}
+
+		absPos := index + pos
+
+		// Check if it's a word boundary before the keyword
+		beforeOK := absPos == 0 || !isAlphaNum(sql[absPos-1])
+
+		// Check if it's a word boundary after the keyword
+		afterPos := absPos + len(keyword)
+		afterOK := afterPos >= len(sql) || !isAlphaNum(sql[afterPos])
+
+		if beforeOK && afterOK {
+			return true
+		}
+
+		index = absPos + 1
+	}
+}
+
 // smartSplitColumns splits column names by comma, respecting parentheses nesting
 func smartSplitColumns(columnsStr string) []string {
 	var result []string
@@ -519,11 +607,23 @@ func smartSplitColumns(columnsStr string) []string {
 func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, paramName string) string {
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
-			if strings.EqualFold(col.Name, paramName) || 
-			   strings.EqualFold(col.Name, strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")) {
+			if strings.EqualFold(col.Name, paramName) ||
+				strings.EqualFold(col.Name, strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")) {
 				return g.mapSQLTypeToJS(col.Type)
 			}
 		}
+	}
+
+	// Check for comparisons with aggregate function results (COUNT, SUM, AVG, etc.)
+	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*`, paramIndex, paramIndex)
+	if matched, _ := regexp.MatchString(aggregatePattern, sql); matched {
+		return "number"
+	}
+
+	// Check for numeric comparisons with aliases containing numeric indicators
+	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*`, paramIndex, paramIndex)
+	if matched, _ := regexp.MatchString(numericAliasPattern, sql); matched {
+		return "number"
 	}
 
 	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
@@ -566,6 +666,12 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 		return "number"
 	}
 
+	// Check for OFFSET clause
+	offsetPattern := fmt.Sprintf(`(?i)OFFSET\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(offsetPattern, sql); matched {
+		return "number"
+	}
+
 	// Check for BETWEEN clause (dates)
 	betweenPattern := fmt.Sprintf(`(?i)(\w+)\s+BETWEEN\s+\$%d`, paramIndex)
 	betweenRe := regexp.MustCompile(betweenPattern)
@@ -576,7 +682,7 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 			}
 		}
 	}
-	
+
 	betweenEndPattern := fmt.Sprintf(`(?i)BETWEEN\s+\$\d+\s+AND\s+\$%d`, paramIndex)
 	if matched, _ := regexp.MatchString(betweenEndPattern, sql); matched {
 		betweenStartRe := regexp.MustCompile(`(?i)(\w+)\s+BETWEEN`)
@@ -635,7 +741,7 @@ func (g *Generator) inferParamName(sql string, paramIndex int) string {
 	if match := betweenRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1] + "_start"
 	}
-	
+
 	betweenEndPattern := fmt.Sprintf(`(?i)BETWEEN\s+\$\d+\s+AND\s+\$%d`, paramIndex)
 	if matched, _ := regexp.MatchString(betweenEndPattern, sql); matched {
 		betweenStartRe := regexp.MustCompile(`(?i)(\w+)\s+BETWEEN`)
