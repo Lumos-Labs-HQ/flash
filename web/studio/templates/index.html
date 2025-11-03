@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        .studio-container { height: 100vh; display: flex; }
+        .sidebar { width: 250px; overflow-y: auto; }
+        .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .data-grid { flex: 1; overflow: auto; }
+        .cell-editing { outline: 2px solid #3b82f6; }
+        .cell-dirty { background-color: #fef3c7; }
+        .table-row:hover { background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="studio-container">
+        <!-- Sidebar -->
+        <aside class="sidebar bg-gray-900 text-white border-r border-gray-700">
+            <div class="p-4 border-b border-gray-700">
+                <h1 class="text-xl font-bold">Graft Studio</h1>
+            </div>
+            <div class="p-2">
+                <input 
+                    type="text" 
+                    id="search-tables" 
+                    placeholder="Search tables..." 
+                    class="w-full px-3 py-2 bg-gray-800 text-white rounded border border-gray-700 focus:outline-none focus:border-blue-500"
+                />
+            </div>
+            <div id="tables-list" class="p-2">
+                <!-- Tables will be loaded here -->
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content bg-white">
+            <!-- Toolbar -->
+            <div class="toolbar flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white">
+                <div class="flex items-center gap-4">
+                    <h2 id="current-table" class="text-lg font-semibold text-gray-800">Select a table</h2>
+                    <span id="row-count" class="text-sm text-gray-500"></span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button 
+                        id="save-btn" 
+                        class="hidden px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-medium"
+                    >
+                        💾 Save Changes
+                    </button>
+                    <button 
+                        id="add-btn" 
+                        class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium"
+                    >
+                        + Add Record
+                    </button>
+                    <button 
+                        id="refresh-btn" 
+                        class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 font-medium"
+                    >
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Data Grid -->
+            <div class="data-grid">
+                <div id="grid-container" class="p-6">
+                    <div class="text-center text-gray-500 py-20">
+                        <p class="text-lg">Select a table from the sidebar to view data</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination" class="hidden flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+                <div class="text-sm text-gray-600">
+                    Showing <span id="page-info"></span>
+                </div>
+                <div class="flex gap-2">
+                    <button id="prev-btn" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                        ← Previous
+                    </button>
+                    <button id="next-btn" class="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">
+                        Next →
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/studio.js"></script>
+</body>
+</html>

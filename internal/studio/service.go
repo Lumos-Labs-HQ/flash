@@ -1,0 +1,172 @@
+package studio
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/Rana718/Graft/internal/database"
+)
+
+type Service struct {
+	adapter database.DatabaseAdapter
+	ctx     context.Context
+}
+
+func NewService(adapter database.DatabaseAdapter) *Service {
+	return &Service{
+		adapter: adapter,
+		ctx:     context.Background(),
+	}
+}
+
+func (s *Service) GetTables() ([]TableInfo, error) {
+	tables, err := s.adapter.GetAllTableNames(s.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []TableInfo
+	for _, table := range tables {
+		if table == "_graft_migrations" {
+			continue
+		}
+
+		count, _ := s.getRowCount(table)
+		result = append(result, TableInfo{
+			Name:     table,
+			RowCount: count,
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, error) {
+	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	columns := make([]ColumnInfo, len(schema))
+	for i, col := range schema {
+		columns[i] = ColumnInfo{
+			Name:       col.Name,
+			Type:       col.Type,
+			Nullable:   col.Nullable,
+			PrimaryKey: col.IsPrimary,
+		}
+	}
+
+	offset := (page - 1) * limit
+	rows, err := s.getRows(tableName, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	total, _ := s.getRowCount(tableName)
+
+	return &TableData{
+		Columns: columns,
+		Rows:    rows,
+		Total:   total,
+		Page:    page,
+		Limit:   limit,
+	}, nil
+}
+
+func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
+	for _, change := range changes {
+		switch change.Action {
+		case "update":
+			if err := s.updateRow(tableName, change); err != nil {
+				return err
+			}
+		case "delete":
+			if err := s.deleteRow(tableName, change.RowID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) AddRow(tableName string, data map[string]any) error {
+	columns := []string{}
+	values := []any{}
+
+	for col, val := range data {
+		columns = append(columns, col)
+		values = append(values, val)
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		tableName,
+		joinColumns(columns),
+		placeholders(len(values)))
+
+	return s.adapter.ExecuteMigration(s.ctx, query)
+}
+
+func (s *Service) DeleteRow(tableName, rowID string) error {
+	return s.deleteRow(tableName, rowID)
+}
+
+// Helper methods
+func (s *Service) getRowCount(tableName string) (int, error) {
+	data, err := s.adapter.GetTableData(s.ctx, tableName)
+	if err != nil {
+		return 0, err
+	}
+	return len(data), nil
+}
+
+func (s *Service) getRows(tableName string, limit, offset int) ([]map[string]any, error) {
+	data, err := s.adapter.GetTableData(s.ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	start := offset
+	end := offset + limit
+	if start > len(data) {
+		return []map[string]any{}, nil
+	}
+	if end > len(data) {
+		end = len(data)
+	}
+
+	return data[start:end], nil
+}
+
+func (s *Service) updateRow(tableName string, change RowChange) error {
+	query := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE id = $2",
+		tableName, change.Column)
+	return s.adapter.ExecuteMigration(s.ctx, query)
+}
+
+func (s *Service) deleteRow(tableName, rowID string) error {
+	query := fmt.Sprintf("DELETE FROM %s WHERE id = $1", tableName)
+	return s.adapter.ExecuteMigration(s.ctx, query)
+}
+
+func joinColumns(cols []string) string {
+	result := ""
+	for i, col := range cols {
+		if i > 0 {
+			result += ", "
+		}
+		result += col
+	}
+	return result
+}
+
+func placeholders(n int) string {
+	result := ""
+	for i := 1; i <= n; i++ {
+		if i > 1 {
+			result += ", "
+		}
+		result += fmt.Sprintf("$%d", i)
+	}
+	return result
+}

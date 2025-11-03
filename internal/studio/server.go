@@ -1,0 +1,200 @@
+package studio
+
+import (
+	"context"
+	"fmt"
+	"os/exec"
+	"runtime"
+	"strconv"
+
+	"github.com/Rana718/Graft/internal/config"
+	"github.com/Rana718/Graft/internal/database"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/template/html/v2"
+)
+
+type Server struct {
+	app     *fiber.App
+	service *Service
+	port    int
+}
+
+func NewServer(cfg *config.Config, port int) *Server {
+	adapter := database.NewAdapter(cfg.Database.Provider)
+	
+	dbURL, err := cfg.GetDatabaseURL()
+	if err != nil {
+		panic(fmt.Sprintf("Failed to get database URL: %v", err))
+	}
+	
+	if err := adapter.Connect(context.Background(), dbURL); err != nil {
+		panic(fmt.Sprintf("Failed to connect to database: %v", err))
+	}
+
+	engine := html.New("./web/studio/templates", ".html")
+	app := fiber.New(fiber.Config{
+		Views: engine,
+	})
+
+	server := &Server{
+		app:     app,
+		service: NewService(adapter),
+		port:    port,
+	}
+
+	server.setupRoutes()
+	return server
+}
+
+func (s *Server) setupRoutes() {
+	// Static files
+	s.app.Static("/static", "./web/studio/static")
+
+	// UI
+	s.app.Get("/", s.handleIndex)
+
+	// API
+	api := s.app.Group("/api")
+	api.Get("/tables", s.handleGetTables)
+	api.Get("/tables/:name", s.handleGetTableData)
+	api.Post("/tables/:name/save", s.handleSaveChanges)
+	api.Post("/tables/:name/add", s.handleAddRow)
+	api.Delete("/tables/:name/rows/:id", s.handleDeleteRow)
+}
+
+func (s *Server) Start(openBrowser bool) error {
+	url := fmt.Sprintf("http://localhost:%d", s.port)
+	
+	fmt.Printf("🚀 Graft Studio starting on %s\n", url)
+	
+	if openBrowser {
+		go s.openBrowser(url)
+	}
+
+	return s.app.Listen(fmt.Sprintf(":%d", s.port))
+}
+
+func (s *Server) openBrowser(url string) {
+	var cmd string
+	var args []string
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start", url}
+	case "darwin":
+		cmd = "open"
+		args = []string{url}
+	default:
+		cmd = "xdg-open"
+		args = []string{url}
+	}
+
+	exec.Command(cmd, args...).Start()
+}
+
+// Handlers
+func (s *Server) handleIndex(c *fiber.Ctx) error {
+	return c.Render("index", fiber.Map{
+		"Title": "Graft Studio",
+	})
+}
+
+func (s *Server) handleGetTables(c *fiber.Ctx) error {
+	tables, err := s.service.GetTables()
+	if err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Data:    tables,
+	})
+}
+
+func (s *Server) handleGetTableData(c *fiber.Ctx) error {
+	tableName := c.Params("name")
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	limit, _ := strconv.Atoi(c.Query("limit", "50"))
+
+	data, err := s.service.GetTableData(tableName, page, limit)
+	if err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Data:    data,
+	})
+}
+
+func (s *Server) handleSaveChanges(c *fiber.Ctx) error {
+	tableName := c.Params("name")
+	
+	var req SaveRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(Response{
+			Success: false,
+			Message: "Invalid request",
+		})
+	}
+
+	if err := s.service.SaveChanges(tableName, req.Changes); err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Message: "Changes saved successfully",
+	})
+}
+
+func (s *Server) handleAddRow(c *fiber.Ctx) error {
+	tableName := c.Params("name")
+	
+	var req AddRowRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(Response{
+			Success: false,
+			Message: "Invalid request",
+		})
+	}
+
+	if err := s.service.AddRow(tableName, req.Data); err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Message: "Row added successfully",
+	})
+}
+
+func (s *Server) handleDeleteRow(c *fiber.Ctx) error {
+	tableName := c.Params("name")
+	rowID := c.Params("id")
+
+	if err := s.service.DeleteRow(tableName, rowID); err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Message: "Row deleted successfully",
+	})
+}

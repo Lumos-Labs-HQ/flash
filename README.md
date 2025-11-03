@@ -382,3 +382,27 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Database drivers: [pgx](https://github.com/jackc/pgx), [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql), [go-sqlite3](https://github.com/mattn/go-sqlite3)
 
 ---
+
+## 🎨 Graft Studio
+
+Visual database editor similar to Prisma Studio. View, edit, and manage your database through an intuitive web interface.
+
+```bash
+# Start Graft Studio
+graft studio
+
+# Custom port
+graft studio --port 3000
+```
+
+**Features:**
+- 📊 Browse all tables and data
+- ✏️ Inline editing (double-click cells)
+- 💾 Batch save changes
+- ➕ Add new records
+- 🗑️ Delete records
+- 🔍 Search tables
+- 📄 Pagination for large datasets
+
+See [web/studio/README.md](web/studio/README.md) for more details.
+
