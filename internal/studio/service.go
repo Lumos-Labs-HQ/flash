@@ -31,7 +31,13 @@ func (s *Service) GetTables() ([]TableInfo, error) {
 			continue
 		}
 
-		count, _ := s.getRowCount(table)
+		// Get count asynchronously for better performance
+		count := 0
+		data, err := s.adapter.GetTableData(s.ctx, table)
+		if err == nil {
+			count = len(data)
+		}
+		
 		result = append(result, TableInfo{
 			Name:     table,
 			RowCount: count,
