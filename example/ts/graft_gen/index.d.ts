@@ -8,16 +8,7 @@ export interface Users {
   email: string;
   created_at: Date;
   updated_at: Date;
-}
-
-export interface Posts {
-  id: number | null;
-  user_id: number;
-  category_id: number;
-  title: string;
-  content: string;
-  created_at: Date;
-  updated_at: Date;
+  role: 'admin' | 'moderator' | 'user' | 'guest';
 }
 
 export interface Categories {
@@ -34,14 +25,15 @@ export interface Comments {
   created_at: Date;
 }
 
-export interface GetActiveUsersWithStatsResult {
+export interface Posts {
   id: number | null;
-  name: string;
-  email: string;
-  isadmin: boolean;
-  total_posts: number;
-  total_comments: number;
-  last_post_date: Date;
+  user_id: number;
+  category_id: number;
+  title: string;
+  content: string;
+  created_at: Date;
+  updated_at: Date;
+  status: 'draft' | 'published' | 'archived';
 }
 
 export interface GetTopActiveUsersResult {
@@ -74,6 +66,60 @@ export interface GetPostsByCategoryResult {
   created_at: Date;
 }
 
+export interface GetComplexUserAnalyticsResult {
+  id: number | null;
+  name: string;
+  email: string;
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+  isadmin: boolean;
+  user_created_at: string;
+  total_posts: number;
+  published_posts: boolean;
+  draft_posts: string;
+  total_comments: number;
+  posts_commented_on: string;
+  categories_used: string;
+  category_names: string;
+  last_post_date: Date;
+  last_comment_date: Date;
+  avg_post_length: number | null;
+  activity_level: string;
+  engagement_score: string;
+}
+
+export interface GetPostDetailsWithAllRelationsResult {
+  id: number | null;
+  title: string;
+  content: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+  updated_at: Date;
+  author_id: number;
+  author_name: string;
+  author_email: string;
+  author_role: string;
+  author_is_admin: boolean;
+  category_id: number;
+  category_name: string;
+  comment_count: number;
+  unique_commenters: string;
+  all_comments: string;
+  commenter_names: string;
+  last_comment_date: Date;
+  content_length: string;
+  hours_since_created: string;
+}
+
+export interface GetActiveUsersWithStatsResult {
+  id: number | null;
+  name: string;
+  email: string;
+  isadmin: boolean;
+  total_posts: number;
+  total_comments: number;
+  last_post_date: Date;
+}
+
 export class Queries {
   constructor(db: any);
 
@@ -94,6 +140,8 @@ export class Queries {
   updateUserAdminStatus(id: number, isadmin: boolean): Promise<number>;
   deleteInactiveUsers(created_at: Date): Promise<number>;
   getPostsByCategory(category_id: number): Promise<GetPostsByCategoryResult[]>;
+  getComplexUserAnalytics(total_posts: number, total_comments: number, limit: number): Promise<GetComplexUserAnalyticsResult[]>;
+  getPostDetailsWithAllRelations(id: number): Promise<GetPostDetailsWithAllRelationsResult | null>;
 }
 
 export function New(db: any): Queries;

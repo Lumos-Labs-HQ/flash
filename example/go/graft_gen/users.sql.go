@@ -52,7 +52,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (user_id, category_id, title, content)
 VALUES ($1, $2, $3, $4)
-RETURNING id, user_id, category_id, title, content, created_at, updated_at
+RETURNING id, user_id, category_id, title, content, created_at, updated_at, status
 `
 
 type CreatePostParams struct {
@@ -78,6 +78,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.Content,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Status,
 	)
 	return i, err
 }
@@ -85,7 +86,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, email)
 VALUES ($1, $2)
-RETURNING id, name, address, email, created_at, updated_at
+RETURNING id, name, address, isadmin, email, created_at, updated_at, role
 `
 
 type CreateUserParams struct {
@@ -100,9 +101,96 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ID,
 		&i.Name,
 		&i.Address,
+		&i.Isadmin,
 		&i.Email,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
+	)
+	return i, err
+}
+
+const getPostDetailsWithAllRelations = `-- name: GetPostDetailsWithAllRelations :one
+SELECT 
+    p.id,
+    p.title,
+    p.content,
+    p.status,
+    p.created_at,
+    p.updated_at,
+    u.id as author_id,
+    u.name as author_name,
+    u.email as author_email,
+    u.role as author_role,
+    u.isadmin as author_is_admin,
+    cat.id as category_id,
+    cat.name as category_name,
+    COUNT(DISTINCT c.id) as comment_count,
+    COUNT(DISTINCT c.user_id) as unique_commenters,
+    STRING_AGG(DISTINCT c.content, ' | ' ORDER BY c.content) as all_comments,
+    ARRAY_AGG(DISTINCT cu.name ORDER BY cu.name) as commenter_names,
+    MAX(c.created_at) as last_comment_date,
+    LENGTH(p.content) as content_length,
+    EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 as hours_since_created
+FROM posts p
+INNER JOIN users u ON p.user_id = u.id
+INNER JOIN categories cat ON p.category_id = cat.id
+LEFT JOIN comments c ON p.id = c.post_id
+LEFT JOIN users cu ON c.user_id = cu.id
+WHERE p.id = $1
+GROUP BY 
+    p.id, p.title, p.content, p.status, p.created_at, p.updated_at,
+    u.id, u.name, u.email, u.role, u.isadmin,
+    cat.id, cat.name
+`
+
+type GetPostDetailsWithAllRelationsRow struct {
+	ID                int32
+	Title             string
+	Content           string
+	Status            PostStatus
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	AuthorID          int32
+	AuthorName        string
+	AuthorEmail       string
+	AuthorRole        UserRole
+	AuthorIsAdmin     bool
+	CategoryID        int32
+	CategoryName      string
+	CommentCount      int64
+	UniqueCommenters  int64
+	AllComments       []byte
+	CommenterNames    interface{}
+	LastCommentDate   interface{}
+	ContentLength     float64
+	HoursSinceCreated int32
+}
+
+func (q *Queries) GetPostDetailsWithAllRelations(ctx context.Context, id int32) (GetPostDetailsWithAllRelationsRow, error) {
+	row := q.db.QueryRow(ctx, getPostDetailsWithAllRelations, id)
+	var i GetPostDetailsWithAllRelationsRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Content,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AuthorID,
+		&i.AuthorName,
+		&i.AuthorEmail,
+		&i.AuthorRole,
+		&i.AuthorIsAdmin,
+		&i.CategoryID,
+		&i.CategoryName,
+		&i.CommentCount,
+		&i.UniqueCommenters,
+		&i.AllComments,
+		&i.CommenterNames,
+		&i.LastCommentDate,
+		&i.ContentLength,
+		&i.HoursSinceCreated,
 	)
 	return i, err
 }
@@ -153,7 +241,7 @@ func (q *Queries) GetPostWithComments(ctx context.Context, id int32) ([]GetPostW
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, address, email, created_at, updated_at FROM users
+SELECT id, name, address, isadmin, email, created_at, updated_at, role FROM users
 WHERE id = $1
 `
 
@@ -164,9 +252,11 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 		&i.ID,
 		&i.Name,
 		&i.Address,
+		&i.Isadmin,
 		&i.Email,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
