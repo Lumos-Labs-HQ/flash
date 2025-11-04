@@ -1,5 +1,4 @@
--- name: IsadminUser :one
-SELECT isadmin FROM users WHERE id = $1 LIMIT 1;
+
 
 -- name: GetUserEmail :one
 SELECT email FROM users WHERE id = $1 LIMIT 1;
