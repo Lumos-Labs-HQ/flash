@@ -40,7 +40,7 @@ npm install -g graft-orm
 
 ### Go Install
 ```bash
-go install github.com/Rana718/Graft@latest
+go install github.com/Lumos-Labs-HQ/graft@latest
 ```
 
 ### From Source
@@ -70,7 +70,7 @@ A powerful, database-agnostic migration CLI tool built in Go that provides Prism
 
 ### Using Go Install (Recommended)
 ```bash
-go install github.com/Rana718/Graft@latest
+go install github.com/Lumos-Labs-HQ/graft@latest
 ```
 
 ### From Source

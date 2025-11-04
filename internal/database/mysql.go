@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 	_ "github.com/go-sql-driver/mysql"
 )
 

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Rana718/Graft/internal/database"
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -83,7 +83,7 @@ func exportToCSV(data types.BackupData, exportPath string) (string, error) {
 
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
 	dirPath := filepath.Join(exportPath, fmt.Sprintf("export_%s_csv", timestamp))
-	
+
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create CSV directory: %w", err)
 	}
@@ -101,7 +101,7 @@ func exportToCSV(data types.BackupData, exportPath string) (string, error) {
 		}
 
 		writer := csv.NewWriter(file)
-		
+
 		var headers []string
 		for key := range rows[0] {
 			headers = append(headers, key)

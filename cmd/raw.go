@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
 	"github.com/spf13/cobra"
 )
 

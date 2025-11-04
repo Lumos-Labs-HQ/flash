@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/pull"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/pull"
 	"github.com/spf13/cobra"
 )
 
