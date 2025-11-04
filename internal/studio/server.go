@@ -3,6 +3,8 @@ package studio
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os/exec"
 	"runtime"
 	"strconv"
@@ -10,6 +12,7 @@ import (
 	"github.com/Lumos-Labs-HQ/graft/internal/config"
 	"github.com/Lumos-Labs-HQ/graft/internal/database"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
 )
 
@@ -31,7 +34,9 @@ func NewServer(cfg *config.Config, port int) *Server {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
 
-	engine := html.New("./web/studio/templates", ".html")
+	// Use embedded templates
+	engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
+	
 	app := fiber.New(fiber.Config{
 		Views: engine,
 	})
@@ -47,20 +52,25 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	// Static files
-	s.app.Static("/static", "./web/studio/static")
+	staticFS, _ := fs.Sub(StaticFS, "static")
+	s.app.Use("/static", filesystem.New(filesystem.Config{
+		Root: http.FS(staticFS),
+	}))
 
 	// UI
 	s.app.Get("/", s.handleIndex)
+	s.app.Get("/schema", s.handleSchema)
 
 	// API
 	api := s.app.Group("/api")
 	api.Get("/tables", s.handleGetTables)
 	api.Get("/tables/:name", s.handleGetTableData)
+	api.Get("/schema", s.handleGetSchema)
 	api.Post("/tables/:name/save", s.handleSaveChanges)
 	api.Post("/tables/:name/add", s.handleAddRow)
 	api.Post("/tables/:name/delete", s.handleDeleteRows)
 	api.Delete("/tables/:name/rows/:id", s.handleDeleteRow)
+	api.Post("/sql", s.handleExecuteSQL)
 }
 
 func (s *Server) Start(openBrowser bool) error {
@@ -96,8 +106,29 @@ func (s *Server) openBrowser(url string) {
 
 // Handlers
 func (s *Server) handleIndex(c *fiber.Ctx) error {
-	return c.Render("index", fiber.Map{
+	return c.Render("templates/index", fiber.Map{
 		"Title": "Graft Studio",
+	})
+}
+
+func (s *Server) handleSchema(c *fiber.Ctx) error {
+	return c.Render("templates/schema", fiber.Map{
+		"Title": "Graft Studio",
+	})
+}
+
+func (s *Server) handleGetSchema(c *fiber.Ctx) error {
+	schema, err := s.service.GetSchemaVisualization()
+	if err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Data:    schema,
 	})
 }
 
@@ -224,5 +255,31 @@ func (s *Server) handleDeleteRows(c *fiber.Ctx) error {
 	return c.JSON(Response{
 		Success: true,
 		Message: fmt.Sprintf("Deleted %d row(s) successfully", len(req.RowIDs)),
+	})
+}
+
+func (s *Server) handleExecuteSQL(c *fiber.Ctx) error {
+	var req struct {
+		Query string `json:"query"`
+	}
+	
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(Response{
+			Success: false,
+			Message: "Invalid request",
+		})
+	}
+
+	data, err := s.service.ExecuteSQL(req.Query)
+	if err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Data:    data,
 	})
 }

@@ -14,6 +14,7 @@ A powerful, database-agnostic migration CLI tool built in Go that provides Prism
 - ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
 - 🔍 **Schema Introspection**: Pull schema from existing databases
+- 🗺️ **Schema Visualization**: Visual database diagram with relationships (GoLand/DataGrip style)
 - 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
 
 ## 📊 Performance Benchmarks
@@ -124,6 +125,7 @@ graft status
 | `graft migrate <name>` | Create a new migration file |
 | `graft apply` | Apply pending migrations with transaction safety |
 | `graft status` | Show migration status |
+| `graft studio` | Open visual database editor (like Prisma Studio) |
 | `graft pull` | Extract schema from existing database |
 | `graft export [format]` | Export database (JSON, CSV, SQLite) |
 | `graft reset` | Reset database (⚠️ destructive) |
@@ -134,6 +136,44 @@ graft status
 - `--config` - Specify config file path
 - `--force` - Skip confirmation prompts
 - `--help` - Show help
+
+## 🎨 Graft Studio
+
+Visual database editor with a beautiful dark UI, similar to Prisma Studio.
+
+```bash
+# Start studio (uses DATABASE_URL from .env)
+graft studio
+
+# Use custom database URL
+graft studio --db "postgres://user:pass@localhost:5432/mydb"
+
+# Custom port
+graft studio --port 3000
+```
+
+**Features:**
+- 📊 Browse all tables with row counts
+- ✏️ Inline editing (double-click cells)
+- 💾 Batch save changes
+- ☑️ Multi-select rows
+- 🗑️ Delete selected rows
+- 🔍 Search tables
+- 🎨 Dark theme UI
+- 🗺️ **Schema Visualization** - Visual database diagram with relationships (GoLand/DataGrip style)
+
+**Database URL Priority:** `--db` flag → `DATABASE_URL` env → `.env` file
+
+### Schema Visualization
+
+Navigate to `http://localhost:5555/schema` to view your database schema as a visual diagram:
+
+- 📋 All tables with columns and types
+- 🔑 Primary key indicators
+- 🔗 Foreign key relationships with arrows
+- 🎯 Auto-layout in organized grid
+- 🖱️ Interactive hover effects
+- 📐 Professional GoLand/DataGrip style design
 
 ## 🗄️ Database Support
 
@@ -434,29 +474,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Inspired by [Prisma](https://www.prisma.io/) migration system
 - Built with [Cobra](https://github.com/spf13/cobra) CLI framework
 - Database drivers: [pgx](https://github.com/jackc/pgx), [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql), [go-sqlite3](https://github.com/mattn/go-sqlite3)
-
----
-
-## 🎨 Graft Studio
-
-Visual database editor similar to Prisma Studio. View, edit, and manage your database through an intuitive web interface.
-
-```bash
-# Start Graft Studio
-graft studio
-
-# Custom port
-graft studio --port 3000
-```
-
-**Features:**
-- 📊 Browse all tables and data
-- ✏️ Inline editing (double-click cells)
-- 💾 Batch save changes
-- ➕ Add new records
-- 🗑️ Delete records
-- 🔍 Search tables
-- 📄 Pagination for large datasets
-
-See [web/studio/README.md](web/studio/README.md) for more details.
-

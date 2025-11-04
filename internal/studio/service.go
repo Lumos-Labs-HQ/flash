@@ -3,6 +3,7 @@ package studio
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Rana718/Graft/internal/database"
 )
@@ -216,4 +217,177 @@ func placeholders(n int) string {
 		result += fmt.Sprintf("$%d", i)
 	}
 	return result
+}
+
+func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
+	tables, err := s.adapter.GetAllTableNames(s.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get table names: %w", err)
+	}
+
+	nodes := []map[string]interface{}{}
+	edges := []map[string]interface{}{}
+	
+	edgeId := 0
+	tableIndex := 0
+
+	for _, tableName := range tables {
+		if tableName == "_graft_migrations" || tableName == "graft_migrations" {
+			continue
+		}
+
+		columns, err := s.adapter.GetTableColumns(s.ctx, tableName)
+		if err != nil {
+			fmt.Printf("Error getting columns for table %s: %v\n", tableName, err)
+			continue
+		}
+
+		columnData := []map[string]interface{}{}
+		for _, col := range columns {
+			columnData = append(columnData, map[string]interface{}{
+				"name":      col.Name,
+				"type":      col.Type,
+				"isPrimary": col.IsPrimary,
+				"isForeign": col.ForeignKeyTable != "",
+			})
+
+			if col.ForeignKeyTable != "" {
+				edgeId++
+				edges = append(edges, map[string]interface{}{
+					"id":     fmt.Sprintf("e%d", edgeId),
+					"source": tableName,
+					"target": col.ForeignKeyTable,
+					"label":  col.Name,
+				})
+			}
+		}
+
+		// Better positioning: 2 columns, more spacing
+		col := tableIndex % 2
+		row := tableIndex / 2
+		posX := 150 + (col * 550)
+		posY := 100 + (row * 400)
+
+		nodes = append(nodes, map[string]interface{}{
+			"id":   tableName,
+			"type": "table",
+			"data": map[string]interface{}{
+				"label":   tableName,
+				"columns": columnData,
+			},
+			"position": map[string]interface{}{
+				"x": posX,
+				"y": posY,
+			},
+		})
+		
+		tableIndex++
+	}
+
+	return map[string]interface{}{
+		"nodes": nodes,
+		"edges": edges,
+	}, nil
+}
+
+func (s *Service) ExecuteSQL(query string) (*TableData, error) {
+	// Basic SQL injection protection - only allow SELECT
+	query = strings.TrimSpace(query)
+	if !strings.HasPrefix(strings.ToUpper(query), "SELECT") {
+		return nil, fmt.Errorf("only SELECT queries are allowed")
+	}
+
+	// Execute query based on adapter type
+	switch adapter := s.adapter.(type) {
+	case *database.PostgresAdapter:
+		return s.executeSQLPostgres(adapter, query)
+	default:
+		return nil, fmt.Errorf("SQL query execution not supported for this database type")
+	}
+}
+
+func (s *Service) executeSQLPostgres(adapter *database.PostgresAdapter, query string) (*TableData, error) {
+	wrappedQuery := fmt.Sprintf(`
+		SELECT * FROM (
+			%s
+		) AS subquery
+	`, query)
+	
+	testRows, err := adapter.QueryContext(s.ctx, wrappedQuery+" LIMIT 0")
+	if err != nil {
+		return nil, fmt.Errorf("query validation failed: %w", err)
+	}
+	columns := testRows.FieldDescriptions()
+	testRows.Close()
+	
+	var castCols []string
+	for _, col := range columns {
+		castCols = append(castCols, fmt.Sprintf("subquery.%s::text AS %s", string(col.Name), string(col.Name)))
+	}
+	
+	finalQuery := fmt.Sprintf(`
+		SELECT %s FROM (
+			%s
+		) AS subquery
+	`, strings.Join(castCols, ", "), query)
+	
+	
+	rows, err := adapter.QueryContext(s.ctx, finalQuery)
+	if err != nil {
+		return nil, fmt.Errorf("query execution failed: %w", err)
+	}
+	defer rows.Close()
+
+	
+	columns = rows.FieldDescriptions()
+	columnInfo := make([]ColumnInfo, len(columns))
+	for i, col := range columns {
+		columnInfo[i] = ColumnInfo{
+			Name:     string(col.Name),
+			Type:     "text",
+			Nullable: true,
+		}
+	}
+
+	var results []map[string]any
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]any)
+		for i, col := range columns {
+			val := values[i]
+			colName := string(col.Name)
+			
+			// Convert types
+			switch v := val.(type) {
+			case []byte:
+				row[colName] = string(v)
+			case nil:
+				row[colName] = nil
+			default:
+				row[colName] = v
+			}
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading rows: %w", err)
+	}
+
+	return &TableData{
+		Columns: columnInfo,
+		Rows:    results,
+		Total:   len(results),
+		Page:    1,
+		Limit:   len(results),
+	}, nil
 }

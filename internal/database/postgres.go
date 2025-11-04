@@ -324,7 +324,10 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 			c.column_name, c.udt_name, c.is_nullable, c.column_default,
 			c.character_maximum_length, c.numeric_precision, c.numeric_scale,
 			CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
-			CASE WHEN uq.column_name IS NOT NULL THEN true ELSE false END as is_unique
+			CASE WHEN uq.column_name IS NOT NULL THEN true ELSE false END as is_unique,
+			fk.foreign_table_name,
+			fk.foreign_column_name,
+			fk.on_delete_action
 		FROM information_schema.columns c
 		LEFT JOIN (
 			SELECT ku.column_name
@@ -338,6 +341,14 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 			JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
 			WHERE tc.table_name = $1 AND tc.constraint_type = 'UNIQUE'
 		) uq ON c.column_name = uq.column_name
+		LEFT JOIN (
+			SELECT kcu.column_name, ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name, rc.delete_rule AS on_delete_action
+			FROM information_schema.table_constraints AS tc
+			JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+			JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+			JOIN information_schema.referential_constraints AS rc ON tc.constraint_name = rc.constraint_name
+			WHERE tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
+		) fk ON c.column_name = fk.column_name
 		WHERE c.table_name = $1 AND c.table_schema = 'public'
 		ORDER BY c.ordinal_position
 	`, tableName)
@@ -353,9 +364,10 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 		var columnDefault sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique bool
+		var fkTable, fkColumn, onDelete sql.NullString
 
 		err := rows.Scan(&column.Name, &udtName, &isNullable, &columnDefault,
-			&charMaxLength, &numericPrecision, &numericScale, &isPrimary, &isUnique)
+			&charMaxLength, &numericPrecision, &numericScale, &isPrimary, &isUnique, &fkTable, &fkColumn, &onDelete)
 		if err != nil {
 			return nil, err
 		}
@@ -366,6 +378,15 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 		column.IsUnique = isUnique
 		if columnDefault.Valid {
 			column.Default = p.cleanDefaultValue(columnDefault.String)
+		}
+		if fkTable.Valid {
+			column.ForeignKeyTable = fkTable.String
+		}
+		if fkColumn.Valid {
+			column.ForeignKeyColumn = fkColumn.String
+		}
+		if onDelete.Valid {
+			column.OnDeleteAction = onDelete.String
 		}
 
 		columns = append(columns, column)
@@ -494,43 +515,47 @@ func (p *PostgresAdapter) CheckUniqueConstraint(ctx context.Context, tableName, 
 	return p.constraintExists(tableName, constraintName, "UNIQUE")
 }
 
+func (p *PostgresAdapter) QueryContext(ctx context.Context, query string) (pgx.Rows, error) {
+	return p.pool.Query(ctx, query)
+}
+
+
 func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
-	// Cast enum columns to text to avoid scanning issues with custom types
-	// First, get column information to identify enum types
-	query := fmt.Sprintf(`
+	query := `
 		SELECT column_name, udt_name 
 		FROM information_schema.columns 
-		WHERE table_name = '%s' 
-		ORDER BY ordinal_position`, tableName)
+		WHERE table_name = $1 AND table_schema = 'public'
+		ORDER BY ordinal_position`
 
-	columnRows, err := p.pool.Query(ctx, query)
+	columnRows, err := p.pool.Query(ctx, query, tableName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get column info: %w", err)
 	}
 
-	var selectParts []string
-
+	var selectCols []string
 	for columnRows.Next() {
 		var colName, udtName string
 		if err := columnRows.Scan(&colName, &udtName); err != nil {
 			columnRows.Close()
 			return nil, err
 		}
+		
 		if !isStandardPostgresType(udtName) {
-			selectParts = append(selectParts, fmt.Sprintf(`"%s"::text as "%s"`, colName, colName))
+			selectCols = append(selectCols, fmt.Sprintf(`"%s"::text`, colName))
 		} else {
-			selectParts = append(selectParts, fmt.Sprintf(`"%s"`, colName))
+			selectCols = append(selectCols, fmt.Sprintf(`"%s"`, colName))
 		}
 	}
 	columnRows.Close()
 
-	// Build SELECT query with casted columns
-	selectQuery := fmt.Sprintf("SELECT %s FROM %s",
-		strings.Join(selectParts, ", "), tableName)
+	if len(selectCols) == 0 {
+		return []map[string]interface{}{}, nil
+	}
 
+	selectQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectCols, ", "), tableName)
 	rows, err := p.pool.Query(ctx, selectQuery)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query table %s: %w", tableName, err)
 	}
 	defer rows.Close()
 
@@ -545,42 +570,61 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 		}
 
 		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, err
+			return result, nil
 		}
 
 		row := make(map[string]interface{})
 		for i, col := range columns {
-			row[string(col.Name)] = values[i]
+			val := values[i]
+			colName := string(col.Name)
+			
+			switch v := val.(type) {
+			case []byte:
+				row[colName] = string(v)
+			case string:
+				row[colName] = v
+			case nil:
+				row[colName] = nil
+			case int, int8, int16, int32, int64:
+				row[colName] = v
+			case uint, uint8, uint16, uint32, uint64:
+				row[colName] = v
+			case float32, float64:
+				row[colName] = v
+			case bool:
+				row[colName] = v
+			default:
+				row[colName] = fmt.Sprintf("%v", v)
+			}
 		}
 		result = append(result, row)
 	}
-	return result, nil
+	
+	return result, rows.Err()
 }
 
-// isStandardPostgresType checks if a type is a built-in PostgreSQL type
-func isStandardPostgresType(typeName string) bool {
+// isStandardPostgresType checks udt_name
+func isStandardPostgresType(udtName string) bool {
 	standardTypes := map[string]bool{
 		"int2": true, "int4": true, "int8": true,
-		"float4": true, "float8": true,
+		"smallint": true, "integer": true, "bigint": true,
+		"float4": true, "float8": true, "real": true, "double precision": true,
 		"numeric": true, "decimal": true,
 		"varchar": true, "char": true, "text": true, "bpchar": true,
 		"bool": true, "boolean": true,
 		"date": true, "time": true, "timetz": true,
-		"timestamp": true, "timestamptz": true,
-		"interval": true,
-		"uuid":     true,
-		"json":     true, "jsonb": true,
-		"bytea": true,
-		"xml":   true,
-		"money": true,
+		"timestamp": true, "timestamptz": true, "interval": true,
+		"uuid": true, "json": true, "jsonb": true, "bytea": true,
+		"xml": true, "money": true,
 		"point": true, "line": true, "lseg": true, "box": true,
 		"path": true, "polygon": true, "circle": true,
 		"inet": true, "cidr": true, "macaddr": true,
 		"bit": true, "varbit": true,
 		"tsvector": true, "tsquery": true,
 	}
-	return standardTypes[typeName]
+	return standardTypes[strings.ToLower(udtName)]
 }
+
 
 func (p *PostgresAdapter) DropTable(ctx context.Context, tableName string) error {
 	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName))
