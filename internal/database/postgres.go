@@ -515,6 +515,10 @@ func (p *PostgresAdapter) CheckUniqueConstraint(ctx context.Context, tableName, 
 	return p.constraintExists(tableName, constraintName, "UNIQUE")
 }
 
+func (p *PostgresAdapter) QueryContext(ctx context.Context, query string) (pgx.Rows, error) {
+	return p.pool.Query(ctx, query)
+}
+
 func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
 	columnInfo, err := p.GetTableColumns(ctx, tableName)
 	if err != nil {

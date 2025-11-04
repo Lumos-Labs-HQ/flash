@@ -297,10 +297,97 @@ func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 		return nil, fmt.Errorf("only SELECT queries are allowed")
 	}
 
-	// Execute raw query - we'll use ExecuteMigration as a workaround
-	// In production, you'd want a proper Query method in the adapter interface
+	// Execute query based on adapter type
+	switch adapter := s.adapter.(type) {
+	case *database.PostgresAdapter:
+		return s.executeSQLPostgres(adapter, query)
+	default:
+		return nil, fmt.Errorf("SQL query execution not supported for this database type")
+	}
+}
+
+func (s *Service) executeSQLPostgres(adapter *database.PostgresAdapter, query string) (*TableData, error) {
+	wrappedQuery := fmt.Sprintf(`
+		SELECT * FROM (
+			%s
+		) AS subquery
+	`, query)
 	
-	// For now, return a simple message
-	// TODO: Implement proper raw query execution in database adapters
-	return nil, fmt.Errorf("SQL query execution not yet implemented - coming soon!")
+	testRows, err := adapter.QueryContext(s.ctx, wrappedQuery+" LIMIT 0")
+	if err != nil {
+		return nil, fmt.Errorf("query validation failed: %w", err)
+	}
+	columns := testRows.FieldDescriptions()
+	testRows.Close()
+	
+	var castCols []string
+	for _, col := range columns {
+		castCols = append(castCols, fmt.Sprintf("subquery.%s::text AS %s", string(col.Name), string(col.Name)))
+	}
+	
+	finalQuery := fmt.Sprintf(`
+		SELECT %s FROM (
+			%s
+		) AS subquery
+	`, strings.Join(castCols, ", "), query)
+	
+	
+	rows, err := adapter.QueryContext(s.ctx, finalQuery)
+	if err != nil {
+		return nil, fmt.Errorf("query execution failed: %w", err)
+	}
+	defer rows.Close()
+
+	
+	columns = rows.FieldDescriptions()
+	columnInfo := make([]ColumnInfo, len(columns))
+	for i, col := range columns {
+		columnInfo[i] = ColumnInfo{
+			Name:     string(col.Name),
+			Type:     "text",
+			Nullable: true,
+		}
+	}
+
+	var results []map[string]any
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]any)
+		for i, col := range columns {
+			val := values[i]
+			colName := string(col.Name)
+			
+			// Convert types
+			switch v := val.(type) {
+			case []byte:
+				row[colName] = string(v)
+			case nil:
+				row[colName] = nil
+			default:
+				row[colName] = v
+			}
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading rows: %w", err)
+	}
+
+	return &TableData{
+		Columns: columnInfo,
+		Rows:    results,
+		Total:   len(results),
+		Page:    1,
+		Limit:   len(results),
+	}, nil
 }
