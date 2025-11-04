@@ -41,6 +41,7 @@ type DatabaseAdapter interface {
 	// Backup operations
 	GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
 	DropTable(ctx context.Context, tableName string) error
+	DropEnum(ctx context.Context, enumName string) error
 
 	// SQL generation
 	GenerateCreateTableSQL(table types.SchemaTable) string

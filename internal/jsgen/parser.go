@@ -47,12 +47,13 @@ type Column struct {
 }
 
 type Query struct {
-	Name    string
-	SQL     string
-	Cmd     string
-	Comment string
-	Params  []*Param
-	Columns []*QueryColumn
+	Name       string
+	SQL        string
+	Cmd        string
+	Comment    string
+	Params     []*Param
+	Columns    []*QueryColumn
+	SourceFile string // Name of the SQL file this query came from (without path/extension)
 }
 
 type Param struct {
@@ -61,9 +62,10 @@ type Param struct {
 }
 
 type QueryColumn struct {
-	Name  string
-	Type  string
-	Table string
+	Name     string
+	Type     string
+	Table    string
+	Nullable bool
 }
 
 // removeComments removes SQL comments (-- and /* */) from the input
@@ -84,7 +86,7 @@ func removeComments(sql string) string {
 	return blockCommentRegex.ReplaceAllString(cleaned, "")
 }
 
-func (g *Generator) parseSchema() (*Schema, error) {
+func (g *Generator) ParseSchema() (*Schema, error) {
 	regexOnce.Do(initRegex)
 
 	schema := &Schema{
@@ -179,10 +181,16 @@ func (g *Generator) parseCreateTables(sql string) []*Table {
 				continue
 			}
 
+			// Check if column is nullable
+			// PRIMARY KEY and SERIAL columns are always non-nullable
+			isNullable := !strings.Contains(lineUpper, "NOT NULL") &&
+				!strings.Contains(lineUpper, "PRIMARY KEY") &&
+				!strings.Contains(strings.ToUpper(parts[1]), "SERIAL")
+
 			table.Columns = append(table.Columns, &Column{
 				Name:     parts[0],
 				Type:     parts[1],
-				Nullable: !strings.Contains(lineUpper, "NOT NULL"),
+				Nullable: isNullable,
 			})
 		}
 
@@ -262,7 +270,7 @@ func splitColumns(columnsStr string) []string {
 	return result
 }
 
-func (g *Generator) parseQueries(schema *Schema) ([]*Query, error) {
+func (g *Generator) ParseQueries(schema *Schema) ([]*Query, error) {
 	regexOnce.Do(initRegex)
 
 	queriesPath := g.Config.Queries
@@ -295,6 +303,10 @@ func (g *Generator) parseQueryFile(filename string, schema *Schema) ([]*Query, e
 	}
 	defer file.Close()
 
+	// Extract source file name without path and extension
+	baseName := filepath.Base(filename)
+	sourceFileName := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+
 	queries := []*Query{}
 	scanner := bufio.NewScanner(file)
 
@@ -309,17 +321,27 @@ func (g *Generator) parseQueryFile(filename string, schema *Schema) ([]*Query, e
 			continue
 		}
 
-		if strings.HasPrefix(line, "-- name:") {
+		// Support both "-- name:" and "-- name :" formats
+		if strings.HasPrefix(line, "-- name:") || strings.HasPrefix(line, "-- name :") {
 			if currentQuery != nil {
 				currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, " "))
 				currentQuery.Comment = comment
+				currentQuery.SourceFile = sourceFileName
 				if err := g.analyzeQuery(currentQuery, schema); err != nil {
 					return nil, err
 				}
 				queries = append(queries, currentQuery)
 			}
 
-			parts := strings.Fields(line[8:])
+			// Extract the part after "-- name" (with or without space before colon)
+			nameStart := strings.Index(line, "name")
+			if nameStart == -1 {
+				continue
+			}
+			remainder := line[nameStart+4:] // Skip "name"
+			remainder = strings.TrimLeft(remainder, " :")
+
+			parts := strings.Fields(remainder)
 			if len(parts) >= 2 {
 				currentQuery = &Query{
 					Name: parts[0],
@@ -339,6 +361,7 @@ func (g *Generator) parseQueryFile(filename string, schema *Schema) ([]*Query, e
 	if currentQuery != nil {
 		currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, " "))
 		currentQuery.Comment = comment
+		currentQuery.SourceFile = sourceFileName
 		if err := g.analyzeQuery(currentQuery, schema); err != nil {
 			return nil, err
 		}
@@ -442,10 +465,24 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) error {
 						}
 					}
 
+					// Look up actual column type from schema
+					colType := "string"
+					nullable := false
+					if table != nil {
+						for _, col := range table.Columns {
+							if strings.EqualFold(col.Name, colName) {
+								colType = col.Type
+								nullable = col.Nullable
+								break
+							}
+						}
+					}
+
 					query.Columns = append(query.Columns, &QueryColumn{
-						Name:  colName,
-						Type:  "string",
-						Table: tableName,
+						Name:     colName,
+						Type:     colType,
+						Table:    tableName,
+						Nullable: nullable,
 					})
 				}
 			}
@@ -856,6 +893,23 @@ func validateTableReferences(query *Query, schema *Schema) error {
 		return nil
 	}
 
+	// Extract all CTE (Common Table Expression) names from WITH clause
+	// CTEs can be defined as: WITH cte1 AS (...), cte2 AS (...), ...
+	cteNames := make(map[string]bool)
+
+	// Find all occurrences of "word AS (" pattern which indicates a CTE definition
+	ctePattern := regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
+	cteMatches := ctePattern.FindAllStringSubmatch(query.SQL, -1)
+	for _, match := range cteMatches {
+		if len(match) > 1 {
+			cteName := match[1]
+			// Exclude SQL keywords like SELECT AS (...)
+			if !isSQLKeyword(cteName) {
+				cteNames[strings.ToLower(cteName)] = true
+			}
+		}
+	}
+
 	tablePattern := regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
 	matches := tablePattern.FindAllStringSubmatch(query.SQL, -1)
 
@@ -870,6 +924,11 @@ func validateTableReferences(query *Query, schema *Schema) error {
 		tableName := match[1]
 
 		if isSQLKeyword(tableName) {
+			continue
+		}
+
+		// Skip if this is a CTE
+		if cteNames[strings.ToLower(tableName)] {
 			continue
 		}
 

@@ -495,7 +495,40 @@ func (p *PostgresAdapter) CheckUniqueConstraint(ctx context.Context, tableName, 
 }
 
 func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
-	rows, err := p.pool.Query(ctx, fmt.Sprintf("SELECT * FROM %s", tableName))
+	// Cast enum columns to text to avoid scanning issues with custom types
+	// First, get column information to identify enum types
+	query := fmt.Sprintf(`
+		SELECT column_name, udt_name 
+		FROM information_schema.columns 
+		WHERE table_name = '%s' 
+		ORDER BY ordinal_position`, tableName)
+
+	columnRows, err := p.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var selectParts []string
+
+	for columnRows.Next() {
+		var colName, udtName string
+		if err := columnRows.Scan(&colName, &udtName); err != nil {
+			columnRows.Close()
+			return nil, err
+		}
+		if !isStandardPostgresType(udtName) {
+			selectParts = append(selectParts, fmt.Sprintf(`"%s"::text as "%s"`, colName, colName))
+		} else {
+			selectParts = append(selectParts, fmt.Sprintf(`"%s"`, colName))
+		}
+	}
+	columnRows.Close()
+
+	// Build SELECT query with casted columns
+	selectQuery := fmt.Sprintf("SELECT %s FROM %s",
+		strings.Join(selectParts, ", "), tableName)
+
+	rows, err := p.pool.Query(ctx, selectQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -524,8 +557,38 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 	return result, nil
 }
 
+// isStandardPostgresType checks if a type is a built-in PostgreSQL type
+func isStandardPostgresType(typeName string) bool {
+	standardTypes := map[string]bool{
+		"int2": true, "int4": true, "int8": true,
+		"float4": true, "float8": true,
+		"numeric": true, "decimal": true,
+		"varchar": true, "char": true, "text": true, "bpchar": true,
+		"bool": true, "boolean": true,
+		"date": true, "time": true, "timetz": true,
+		"timestamp": true, "timestamptz": true,
+		"interval": true,
+		"uuid":     true,
+		"json":     true, "jsonb": true,
+		"bytea": true,
+		"xml":   true,
+		"money": true,
+		"point": true, "line": true, "lseg": true, "box": true,
+		"path": true, "polygon": true, "circle": true,
+		"inet": true, "cidr": true, "macaddr": true,
+		"bit": true, "varbit": true,
+		"tsvector": true, "tsquery": true,
+	}
+	return standardTypes[typeName]
+}
+
 func (p *PostgresAdapter) DropTable(ctx context.Context, tableName string) error {
 	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName))
+	return err
+}
+
+func (p *PostgresAdapter) DropEnum(ctx context.Context, enumName string) error {
+	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE", enumName))
 	return err
 }
 

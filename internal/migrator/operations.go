@@ -128,7 +128,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migra
 
 	for i, migration := range migrations {
 		fmt.Printf("  [%d/%d] %s\n", i+1, len(migrations), migration.ID)
-		
+
 		// Apply migration with ExecuteMigration + RecordMigration in same transaction
 		if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
 			fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
@@ -136,7 +136,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migra
 			fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
 			return fmt.Errorf("migration %s failed: %w", migration.ID, err)
 		}
-		
+
 		fmt.Printf("      ✅ Applied\n")
 	}
 
@@ -150,7 +150,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 	if err != nil {
 		return fmt.Errorf("failed to read migration file: %w", err)
 	}
-	
+
 	if err := m.adapter.ExecuteMigration(ctx, string(content)); err != nil {
 		return fmt.Errorf("failed to execute: %w", err)
 	}
@@ -180,7 +180,7 @@ func (m *Migrator) createExport() error {
 	}
 
 	if len(dataTables) == 0 {
-		return nil 
+		return nil
 	}
 
 	exportData := types.BackupData{
@@ -239,6 +239,7 @@ func (m *Migrator) Reset(ctx context.Context) error {
 		}
 	}
 
+	// Drop all tables first
 	tables, err := m.adapter.GetAllTableNames(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get table names: %w", err)
@@ -250,7 +251,17 @@ func (m *Migrator) Reset(ctx context.Context) error {
 		}
 	}
 
-	fmt.Println("Database reset completed")
+	// Drop all enums
+	enums, err := m.adapter.GetCurrentEnums(ctx)
+	if err == nil {
+		for _, enum := range enums {
+			if err := m.adapter.DropEnum(ctx, enum.Name); err != nil {
+				fmt.Printf("Warning: Failed to drop enum %s: %v\n", enum.Name, err)
+			}
+		}
+	}
+
+	fmt.Println("✅ Database reset completed")
 	return nil
 }
 

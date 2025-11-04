@@ -139,14 +139,14 @@ func (s *SQLiteAdapter) ExecuteMigration(ctx context.Context, migrationSQL strin
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() 
+	defer tx.Rollback()
 
 	statements := s.parseSQLStatements(migrationSQL)
 
 	for _, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
-			continue 
+			continue
 		}
 
 		_, err := tx.ExecContext(ctx, stmt)
@@ -526,6 +526,12 @@ func (s *SQLiteAdapter) GetTableData(ctx context.Context, tableName string) ([]m
 func (s *SQLiteAdapter) DropTable(ctx context.Context, tableName string) error {
 	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", tableName))
 	return err
+}
+
+func (s *SQLiteAdapter) DropEnum(ctx context.Context, enumName string) error {
+	// SQLite doesn't have native ENUM types, they're CHECK constraints on table columns
+	// So this is a no-op for SQLite
+	return nil
 }
 
 // SQL Generation

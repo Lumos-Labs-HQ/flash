@@ -472,6 +472,12 @@ func (m *MySQLAdapter) DropTable(ctx context.Context, tableName string) error {
 	return err
 }
 
+func (m *MySQLAdapter) DropEnum(ctx context.Context, enumName string) error {
+	// MySQL doesn't have native ENUM types as separate objects, they're part of table columns
+	// So this is a no-op for MySQL
+	return nil
+}
+
 // SQL Generation
 func (m *MySQLAdapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 	var lines []string
