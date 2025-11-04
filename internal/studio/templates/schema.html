@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schema Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
+        body { background: #2b2b2b; color: #a9b7c6; overflow: hidden; }
+        
+        .topbar { 
+            height: 40px; 
+            background: #3c3f41; 
+            border-bottom: 1px solid #232323; 
+            display: flex; 
+            align-items: center; 
+            padding: 0 12px;
+            justify-content: space-between;
+        }
+        .topbar h1 { font-size: 13px; font-weight: 500; }
+        .btn { 
+            padding: 4px 10px; 
+            border-radius: 3px; 
+            border: 1px solid #555; 
+            font-size: 11px; 
+            cursor: pointer; 
+            background: #4c5052;
+            color: #a9b7c6;
+        }
+        .btn:hover { background: #5a5d5f; }
+        
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 40px);
+            overflow: auto;
+            background: 
+                linear-gradient(#3a3a3a 1px, transparent 1px),
+                linear-gradient(90deg, #3a3a3a 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        
+        .table-box {
+            position: absolute;
+            background: #3c3f41;
+            border: 1px solid #555;
+            min-width: 200px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            cursor: move;
+        }
+        
+        .table-header {
+            background: #4b4b4b;
+            padding: 6px 8px;
+            border-bottom: 1px solid #555;
+            font-weight: 500;
+            font-size: 11px;
+        }
+        
+        .table-body {
+            padding: 0;
+        }
+        
+        .table-field {
+            padding: 4px 8px;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #3a3a3a;
+            font-size: 11px;
+        }
+        
+        .table-field:last-child { border-bottom: none; }
+        
+        .field-name { color: #a9b7c6; }
+        .field-type { color: #6897bb; font-size: 10px; }
+        .pk { color: #ffc66d; margin-right: 4px; }
+        .fk { color: #10b981; margin-right: 4px; }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: calc(100vh - 40px);
+            font-size: 12px;
+            color: #6897bb;
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <h1>Database Schema</h1>
+        <div style="display: flex; gap: 12px;">
+            <span id="stats" style="font-size: 11px; color: #6897bb;"></span>
+            <button class="btn" onclick="window.location.href='/'">Back</button>
+        </div>
+    </div>
+    
+    <div id="canvas-container">
+        <canvas id="canvas"></canvas>
+        <div id="tables"></div>
+        <div id="loading" class="loading">Loading schema...</div>
+    </div>
+
+    <script>
+        let tables = [];
+        let edges = [];
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('canvas-container');
+        
+        // Load schema
+        fetch('/api/schema')
+            .then(res => res.json())
+            .then(data => {
+                console.log('API Response:', data);
+                
+                if (data.success && data.data) {
+                    document.getElementById('loading').style.display = 'none';
+                    tables = data.data.nodes || [];
+                    edges = data.data.edges || [];
+                    
+                    console.log('Tables:', tables.length);
+                    console.log('Edges:', edges.length);
+                    
+                    if (tables.length === 0) {
+                        document.getElementById('loading').textContent = 'No tables found in database';
+                        return;
+                    }
+                    
+                    document.getElementById('stats').textContent = 
+                        `${tables.length} tables, ${edges.length} relations`;
+                    
+                    renderTables();
+                    drawConnections();
+                } else {
+                    document.getElementById('loading').textContent = 'Error: ' + (data.message || 'Failed to load schema');
+                }
+            })
+            .catch(err => {
+                document.getElementById('loading').textContent = 'Error loading schema: ' + err.message;
+                console.error('Error:', err);
+            });
+        
+        function renderTables() {
+            const tablesDiv = document.getElementById('tables');
+            tablesDiv.innerHTML = '';
+            
+            console.log('Rendering tables:', tables);
+            
+            tables.forEach(table => {
+                console.log('Table:', table);
+                
+                const box = document.createElement('div');
+                box.className = 'table-box';
+                box.id = `table-${table.id}`;
+                box.style.left = table.position.x + 'px';
+                box.style.top = table.position.y + 'px';
+                
+                const header = document.createElement('div');
+                header.className = 'table-header';
+                header.innerHTML = `📋 ${table.data.label}`;
+                box.appendChild(header);
+                
+                const body = document.createElement('div');
+                body.className = 'table-body';
+                
+                if (table.data.columns && table.data.columns.length > 0) {
+                    table.data.columns.forEach(col => {
+                        const field = document.createElement('div');
+                        field.className = 'table-field';
+                        
+                        let icon = '';
+                        if (col.isPrimary) icon = '<span class="pk">🔑</span>';
+                        else if (col.isForeign) icon = '<span class="fk">🔗</span>';
+                        
+                        field.innerHTML = `
+                            <div class="field-name">${icon}${col.name}</div>
+                            <div class="field-type">${col.type}</div>
+                        `;
+                        
+                        body.appendChild(field);
+                    });
+                } else {
+                    body.innerHTML = '<div class="table-field">No columns</div>';
+                }
+                
+                box.appendChild(body);
+                tablesDiv.appendChild(box);
+            });
+            
+            // Set canvas size
+            const maxX = Math.max(...tables.map(t => t.position.x)) + 400;
+            const maxY = Math.max(...tables.map(t => t.position.y)) + 500;
+            canvas.width = Math.max(maxX, container.clientWidth);
+            canvas.height = Math.max(maxY, container.clientHeight);
+            
+            setTimeout(drawConnections, 100);
+        }
+        
+        function drawConnections() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#6897bb';
+            ctx.lineWidth = 1.5;
+            ctx.font = '9px JetBrains Mono';
+            ctx.fillStyle = '#6897bb';
+            
+            edges.forEach(edge => {
+                const sourceEl = document.getElementById(`table-${edge.source}`);
+                const targetEl = document.getElementById(`table-${edge.target}`);
+                
+                if (!sourceEl || !targetEl) return;
+                
+                const sourceRect = sourceEl.getBoundingClientRect();
+                const targetRect = targetEl.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                const x1 = sourceRect.right - containerRect.left + container.scrollLeft;
+                const y1 = sourceRect.top - containerRect.top + container.scrollTop + sourceRect.height / 2;
+                const x2 = targetRect.left - containerRect.left + container.scrollLeft;
+                const y2 = targetRect.top - containerRect.top + container.scrollTop + targetRect.height / 2;
+                
+                // Draw line
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+                
+                // Draw arrow
+                const angle = Math.atan2(y2 - y1, x2 - x1);
+                const arrowSize = 8;
+                ctx.beginPath();
+                ctx.moveTo(x2, y2);
+                ctx.lineTo(
+                    x2 - arrowSize * Math.cos(angle - Math.PI / 6),
+                    y2 - arrowSize * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.lineTo(
+                    x2 - arrowSize * Math.cos(angle + Math.PI / 6),
+                    y2 - arrowSize * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw label
+                if (edge.label) {
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
+                    ctx.fillText(edge.label, midX + 5, midY - 5);
+                }
+            });
+        }
+        
+        // Redraw on scroll
+        container.addEventListener('scroll', drawConnections);
+        window.addEventListener('resize', () => {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            drawConnections();
+        });
+    </script>
+</body>
+</html>

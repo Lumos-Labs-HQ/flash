@@ -217,3 +217,71 @@ func placeholders(n int) string {
 	}
 	return result
 }
+
+func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
+	tables, err := s.adapter.GetAllTableNames(s.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get table names: %w", err)
+	}
+
+	nodes := []map[string]interface{}{}
+	edges := []map[string]interface{}{}
+	
+	x, y := 100, 100
+	edgeId := 0
+
+	for i, tableName := range tables {
+		if tableName == "_graft_migrations" || tableName == "graft_migrations" {
+			continue
+		}
+
+		columns, err := s.adapter.GetTableColumns(s.ctx, tableName)
+		if err != nil {
+			fmt.Printf("Error getting columns for table %s: %v\n", tableName, err)
+			continue
+		}
+
+		columnData := []map[string]interface{}{}
+		for _, col := range columns {
+			columnData = append(columnData, map[string]interface{}{
+				"name":      col.Name,
+				"type":      col.Type,
+				"isPrimary": col.IsPrimary,
+				"isForeign": col.ForeignKeyTable != "",
+			})
+
+			if col.ForeignKeyTable != "" {
+				edgeId++
+				edges = append(edges, map[string]interface{}{
+					"id":     fmt.Sprintf("e%d", edgeId),
+					"source": tableName,
+					"target": col.ForeignKeyTable,
+					"label":  col.Name,
+				})
+			}
+		}
+
+		colPos := i % 3
+		rowPos := i / 3
+		posX := x + (colPos * 400)
+		posY := y + (rowPos * 350)
+
+		nodes = append(nodes, map[string]interface{}{
+			"id":   tableName,
+			"type": "table",
+			"data": map[string]interface{}{
+				"label":   tableName,
+				"columns": columnData,
+			},
+			"position": map[string]interface{}{
+				"x": posX,
+				"y": posY,
+			},
+		})
+	}
+
+	return map[string]interface{}{
+		"nodes": nodes,
+		"edges": edges,
+	}, nil
+}

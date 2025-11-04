@@ -1,9 +1,7 @@
-/* Additional custom styles if needed */
 * {
     box-sizing: border-box;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -31,7 +29,6 @@
     background-color: #f9fafb;
 }
 
-/* Loading state */
 .loading {
     opacity: 0.6;
     pointer-events: none;

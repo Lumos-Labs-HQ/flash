@@ -52,7 +52,6 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	// Serve embedded static files
 	staticFS, _ := fs.Sub(StaticFS, "static")
 	s.app.Use("/static", filesystem.New(filesystem.Config{
 		Root: http.FS(staticFS),
@@ -60,11 +59,13 @@ func (s *Server) setupRoutes() {
 
 	// UI
 	s.app.Get("/", s.handleIndex)
+	s.app.Get("/schema", s.handleSchema)
 
 	// API
 	api := s.app.Group("/api")
 	api.Get("/tables", s.handleGetTables)
 	api.Get("/tables/:name", s.handleGetTableData)
+	api.Get("/schema", s.handleGetSchema)
 	api.Post("/tables/:name/save", s.handleSaveChanges)
 	api.Post("/tables/:name/add", s.handleAddRow)
 	api.Post("/tables/:name/delete", s.handleDeleteRows)
@@ -106,6 +107,27 @@ func (s *Server) openBrowser(url string) {
 func (s *Server) handleIndex(c *fiber.Ctx) error {
 	return c.Render("templates/index", fiber.Map{
 		"Title": "Graft Studio",
+	})
+}
+
+func (s *Server) handleSchema(c *fiber.Ctx) error {
+	return c.Render("templates/schema", fiber.Map{
+		"Title": "Graft Studio",
+	})
+}
+
+func (s *Server) handleGetSchema(c *fiber.Ctx) error {
+	schema, err := s.service.GetSchemaVisualization()
+	if err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Data:    schema,
 	})
 }
 

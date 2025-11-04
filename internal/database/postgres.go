@@ -324,7 +324,10 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 			c.column_name, c.udt_name, c.is_nullable, c.column_default,
 			c.character_maximum_length, c.numeric_precision, c.numeric_scale,
 			CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END as is_primary_key,
-			CASE WHEN uq.column_name IS NOT NULL THEN true ELSE false END as is_unique
+			CASE WHEN uq.column_name IS NOT NULL THEN true ELSE false END as is_unique,
+			fk.foreign_table_name,
+			fk.foreign_column_name,
+			fk.on_delete_action
 		FROM information_schema.columns c
 		LEFT JOIN (
 			SELECT ku.column_name
@@ -338,6 +341,14 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 			JOIN information_schema.key_column_usage ku ON tc.constraint_name = ku.constraint_name
 			WHERE tc.table_name = $1 AND tc.constraint_type = 'UNIQUE'
 		) uq ON c.column_name = uq.column_name
+		LEFT JOIN (
+			SELECT kcu.column_name, ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name, rc.delete_rule AS on_delete_action
+			FROM information_schema.table_constraints AS tc
+			JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+			JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+			JOIN information_schema.referential_constraints AS rc ON tc.constraint_name = rc.constraint_name
+			WHERE tc.table_name = $1 AND tc.constraint_type = 'FOREIGN KEY'
+		) fk ON c.column_name = fk.column_name
 		WHERE c.table_name = $1 AND c.table_schema = 'public'
 		ORDER BY c.ordinal_position
 	`, tableName)
@@ -353,9 +364,10 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 		var columnDefault sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique bool
+		var fkTable, fkColumn, onDelete sql.NullString
 
 		err := rows.Scan(&column.Name, &udtName, &isNullable, &columnDefault,
-			&charMaxLength, &numericPrecision, &numericScale, &isPrimary, &isUnique)
+			&charMaxLength, &numericPrecision, &numericScale, &isPrimary, &isUnique, &fkTable, &fkColumn, &onDelete)
 		if err != nil {
 			return nil, err
 		}
@@ -366,6 +378,15 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 		column.IsUnique = isUnique
 		if columnDefault.Valid {
 			column.Default = p.cleanDefaultValue(columnDefault.String)
+		}
+		if fkTable.Valid {
+			column.ForeignKeyTable = fkTable.String
+		}
+		if fkColumn.Valid {
+			column.ForeignKeyColumn = fkColumn.String
+		}
+		if onDelete.Valid {
+			column.OnDeleteAction = onDelete.String
 		}
 
 		columns = append(columns, column)
