@@ -70,6 +70,7 @@ func (s *Server) setupRoutes() {
 	api.Post("/tables/:name/add", s.handleAddRow)
 	api.Post("/tables/:name/delete", s.handleDeleteRows)
 	api.Delete("/tables/:name/rows/:id", s.handleDeleteRow)
+	api.Post("/sql", s.handleExecuteSQL)
 }
 
 func (s *Server) Start(openBrowser bool) error {
@@ -254,5 +255,31 @@ func (s *Server) handleDeleteRows(c *fiber.Ctx) error {
 	return c.JSON(Response{
 		Success: true,
 		Message: fmt.Sprintf("Deleted %d row(s) successfully", len(req.RowIDs)),
+	})
+}
+
+func (s *Server) handleExecuteSQL(c *fiber.Ctx) error {
+	var req struct {
+		Query string `json:"query"`
+	}
+	
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(400).JSON(Response{
+			Success: false,
+			Message: "Invalid request",
+		})
+	}
+
+	data, err := s.service.ExecuteSQL(req.Query)
+	if err != nil {
+		return c.Status(500).JSON(Response{
+			Success: false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(Response{
+		Success: true,
+		Data:    data,
 	})
 }

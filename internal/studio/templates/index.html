@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
@@ -19,169 +17,148 @@
         .sidebar-title { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
         .search-box { padding: 8px 12px; border-bottom: 1px solid #2d2d2d; }
         .search-box input { 
-            width: 100%; 
-            background: #2a2a2a; 
-            border: 1px solid #3a3a3a; 
-            color: #e0e0e0; 
-            padding: 6px 10px; 
-            border-radius: 4px; 
-            font-size: 13px;
-            outline: none;
+            width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a; color: #e0e0e0; 
+            padding: 6px 10px; border-radius: 4px; font-size: 13px; outline: none;
         }
         .search-box input:focus { border-color: #4a9eff; }
         .tables-list { flex: 1; overflow-y: auto; padding: 4px; }
         .table-item { 
-            padding: 8px 12px; 
-            cursor: pointer; 
-            border-radius: 4px; 
-            margin-bottom: 2px;
-            font-size: 13px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 8px 12px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; font-size: 13px;
+            display: flex; justify-content: space-between; align-items: center;
         }
         .table-item:hover { background: #2a2a2a; }
         .table-item.active { background: #2d4a6e; color: #fff; }
         .table-count { font-size: 11px; color: #888; }
         
         /* Main content */
-        .content { flex: 1; display: flex; flex-direction: column; background: #1a1a1a; }
+        .content { flex: 1; display: flex; flex-direction: column; background: #1a1a1a; position: relative; }
         
         /* Top bar */
         .topbar { 
-            height: 48px; 
-            background: #1e1e1e; 
-            border-bottom: 1px solid #2d2d2d; 
-            display: flex; 
-            align-items: center; 
-            padding: 0 16px;
-            justify-content: space-between;
+            height: 48px; background: #1e1e1e; border-bottom: 1px solid #2d2d2d; 
+            display: flex; align-items: center; padding: 0 16px; justify-content: space-between;
         }
         .topbar-left { display: flex; align-items: center; gap: 12px; }
         .topbar-right { display: flex; gap: 8px; }
         .table-name { font-size: 14px; font-weight: 500; }
         .btn { 
-            padding: 6px 12px; 
-            border-radius: 4px; 
-            border: none; 
-            font-size: 12px; 
-            cursor: pointer; 
-            font-weight: 500;
-            transition: all 0.15s;
+            padding: 6px 12px; border-radius: 4px; border: none; font-size: 12px; 
+            cursor: pointer; font-weight: 500; transition: all 0.15s; position: relative;
         }
         .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-primary { background: #4a9eff; color: #fff; }
         .btn-success { background: #10b981; color: #fff; }
         .btn-secondary { background: #3a3a3a; color: #e0e0e0; }
+        .btn-filter { background: #3a3a3a; color: #e0e0e0; }
+        .btn-filter.active { background: #4a9eff; color: #fff; }
+        .filter-badge {
+            position: absolute; top: -6px; right: -6px; background: #ef4444; color: #fff;
+            border-radius: 10px; padding: 2px 6px; font-size: 10px; font-weight: 600;
+        }
         
-        /* Toolbar */
+        /* Filter Panel */
+        .filter-panel {
+            display: none; position: absolute; top: 48px; right: 16px; background: #2a2a2a;
+            border: 1px solid #3a3a3a; border-radius: 6px; padding: 16px; min-width: 700px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 1000;
+        }
+        .filter-panel.show { display: block; }
+        .filter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .filter-title { font-size: 13px; font-weight: 600; }
+        .filter-row {
+            display: flex; gap: 8px; margin-bottom: 8px; align-items: center;
+        }
+        .filter-row select, .filter-row input {
+            background: #1e1e1e; border: 1px solid #3a3a3a; color: #e0e0e0;
+            padding: 6px 10px; border-radius: 4px; font-size: 12px; outline: none;
+        }
+        .filter-row select:focus, .filter-row input:focus { border-color: #4a9eff; }
+        .filter-logic { width: 80px; }
+        .filter-column { flex: 1; }
+        .filter-operator { width: 140px; }
+        .filter-value { flex: 1; }
+        .filter-remove {
+            background: #ef4444; color: #fff; border: none; padding: 6px 10px;
+            border-radius: 4px; cursor: pointer; font-size: 11px;
+        }
+        .filter-actions {
+            display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #3a3a3a;
+        }
+        .btn-sm { padding: 5px 10px; font-size: 11px; }
+        
+        /* SQL Modal */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 2000; align-items: center; justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content {
+            background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px;
+            padding: 20px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .modal-title { font-size: 16px; font-weight: 600; }
+        .modal-close {
+            background: none; border: none; color: #888; font-size: 24px;
+            cursor: pointer; padding: 0; width: 30px; height: 30px;
+        }
+        .modal-close:hover { color: #e0e0e0; }
+        .sql-editor {
+            width: 100%; min-height: 150px; background: #1e1e1e; border: 1px solid #3a3a3a;
+            color: #e0e0e0; padding: 12px; border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+            font-size: 13px; resize: vertical; outline: none;
+        }
+        .sql-editor:focus { border-color: #4a9eff; }
+        .sql-hint { font-size: 11px; color: #888; margin-top: 8px; }
+        
+        /* Rest of styles from original */
         .toolbar { 
-            height: 40px; 
-            background: #1e1e1e; 
-            border-bottom: 1px solid #2d2d2d; 
-            display: flex; 
-            align-items: center; 
-            padding: 0 16px;
-            gap: 12px;
-            font-size: 12px;
+            height: 40px; background: #1e1e1e; border-bottom: 1px solid #2d2d2d; 
+            display: flex; align-items: center; padding: 0 16px; gap: 12px; font-size: 12px;
         }
         .toolbar-item { color: #888; display: flex; align-items: center; gap: 6px; }
-        
-        /* Data grid */
         .data-grid { flex: 1; overflow: auto; }
         .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .data-table thead { 
-            position: sticky; 
-            top: 0; 
-            background: #1e1e1e; 
-            z-index: 10;
-        }
+        .data-table thead { position: sticky; top: 0; background: #1e1e1e; z-index: 10; }
         .data-table th { 
-            text-align: left; 
-            padding: 10px 12px; 
-            font-weight: 500; 
-            color: #888; 
-            border-bottom: 1px solid #2d2d2d;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
+            text-align: left; padding: 10px 12px; font-weight: 500; color: #888; 
+            border-bottom: 1px solid #2d2d2d; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
         }
-        .data-table td { 
-            padding: 10px 12px; 
-            border-bottom: 1px solid #2a2a2a; 
-            color: #e0e0e0;
-        }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid #2a2a2a; color: #e0e0e0; }
         .data-table tbody tr:hover { background: #222; }
         .cell { cursor: text; }
         .cell:hover { background: #252525; }
         .cell-editing { background: #2a2a2a !important; outline: 2px solid #4a9eff; }
         .cell-dirty { background: #3a2f1a !important; }
         .cell input { 
-            width: 100%; 
-            background: transparent; 
-            border: none; 
-            color: #e0e0e0; 
-            outline: none;
-            font-size: 13px;
-            font-family: inherit;
+            width: 100%; background: transparent; border: none; color: #e0e0e0; 
+            outline: none; font-size: 13px; font-family: inherit;
         }
-        
-        /* Empty state */
         .empty-state { 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            height: 100%; 
-            color: #666;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            height: 100%; color: #666;
         }
         .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
-        
-        /* Scrollbar */
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: #1a1a1a; }
         ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 5px; }
         ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
-        
-        /* Loading */
         .skeleton { background: #2a2a2a; animation: pulse 1.5s infinite; border-radius: 4px; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        
-        /* Pagination */
         .pagination { 
-            height: 40px; 
-            background: #1e1e1e; 
-            border-top: 1px solid #2d2d2d; 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between;
-            padding: 0 16px;
-            font-size: 12px;
+            height: 40px; background: #1e1e1e; border-top: 1px solid #2d2d2d; 
+            display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-size: 12px;
         }
         .pagination button { 
-            padding: 4px 12px; 
-            background: #2a2a2a; 
-            border: 1px solid #3a3a3a; 
-            color: #e0e0e0; 
-            border-radius: 4px; 
-            cursor: pointer;
-            font-size: 12px;
+            padding: 4px 12px; background: #2a2a2a; border: 1px solid #3a3a3a; 
+            color: #e0e0e0; border-radius: 4px; cursor: pointer; font-size: 12px;
         }
         .pagination button:hover:not(:disabled) { background: #3a3a3a; }
         .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
-        
-        /* Type badges */
         .type-badge { 
-            display: inline-block; 
-            padding: 2px 6px; 
-            background: #2a2a2a; 
-            border-radius: 3px; 
-            font-size: 10px; 
-            color: #888;
-            margin-left: 6px;
+            display: inline-block; padding: 2px 6px; background: #2a2a2a; 
+            border-radius: 3px; font-size: 10px; color: #888; margin-left: 6px;
         }
-        
-        /* Value types */
         .value-null { color: #888; font-style: italic; }
         .value-bool { color: #c792ea; }
         .value-number { color: #f78c6c; }
@@ -213,7 +190,11 @@
                     <span class="table-name" id="current-table">Select a model</span>
                 </div>
                 <div class="topbar-right">
-                    <button id="schema-btn" class="btn btn-secondary" onclick="window.location.href='/schema'">📊 Schema</button>
+                    <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()">
+                        ⚡ Filters
+                        <span id="filter-count" class="filter-badge" style="display: none;">0</span>
+                    </button>
+                    <button id="sql-btn" class="btn btn-secondary" onclick="openSQLModal()">📝 SQL Query</button>
                     <button id="delete-selected-btn" class="btn btn-secondary" style="display: none; background: #dc2626; color: #fff;">Delete selected</button>
                     <button id="save-btn" class="btn btn-primary" style="display: none;">Save changes</button>
                     <button id="add-btn" class="btn btn-success">Add record</button>
@@ -221,16 +202,22 @@
                 </div>
             </div>
 
+            <!-- Filter Panel -->
+            <div id="filter-panel" class="filter-panel">
+                <div class="filter-header">
+                    <div class="filter-title">🔍 Filter Records</div>
+                    <button class="btn-sm btn-secondary" onclick="toggleFilters()">✕</button>
+                </div>
+                <div id="filter-rows"></div>
+                <div class="filter-actions">
+                    <button class="btn-sm btn-primary" onclick="addFilterRow()">+ Add filter</button>
+                    <button class="btn-sm btn-success" onclick="applyFilters()">Apply</button>
+                    <button class="btn-sm btn-secondary" onclick="clearFilters()">Clear all</button>
+                </div>
+            </div>
+
             <!-- Toolbar -->
             <div class="toolbar">
-                <div class="toolbar-item">
-                    <span>Filters:</span>
-                    <span style="color: #e0e0e0;">None</span>
-                </div>
-                <div class="toolbar-item">
-                    <span>Fields:</span>
-                    <span style="color: #e0e0e0;">All</span>
-                </div>
                 <div class="toolbar-item">
                     <span>Showing</span>
                     <span style="color: #e0e0e0;" id="row-count">0 of 0</span>
@@ -251,9 +238,7 @@
 
             <!-- Pagination -->
             <div class="pagination" id="pagination" style="display: none;">
-                <div>
-                    <span id="page-info">0-0 of 0</span>
-                </div>
+                <div><span id="page-info">0-0 of 0</span></div>
                 <div style="display: flex; gap: 8px;">
                     <button id="prev-btn">← Previous</button>
                     <button id="next-btn">Next →</button>
@@ -262,6 +247,247 @@
         </main>
     </div>
 
+    <!-- SQL Query Modal -->
+    <div id="sql-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📝 Execute SQL Query</div>
+                <button class="modal-close" onclick="closeSQLModal()">×</button>
+            </div>
+            <textarea id="sql-query" class="sql-editor" placeholder="SELECT * FROM users WHERE id = 1;"></textarea>
+            <div class="sql-hint">💡 Tip: Write any SELECT query to search your database</div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" onclick="executeSQLQuery()">▶ Execute</button>
+                <button class="btn btn-secondary" onclick="closeSQLModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/studio.js"></script>
+    <script>
+        // Filter state
+        let filters = [];
+        let currentColumns = [];
+        
+        function toggleFilters() {
+            const panel = document.getElementById('filter-panel');
+            const btn = document.getElementById('filter-btn');
+            panel.classList.toggle('show');
+            btn.classList.toggle('active');
+        }
+        
+        function addFilterRow(logic = 'where', column = '', operator = 'equals', value = '') {
+            const row = document.createElement('div');
+            row.className = 'filter-row';
+            
+            const logicSelect = logic === 'where' ? 
+                `<select class="filter-logic" disabled><option>where</option></select>` :
+                `<select class="filter-logic"><option>and</option><option>or</option></select>`;
+            
+            const columnOptions = currentColumns.map(col => 
+                `<option value="${col.name}" ${col.name === column ? 'selected' : ''}>${col.name}</option>`
+            ).join('');
+            
+            row.innerHTML = `
+                ${logicSelect}
+                <select class="filter-column">${columnOptions}</select>
+                <select class="filter-operator">
+                    <option value="equals" ${operator === 'equals' ? 'selected' : ''}>equals</option>
+                    <option value="not_equals" ${operator === 'not_equals' ? 'selected' : ''}>not equals</option>
+                    <option value="contains" ${operator === 'contains' ? 'selected' : ''}>contains</option>
+                    <option value="starts_with" ${operator === 'starts_with' ? 'selected' : ''}>starts with</option>
+                    <option value="ends_with" ${operator === 'ends_with' ? 'selected' : ''}>ends with</option>
+                    <option value="gt" ${operator === 'gt' ? 'selected' : ''}>greater than</option>
+                    <option value="lt" ${operator === 'lt' ? 'selected' : ''}>less than</option>
+                    <option value="gte" ${operator === 'gte' ? 'selected' : ''}>≥</option>
+                    <option value="lte" ${operator === 'lte' ? 'selected' : ''}>≤</option>
+                </select>
+                <input type="text" class="filter-value" value="${value}" placeholder="Value">
+                <button class="filter-remove" onclick="this.parentElement.remove(); updateFilterCount();">✕</button>
+            `;
+            
+            document.getElementById('filter-rows').appendChild(row);
+            updateFilterCount();
+        }
+        
+        function updateFilterCount() {
+            const count = document.getElementById('filter-rows').children.length;
+            const badge = document.getElementById('filter-count');
+            if (count > 0) {
+                badge.textContent = count;
+                badge.style.display = 'block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        function clearFilters() {
+            document.getElementById('filter-rows').innerHTML = '';
+            updateFilterCount();
+            filters = [];
+            // Reload data to show all rows
+            if (state.currentTable) {
+                loadTableData();
+            }
+        }
+        
+        function applyFilters() {
+            const rows = document.getElementById('filter-rows').children;
+            filters = [];
+            
+            for (let row of rows) {
+                const logicSelect = row.querySelector('.filter-logic');
+                const logic = logicSelect ? logicSelect.value : 'where';
+                const column = row.querySelector('.filter-column').value;
+                const operator = row.querySelector('.filter-operator').value;
+                const value = row.querySelector('.filter-value').value;
+                
+                console.log('Filter:', { logic, column, operator, value });
+                
+                if (column && value) {
+                    filters.push({ logic, column, operator, value });
+                }
+            }
+            
+            console.log('All filters:', filters);
+            toggleFilters();
+            
+            // Apply filters to current data
+            if (!state.data || !state.data.rows) {
+                console.log('No data to filter');
+                return;
+            }
+            
+            const allRows = state.data.rows;
+            console.log('Total rows:', allRows.length);
+            
+            let filteredRows = allRows;
+            
+            // Apply filters sequentially
+            filters.forEach((filter, index) => {
+                const { logic, column, operator, value } = filter;
+                console.log(`Applying filter ${index + 1}:`, filter);
+                
+                const matchesFilter = (row) => {
+                    const cellValue = String(row[column] || '').toLowerCase();
+                    const filterValue = value.toLowerCase();
+                    
+                    let result = false;
+                    switch (operator) {
+                        case 'equals':
+                            result = cellValue === filterValue;
+                            break;
+                        case 'not_equals':
+                            result = cellValue !== filterValue;
+                            break;
+                        case 'contains':
+                            result = cellValue.includes(filterValue);
+                            break;
+                        case 'starts_with':
+                            result = cellValue.startsWith(filterValue);
+                            break;
+                        case 'ends_with':
+                            result = cellValue.endsWith(filterValue);
+                            break;
+                        case 'gt':
+                            result = parseFloat(cellValue) > parseFloat(filterValue);
+                            break;
+                        case 'lt':
+                            result = parseFloat(cellValue) < parseFloat(filterValue);
+                            break;
+                        case 'gte':
+                            result = parseFloat(cellValue) >= parseFloat(filterValue);
+                            break;
+                        case 'lte':
+                            result = parseFloat(cellValue) <= parseFloat(filterValue);
+                            break;
+                        default:
+                            result = true;
+                    }
+                    return result;
+                };
+                
+                // Apply filter based on logic
+                if (index === 0) {
+                    // First filter (where) - filter from all rows
+                    filteredRows = allRows.filter(matchesFilter);
+                    console.log(`After filter 1 (where): ${filteredRows.length} rows`);
+                } else if (logic === 'and') {
+                    // AND - filter from current filtered rows
+                    filteredRows = filteredRows.filter(matchesFilter);
+                    console.log(`After filter ${index + 1} (and): ${filteredRows.length} rows`);
+                } else if (logic === 'or') {
+                    // OR - add matching rows from all rows
+                    const orMatches = allRows.filter(matchesFilter);
+                    console.log(`OR matches: ${orMatches.length} rows`);
+                    // Merge and remove duplicates
+                    const combined = [...filteredRows, ...orMatches];
+                    filteredRows = combined.filter((row, idx, self) => 
+                        idx === self.findIndex(r => JSON.stringify(r) === JSON.stringify(row))
+                    );
+                    console.log(`After filter ${index + 1} (or): ${filteredRows.length} rows`);
+                }
+            });
+            
+            console.log('Final filtered rows:', filteredRows.length);
+            
+            // Update display with filtered data
+            const filteredData = {
+                ...state.data,
+                rows: filteredRows,
+                total: filteredRows.length
+            };
+            
+            renderDataGrid(filteredData);
+            document.getElementById('row-count').textContent = `${filteredRows.length} of ${allRows.length}`;
+        }
+        
+        function openSQLModal() {
+            document.getElementById('sql-modal').classList.add('show');
+        }
+        
+        function closeSQLModal() {
+            document.getElementById('sql-modal').classList.remove('show');
+        }
+        
+        async function executeSQLQuery() {
+            const query = document.getElementById('sql-query').value.trim();
+            if (!query) {
+                alert('Please enter a SQL query');
+                return;
+            }
+            
+            try {
+                const res = await fetch('/api/sql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                
+                const json = await res.json();
+                
+                if (json.success) {
+                    // Display results in grid
+                    state.data = json.data;
+                    renderDataGrid(json.data);
+                    closeSQLModal();
+                    alert(`✓ Query executed: ${json.data.rows.length} rows returned`);
+                } else {
+                    alert('Error: ' + json.message);
+                }
+            } catch (err) {
+                alert('Failed to execute query: ' + err.message);
+            }
+        }
+        
+        // Override selectTable to populate filter columns
+        const originalSelectTable = selectTable;
+        selectTable = async function(tableName) {
+            await originalSelectTable(tableName);
+            if (state.data && state.data.columns) {
+                currentColumns = state.data.columns;
+            }
+        };
+    </script>
 </body>
 </html>

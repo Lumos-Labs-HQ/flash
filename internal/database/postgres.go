@@ -516,8 +516,35 @@ func (p *PostgresAdapter) CheckUniqueConstraint(ctx context.Context, tableName, 
 }
 
 func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
-	rows, err := p.pool.Query(ctx, fmt.Sprintf("SELECT * FROM %s", tableName))
+	columnInfo, err := p.GetTableColumns(ctx, tableName)
 	if err != nil {
+		return nil, fmt.Errorf("failed to get column info: %w", err)
+	}
+	
+	var selectCols []string
+	for _, col := range columnInfo {
+		if strings.Contains(col.Type, "_") || 
+		   (!strings.Contains(col.Type, "int") && 
+		    !strings.Contains(col.Type, "varchar") && 
+		    !strings.Contains(col.Type, "text") &&
+		    !strings.Contains(col.Type, "bool") &&
+		    !strings.Contains(col.Type, "timestamp") &&
+		    !strings.Contains(col.Type, "date") &&
+		    !strings.Contains(col.Type, "numeric") &&
+		    !strings.Contains(col.Type, "float") &&
+		    !strings.Contains(col.Type, "serial")) {
+			// Cast enum to text
+			selectCols = append(selectCols, fmt.Sprintf("\"%s\"::text", col.Name))
+		} else {
+			selectCols = append(selectCols, fmt.Sprintf("\"%s\"", col.Name))
+		}
+	}
+	
+	query := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectCols, ", "), tableName)
+	
+	rows, err := p.pool.Query(ctx, query)
+	if err != nil {
+		fmt.Printf("ERROR querying table %s: %v\n", tableName, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -525,7 +552,9 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 	columns := rows.FieldDescriptions()
 	var result []map[string]interface{}
 
+	rowNum := 0
 	for rows.Next() {
+		rowNum++
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
 		for i := range values {
@@ -533,15 +562,43 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 		}
 
 		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, err
+			fmt.Printf("ERROR scanning row %d in table %s: %v\n", rowNum, tableName, err)
+			return result, nil
 		}
 
 		row := make(map[string]interface{})
 		for i, col := range columns {
-			row[string(col.Name)] = values[i]
+			val := values[i]
+			colName := string(col.Name)
+			
+			switch v := val.(type) {
+			case []byte:
+				row[colName] = string(v)
+			case string:
+				row[colName] = v
+			case nil:
+				row[colName] = nil
+			case int, int8, int16, int32, int64:
+				row[colName] = v
+			case uint, uint8, uint16, uint32, uint64:
+				row[colName] = v
+			case float32, float64:
+				row[colName] = v
+			case bool:
+				row[colName] = v
+			default:
+				row[colName] = fmt.Sprintf("%v", v)
+			}
 		}
 		result = append(result, row)
 	}
+	
+	if err := rows.Err(); err != nil {
+		fmt.Printf("ERROR after reading rows from %s: %v\n", tableName, err)
+		return result, err
+	}
+
+	// fmt.Printf("Successfully fetched %d rows from %s\n", len(result), tableName)  its here for dev reference
 	return result, nil
 }
 

@@ -3,6 +3,7 @@ package studio
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Rana718/Graft/internal/database"
 )
@@ -287,4 +288,19 @@ func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
 		"nodes": nodes,
 		"edges": edges,
 	}, nil
+}
+
+func (s *Service) ExecuteSQL(query string) (*TableData, error) {
+	// Basic SQL injection protection - only allow SELECT
+	query = strings.TrimSpace(query)
+	if !strings.HasPrefix(strings.ToUpper(query), "SELECT") {
+		return nil, fmt.Errorf("only SELECT queries are allowed")
+	}
+
+	// Execute raw query - we'll use ExecuteMigration as a workaround
+	// In production, you'd want a proper Query method in the adapter interface
+	
+	// For now, return a simple message
+	// TODO: Implement proper raw query execution in database adapters
+	return nil, fmt.Errorf("SQL query execution not yet implemented - coming soon!")
 }
