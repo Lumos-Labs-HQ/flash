@@ -8,9 +8,9 @@
 // 	"sort"
 // 	"strings"
 
-// 	"github.com/Rana718/Graft/internal/config"
-// 	"github.com/Rana718/Graft/internal/migrator"
-// 	"github.com/Rana718/Graft/internal/types"
+// 	"github.com/Lumos-Labs-HQ/graft/internal/config"
+// 	"github.com/Lumos-Labs-HQ/graft/internal/migrator"
+// 	"github.com/Lumos-Labs-HQ/graft/internal/types"
 // )
 
 // type Options struct {

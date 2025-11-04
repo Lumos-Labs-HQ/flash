@@ -1,4 +1,4 @@
-module github.com/Rana718/Graft
+module github.com/Lumos-Labs-HQ/graft
 
 go 1.24.2
 

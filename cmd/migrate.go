@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/migrator"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/migrator"
 
 	"github.com/spf13/cobra"
 )
@@ -94,6 +94,6 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(migrateCmd)
-	
+
 	migrateCmd.Flags().BoolP("empty", "e", false, "Create an empty migration template without schema diff")
 }

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rana718/Graft/internal/database"
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
-	"github.com/Rana718/Graft/internal/schema"
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/schema"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 )
 
 type Options struct {

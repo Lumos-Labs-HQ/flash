@@ -29,25 +29,7 @@ type Gen struct {
 }
 
 type GoGen struct {
-	SqlPackage                string `json:"sql_package,omitempty" mapstructure:"sql_package"`
-	EmitInterface             bool   `json:"emit_interface,omitempty" mapstructure:"emit_interface"`
-	EmitJsonTags              bool   `json:"emit_json_tags,omitempty" mapstructure:"emit_json_tags"`
-	EmitDbTags                bool   `json:"emit_db_tags,omitempty" mapstructure:"emit_db_tags"`
-	EmitPreparedQueries       bool   `json:"emit_prepared_queries,omitempty" mapstructure:"emit_prepared_queries"`
-	EmitExactTableNames       bool   `json:"emit_exact_table_names,omitempty" mapstructure:"emit_exact_table_names"`
-	EmitEmptySlices           bool   `json:"emit_empty_slices,omitempty" mapstructure:"emit_empty_slices"`
-	EmitExportedQueries       bool   `json:"emit_exported_queries,omitempty" mapstructure:"emit_exported_queries"`
-	EmitResultStructPointers  bool   `json:"emit_result_struct_pointers,omitempty" mapstructure:"emit_result_struct_pointers"`
-	EmitParamsStructPointers  bool   `json:"emit_params_struct_pointers,omitempty" mapstructure:"emit_params_struct_pointers"`
-	EmitMethodsWithDbArgument bool   `json:"emit_methods_with_db_argument,omitempty" mapstructure:"emit_methods_with_db_argument"`
-	EmitPointersForNullTypes  bool   `json:"emit_pointers_for_null_types,omitempty" mapstructure:"emit_pointers_for_null_types"`
-	EmitEnumValidMethod       bool   `json:"emit_enum_valid_method,omitempty" mapstructure:"emit_enum_valid_method"`
-	EmitAllEnumValues         bool   `json:"emit_all_enum_values,omitempty" mapstructure:"emit_all_enum_values"`
-	JsonTagsCaseStyle         string `json:"json_tags_case_style,omitempty" mapstructure:"json_tags_case_style"`
-	OutputDbFileName          string `json:"output_db_file_name,omitempty" mapstructure:"output_db_file_name"`
-	OutputModelsFileName      string `json:"output_models_file_name,omitempty" mapstructure:"output_models_file_name"`
-	OutputQuerierFileName     string `json:"output_querier_file_name,omitempty" mapstructure:"output_querier_file_name"`
-	OutputFilesSuffix         string `json:"output_files_suffix,omitempty" mapstructure:"output_files_suffix"`
+	Enabled bool `json:"enabled,omitempty" mapstructure:"enabled"`
 }
 
 type JSGen struct {

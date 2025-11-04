@@ -86,18 +86,11 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
     }
   }`
 	} else {
-		sqlPackage := ""
-		if pt.DatabaseType == PostgreSQL {
-			sqlPackage = `"sql_package": "pgx/v5"`
-		}
-
-		if sqlPackage != "" {
-			genSection = fmt.Sprintf(`  "gen": {
+		genSection = `  "gen": {
     "go": {
-      %s
+      "enabled": true
     }
-  }`, sqlPackage)
-		}
+  }`
 	}
 
 	configParts := []string{
@@ -128,10 +121,6 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
 	config += "}"
 
 	return config
-}
-
-func (pt *ProjectTemplate) GetSQLCConfig() string {
-	return ""
 }
 
 func (pt *ProjectTemplate) GetSchema() string {

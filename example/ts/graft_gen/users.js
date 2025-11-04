@@ -6,17 +6,6 @@ class Queries {
     this._stmts = new Map();
   }
 
-  async isadminUser(id) {
-    let stmt = this._stmts.get('isadminUser');
-    if (!stmt) {
-      stmt = { name: 'isadminUser', text: `SELECT isadmin FROM users WHERE id = $1 LIMIT 1;` };
-      this._stmts.set('isadminUser', stmt);
-    }
-    stmt.values = [id];
-    const r = await this.db.query(stmt);
-    return r.rows[0] ? r.rows[0].isadmin : null;
-  }
-
   async getUserEmail(id) {
     let stmt = this._stmts.get('getUserEmail');
     if (!stmt) {

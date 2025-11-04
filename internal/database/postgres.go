@@ -519,46 +519,50 @@ func (p *PostgresAdapter) QueryContext(ctx context.Context, query string) (pgx.R
 	return p.pool.Query(ctx, query)
 }
 
+
 func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
-	columnInfo, err := p.GetTableColumns(ctx, tableName)
+	query := `
+		SELECT column_name, udt_name 
+		FROM information_schema.columns 
+		WHERE table_name = $1 AND table_schema = 'public'
+		ORDER BY ordinal_position`
+
+	columnRows, err := p.pool.Query(ctx, query, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column info: %w", err)
 	}
-	
+
 	var selectCols []string
-	for _, col := range columnInfo {
-		if strings.Contains(col.Type, "_") || 
-		   (!strings.Contains(col.Type, "int") && 
-		    !strings.Contains(col.Type, "varchar") && 
-		    !strings.Contains(col.Type, "text") &&
-		    !strings.Contains(col.Type, "bool") &&
-		    !strings.Contains(col.Type, "timestamp") &&
-		    !strings.Contains(col.Type, "date") &&
-		    !strings.Contains(col.Type, "numeric") &&
-		    !strings.Contains(col.Type, "float") &&
-		    !strings.Contains(col.Type, "serial")) {
-			// Cast enum to text
-			selectCols = append(selectCols, fmt.Sprintf("\"%s\"::text", col.Name))
+	for columnRows.Next() {
+		var colName, udtName string
+		if err := columnRows.Scan(&colName, &udtName); err != nil {
+			columnRows.Close()
+			return nil, err
+		}
+		
+		if !isStandardPostgresType(udtName) {
+			selectCols = append(selectCols, fmt.Sprintf(`"%s"::text`, colName))
 		} else {
-			selectCols = append(selectCols, fmt.Sprintf("\"%s\"", col.Name))
+			selectCols = append(selectCols, fmt.Sprintf(`"%s"`, colName))
 		}
 	}
-	
-	query := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectCols, ", "), tableName)
-	
-	rows, err := p.pool.Query(ctx, query)
+	columnRows.Close()
+
+	if len(selectCols) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	selectQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectCols, ", "), tableName)
+	rows, err := p.pool.Query(ctx, selectQuery)
 	if err != nil {
-		fmt.Printf("ERROR querying table %s: %v\n", tableName, err)
-		return nil, err
+		return nil, fmt.Errorf("failed to query table %s: %w", tableName, err)
 	}
 	defer rows.Close()
 
 	columns := rows.FieldDescriptions()
 	var result []map[string]interface{}
 
-	rowNum := 0
 	for rows.Next() {
-		rowNum++
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
 		for i := range values {
@@ -566,7 +570,6 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 		}
 
 		if err := rows.Scan(valuePtrs...); err != nil {
-			fmt.Printf("ERROR scanning row %d in table %s: %v\n", rowNum, tableName, err)
 			return result, nil
 		}
 
@@ -597,17 +600,39 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 		result = append(result, row)
 	}
 	
-	if err := rows.Err(); err != nil {
-		fmt.Printf("ERROR after reading rows from %s: %v\n", tableName, err)
-		return result, err
-	}
-
-	// fmt.Printf("Successfully fetched %d rows from %s\n", len(result), tableName)  its here for dev reference
-	return result, nil
+	return result, rows.Err()
 }
+
+// isStandardPostgresType checks udt_name
+func isStandardPostgresType(udtName string) bool {
+	standardTypes := map[string]bool{
+		"int2": true, "int4": true, "int8": true,
+		"smallint": true, "integer": true, "bigint": true,
+		"float4": true, "float8": true, "real": true, "double precision": true,
+		"numeric": true, "decimal": true,
+		"varchar": true, "char": true, "text": true, "bpchar": true,
+		"bool": true, "boolean": true,
+		"date": true, "time": true, "timetz": true,
+		"timestamp": true, "timestamptz": true, "interval": true,
+		"uuid": true, "json": true, "jsonb": true, "bytea": true,
+		"xml": true, "money": true,
+		"point": true, "line": true, "lseg": true, "box": true,
+		"path": true, "polygon": true, "circle": true,
+		"inet": true, "cidr": true, "macaddr": true,
+		"bit": true, "varbit": true,
+		"tsvector": true, "tsquery": true,
+	}
+	return standardTypes[strings.ToLower(udtName)]
+}
+
 
 func (p *PostgresAdapter) DropTable(ctx context.Context, tableName string) error {
 	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName))
+	return err
+}
+
+func (p *PostgresAdapter) DropEnum(ctx context.Context, enumName string) error {
+	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE", enumName))
 	return err
 }
 

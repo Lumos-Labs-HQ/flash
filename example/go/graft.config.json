@@ -10,7 +10,7 @@
   },
   "gen": {
     "go": {
-      "sql_package": "pgx/v5"
+      "enabled": true
     }
   }
 }

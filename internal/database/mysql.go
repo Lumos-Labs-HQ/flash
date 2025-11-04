@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -470,6 +470,12 @@ func (m *MySQLAdapter) GetTableData(ctx context.Context, tableName string) ([]ma
 func (m *MySQLAdapter) DropTable(ctx context.Context, tableName string) error {
 	_, err := m.db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", tableName))
 	return err
+}
+
+func (m *MySQLAdapter) DropEnum(ctx context.Context, enumName string) error {
+	// MySQL doesn't have native ENUM types as separate objects, they're part of table columns
+	// So this is a no-op for MySQL
+	return nil
 }
 
 // SQL Generation

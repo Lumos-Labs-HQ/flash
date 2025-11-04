@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/studio"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/studio"
 	"github.com/spf13/cobra"
 )
 

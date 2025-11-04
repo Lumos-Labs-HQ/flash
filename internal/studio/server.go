@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
@@ -24,12 +24,12 @@ type Server struct {
 
 func NewServer(cfg *config.Config, port int) *Server {
 	adapter := database.NewAdapter(cfg.Database.Provider)
-	
+
 	dbURL, err := cfg.GetDatabaseURL()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to get database URL: %v", err))
 	}
-	
+
 	if err := adapter.Connect(context.Background(), dbURL); err != nil {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
@@ -75,9 +75,9 @@ func (s *Server) setupRoutes() {
 
 func (s *Server) Start(openBrowser bool) error {
 	url := fmt.Sprintf("http://localhost:%d", s.port)
-	
+
 	fmt.Printf("🚀 Graft Studio starting on %s\n", url)
-	
+
 	if openBrowser {
 		go s.openBrowser(url)
 	}
@@ -168,7 +168,7 @@ func (s *Server) handleGetTableData(c *fiber.Ctx) error {
 
 func (s *Server) handleSaveChanges(c *fiber.Ctx) error {
 	tableName := c.Params("name")
-	
+
 	var req SaveRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(Response{
@@ -192,7 +192,7 @@ func (s *Server) handleSaveChanges(c *fiber.Ctx) error {
 
 func (s *Server) handleAddRow(c *fiber.Ctx) error {
 	tableName := c.Params("name")
-	
+
 	var req AddRowRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(Response{
@@ -233,11 +233,11 @@ func (s *Server) handleDeleteRow(c *fiber.Ctx) error {
 
 func (s *Server) handleDeleteRows(c *fiber.Ctx) error {
 	tableName := c.Params("name")
-	
+
 	var req struct {
 		RowIDs []string `json:"row_ids"`
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(Response{
 			Success: false,
