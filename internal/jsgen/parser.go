@@ -66,12 +66,26 @@ type QueryColumn struct {
 	Table string
 }
 
+// removeComments removes SQL comments (-- and /* */) from the input
+func removeComments(sql string) string {
+	var result strings.Builder
+	lines := strings.Split(sql, "\n")
+
+	for _, line := range lines {
+		if idx := strings.Index(line, "--"); idx != -1 {
+			line = line[:idx]
+		}
+		result.WriteString(line)
+		result.WriteString("\n")
+	}
+
+	cleaned := result.String()
+	blockCommentRegex := regexp.MustCompile(`/\*[\s\S]*?\*/`)
+	return blockCommentRegex.ReplaceAllString(cleaned, "")
+}
+
 func (g *Generator) parseSchema() (*Schema, error) {
 	regexOnce.Do(initRegex)
-
-	if g.cachedSchema != nil {
-		return g.cachedSchema, nil
-	}
 
 	schema := &Schema{
 		Tables: []*Table{},
@@ -96,6 +110,11 @@ func (g *Generator) parseSchema() (*Schema, error) {
 			if err != nil {
 				continue
 			}
+
+			if err := validateSchemaSyntax(string(content), file); err != nil {
+				return nil, err
+			}
+
 			tables := g.parseCreateTables(string(content))
 			schema.Tables = append(schema.Tables, tables...)
 			enums := g.parseCreateEnums(string(content))
@@ -106,6 +125,11 @@ func (g *Generator) parseSchema() (*Schema, error) {
 		if err != nil {
 			return schema, nil
 		}
+
+		if err := validateSchemaSyntax(string(content), schemaPath); err != nil {
+			return nil, err
+		}
+
 		tables := g.parseCreateTables(string(content))
 		schema.Tables = append(schema.Tables, tables...)
 		enums := g.parseCreateEnums(string(content))
@@ -116,6 +140,9 @@ func (g *Generator) parseSchema() (*Schema, error) {
 }
 
 func (g *Generator) parseCreateTables(sql string) []*Table {
+	// Remove SQL comments before parsing
+	sql = removeComments(sql)
+
 	tables := make([]*Table, 0, 8)
 	matches := createTableRegex.FindAllStringSubmatch(sql, -1)
 
@@ -168,6 +195,8 @@ func (g *Generator) parseCreateTables(sql string) []*Table {
 }
 
 func (g *Generator) parseCreateEnums(sql string) []*Enum {
+	sql = removeComments(sql)
+
 	enums := make([]*Enum, 0)
 	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 	matches := enumRegex.FindAllStringSubmatch(sql, -1)
@@ -233,18 +262,13 @@ func splitColumns(columnsStr string) []string {
 	return result
 }
 
-func (g *Generator) parseQueries() ([]*Query, error) {
+func (g *Generator) parseQueries(schema *Schema) ([]*Query, error) {
 	regexOnce.Do(initRegex)
 
 	queriesPath := g.Config.Queries
 	if !filepath.IsAbs(queriesPath) {
 		cwd, _ := os.Getwd()
 		queriesPath = filepath.Join(cwd, queriesPath)
-	}
-
-	schema := g.cachedSchema
-	if schema == nil {
-		schema, _ = g.parseSchema()
 	}
 
 	files, err := filepath.Glob(filepath.Join(queriesPath, "*.sql"))
@@ -256,7 +280,7 @@ func (g *Generator) parseQueries() ([]*Query, error) {
 	for _, file := range files {
 		fileQueries, err := g.parseQueryFile(file, schema)
 		if err != nil {
-			continue
+			return nil, err
 		}
 		queries = append(queries, fileQueries...)
 	}
@@ -289,7 +313,9 @@ func (g *Generator) parseQueryFile(filename string, schema *Schema) ([]*Query, e
 			if currentQuery != nil {
 				currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, " "))
 				currentQuery.Comment = comment
-				g.analyzeQuery(currentQuery, schema)
+				if err := g.analyzeQuery(currentQuery, schema); err != nil {
+					return nil, err
+				}
 				queries = append(queries, currentQuery)
 			}
 
@@ -313,14 +339,16 @@ func (g *Generator) parseQueryFile(filename string, schema *Schema) ([]*Query, e
 	if currentQuery != nil {
 		currentQuery.SQL = strings.TrimSpace(strings.Join(sqlLines, " "))
 		currentQuery.Comment = comment
-		g.analyzeQuery(currentQuery, schema)
+		if err := g.analyzeQuery(currentQuery, schema); err != nil {
+			return nil, err
+		}
 		queries = append(queries, currentQuery)
 	}
 
 	return queries, scanner.Err()
 }
 
-func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
+func (g *Generator) analyzeQuery(query *Query, schema *Schema) error {
 	var tableName string
 	if match := fromRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 		tableName = match[1]
@@ -382,8 +410,6 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 
 	isSelectQuery := strings.HasPrefix(sqlTrimmed, "SELECT") || strings.HasPrefix(sqlTrimmed, "WITH")
 
-	// Check if it's a modifying query (INSERT/UPDATE/DELETE as SQL commands, not in column names)
-	// Use word boundary checks to avoid false positives with column names like "updated_at"
 	isNotModifying := !containsSQLKeyword(sqlTrimmed, "DELETE") &&
 		!containsSQLKeyword(sqlTrimmed, "UPDATE") &&
 		!containsSQLKeyword(sqlTrimmed, "INSERT")
@@ -433,8 +459,17 @@ func (g *Generator) analyzeQuery(query *Query, schema *Schema) {
 			}}
 		}
 	}
-}
 
+	if err := validateTableReferences(query, schema); err != nil {
+		return err
+	}
+
+	if err := validateColumnReferences(query, schema); err != nil {
+		return err
+	}
+
+	return nil
+}
 func extractSelectColumns(sql string) string {
 	sqlUpper := strings.ToUpper(sql)
 
@@ -494,7 +529,6 @@ func extractColumnsFromSelect(sql string, selectIdx int) string {
 		case ')':
 			parenDepth--
 		case 'F', 'f':
-			// Only match FROM when not inside parentheses (to avoid EXTRACT(... FROM ...) etc.)
 			if parenDepth == 0 && i+4 <= len(sql) {
 				potential := strings.ToUpper(sql[i:min(i+4, len(sql))])
 				if potential == "FROM" {
@@ -614,13 +648,11 @@ func (g *Generator) inferParamType(sql string, paramIndex int, table *Table, par
 		}
 	}
 
-	// Check for comparisons with aggregate function results (COUNT, SUM, AVG, etc.)
 	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(aggregatePattern, sql); matched {
 		return "number"
 	}
 
-	// Check for numeric comparisons with aliases containing numeric indicators
 	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(numericAliasPattern, sql); matched {
 		return "number"
@@ -758,4 +790,234 @@ func (g *Generator) inferParamName(sql string, paramIndex int) string {
 	}
 
 	return fmt.Sprintf("param%d", paramIndex)
+}
+
+// validateSchemaSyntax checks for common SQL syntax errors in schema files
+func validateSchemaSyntax(content, filePath string) error {
+	lines := strings.Split(content, "\n")
+
+	// Track CREATE TABLE blocks
+	inCreateTable := false
+	tableStartLine := 0
+	parenDepth := 0
+
+	for lineNum, line := range lines {
+		lineNumber := lineNum + 1
+		trimmed := strings.TrimSpace(line)
+
+		if strings.Contains(strings.ToUpper(trimmed), "CREATE TABLE") {
+			inCreateTable = true
+			tableStartLine = lineNumber
+			parenDepth = 0
+		}
+
+		for _, ch := range line {
+			switch ch {
+			case '(':
+				parenDepth++
+			case ')':
+				parenDepth--
+			}
+		}
+
+		// Check for trailing comma before closing paren (common error)
+		if inCreateTable && parenDepth == 0 && strings.Contains(trimmed, ");") {
+			for i := lineNum - 1; i >= 0; i-- {
+				prevLine := strings.TrimSpace(lines[i])
+				if prevLine == "" {
+					continue
+				}
+				if strings.HasSuffix(prevLine, ",") {
+					relPath := filepath.Base(filePath)
+					return fmt.Errorf("# package graft\n%s:%d:2: syntax error at or near \")\"", relPath, lineNumber)
+				}
+				break
+			}
+			inCreateTable = false
+		}
+
+		if parenDepth < 0 {
+			relPath := filepath.Base(filePath)
+			return fmt.Errorf("# package graft\n%s:%d:2: syntax error: unexpected ')'", relPath, lineNumber)
+		}
+	}
+
+	if inCreateTable && parenDepth > 0 {
+		relPath := filepath.Base(filePath)
+		return fmt.Errorf("# package graft\n%s:%d:2: syntax error: unclosed CREATE TABLE statement", relPath, tableStartLine)
+	}
+
+	return nil
+}
+
+// validateTableReferences checks if tables referenced in queries exist in the schema
+func validateTableReferences(query *Query, schema *Schema) error {
+	if query == nil || schema == nil {
+		return nil
+	}
+
+	tablePattern := regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
+	matches := tablePattern.FindAllStringSubmatch(query.SQL, -1)
+
+	// Track if we found any table references
+	foundTableRefs := false
+
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+
+		tableName := match[1]
+
+		if isSQLKeyword(tableName) {
+			continue
+		}
+
+		foundTableRefs = true
+
+		// Check if table exists in schema
+		tableExists := false
+		for _, t := range schema.Tables {
+			if strings.EqualFold(t.Name, tableName) {
+				tableExists = true
+				break
+			}
+		}
+
+		if !tableExists {
+			lines := strings.Split(query.SQL, "\n")
+			lineNum := 1
+			colPos := 1
+
+			for i, line := range lines {
+				if strings.Contains(strings.ToUpper(line), strings.ToUpper(tableName)) {
+					lineNum = i + 1
+					upperLine := strings.ToUpper(line)
+					upperTable := strings.ToUpper(tableName)
+					colPos = strings.Index(upperLine, upperTable) + 1
+					break
+				}
+			}
+
+			return fmt.Errorf("# package graft\ndb\\queries\\users.sql:%d:%d: relation \"%s\" does not exist", lineNum, colPos, tableName)
+		}
+	}
+
+	// If query references tables but schema is empty, that's an error
+	if foundTableRefs && len(schema.Tables) == 0 {
+		return fmt.Errorf("# package graft\ndb\\queries\\users.sql:1:1: no tables found in schema, but query references tables")
+	}
+
+	return nil
+}
+
+// validateColumnReferences checks if columns referenced in queries exist in the schema
+func validateColumnReferences(query *Query, schema *Schema) error {
+	if query == nil || schema == nil {
+		return nil
+	}
+
+	tableAliasPattern := regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
+	joinPattern := regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+
+	// Build table alias to table name mapping
+	aliasToTable := make(map[string]string)
+
+	matches := tableAliasPattern.FindAllStringSubmatch(query.SQL, -1)
+	for _, match := range matches {
+		if len(match) >= 3 {
+			tableName := match[1]
+			alias := match[2]
+			aliasToTable[alias] = tableName
+		}
+	}
+
+	matches = joinPattern.FindAllStringSubmatch(query.SQL, -1)
+	for _, match := range matches {
+		if len(match) >= 3 {
+			tableName := match[1]
+			alias := match[2]
+			aliasToTable[alias] = tableName
+		}
+	}
+
+	// Check column references in SELECT, WHERE, GROUP BY clauses
+	columnRefPattern := regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
+	columnRefs := columnRefPattern.FindAllStringSubmatch(query.SQL, -1)
+
+	for _, ref := range columnRefs {
+		if len(ref) < 3 {
+			continue
+		}
+
+		tableOrAlias := ref[1]
+		columnName := ref[2]
+
+		if isSQLKeyword(tableOrAlias) || isSQLKeyword(columnName) {
+			continue
+		}
+
+		tableName := tableOrAlias
+		if realTable, ok := aliasToTable[tableOrAlias]; ok {
+			tableName = realTable
+		}
+
+		// Find the table in schema
+		var table *Table
+		for _, t := range schema.Tables {
+			if strings.EqualFold(t.Name, tableName) {
+				table = t
+				break
+			}
+		}
+
+		if table == nil {
+			continue // Table not found in schema,
+		}
+
+		columnExists := false
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, columnName) {
+				columnExists = true
+				break
+			}
+		}
+
+		if !columnExists {
+			lines := strings.Split(query.SQL, "\n")
+			lineNum := 0
+			colPos := 0
+			for i, line := range lines {
+				if strings.Contains(line, ref[0]) {
+					lineNum = i + 1
+					colPos = strings.Index(line, ref[0]) + len(tableOrAlias) + 1
+					break
+				}
+			}
+
+			return fmt.Errorf("# package graft\ndb\\queries\\users.sql:%d:%d: column reference \"%s\" not found", lineNum, colPos, columnName)
+		}
+	}
+
+	return nil
+}
+
+// isSQLKeyword checks if a word is a SQL keyword
+func isSQLKeyword(word string) bool {
+	keywords := []string{
+		"SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "OUTER",
+		"ON", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN", "IS", "NULL",
+		"GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
+		"INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TABLE",
+		"INDEX", "VIEW", "AS", "DISTINCT", "COUNT", "SUM", "AVG", "MIN", "MAX",
+		"CASE", "WHEN", "THEN", "ELSE", "END", "WITH", "RECURSIVE",
+	}
+
+	wordUpper := strings.ToUpper(word)
+	for _, kw := range keywords {
+		if wordUpper == kw {
+			return true
+		}
+	}
+	return false
 }

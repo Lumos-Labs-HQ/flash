@@ -11,11 +11,11 @@ import (
 )
 
 type Generator struct {
-	Config       *config.Config
-	insertRegex  *regexp.Regexp
-	updateRegex  *regexp.Regexp
-	deleteRegex  *regexp.Regexp
-	cachedSchema *Schema
+	Config      *config.Config
+	insertRegex *regexp.Regexp
+	updateRegex *regexp.Regexp
+	deleteRegex *regexp.Regexp
+	schema      *Schema
 }
 
 func New(cfg *config.Config) *Generator {
@@ -32,13 +32,14 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	// Always re-parse schema (no caching across runs)
 	schema, err := g.parseSchema()
 	if err != nil {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
-	g.cachedSchema = schema
+	g.schema = schema
 
-	queries, err := g.parseQueries()
+	queries, err := g.parseQueries(schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
@@ -267,8 +268,8 @@ func (g *Generator) getReturnType(query *Query) string {
 			return "boolean"
 		}
 
-		if query.Columns[0].Table != "" && g.cachedSchema != nil {
-			for _, table := range g.cachedSchema.Tables {
+		if query.Columns[0].Table != "" && g.schema != nil {
+			for _, table := range g.schema.Tables {
 				if strings.EqualFold(table.Name, query.Columns[0].Table) {
 					for _, col := range table.Columns {
 						if strings.EqualFold(col.Name, query.Columns[0].Name) {
@@ -336,11 +337,9 @@ func (g *Generator) generateDatabase() error {
 func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	sqlTypeLower := strings.ToLower(sqlType)
 
-	// Check if it's an enum type
-	if g.cachedSchema != nil {
-		for _, enum := range g.cachedSchema.Enums {
+	if g.schema != nil {
+		for _, enum := range g.schema.Enums {
 			if strings.ToLower(enum.Name) == sqlTypeLower {
-				// Return TypeScript union type
 				quotedValues := make([]string, len(enum.Values))
 				for i, v := range enum.Values {
 					quotedValues[i] = fmt.Sprintf("'%s'", v)
