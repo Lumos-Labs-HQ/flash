@@ -227,10 +227,10 @@ func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
 	nodes := []map[string]interface{}{}
 	edges := []map[string]interface{}{}
 	
-	x, y := 100, 100
 	edgeId := 0
+	tableIndex := 0
 
-	for i, tableName := range tables {
+	for _, tableName := range tables {
 		if tableName == "_graft_migrations" || tableName == "graft_migrations" {
 			continue
 		}
@@ -261,10 +261,11 @@ func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
 			}
 		}
 
-		colPos := i % 3
-		rowPos := i / 3
-		posX := x + (colPos * 400)
-		posY := y + (rowPos * 350)
+		// Better positioning: 2 columns, more spacing
+		col := tableIndex % 2
+		row := tableIndex / 2
+		posX := 150 + (col * 550)
+		posY := 100 + (row * 400)
 
 		nodes = append(nodes, map[string]interface{}{
 			"id":   tableName,
@@ -278,6 +279,8 @@ func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
 				"y": posY,
 			},
 		})
+		
+		tableIndex++
 	}
 
 	return map[string]interface{}{

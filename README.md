@@ -14,6 +14,7 @@ A powerful, database-agnostic migration CLI tool built in Go that provides Prism
 - ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
 - 🔍 **Schema Introspection**: Pull schema from existing databases
+- 🗺️ **Schema Visualization**: Visual database diagram with relationships (GoLand/DataGrip style)
 - 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
 
 ## 📊 Performance Benchmarks
@@ -159,9 +160,20 @@ graft studio --port 3000
 - 🗑️ Delete selected rows
 - 🔍 Search tables
 - 🎨 Dark theme UI
+- 🗺️ **Schema Visualization** - Visual database diagram with relationships (GoLand/DataGrip style)
 
 **Database URL Priority:** `--db` flag → `DATABASE_URL` env → `.env` file
 
+### Schema Visualization
+
+Navigate to `http://localhost:5555/schema` to view your database schema as a visual diagram:
+
+- 📋 All tables with columns and types
+- 🔑 Primary key indicators
+- 🔗 Foreign key relationships with arrows
+- 🎯 Auto-layout in organized grid
+- 🖱️ Interactive hover effects
+- 📐 Professional GoLand/DataGrip style design
 
 ## 🗄️ Database Support
 
