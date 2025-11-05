@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 	"github.com/Masterminds/squirrel"
-	"github.com/Rana718/Graft/internal/types"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/lib/pq"
@@ -180,6 +180,46 @@ func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL str
 	}
 
 	return nil
+}
+
+// ExecuteQuery executes a SQL query and returns the results with column order preserved
+func (p *PostgresAdapter) ExecuteQuery(ctx context.Context, query string) (*QueryResult, error) {
+	rows, err := p.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	// Get column names in order
+	fieldDescriptions := rows.FieldDescriptions()
+	columns := make([]string, len(fieldDescriptions))
+	for i, fd := range fieldDescriptions {
+		columns[i] = string(fd.Name)
+	}
+
+	// Read all rows
+	var results []map[string]interface{}
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			row[col] = values[i]
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return &QueryResult{
+		Columns: columns,
+		Rows:    results,
+	}, nil
 }
 
 // parseSQLStatements properly parses SQL statements handling multi-line CREATE TABLE statements
@@ -376,9 +416,14 @@ func (p *PostgresAdapter) GetTableColumns(ctx context.Context, tableName string)
 		column.Nullable = isNullable == "YES"
 		column.IsPrimary = isPrimary
 		column.IsUnique = isUnique
+
+		// Detect auto-increment columns (SERIAL types have nextval in default)
 		if columnDefault.Valid {
-			column.Default = p.cleanDefaultValue(columnDefault.String)
+			defaultStr := columnDefault.String
+			column.IsAutoIncrement = strings.Contains(strings.ToLower(defaultStr), "nextval")
+			column.Default = p.cleanDefaultValue(defaultStr)
 		}
+
 		if fkTable.Valid {
 			column.ForeignKeyTable = fkTable.String
 		}
@@ -519,7 +564,6 @@ func (p *PostgresAdapter) QueryContext(ctx context.Context, query string) (pgx.R
 	return p.pool.Query(ctx, query)
 }
 
-
 func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
 	query := `
 		SELECT column_name, udt_name 
@@ -539,7 +583,7 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 			columnRows.Close()
 			return nil, err
 		}
-		
+
 		if !isStandardPostgresType(udtName) {
 			selectCols = append(selectCols, fmt.Sprintf(`"%s"::text`, colName))
 		} else {
@@ -577,7 +621,7 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 		for i, col := range columns {
 			val := values[i]
 			colName := string(col.Name)
-			
+
 			switch v := val.(type) {
 			case []byte:
 				row[colName] = string(v)
@@ -599,8 +643,19 @@ func (p *PostgresAdapter) GetTableData(ctx context.Context, tableName string) ([
 		}
 		result = append(result, row)
 	}
-	
+
 	return result, rows.Err()
+}
+
+// GetTableRowCount returns the number of rows in a table
+func (p *PostgresAdapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)
+	err := p.pool.QueryRow(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count rows in table %s: %w", tableName, err)
+	}
+	return count, nil
 }
 
 // isStandardPostgresType checks udt_name
@@ -624,7 +679,6 @@ func isStandardPostgresType(udtName string) bool {
 	}
 	return standardTypes[strings.ToLower(udtName)]
 }
-
 
 func (p *PostgresAdapter) DropTable(ctx context.Context, tableName string) error {
 	_, err := p.pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE", tableName))

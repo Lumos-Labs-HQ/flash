@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Masterminds/squirrel"
 	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Masterminds/squirrel"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -166,6 +166,57 @@ func (m *MySQLAdapter) ExecuteMigration(ctx context.Context, migrationSQL string
 	return nil
 }
 
+// ExecuteQuery executes a SQL query and returns the results with column order preserved
+func (m *MySQLAdapter) ExecuteQuery(ctx context.Context, query string) (*QueryResult, error) {
+	rows, err := m.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	// Get column names in order
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+
+	// Read all rows
+	var results []map[string]interface{}
+	for rows.Next() {
+		// Create a slice of interface{}'s to represent each column
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			// Convert byte slices to strings
+			if b, ok := val.([]byte); ok {
+				row[col] = string(b)
+			} else {
+				row[col] = val
+			}
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return &QueryResult{
+		Columns: columns,
+		Rows:    results,
+	}, nil
+}
+
 // parseSQLStatements properly parses SQL statements handling multi-line CREATE TABLE statements
 func (m *MySQLAdapter) parseSQLStatements(sql string) []string {
 	var statements []string
@@ -277,7 +328,8 @@ func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([
 			c.column_name, c.data_type, c.is_nullable, c.column_default,
 			c.character_maximum_length, c.numeric_precision, c.numeric_scale, c.column_type,
 			CASE WHEN c.column_key = 'PRI' THEN 1 ELSE 0 END as is_primary_key,
-			CASE WHEN c.column_key = 'UNI' THEN 1 ELSE 0 END as is_unique
+			CASE WHEN c.column_key = 'UNI' THEN 1 ELSE 0 END as is_unique,
+			c.extra
 		FROM information_schema.columns c
 		WHERE c.table_name = ? AND c.table_schema = DATABASE()
 		ORDER BY c.ordinal_position
@@ -290,14 +342,14 @@ func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([
 	var columns []types.SchemaColumn
 	for rows.Next() {
 		var column types.SchemaColumn
-		var dataType, isNullable, columnType string
+		var dataType, isNullable, columnType, extra string
 		var columnDefault sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique int
 
 		err := rows.Scan(&column.Name, &dataType, &isNullable, &columnDefault,
 			&charMaxLength, &numericPrecision, &numericScale, &columnType,
-			&isPrimary, &isUnique)
+			&isPrimary, &isUnique, &extra)
 		if err != nil {
 			return nil, err
 		}
@@ -306,6 +358,8 @@ func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([
 		column.Nullable = isNullable == "YES"
 		column.IsPrimary = isPrimary == 1
 		column.IsUnique = isUnique == 1
+		// Detect auto-increment in MySQL
+		column.IsAutoIncrement = strings.Contains(strings.ToLower(extra), "auto_increment")
 		if columnDefault.Valid {
 			column.Default = columnDefault.String
 		}
@@ -465,6 +519,17 @@ func (m *MySQLAdapter) GetTableData(ctx context.Context, tableName string) ([]ma
 		result = append(result, row)
 	}
 	return result, nil
+}
+
+// GetTableRowCount returns the number of rows in a table
+func (m *MySQLAdapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tableName)
+	err := m.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count rows in table %s: %w", tableName, err)
+	}
+	return count, nil
 }
 
 func (m *MySQLAdapter) DropTable(ctx context.Context, tableName string) error {

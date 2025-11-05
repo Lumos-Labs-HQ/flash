@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 	"github.com/Masterminds/squirrel"
-	"github.com/Rana718/Graft/internal/types"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -162,6 +162,57 @@ func (s *SQLiteAdapter) ExecuteMigration(ctx context.Context, migrationSQL strin
 	return nil
 }
 
+// ExecuteQuery executes a SQL query and returns the results with column order preserved
+func (s *SQLiteAdapter) ExecuteQuery(ctx context.Context, query string) (*QueryResult, error) {
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	// Get column names in order
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+
+	// Read all rows
+	var results []map[string]interface{}
+	for rows.Next() {
+		// Create a slice of interface{}'s to represent each column
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			// Convert byte slices to strings
+			if b, ok := val.([]byte); ok {
+				row[col] = string(b)
+			} else {
+				row[col] = val
+			}
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return &QueryResult{
+		Columns: columns,
+		Rows:    results,
+	}, nil
+}
+
 // parseSQLStatements properly parses SQL statements handling multi-line CREATE TABLE statements
 func (s *SQLiteAdapter) parseSQLStatements(sql string) []string {
 	var statements []string
@@ -286,6 +337,11 @@ func (s *SQLiteAdapter) GetTableColumns(ctx context.Context, tableName string) (
 		column.Type = s.MapColumnType(dataType)
 		column.Nullable = notNull == 0
 		column.IsPrimary = pk > 0
+
+		// In SQLite, a column is auto-increment if it's INTEGER PRIMARY KEY
+		// SQLite automatically creates ROWID for INTEGER PRIMARY KEY columns
+		column.IsAutoIncrement = pk > 0 && strings.ToUpper(dataType) == "INTEGER"
+
 		if defaultValue.Valid {
 			column.Default = defaultValue.String
 		}
@@ -521,6 +577,17 @@ func (s *SQLiteAdapter) GetTableData(ctx context.Context, tableName string) ([]m
 		result = append(result, row)
 	}
 	return result, nil
+}
+
+// GetTableRowCount returns the number of rows in a table
+func (s *SQLiteAdapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
+	var count int
+	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tableName)
+	err := s.db.QueryRowContext(ctx, query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count rows in table %s: %w", tableName, err)
+	}
+	return count, nil
 }
 
 func (s *SQLiteAdapter) DropTable(ctx context.Context, tableName string) error {

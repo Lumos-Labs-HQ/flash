@@ -22,9 +22,10 @@ type SchemaColumn struct {
 	Default          string
 	IsPrimary        bool
 	IsUnique         bool
-	ForeignKeyTable  string 
-	ForeignKeyColumn string 
-	OnDeleteAction   string 
+	IsAutoIncrement  bool // NEW: Indicates if column is auto-increment (SERIAL, AUTO_INCREMENT, etc.)
+	ForeignKeyTable  string
+	ForeignKeyColumn string
+	OnDeleteAction   string
 }
 
 type SchemaIndex struct {
