@@ -1,4 +1,4 @@
-﻿package migrator
+package migrator
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rana718/Graft/internal/types"
-	"github.com/Rana718/Graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/utils"
 )
 
 // Apply runs migrations with optional generation

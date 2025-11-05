@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/gogen"
-	"github.com/Rana718/Graft/internal/jsgen"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/gogen"
+	"github.com/Lumos-Labs-HQ/graft/internal/jsgen"
 	"github.com/spf13/cobra"
 )
 

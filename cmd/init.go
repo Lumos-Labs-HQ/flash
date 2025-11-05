@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Rana718/Graft/template"
+	"github.com/Lumos-Labs-HQ/graft/template"
 	"github.com/spf13/cobra"
 )
 

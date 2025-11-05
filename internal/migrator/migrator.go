@@ -1,4 +1,4 @@
-﻿package migrator
+package migrator
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
-	"github.com/Rana718/Graft/internal/schema"
-	"github.com/Rana718/Graft/internal/types"
-	"github.com/Rana718/Graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/schema"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/utils"
 )
 
 type Migrator struct {

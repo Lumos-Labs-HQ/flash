@@ -66,33 +66,141 @@ func runRaw(cmd *cobra.Command, args []string) error {
 	fmt.Printf("🎯 Database: %s\n", cfg.Database.Provider)
 	fmt.Println()
 
-	statements := splitSQLStatements(string(sqlContent))
+	query := strings.TrimSpace(string(sqlContent))
 
-	if len(statements) == 0 {
-		return fmt.Errorf("no SQL statements found in file")
-	}
+	// Check if it's a SELECT query or other query that returns data
+	queryUpper := strings.ToUpper(query)
+	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
+		strings.HasPrefix(queryUpper, "SHOW") ||
+		strings.HasPrefix(queryUpper, "DESCRIBE") ||
+		strings.HasPrefix(queryUpper, "EXPLAIN") ||
+		strings.HasPrefix(queryUpper, "WITH")
 
-	fmt.Printf("📝 Found %d SQL statement(s)\n", len(statements))
-	fmt.Println()
-
-	for i, statement := range statements {
-		statement = strings.TrimSpace(statement)
-		if statement == "" {
-			continue
+	if isSelectQuery {
+		// Execute as query and display results
+		fmt.Println("⚡ Executing query...")
+		result, err := adapter.ExecuteQuery(ctx, query)
+		if err != nil {
+			return fmt.Errorf("failed to execute query: %w", err)
 		}
 
-		fmt.Printf("⚡ Executing statement %d...\n", i+1)
-
-		if err := adapter.ExecuteMigration(ctx, statement); err != nil {
-			return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
+		if len(result.Rows) == 0 {
+			fmt.Println("✅ Query executed successfully")
+			fmt.Println("📊 No rows returned")
+			return nil
 		}
 
-		fmt.Printf("✅ Statement %d executed successfully\n", i+1)
+		// Display results in a formatted table
+		fmt.Printf("✅ Query executed successfully\n")
+		fmt.Printf("📊 %d row(s) returned\n\n", len(result.Rows))
+
+		displayResultsTable(result.Columns, result.Rows)
+	} else {
+		// Execute as migration for non-SELECT queries
+		statements := splitSQLStatements(query)
+
+		if len(statements) == 0 {
+			return fmt.Errorf("no SQL statements found in file")
+		}
+
+		fmt.Printf("📝 Found %d SQL statement(s)\n", len(statements))
+		fmt.Println()
+
+		for i, statement := range statements {
+			statement = strings.TrimSpace(statement)
+			if statement == "" {
+				continue
+			}
+
+			fmt.Printf("⚡ Executing statement %d...\n", i+1)
+
+			if err := adapter.ExecuteMigration(ctx, statement); err != nil {
+				return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
+			}
+
+			fmt.Printf("✅ Statement %d executed successfully\n", i+1)
+		}
+
+		fmt.Println()
+		fmt.Printf("🎉 All statements executed successfully!\n")
 	}
 
-	fmt.Println()
-	fmt.Printf("🎉 All statements executed successfully!\n")
 	return nil
+}
+
+// displayResultsTable displays query results in a formatted table
+func displayResultsTable(columns []string, rows []map[string]interface{}) {
+	if len(rows) == 0 {
+		return
+	}
+
+	// Calculate column widths
+	colWidths := make(map[string]int)
+	for _, col := range columns {
+		colWidths[col] = len(col)
+	}
+
+	for _, row := range rows {
+		for _, col := range columns {
+			val := formatValue(row[col])
+			if len(val) > colWidths[col] {
+				colWidths[col] = len(val)
+			}
+		}
+	}
+
+	// Print header
+	fmt.Print("┌")
+	for i, col := range columns {
+		fmt.Print(strings.Repeat("─", colWidths[col]+2))
+		if i < len(columns)-1 {
+			fmt.Print("┬")
+		}
+	}
+	fmt.Println("┐")
+
+	fmt.Print("│")
+	for _, col := range columns {
+		fmt.Printf(" %-*s │", colWidths[col], col)
+	}
+	fmt.Println()
+
+	fmt.Print("├")
+	for i, col := range columns {
+		fmt.Print(strings.Repeat("─", colWidths[col]+2))
+		if i < len(columns)-1 {
+			fmt.Print("┼")
+		}
+	}
+	fmt.Println("┤")
+
+	// Print rows
+	for _, row := range rows {
+		fmt.Print("│")
+		for _, col := range columns {
+			val := formatValue(row[col])
+			fmt.Printf(" %-*s │", colWidths[col], val)
+		}
+		fmt.Println()
+	}
+
+	// Print footer
+	fmt.Print("└")
+	for i, col := range columns {
+		fmt.Print(strings.Repeat("─", colWidths[col]+2))
+		if i < len(columns)-1 {
+			fmt.Print("┴")
+		}
+	}
+	fmt.Println("┘")
+}
+
+// formatValue formats a value for display
+func formatValue(val interface{}) string {
+	if val == nil {
+		return "NULL"
+	}
+	return fmt.Sprintf("%v", val)
 }
 
 func splitSQLStatements(content string) []string {

@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/parser"
-	"github.com/Rana718/Graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/parser"
+	"github.com/Lumos-Labs-HQ/graft/internal/utils"
 )
 
 type Generator struct {

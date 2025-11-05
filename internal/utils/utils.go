@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 )
 
 type FileUtils struct{}
