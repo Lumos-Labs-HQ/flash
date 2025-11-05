@@ -60,6 +60,7 @@ func (s *Server) setupRoutes() {
 	// UI
 	s.app.Get("/", s.handleIndex)
 	s.app.Get("/schema", s.handleSchema)
+	s.app.Get("/sql", s.handleSQL)
 
 	// API
 	api := s.app.Group("/api")
@@ -114,6 +115,12 @@ func (s *Server) handleIndex(c *fiber.Ctx) error {
 func (s *Server) handleSchema(c *fiber.Ctx) error {
 	return c.Render("templates/schema", fiber.Map{
 		"Title": "Graft Studio",
+	})
+}
+
+func (s *Server) handleSQL(c *fiber.Ctx) error {
+	return c.Render("templates/sql", fiber.Map{
+		"Title": "SQL Editor - Graft Studio",
 	})
 }
 

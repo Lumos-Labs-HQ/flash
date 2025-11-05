@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Editor - Graft Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
+    <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
+        
+        /* Left Vertical Navbar (Supabase style) */
+        .left-navbar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            background: #0f0f0f;
+            border-right: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 8px;
+            z-index: 1000;
+        }
+        .left-navbar-logo {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 20px;
+        }
+        .left-navbar-link {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: #888;
+            text-decoration: none;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .left-navbar-link span.iconify {
+            font-size: 22px;
+        }
+        .left-navbar-link:hover {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .left-navbar-link.active {
+            background: #1a3a5a;
+            color: #4a9eff;
+        }
+        .left-navbar-link .tooltip {
+            visibility: hidden;
+            position: absolute;
+            left: 100%;
+            margin-left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #2a2a2a;
+            padding: 6px 12px;
+            border-radius: 4px;
+            white-space: nowrap;
+            font-size: 12px;
+            border: 1px solid #3a3a3a;
+            pointer-events: none;
+        }
+        .left-navbar-link:hover .tooltip {
+            visibility: visible;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            margin-left: 60px;
+        }
+        
+        .editor-section {
+            flex: 0 0 40%;
+            display: flex;
+            flex-direction: column;
+            border-bottom: 1px solid #2d2d2d;
+            min-height: 200px;
+        }
+        
+        .editor-header {
+            height: 48px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #2d2d2d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+        }
+        
+        .editor-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #888;
+        }
+        
+        .editor-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            padding: 6px 16px;
+            border-radius: 4px;
+            border: none;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+        .btn:hover { opacity: 0.9; }
+        .btn-primary { background: #10b981; color: #fff; }
+        .btn-secondary { background: #3a3a3a; color: #e0e0e0; }
+        
+        .editor-wrapper {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .CodeMirror {
+            height: 100% !important;
+            font-size: 14px;
+            background: #1a1a1a !important;
+        }
+        
+        .results-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .results-header {
+            height: 48px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #2d2d2d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+        }
+        
+        .results-info {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .results-body {
+            flex: 1;
+            overflow: auto;
+            padding: 16px;
+        }
+        
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #1e1e1e;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .results-table thead {
+            background: #2a2a2a;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .results-table th {
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 500;
+            color: #888;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #2d2d2d;
+        }
+        
+        .results-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #2a2a2a;
+            color: #e0e0e0;
+        }
+        
+        .results-table tbody tr:hover {
+            background: #252525;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            gap: 12px;
+        }
+        
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            opacity: 0.3;
+        }
+        
+        .error-message {
+            background: #3a1f1f;
+            border: 1px solid #5a2f2f;
+            border-radius: 6px;
+            padding: 16px;
+            color: #ef4444;
+            font-size: 13px;
+            margin: 16px;
+        }
+        
+        .success-message {
+            background: #1f3a2f;
+            border: 1px solid #2f5a3f;
+            border-radius: 6px;
+            padding: 16px;
+            color: #10b981;
+            font-size: 13px;
+            margin: 16px;
+        }
+        
+        .resize-handle {
+            height: 4px;
+            background: #2d2d2d;
+            cursor: ns-resize;
+            transition: background 0.2s;
+        }
+        .resize-handle:hover {
+            background: #4a9eff;
+        }
+        
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #1a1a1a; }
+        ::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+        
+        @media (max-width: 768px) {
+            .navbar-links { display: none; }
+            .editor-actions { flex-direction: column; gap: 4px; }
+            .btn { padding: 4px 12px; font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Left Vertical Navbar (Supabase style) -->
+    <div class="left-navbar">
+        <img src="/static/image/logo.png" alt="Graft" class="left-navbar-logo">
+        
+        <a href="/" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:table"></span>
+            <span class="tooltip">Data</span>
+        </a>
+        
+        <a href="/sql" class="left-navbar-link active">
+            <span class="iconify" data-icon="mdi:code-braces"></span>
+            <span class="tooltip">SQL Editor</span>
+        </a>
+        
+        <a href="/schema" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:file-tree"></span>
+            <span class="tooltip">Schema</span>
+        </a>
+    </div>
+
+    <div class="container">
+        <div class="editor-section">
+            <div class="editor-header">
+                <span class="editor-title">SQL Query</span>
+                <div class="editor-actions">
+                    <button class="btn btn-secondary" onclick="clearEditor()">Clear</button>
+                    <button class="btn btn-primary" onclick="runQuery()">▶ Run Query</button>
+                </div>
+            </div>
+            <div class="editor-wrapper">
+                <textarea id="sql-editor"></textarea>
+            </div>
+        </div>
+        
+        <div class="resize-handle" id="resize-handle"></div>
+        
+        <div class="results-section">
+            <div class="results-header">
+                <span class="results-info" id="results-info">Ready to execute query</span>
+                <button class="btn btn-secondary" onclick="exportResults()" id="export-btn" style="display: none;">Export CSV</button>
+            </div>
+            <div class="results-body" id="results-body">
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    <div>Run a query to see results</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
+    <script>
+        let editor;
+        let currentResults = null;
+        
+        // Initialize CodeMirror
+        document.addEventListener('DOMContentLoaded', () => {
+            editor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
+                mode: 'text/x-sql',
+                theme: 'material-darker',
+                lineNumbers: true,
+                lineWrapping: true,
+                autofocus: true,
+                extraKeys: {
+                    'Ctrl-Enter': runQuery,
+                    'Cmd-Enter': runQuery
+                }
+            });
+            
+            editor.setValue('SELECT * FROM users LIMIT 10;');
+            setupResize();
+        });
+        
+        async function runQuery() {
+            const query = editor.getValue().trim();
+            if (!query) return;
+            
+            document.getElementById('results-info').textContent = 'Executing query...';
+            document.getElementById('results-body').innerHTML = '<div class="empty-state"><div>Loading...</div></div>';
+            
+            try {
+                const res = await fetch('/api/sql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    currentResults = data.data;
+                    displayResults(data.data);
+                } else {
+                    displayError(data.message);
+                }
+            } catch (err) {
+                displayError(err.message);
+            }
+        }
+        
+        function displayResults(data) {
+            const resultsBody = document.getElementById('results-body');
+            
+            if (!data || !data.rows || data.rows.length === 0) {
+                document.getElementById('results-info').textContent = 'Query executed successfully (0 rows)';
+                resultsBody.innerHTML = '<div class="success-message">✓ Query executed successfully. No rows returned.</div>';
+                document.getElementById('export-btn').style.display = 'none';
+                return;
+            }
+            
+            const rowCount = data.rows.length;
+            document.getElementById('results-info').textContent = `${rowCount} row${rowCount !== 1 ? 's' : ''} returned`;
+            document.getElementById('export-btn').style.display = 'block';
+            
+            // Use columns from data.columns to maintain database order
+            // Fallback to Object.keys if columns not provided (backward compatibility)
+            const columns = data.columns && data.columns.length > 0 
+                ? data.columns.map(col => col.name || col) 
+                : Object.keys(data.rows[0]);
+            
+            let html = '<table class="results-table"><thead><tr>';
+            columns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            data.rows.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    const value = row[col];
+                    const displayValue = value === null ? '<span style="color: #666; font-style: italic;">NULL</span>' : 
+                                       typeof value === 'object' ? JSON.stringify(value) : value;
+                    html += `<td>${displayValue}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            resultsBody.innerHTML = html;
+        }
+        
+        function displayError(message) {
+            document.getElementById('results-info').textContent = 'Query failed';
+            document.getElementById('results-body').innerHTML = 
+                `<div class="error-message">❌ Error: ${message}</div>`;
+            document.getElementById('export-btn').style.display = 'none';
+        }
+        
+        function clearEditor() {
+            editor.setValue('');
+            editor.focus();
+        }
+        
+        function exportResults() {
+            if (!currentResults || !currentResults.rows) return;
+            
+            const rows = currentResults.rows;
+            // Use ordered columns from data.columns
+            const columns = currentResults.columns && currentResults.columns.length > 0 
+                ? currentResults.columns.map(col => col.name || col) 
+                : Object.keys(rows[0]);
+            
+            let csv = columns.join(',') + '\n';
+            rows.forEach(row => {
+                const values = columns.map(col => {
+                    const val = row[col];
+                    return val === null ? '' : `"${String(val).replace(/"/g, '""')}"`;
+                });
+                csv += values.join(',') + '\n';
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `query_results_${Date.now()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function setupResize() {
+            const handle = document.getElementById('resize-handle');
+            const editorSection = document.querySelector('.editor-section');
+            let isResizing = false;
+            
+            handle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                document.body.style.cursor = 'ns-resize';
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                
+                const containerHeight = document.querySelector('.container').offsetHeight;
+                const newHeight = (e.clientY - 44) / containerHeight * 100;
+                
+                if (newHeight > 20 && newHeight < 80) {
+                    editorSection.style.flex = `0 0 ${newHeight}%`;
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isResizing = false;
+                document.body.style.cursor = 'default';
+            });
+        }
+    </script>
+</body>
+</html>

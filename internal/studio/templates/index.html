@@ -5,16 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Iconify for icons -->
+    <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
         body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
         
-        .studio-container { display: flex; height: 100vh; }
+        /* Left Vertical Navbar (Supabase style) */
+        .left-navbar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            background: #0f0f0f;
+            border-right: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 8px;
+            z-index: 1000;
+        }
+        .left-navbar-logo {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 20px;
+        }
+        .left-navbar-link {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: #888;
+            text-decoration: none;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .left-navbar-link span.iconify {
+            font-size: 22px;
+        }
+        .left-navbar-link:hover {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .left-navbar-link.active {
+            background: #1a3a5a;
+            color: #4a9eff;
+        }
+        .left-navbar-link .tooltip {
+            visibility: hidden;
+            position: absolute;
+            left: 100%;
+            margin-left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #2a2a2a;
+            padding: 6px 12px;
+            border-radius: 4px;
+            white-space: nowrap;
+            font-size: 12px;
+            border: 1px solid #3a3a3a;
+            pointer-events: none;
+        }
+        .left-navbar-link:hover .tooltip {
+            visibility: visible;
+        }
         
-        /* Sidebar */
-        .sidebar { width: 220px; background: #1e1e1e; border-right: 1px solid #2d2d2d; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 12px 16px; border-bottom: 1px solid #2d2d2d; }
-        .sidebar-title { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
+        .studio-container { 
+            display: flex; 
+            height: 100vh;
+            margin-left: 60px; /* Space for left navbar */
+        }        /* Sidebar */
+    .sidebar { width: 220px; background: #1e1e1e; border-right: 1px solid #2d2d2d; display: flex; flex-direction: column; }
+    .sidebar.collapsed { width: 72px; }
+    .sidebar-header { padding: 12px 16px; border-bottom: 1px solid #2d2d2d; display:flex; align-items:center; gap:8px; }
+    .sidebar.collapsed .table-item span:first-child { display: none; }
+    .sidebar.collapsed .table-item .table-count { margin-left: 0; }
+    .sidebar-title { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; }
         .search-box { padding: 8px 12px; border-bottom: 1px solid #2d2d2d; }
         .search-box input { 
             width: 100%; background: #2a2a2a; border: 1px solid #3a3a3a; color: #e0e0e0; 
@@ -25,18 +95,26 @@
         .table-item { 
             padding: 8px 12px; cursor: pointer; border-radius: 4px; margin-bottom: 2px; font-size: 13px;
             display: flex; justify-content: space-between; align-items: center;
+            gap: 8px;
+        }
+        .table-item-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .table-item:hover { background: #2a2a2a; }
         .table-item.active { background: #2d4a6e; color: #fff; }
-        .table-count { font-size: 11px; color: #888; }
+        .table-count { font-size: 11px; color: #888; flex-shrink: 0; }
         
         /* Main content */
-        .content { flex: 1; display: flex; flex-direction: column; background: #1a1a1a; position: relative; }
+        .content { flex: 1; display: flex; flex-direction: column; background: #1a1a1a; overflow: hidden; min-height: 0; }
         
         /* Top bar */
         .topbar { 
             height: 48px; background: #1e1e1e; border-bottom: 1px solid #2d2d2d; 
             display: flex; align-items: center; padding: 0 16px; justify-content: space-between;
+            position: sticky; top: 0; z-index: 50;
         }
         .topbar-left { display: flex; align-items: center; gap: 12px; }
         .topbar-right { display: flex; gap: 8px; }
@@ -117,19 +195,97 @@
             display: flex; align-items: center; padding: 0 16px; gap: 12px; font-size: 12px;
         }
         .toolbar-item { color: #888; display: flex; align-items: center; gap: 6px; }
-        .data-grid { flex: 1; overflow: auto; }
-        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .data-table thead { position: sticky; top: 0; background: #1e1e1e; z-index: 10; }
-        .data-table th { 
-            text-align: left; padding: 10px 12px; font-weight: 500; color: #888; 
-            border-bottom: 1px solid #2d2d2d; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+        
+        /* Data grid - this is the scrollable container */
+        .data-grid { 
+            flex: 1; 
+            overflow: auto; /* Allow both directions */
+            position: relative; 
         }
-        .data-table td { padding: 10px 12px; border-bottom: 1px solid #2a2a2a; color: #e0e0e0; }
-        .data-table tbody tr:hover { background: #222; }
-        .cell { cursor: text; }
+        
+        /* Grid container - holds the table */
+        #grid-container {
+            min-height: 100%;
+            position: relative;
+        }
+        
+        .data-table { 
+            width: max-content; /* Auto-size based on content */
+            min-width: 100%;
+            border-collapse: collapse; 
+            font-size: 13px; 
+            table-layout: auto; /* Auto layout for flexible columns */
+        }
+        .data-table thead { 
+            position: sticky; top: 0; background: #1e1e1e; z-index: 10;
+            box-shadow: 0 2px 0 #4a9eff; /* Neon underline */
+        }
+        .data-table th { 
+            text-align: left; 
+            padding: 10px 16px; 
+            font-weight: 500; 
+            color: #888; 
+            border-bottom: 2px solid #4a9eff; /* Neon border */
+            font-size: 12px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 150px; /* Increased for better visibility */
+        }
+        .data-table td { 
+            padding: 10px 16px; 
+            border-bottom: 1px solid #2a2a2a; 
+            color: #e0e0e0;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            min-width: 150px; /* Increased for better visibility */
+            max-width: 400px; /* Allow wider cells */
+        }
+        .data-table td.cell-editing {
+            white-space: normal !important;
+            overflow: visible !important;
+        }
+        .data-table td textarea {
+            width: 100%;
+            min-height: 60px;
+            background: #2a2a2a;
+            border: 2px solid #4a9eff;
+            color: #e0e0e0;
+            padding: 8px;
+            font-family: inherit;
+            font-size: 13px;
+            resize: vertical;
+            outline: none;
+            border-radius: 4px;
+        }
+        .data-table tbody tr { 
+            transition: background 0.15s, border-left 0.15s;
+            border-left: 2px solid transparent;
+        }
+        .data-table tbody tr:hover { 
+            background: #222;
+            border-left: 2px solid #4a9eff; /* Neon line on hover */
+        }
+        .data-table tbody tr.selected {
+            background: #2a3a4a;
+            border-left: 2px solid #10b981;
+        }
+        .cell { 
+            cursor: pointer; 
+            position: relative; 
+        }
         .cell:hover { background: #252525; }
-        .cell-editing { background: #2a2a2a !important; outline: 2px solid #4a9eff; }
-        .cell-dirty { background: #3a2f1a !important; }
+        .cell-editing { 
+            background: #2a2a2a !important; 
+            padding: 0 !important;
+        }
+        .cell-dirty { 
+            background: #3a2f1a !important;
+            border-left: 2px solid #f59e0b;
+        }
         .cell input { 
             width: 100%; background: transparent; border: none; color: #e0e0e0; 
             outline: none; font-size: 13px; font-family: inherit;
@@ -163,9 +319,191 @@
         .value-bool { color: #c792ea; }
         .value-number { color: #f78c6c; }
         .value-string { color: #c3e88d; }
+        .value-fk { color: #4a9eff; text-decoration: underline; cursor: pointer; }
+        .value-fk:hover { opacity: 0.8; }
+        
+        /* Custom Modal */
+        .custom-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.2s;
+        }
+        .custom-modal.show { display: flex; }
+        .custom-modal-content {
+            background: #1e1e1e;
+            border: 1px solid #3a3a3a;
+            border-radius: 8px;
+            padding: 0;
+            min-width: 400px;
+            max-width: 600px;
+            width: auto;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            animation: slideUp 0.3s;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .custom-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #3a3a3a;
+            flex-shrink: 0;
+        }
+        .custom-modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .custom-modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .custom-modal-close:hover {
+            background: #2a2a2a;
+            color: #e0e0e0;
+        }
+        .custom-modal-body {
+            color: #e0e0e0;
+            line-height: 1.6;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+            padding: 20px 24px;
+            min-height: 0;
+        }
+        .custom-modal-footer {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            padding: 16px 24px;
+            border-top: 1px solid #3a3a3a;
+            flex-shrink: 0;
+            background: #1e1e1e;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #888;
+            font-weight: 500;
+        }
+        .form-input {
+            width: 100%;
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+        }
+        .form-input:focus {
+            border-color: #4a9eff;
+        }
+        .form-input[readonly] {
+            background: #252525;
+            color: #666;
+        }
+        .form-hint {
+            font-size: 11px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        /* Table Schema Info */
+        .table-schema-info {
+            background: #1e1e1e;
+            border: 1px solid #2d2d2d;
+            border-radius: 6px;
+            padding: 16px;
+            margin: 16px;
+        }
+        .schema-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4a9eff;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .schema-columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+        }
+        .schema-column {
+            background: #252525;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .schema-column-name {
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+        .schema-column-type {
+            color: #888;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .schema-column-badge {
+            display: inline-block;
+            background: #3a3a3a;
+            color: #ffc66d;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            margin-left: 6px;
+        }
     </style>
 </head>
 <body>
+    <!-- Left Vertical Navbar (Supabase style) -->
+    <div class="left-navbar">
+        <img src="/static/image/logo.png" alt="Graft" class="left-navbar-logo">
+        
+        <a href="/" class="left-navbar-link active">
+            <span class="iconify" data-icon="mdi:table"></span>
+            <span class="tooltip">Data</span>
+        </a>
+        
+        <a href="/sql" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:code-braces"></span>
+            <span class="tooltip">SQL Editor</span>
+        </a>
+        
+        <a href="/schema" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:file-tree"></span>
+            <span class="tooltip">Schema</span>
+        </a>
+    </div>
+
     <div class="studio-container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -191,21 +529,20 @@
                 </div>
                 <div class="topbar-right">
                     <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()">
-                        ⚡ Filters
+                        <span class="iconify" data-icon="mdi:filter-outline"></span> Filters
                         <span id="filter-count" class="filter-badge" style="display: none;">0</span>
                     </button>
-                    <button id="sql-btn" class="btn btn-secondary" onclick="openSQLModal()">📝 SQL Query</button>
                     <button id="delete-selected-btn" class="btn btn-secondary" style="display: none; background: #dc2626; color: #fff;">Delete selected</button>
                     <button id="save-btn" class="btn btn-primary" style="display: none;">Save changes</button>
                     <button id="add-btn" class="btn btn-success">Add record</button>
-                    <button id="refresh-btn" class="btn btn-secondary">⟳</button>
+                    <button id="refresh-btn" class="btn btn-secondary"><span class="iconify" data-icon="mdi:refresh"></span></button>
                 </div>
             </div>
 
             <!-- Filter Panel -->
             <div id="filter-panel" class="filter-panel">
                 <div class="filter-header">
-                    <div class="filter-title">🔍 Filter Records</div>
+                    <div class="filter-title">Filter Records</div>
                     <button class="btn-sm btn-secondary" onclick="toggleFilters()">✕</button>
                 </div>
                 <div id="filter-rows"></div>
@@ -263,6 +600,7 @@
         </div>
     </div>
 
+    <script src="/static/js/modal.js"></script>
     <script src="/static/js/studio.js"></script>
     <script>
         // Filter state

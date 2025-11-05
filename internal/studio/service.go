@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Rana718/Graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
 )
 
 type Service struct {
@@ -27,21 +27,46 @@ func (s *Service) GetTables() ([]TableInfo, error) {
 	}
 
 	var result []TableInfo
+
+	// Use goroutines for parallel count fetching (much faster)
+	type tableCount struct {
+		name  string
+		count int
+	}
+
+	countChan := make(chan tableCount, len(tables))
+
 	for _, table := range tables {
 		if table == "_graft_migrations" {
 			continue
 		}
 
-		// Get count asynchronously for better performance
-		count := 0
-		data, err := s.adapter.GetTableData(s.ctx, table)
-		if err == nil {
-			count = len(data)
+		go func(tableName string) {
+			count := 0
+			// Fast count using COUNT(*) query
+			count, err := s.adapter.GetTableRowCount(s.ctx, tableName)
+			if err != nil {
+				count = 0
+			}
+			countChan <- tableCount{name: tableName, count: count}
+		}(table)
+	}
+
+	// Collect results
+	tableMap := make(map[string]int)
+	for i := 0; i < len(tables)-1; i++ { // -1 for _graft_migrations
+		tc := <-countChan
+		tableMap[tc.name] = tc.count
+	}
+
+	// Build result in order
+	for _, table := range tables {
+		if table == "_graft_migrations" {
+			continue
 		}
-		
 		result = append(result, TableInfo{
 			Name:     table,
-			RowCount: count,
+			RowCount: tableMap[table],
 		})
 	}
 
@@ -57,10 +82,14 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, e
 	columns := make([]ColumnInfo, len(schema))
 	for i, col := range schema {
 		columns[i] = ColumnInfo{
-			Name:       col.Name,
-			Type:       col.Type,
-			Nullable:   col.Nullable,
-			PrimaryKey: col.IsPrimary,
+			Name:             col.Name,
+			Type:             col.Type,
+			Nullable:         col.Nullable,
+			PrimaryKey:       col.IsPrimary,
+			Default:          col.Default,
+			AutoIncrement:    col.IsAutoIncrement, // NEW: Pass auto-increment info
+			ForeignKeyTable:  col.ForeignKeyTable,
+			ForeignKeyColumn: col.ForeignKeyColumn,
 		}
 	}
 
@@ -87,7 +116,7 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 	if err != nil {
 		return err
 	}
-	
+
 	pkColumn := "id"
 	for _, col := range schema {
 		if col.IsPrimary {
@@ -95,20 +124,20 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 			break
 		}
 	}
-	
+
 	// Execute each change
 	for _, change := range changes {
 		if change.Action == "update" {
 			// Build and execute UPDATE query
 			query := fmt.Sprintf("UPDATE %s SET %s = '%s' WHERE %s = '%s'",
 				tableName, change.Column, change.Value, pkColumn, change.RowID)
-			
+
 			if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
 				return fmt.Errorf("failed to update %s.%s: %w", tableName, change.Column, err)
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -118,7 +147,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	pkColumn := "id"
 	for _, col := range schema {
 		if col.IsPrimary {
@@ -126,7 +155,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 			break
 		}
 	}
-	
+
 	// Delete each row
 	for _, rowID := range rowIDs {
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", tableName, pkColumn, rowID)
@@ -134,23 +163,35 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 			return fmt.Errorf("failed to delete row %s: %w", rowID, err)
 		}
 	}
-	
+
 	return nil
 }
 
 func (s *Service) AddRow(tableName string, data map[string]any) error {
+	if len(data) == 0 {
+		return fmt.Errorf("no data provided")
+	}
+
 	columns := []string{}
-	values := []any{}
+	values := []string{}
 
 	for col, val := range data {
 		columns = append(columns, col)
-		values = append(values, val)
+		// Format value with proper escaping
+		if val == nil {
+			values = append(values, "NULL")
+		} else {
+			// Escape single quotes and wrap in quotes for strings
+			strVal := fmt.Sprintf("%v", val)
+			escapedVal := strings.ReplaceAll(strVal, "'", "''")
+			values = append(values, fmt.Sprintf("'%s'", escapedVal))
+		}
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		tableName,
 		joinColumns(columns),
-		placeholders(len(values)))
+		strings.Join(values, ", "))
 
 	return s.adapter.ExecuteMigration(s.ctx, query)
 }
@@ -219,175 +260,120 @@ func placeholders(n int) string {
 	return result
 }
 
-func (s *Service) GetSchemaVisualization() (map[string]interface{}, error) {
-	tables, err := s.adapter.GetAllTableNames(s.ctx)
+// GetSchemaVisualization returns schema for visualization
+func (s *Service) GetSchemaVisualization() (map[string]any, error) {
+	tables, err := s.adapter.GetCurrentSchema(s.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get table names: %w", err)
+		return nil, err
 	}
 
-	nodes := []map[string]interface{}{}
-	edges := []map[string]interface{}{}
-	
-	edgeId := 0
-	tableIndex := 0
+	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
 
-	for _, tableName := range tables {
-		if tableName == "_graft_migrations" || tableName == "graft_migrations" {
-			continue
-		}
+	// Build nodes (tables)
+	nodes := []map[string]any{}
+	nodeIndex := make(map[string]string)
 
-		columns, err := s.adapter.GetTableColumns(s.ctx, tableName)
-		if err != nil {
-			fmt.Printf("Error getting columns for table %s: %v\n", tableName, err)
-			continue
-		}
+	for i, table := range tables {
+		nodeID := fmt.Sprintf("table-%d", i)
+		nodeIndex[table.Name] = nodeID
 
-		columnData := []map[string]interface{}{}
-		for _, col := range columns {
-			columnData = append(columnData, map[string]interface{}{
+		// Prepare columns info
+		columns := []map[string]any{}
+		for _, col := range table.Columns {
+			columns = append(columns, map[string]any{
 				"name":      col.Name,
 				"type":      col.Type,
 				"isPrimary": col.IsPrimary,
 				"isForeign": col.ForeignKeyTable != "",
 			})
-
-			if col.ForeignKeyTable != "" {
-				edgeId++
-				edges = append(edges, map[string]interface{}{
-					"id":     fmt.Sprintf("e%d", edgeId),
-					"source": tableName,
-					"target": col.ForeignKeyTable,
-					"label":  col.Name,
-				})
-			}
 		}
 
-		// Better positioning: 2 columns, more spacing
-		col := tableIndex % 2
-		row := tableIndex / 2
-		posX := 150 + (col * 550)
-		posY := 100 + (row * 400)
-
-		nodes = append(nodes, map[string]interface{}{
-			"id":   tableName,
-			"type": "table",
-			"data": map[string]interface{}{
-				"label":   tableName,
-				"columns": columnData,
+		nodes = append(nodes, map[string]any{
+			"id": nodeID,
+			"data": map[string]any{
+				"label":   table.Name,
+				"columns": columns,
 			},
-			"position": map[string]interface{}{
-				"x": posX,
-				"y": posY,
+			"position": map[string]int{
+				"x": 100 + (i%4)*300,
+				"y": 100 + (i/4)*250,
 			},
 		})
-		
-		tableIndex++
 	}
 
-	return map[string]interface{}{
-		"nodes": nodes,
-		"edges": edges,
-	}, nil
-}
-
-func (s *Service) ExecuteSQL(query string) (*TableData, error) {
-	// Basic SQL injection protection - only allow SELECT
-	query = strings.TrimSpace(query)
-	if !strings.HasPrefix(strings.ToUpper(query), "SELECT") {
-		return nil, fmt.Errorf("only SELECT queries are allowed")
-	}
-
-	// Execute query based on adapter type
-	switch adapter := s.adapter.(type) {
-	case *database.PostgresAdapter:
-		return s.executeSQLPostgres(adapter, query)
-	default:
-		return nil, fmt.Errorf("SQL query execution not supported for this database type")
-	}
-}
-
-func (s *Service) executeSQLPostgres(adapter *database.PostgresAdapter, query string) (*TableData, error) {
-	wrappedQuery := fmt.Sprintf(`
-		SELECT * FROM (
-			%s
-		) AS subquery
-	`, query)
-	
-	testRows, err := adapter.QueryContext(s.ctx, wrappedQuery+" LIMIT 0")
-	if err != nil {
-		return nil, fmt.Errorf("query validation failed: %w", err)
-	}
-	columns := testRows.FieldDescriptions()
-	testRows.Close()
-	
-	var castCols []string
-	for _, col := range columns {
-		castCols = append(castCols, fmt.Sprintf("subquery.%s::text AS %s", string(col.Name), string(col.Name)))
-	}
-	
-	finalQuery := fmt.Sprintf(`
-		SELECT %s FROM (
-			%s
-		) AS subquery
-	`, strings.Join(castCols, ", "), query)
-	
-	
-	rows, err := adapter.QueryContext(s.ctx, finalQuery)
-	if err != nil {
-		return nil, fmt.Errorf("query execution failed: %w", err)
-	}
-	defer rows.Close()
-
-	
-	columns = rows.FieldDescriptions()
-	columnInfo := make([]ColumnInfo, len(columns))
-	for i, col := range columns {
-		columnInfo[i] = ColumnInfo{
-			Name:     string(col.Name),
-			Type:     "text",
-			Nullable: true,
-		}
-	}
-
-	var results []map[string]any
-	for rows.Next() {
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
-		for i := range values {
-			valuePtrs[i] = &values[i]
-		}
-
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		row := make(map[string]any)
-		for i, col := range columns {
-			val := values[i]
-			colName := string(col.Name)
-			
-			// Convert types
-			switch v := val.(type) {
-			case []byte:
-				row[colName] = string(v)
-			case nil:
-				row[colName] = nil
-			default:
-				row[colName] = v
+	// Build edges (relationships)
+	edges := []map[string]any{}
+	for _, table := range tables {
+		sourceID := nodeIndex[table.Name]
+		for _, col := range table.Columns {
+			if col.ForeignKeyTable != "" {
+				if targetID, ok := nodeIndex[col.ForeignKeyTable]; ok {
+					edges = append(edges, map[string]any{
+						"id":     fmt.Sprintf("%s-%s", sourceID, targetID),
+						"source": sourceID,
+						"target": targetID,
+						"label":  col.Name,
+					})
+				}
 			}
 		}
-		results = append(results, row)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error reading rows: %w", err)
-	}
-
-	return &TableData{
-		Columns: columnInfo,
-		Rows:    results,
-		Total:   len(results),
-		Page:    1,
-		Limit:   len(results),
+	return map[string]any{
+		"nodes": nodes,
+		"edges": edges,
+		"enums": enums,
 	}, nil
+}
+
+// ExecuteSQL executes a raw SQL query
+func (s *Service) ExecuteSQL(query string) (*TableData, error) {
+	query = strings.TrimSpace(query)
+
+	// Check if it's a SELECT query or other query that returns data
+	queryUpper := strings.ToUpper(query)
+	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
+		strings.HasPrefix(queryUpper, "SHOW") ||
+		strings.HasPrefix(queryUpper, "DESCRIBE") ||
+		strings.HasPrefix(queryUpper, "EXPLAIN") ||
+		strings.HasPrefix(queryUpper, "WITH")
+
+	if isSelectQuery {
+		// Execute as a query and return results
+		result, err := s.adapter.ExecuteQuery(s.ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("query execution failed: %w", err)
+		}
+
+		// Convert to TableData format with ordered columns
+		columns := make([]ColumnInfo, len(result.Columns))
+		for i, col := range result.Columns {
+			columns[i] = ColumnInfo{
+				Name: col,
+				Type: "TEXT", // We don't have type info from query results
+			}
+		}
+
+		return &TableData{
+			Columns: columns,
+			Rows:    result.Rows,
+			Total:   len(result.Rows),
+			Page:    1,
+			Limit:   len(result.Rows),
+		}, nil
+	} else {
+		// Execute as a migration (INSERT, UPDATE, DELETE, CREATE, etc.)
+		if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
+			return nil, fmt.Errorf("query execution failed: %w", err)
+		}
+
+		// Return success message
+		return &TableData{
+			Columns: []ColumnInfo{},
+			Rows:    []map[string]any{},
+			Total:   0,
+			Page:    1,
+			Limit:   0,
+		}, nil
+	}
 }

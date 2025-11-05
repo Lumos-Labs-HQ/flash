@@ -5,74 +5,166 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Schema Visualization</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.8.4/dist/style.css">
+    <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
-        body { background: #2b2b2b; color: #a9b7c6; overflow: hidden; }
+        body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
+        
+        /* Left Vertical Navbar (Supabase style) */
+        .left-navbar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            background: #0f0f0f;
+            border-right: 1px solid #222;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 8px;
+            z-index: 1000;
+        }
+        .left-navbar-logo {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 20px;
+        }
+        .left-navbar-link {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: #888;
+            text-decoration: none;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .left-navbar-link span.iconify {
+            font-size: 22px;
+        }
+        .left-navbar-link:hover {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .left-navbar-link.active {
+            background: #1a3a5a;
+            color: #4a9eff;
+        }
+        .left-navbar-link .tooltip {
+            visibility: hidden;
+            position: absolute;
+            left: 100%;
+            margin-left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #2a2a2a;
+            padding: 6px 12px;
+            border-radius: 4px;
+            white-space: nowrap;
+            font-size: 12px;
+            border: 1px solid #3a3a3a;
+            pointer-events: none;
+        }
+        .left-navbar-link:hover .tooltip {
+            visibility: visible;
+        }
         
         .topbar { 
+            position: fixed;
+            top: 0;
+            left: 60px;
+            right: 0;
             height: 48px; 
-            background: #3c3f41; 
-            border-bottom: 1px solid #232323; 
+            background: #1e1e1e; 
+            border-bottom: 1px solid #2d2d2d; 
             display: flex; 
             align-items: center; 
             padding: 0 16px;
             justify-content: space-between;
+            z-index: 100;
         }
-        .topbar h1 { font-size: 14px; font-weight: 500; color: #a9b7c6; }
+        .topbar h1 { font-size: 14px; font-weight: 500; color: #e0e0e0; }
         .topbar-right { display: flex; gap: 12px; align-items: center; }
-        .stats { font-size: 11px; color: #6897bb; }
+        .stats { font-size: 11px; color: #4a9eff; }
         .btn { 
             padding: 6px 14px; 
             border-radius: 4px; 
-            border: 1px solid #555; 
+            border: 1px solid #3a3a3a; 
             font-size: 11px; 
             cursor: pointer; 
-            background: #4c5052;
-            color: #a9b7c6;
+            background: #2a2a2a;
+            color: #e0e0e0;
             transition: all 0.2s;
         }
-        .btn:hover { background: #5a5d5f; }
+        .btn:hover { background: #3a3a3a; }
         
-        #canvas-container {
-            position: relative;
-            width: 100%;
+        #root {
+            position: fixed;
+            top: 48px;
+            left: 60px;
+            right: 0;
+            bottom: 0;
+            width: calc(100% - 60px);
             height: calc(100vh - 48px);
-            overflow: auto;
-            background: 
-                repeating-linear-gradient(0deg, transparent, transparent 19px, #3a3a3a 19px, #3a3a3a 20px),
-                repeating-linear-gradient(90deg, transparent, transparent 19px, #3a3a3a 19px, #3a3a3a 20px);
-            background-size: 20px 20px;
         }
         
-        #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            pointer-events: none;
-            z-index: 1;
-        }
-        
-        #tables {
-            position: relative;
-            z-index: 2;
-            min-width: 100%;
-            min-height: 100%;
-        }
-        
-        .table-box {
-            position: absolute;
-            background: #3c3f41;
-            border: 2px solid #5a5d5f;
+        .react-flow__node {
+            background: #1e1e1e;
+            border: 2px solid #2d2d2d;
             border-radius: 4px;
             min-width: 220px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            cursor: move;
-            transition: box-shadow 0.2s;
+            cursor: grab;
         }
         
-        .table-box:hover {
+        .react-flow__node.dragging {
+            cursor: grabbing;
+        }
+        
+        .react-flow__node:hover {
             box-shadow: 0 6px 16px rgba(0,0,0,0.6);
-            border-color: #6897bb;
+            border-color: #4a9eff;
+        }
+        
+        .react-flow__edge-path {
+            stroke: #4a9eff;
+            stroke-width: 2;
+        }
+        
+        .react-flow__edge-text {
+            fill: #4a9eff;
+            font-size: 10px;
+            font-weight: 500;
+        }
+        
+        .react-flow__background {
+            background: #2b2b2b;
+        }
+        
+        .react-flow__minimap {
+            background: #3c3f41 !important;
+            border: 1px solid #555 !important;
+        }
+        
+        .react-flow__minimap-mask {
+            fill: rgba(104, 151, 187, 0.2) !important;
+        }
+        
+        .react-flow__minimap-node {
+            fill: #5a5d5f !important;
+            stroke: #6897bb !important;
+        }
+        
+        .react-flow__handle {
+            width: 8px;
+            height: 8px;
+            background: #6897bb;
+            border: 2px solid #3c3f41;
         }
         
         .table-header {
@@ -88,10 +180,6 @@
             border-radius: 2px 2px 0 0;
         }
         
-        .table-icon {
-            font-size: 14px;
-        }
-        
         .table-body {
             padding: 0;
             background: #3c3f41;
@@ -104,16 +192,10 @@
             align-items: center;
             border-bottom: 1px solid #2d2d2d;
             font-size: 11px;
-            transition: background 0.15s;
-        }
-        
-        .table-field:hover {
-            background: #454749;
         }
         
         .table-field:last-child { 
             border-bottom: none; 
-            border-radius: 0 0 2px 2px;
         }
         
         .field-left {
@@ -136,7 +218,6 @@
         .field-type { 
             color: #6897bb; 
             font-size: 10px;
-            font-weight: 400;
         }
         
         .pk-icon { color: #ffc66d; }
@@ -147,7 +228,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: calc(100vh - 48px);
+            height: 100%;
             font-size: 13px;
             color: #6897bb;
             gap: 12px;
@@ -165,110 +246,76 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
-        
-        /* Connection lines */
-        .connection-line {
-            stroke: #6897bb;
-            stroke-width: 2;
-            fill: none;
-            marker-end: url(#arrowhead);
-        }
-        
-        .connection-label {
-            fill: #6897bb;
-            font-size: 10px;
-            font-family: 'JetBrains Mono', monospace;
-        }
     </style>
 </head>
 <body>
+    <!-- Left Vertical Navbar (Supabase style) -->
+    <div class="left-navbar">
+        <img src="/static/image/logo.png" alt="Graft" class="left-navbar-logo">
+        
+        <a href="/" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:table"></span>
+            <span class="tooltip">Data</span>
+        </a>
+        
+        <a href="/sql" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:code-braces"></span>
+            <span class="tooltip">SQL Editor</span>
+        </a>
+        
+        <a href="/schema" class="left-navbar-link active">
+            <span class="iconify" data-icon="mdi:file-tree"></span>
+            <span class="tooltip">Schema</span>
+        </a>
+    </div>
+    
     <div class="topbar">
-        <h1>📊 Database Schema Visualization</h1>
+        <h1>Database Schema</h1>
         <div class="topbar-right">
             <span id="stats" class="stats">Loading...</span>
-            <button class="btn" onclick="window.location.reload()">🔄 Refresh</button>
-            <button class="btn" onclick="window.location.href='/'">← Back to Data</button>
+            <button class="btn" onclick="window.location.reload()">
+                <span class="iconify" data-icon="mdi:refresh"></span> Refresh
+            </button>
         </div>
     </div>
     
-    <div id="canvas-container">
-        <svg id="canvas"></svg>
-        <div id="tables"></div>
-        <div id="loading" class="loading">
+    <div id="root">
+        <div class="loading">
             <div class="spinner"></div>
             <div>Loading schema...</div>
         </div>
     </div>
 
-    <script>
-        let tables = [];
-        let edges = [];
-        const canvas = document.getElementById('canvas');
-        const container = document.getElementById('canvas-container');
-        
-        // Load schema
-        fetch('/api/schema')
-            .then(res => res.json())
-            .then(data => {
-                console.log('Schema loaded:', data);
-                
-                if (data.success && data.data) {
-                    document.getElementById('loading').style.display = 'none';
-                    tables = data.data.nodes || [];
-                    edges = data.data.edges || [];
-                    
-                    if (tables.length === 0) {
-                        document.getElementById('loading').innerHTML = '<div>⚠️ No tables found in database</div>';
-                        document.getElementById('loading').style.display = 'flex';
-                        return;
-                    }
-                    
-                    document.getElementById('stats').textContent = 
-                        `${tables.length} tables • ${edges.length} relationships`;
-                    
-                    renderTables();
-                    setTimeout(drawConnections, 200);
-                } else {
-                    showError(data.message || 'Failed to load schema');
-                }
-            })
-            .catch(err => {
-                showError('Error: ' + err.message);
-                console.error('Error:', err);
-            });
-        
-        function showError(msg) {
-            document.getElementById('loading').innerHTML = `<div>❌ ${msg}</div>`;
-            document.getElementById('loading').style.display = 'flex';
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "@xyflow/react": "https://esm.sh/@xyflow/react@12.8.4?deps=react@18.2.0,react-dom@18.2.0",
+            "dagre": "https://esm.sh/dagre@0.8.5"
         }
-        
-        function renderTables() {
-            const tablesDiv = document.getElementById('tables');
-            tablesDiv.innerHTML = '';
-            
-            tables.forEach(table => {
-                const box = document.createElement('div');
-                box.className = 'table-box';
-                box.id = `table-${table.id}`;
-                box.style.left = table.position.x + 'px';
-                box.style.top = table.position.y + 'px';
-                
-                // Header
-                const header = document.createElement('div');
-                header.className = 'table-header';
-                header.innerHTML = `<span class="table-icon">📋</span>${table.data.label}`;
-                box.appendChild(header);
-                
-                // Body
-                const body = document.createElement('div');
-                body.className = 'table-body';
-                
-                if (table.data.columns && table.data.columns.length > 0) {
-                    table.data.columns.forEach(col => {
-                        const field = document.createElement('div');
-                        field.className = 'table-field';
-                        
-                        let icon = '';
+    }
+    </script>
+
+    <script type="module">
+        import React from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { ReactFlow, Background, Controls, MiniMap, MarkerType, useNodesState, useEdgesState, Handle, Position } from '@xyflow/react';
+        import dagre from 'dagre';
+
+        const { useState, useEffect } = React;
+
+        function TableNode({ data }) {
+            return React.createElement('div', { style: { minWidth: '220px' } },
+                React.createElement(Handle, { type: 'target', position: Position.Left }),
+                React.createElement(Handle, { type: 'source', position: Position.Right }),
+                React.createElement('div', { className: 'table-header' },
+                    React.createElement('span', null, '📋'),
+                    data.label
+                ),
+                React.createElement('div', { className: 'table-body' },
+                    data.columns && data.columns.map((col, idx) => {
+                        let icon = '•';
                         let iconClass = '';
                         if (col.isPrimary) {
                             icon = '🔑';
@@ -276,92 +323,262 @@
                         } else if (col.isForeign) {
                             icon = '🔗';
                             iconClass = 'fk-icon';
-                        } else {
-                            icon = '•';
                         }
                         
-                        field.innerHTML = `
-                            <div class="field-left">
-                                <span class="field-icon ${iconClass}">${icon}</span>
-                                <span class="field-name">${col.name}</span>
-                            </div>
-                            <span class="field-type">${col.type}</span>
-                        `;
-                        
-                        body.appendChild(field);
+                        return React.createElement('div', { key: idx, className: 'table-field' },
+                            React.createElement('div', { className: 'field-left' },
+                                React.createElement('span', { className: `field-icon ${iconClass}` }, icon),
+                                React.createElement('span', { className: 'field-name' }, col.name)
+                            ),
+                            React.createElement('span', { className: 'field-type' }, col.type)
+                        );
+                    })
+                )
+            );
+        }
+
+        const nodeTypes = { table: TableNode };
+
+        function SchemaFlow() {
+            const [nodes, setNodes, onNodesChange] = useNodesState([]);
+            const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                fetch('/api/schema')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.data) {
+                            const rawNodes = data.data.nodes || [];
+                            const rawEdges = data.data.edges || [];
+                            
+                            if (rawNodes.length === 0) {
+                                document.getElementById('root').innerHTML = '<div class="loading"><div>⚠️ No tables found in database</div></div>';
+                                return;
+                            }
+                            
+                            document.getElementById('stats').textContent = 
+                                `${rawNodes.length} tables • ${rawEdges.length} relationships`;
+                            
+                            const layoutedNodes = getLayoutedElements(rawNodes, rawEdges);
+                            
+                            const formattedNodes = layoutedNodes.map(node => ({
+                                id: node.id,
+                                type: 'table',
+                                position: node.position,
+                                data: node.data,
+                                draggable: true,
+                                sourcePosition: Position.Right,
+                                targetPosition: Position.Left
+                            }));
+                            
+                            const formattedEdges = rawEdges.map((edge, idx) => ({
+                                id: edge.id,
+                                source: edge.source,
+                                target: edge.target,
+                                label: edge.label || '',
+                                type: 'smoothstep',
+                                animated: false,
+                                markerEnd: {
+                                    type: MarkerType.ArrowClosed,
+                                    color: '#6897bb'
+                                },
+                                style: { 
+                                    stroke: '#6897bb', 
+                                    strokeWidth: 2
+                                }
+                            }));
+                            
+                            setNodes(formattedNodes);
+                            setEdges(formattedEdges);
+                            setLoading(false);
+                        } else {
+                            document.getElementById('root').innerHTML = 
+                                `<div class="loading"><div>❌ ${data.message || 'Failed to load schema'}</div></div>`;
+                        }
+                    })
+                    .catch(err => {
+                        document.getElementById('root').innerHTML = 
+                            `<div class="loading"><div>❌ Error: ${err.message}</div></div>`;
                     });
+            }, []);
+
+            if (loading) {
+                return null;
+            }
+
+            return React.createElement(ReactFlow, {
+                nodes,
+                edges,
+                onNodesChange,
+                onEdgesChange,
+                nodeTypes,
+                nodesDraggable: true,
+                nodesConnectable: false,
+                elementsSelectable: true,
+                fitView: true,
+                minZoom: 0.05,
+                maxZoom: 3,
+                zoomOnScroll: true,
+                zoomOnPinch: true,
+                zoomOnDoubleClick: true,
+                panOnScroll: false,
+                defaultViewport: { x: 0, y: 0, zoom: 0.6 },
+                style: { background: '#2b2b2b' }
+            },
+                React.createElement(Background, { color: '#3a3a3a', gap: 20, size: 1 }),
+                React.createElement(Controls, { 
+                    style: { 
+                        background: '#3c3f41', 
+                        border: '1px solid #555'
+                    } 
+                }),
+                React.createElement(MiniMap, { 
+                    nodeColor: '#5a5d5f',
+                    nodeStrokeColor: '#6897bb',
+                    nodeStrokeWidth: 2,
+                    maskColor: 'rgba(104, 151, 187, 0.2)',
+                    style: { 
+                        background: '#3c3f41', 
+                        border: '1px solid #555'
+                    },
+                    zoomable: true,
+                    pannable: true
+                })
+            );
+        }
+
+        function getLayoutedElements(nodes, edges) {
+            // Find connected components first
+            const visited = new Set();
+            const components = [];
+            const adj = new Map();
+            
+            nodes.forEach(n => adj.set(n.id, []));
+            edges.forEach(e => {
+                if (adj.has(e.source)) adj.get(e.source).push(e.target);
+                if (adj.has(e.target)) adj.get(e.target).push(e.source);
+            });
+            
+            nodes.forEach(node => {
+                if (visited.has(node.id)) return;
+                
+                const component = { nodes: [], edges: [] };
+                const queue = [node.id];
+                
+                while (queue.length > 0) {
+                    const id = queue.shift();
+                    if (visited.has(id)) continue;
+                    
+                    visited.add(id);
+                    component.nodes.push(nodes.find(n => n.id === id));
+                    
+                    adj.get(id).forEach(connId => {
+                        if (!visited.has(connId)) queue.push(connId);
+                    });
+                }
+                
+                component.edges = edges.filter(e => 
+                    component.nodes.some(n => n.id === e.source) &&
+                    component.nodes.some(n => n.id === e.target)
+                );
+                
+                components.push(component);
+            });
+            
+            // Sort: connected clusters first, then isolated nodes
+            components.sort((a, b) => {
+                const aHasEdges = a.edges.length > 0 ? 1 : 0;
+                const bHasEdges = b.edges.length > 0 ? 1 : 0;
+                if (aHasEdges !== bHasEdges) return bHasEdges - aHasEdges;
+                return b.nodes.length - a.nodes.length;
+            });
+            
+            // Layout each component separately
+            const layoutedComponents = [];
+            let globalOffsetX = 0;
+            let globalOffsetY = 0;
+            let rowMaxY = 0;
+            const componentsPerRow = 3;
+            
+            components.forEach((comp, idx) => {
+                // For isolated nodes (no edges), use simple positioning
+                if (comp.edges.length === 0 && comp.nodes.length === 1) {
+                    const node = comp.nodes[0];
+                    layoutedComponents.push({
+                        ...node,
+                        position: {
+                            x: globalOffsetX,
+                            y: globalOffsetY
+                        }
+                    });
+                    
+                    // Move to next position
+                    if ((idx + 1) % componentsPerRow === 0) {
+                        globalOffsetX = 0;
+                        globalOffsetY = rowMaxY + 400;
+                        rowMaxY = 0;
+                    } else {
+                        globalOffsetX += 400;
+                        rowMaxY = Math.max(rowMaxY, globalOffsetY + 200);
+                    }
+                    return;
+                }
+                
+                // For connected components, use dagre
+                const dagreGraph = new dagre.graphlib.Graph();
+                dagreGraph.setDefaultEdgeLabel(() => ({}));
+                dagreGraph.setGraph({ 
+                    rankdir: 'LR',
+                    nodesep: 250,
+                    ranksep: 400,
+                    marginx: 50,
+                    marginy: 50
+                });
+
+                comp.nodes.forEach((node) => {
+                    dagreGraph.setNode(node.id, { width: 250, height: 200 });
+                });
+
+                comp.edges.forEach((edge) => {
+                    dagreGraph.setEdge(edge.source, edge.target);
+                });
+
+                dagre.layout(dagreGraph);
+
+                const layouted = comp.nodes.map((node) => {
+                    const nodeWithPosition = dagreGraph.node(node.id);
+                    return {
+                        ...node,
+                        position: {
+                            x: globalOffsetX + nodeWithPosition.x - 125,
+                            y: globalOffsetY + nodeWithPosition.y - 100,
+                        },
+                    };
+                });
+                
+                layoutedComponents.push(...layouted);
+                
+                // Calculate component bounds
+                const maxX = Math.max(...layouted.map(n => n.position.x));
+                const compMaxY = Math.max(...layouted.map(n => n.position.y));
+                rowMaxY = Math.max(rowMaxY, compMaxY);
+                
+                // Move to next position
+                if ((idx + 1) % componentsPerRow === 0) {
+                    globalOffsetX = 0;
+                    globalOffsetY = rowMaxY + 400;
+                    rowMaxY = 0;
                 } else {
-                    body.innerHTML = '<div class="table-field"><div class="field-left">No columns</div></div>';
-                }
-                
-                box.appendChild(body);
-                tablesDiv.appendChild(box);
-            });
-            
-            // Set canvas size
-            const maxX = Math.max(...tables.map(t => t.position.x)) + 500;
-            const maxY = Math.max(...tables.map(t => t.position.y)) + 600;
-            canvas.setAttribute('width', Math.max(maxX, container.clientWidth));
-            canvas.setAttribute('height', Math.max(maxY, container.clientHeight));
-        }
-        
-        function drawConnections() {
-            // Clear existing
-            canvas.innerHTML = '';
-            
-            // Add arrow marker definition
-            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-            defs.innerHTML = `
-                <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-                    <polygon points="0 0, 10 3, 0 6" fill="#6897bb" />
-                </marker>
-            `;
-            canvas.appendChild(defs);
-            
-            edges.forEach(edge => {
-                const sourceEl = document.getElementById(`table-${edge.source}`);
-                const targetEl = document.getElementById(`table-${edge.target}`);
-                
-                if (!sourceEl || !targetEl) return;
-                
-                const sourceRect = sourceEl.getBoundingClientRect();
-                const targetRect = targetEl.getBoundingClientRect();
-                const containerRect = container.getBoundingClientRect();
-                
-                // Calculate connection points (right side of source, left side of target)
-                const x1 = sourceRect.right - containerRect.left + container.scrollLeft;
-                const y1 = sourceRect.top - containerRect.top + container.scrollTop + sourceRect.height / 2;
-                const x2 = targetRect.left - containerRect.left + container.scrollLeft;
-                const y2 = targetRect.top - containerRect.top + container.scrollTop + targetRect.height / 2;
-                
-                // Draw line
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                line.setAttribute('class', 'connection-line');
-                line.setAttribute('x1', x1);
-                line.setAttribute('y1', y1);
-                line.setAttribute('x2', x2);
-                line.setAttribute('y2', y2);
-                canvas.appendChild(line);
-                
-                // Draw label
-                if (edge.label) {
-                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-                    text.setAttribute('class', 'connection-label');
-                    text.setAttribute('x', (x1 + x2) / 2);
-                    text.setAttribute('y', (y1 + y2) / 2 - 5);
-                    text.textContent = edge.label;
-                    canvas.appendChild(text);
+                    globalOffsetX = maxX + 500;
                 }
             });
+            
+            return layoutedComponents;
         }
-        
-        // Redraw on scroll/resize
-        container.addEventListener('scroll', drawConnections);
-        window.addEventListener('resize', () => {
-            canvas.setAttribute('width', container.clientWidth);
-            canvas.setAttribute('height', container.clientHeight);
-            drawConnections();
-        });
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(SchemaFlow));
     </script>
 </body>
 </html>
