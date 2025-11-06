@@ -46,7 +46,9 @@ Use --force to skip all confirmation prompts.`,
 		}
 		defer m.Close()
 
-		return m.Reset(ctx)
+		force, _ := cmd.Flags().GetBool("force")
+
+		return m.Reset(ctx, force)
 	},
 }
 

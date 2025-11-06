@@ -32,10 +32,8 @@ Examples:
 			return fmt.Errorf("invalid config: %w", err)
 		}
 
-		// Check if DATABASE_URL flag is provided
 		dbURL, _ := cmd.Flags().GetString("db")
 		if dbURL != "" {
-			// Override environment variable with flag value
 			os.Setenv(cfg.Database.URLEnv, dbURL)
 			fmt.Printf("📊 Using database: %s\n", maskDBURL(dbURL))
 		}
@@ -55,12 +53,10 @@ func init() {
 	studioCmd.Flags().String("db", "", "Database URL (overrides config/env)")
 }
 
-// maskDBURL masks password in database URL for display
 func maskDBURL(url string) string {
 	if len(url) < 20 {
 		return "***"
 	}
-	// Simple masking - show protocol and host only
 	if idx := len(url) / 2; idx > 0 {
 		return url[:10] + "***" + url[len(url)-10:]
 	}

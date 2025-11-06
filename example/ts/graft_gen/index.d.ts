@@ -17,14 +17,6 @@ export interface Categories {
   created_at: Date;
 }
 
-export interface Comments {
-  id: number;
-  post_id: number;
-  user_id: number;
-  content: string;
-  created_at: Date;
-}
-
 export interface Posts {
   id: number;
   user_id: number;
@@ -34,6 +26,32 @@ export interface Posts {
   created_at: Date;
   updated_at: Date;
   status: 'draft' | 'published' | 'archived';
+}
+
+export interface Comments {
+  id: number;
+  post_id: number;
+  user_id: number;
+  content: string;
+  created_at: Date;
+}
+
+export interface GetActiveUsersWithStatsResult {
+  id: number;
+  name: string;
+  email: string;
+  isadmin: boolean;
+  total_posts: number;
+  total_comments: number;
+  last_post_date: Date;
+}
+
+export interface GetTopActiveUsersResult {
+  id: number;
+  name: string;
+  email: string;
+  total_posts: number;
+  total_comments: number;
 }
 
 export interface GetMostCommentedPostsResult {
@@ -100,24 +118,6 @@ export interface GetPostDetailsWithAllRelationsResult {
   last_comment_date: Date;
   content_length: string;
   hours_since_created: string;
-}
-
-export interface GetActiveUsersWithStatsResult {
-  id: number;
-  name: string;
-  email: string;
-  isadmin: boolean;
-  total_posts: number;
-  total_comments: number;
-  last_post_date: Date;
-}
-
-export interface GetTopActiveUsersResult {
-  id: number;
-  name: string;
-  email: string;
-  total_posts: number;
-  total_comments: number;
 }
 
 export class Queries {

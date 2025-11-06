@@ -1,5 +1,5 @@
 -- Migration: init
--- Created: 2025-11-04T11:49:20Z
+-- Created: 2025-11-06T12:22:14Z
 
 CREATE TYPE "post_status" AS ENUM ('draft', 'published', 'archived');
 CREATE TYPE "user_role" AS ENUM ('admin', 'moderator', 'user', 'guest');
@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS "posts" (
   FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE,
   FOREIGN KEY ("category_id") REFERENCES "categories"("id") ON DELETE SET NULL
 );
-
 CREATE TABLE IF NOT EXISTS "comments" (
   "id" SERIAL PRIMARY KEY,
   "post_id" INT NOT NULL REFERENCES "posts"("id") ON DELETE CASCADE,
