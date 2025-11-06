@@ -6,7 +6,7 @@ const state = {
     page: 1,
     limit: 50,
     tablesCache: null,
-    foreignKeys: new Map() // Store FK relationships
+    foreignKeys: new Map() 
 };
 
 // Initialize
@@ -24,7 +24,6 @@ function setupEventListeners() {
     document.getElementById('prev-btn').addEventListener('click', () => changePage(-1));
     document.getElementById('next-btn').addEventListener('click', () => changePage(1));
     document.getElementById('search-tables').addEventListener('input', debounce(filterTables, 200));
-    // Keyboard shortcuts: collapse/expand sidebar with arrow keys
     document.addEventListener('keydown', handleKeyDown);
 }
 
@@ -119,10 +118,8 @@ async function loadTableData() {
         
         if (json.success) {
             state.data = json.data;
-            // Handle null or empty rows
             const rowCount = json.data.rows ? json.data.rows.length : 0;
             document.getElementById('row-count').textContent = `${rowCount} of ${json.data.total || 0}`;
-            // Keep track of current columns for filters and export
             currentColumns = json.data.columns || [];
             renderDataGrid(json.data);
             updatePagination(json.data);
@@ -136,7 +133,6 @@ async function loadTableData() {
 function renderDataGrid(data) {
     const container = document.getElementById('grid-container');
     
-    // Check if rows is null or empty array - both should show schema + empty state
     if (!data.rows || data.rows.length === 0) {
         if (data.columns && data.columns.length > 0) {
             const schemaInfo = `
@@ -172,7 +168,6 @@ function renderDataGrid(data) {
     
     // Store foreign key info
     if (data.columns) {
-        // preserve column order and dedupe column names (some adapters may return duplicates)
         const seen = new Set();
         const orderedCols = [];
         data.columns.forEach(col => {
@@ -208,10 +203,7 @@ function renderDataGrid(data) {
             </table>
         `;
 
-        // expose currentColumns for filter UI and other features
         currentColumns = orderedCols;
-
-        // Set the HTML content
         container.innerHTML = html;
     }
 }
@@ -234,7 +226,7 @@ function renderRow(row, idx, columns) {
                 const cellClass = fk && value ? 'cell value-fk' : 'cell';
                 const onClick = fk && value ? 
                     `onclick="event.stopPropagation(); navigateToForeignKey('${fk.table}', '${fk.column}', '${value}'); return false;"` : 
-                    `onclick="editCell(this)"`; // Changed from dblclick to onclick
+                    `onclick="editCell(this)"`;
                 
                 const titleText = fk ? `Click to view ${fk.table}.${fk.column} = ${value}` : valueStr;
                 
@@ -250,21 +242,19 @@ function renderRow(row, idx, columns) {
     `;
 }
 
-// Navigate to foreign key reference - Show popup instead
+// foreign key reference - Show popup
 async function navigateToForeignKey(tableName, columnName, value) {
     console.log(`Showing FK reference: ${tableName}.${columnName} = ${value}`);
     
-    // Show modal immediately with loading state (non-blocking)
     const loadingHtml = `
         <div style="text-align: center; padding: 40px; color: #888;">
             <div class="spinner" style="margin: 0 auto 16px;"></div>
             <div>Loading reference data...</div>
         </div>
     `;
-    showModal('Foreign Key Reference', loadingHtml, 'info', false); // false = don't block
+    showModal('Foreign Key Reference', loadingHtml, 'info', false); 
     
     try {
-        // Fetch the referenced row - use correct API endpoint
         const response = await fetch(`/api/tables/${tableName}?page=1&limit=1000`);
         const json = await response.json();
         
@@ -273,7 +263,6 @@ async function navigateToForeignKey(tableName, columnName, value) {
             return;
         }
         
-        // Find the row where the FK column matches the value
         const row = json.data.rows.find(r => r[columnName] == value);
         if (!row) {
             showModal('Foreign Key Reference', `No row found in ${tableName} where ${columnName} = ${value}`, 'warning', false);
@@ -282,7 +271,6 @@ async function navigateToForeignKey(tableName, columnName, value) {
         
         const columns = json.data.columns;
         
-        // Build table HTML with horizontal scroll wrapper
         const tableHtml = `
             <div style="margin-bottom: 12px; color: #888; font-size: 12px;">
                 Reference: ${tableName}.${columnName} = ${value}
@@ -321,17 +309,11 @@ async function navigateToForeignKey(tableName, columnName, value) {
 
 // Helper function to navigate to table with filter
 async function goToTable(tableName, columnName, value) {
-    // Close modal
     document.querySelectorAll('.custom-modal').forEach(m => m.classList.remove('show'));
     
-    // Select the referenced table
     await selectTable(tableName);
-    
-    // Apply filter to show only the referenced row
     setTimeout(() => {
         if (!state.data || !state.data.columns) return;
-        
-        // Add filter
         currentColumns = state.data.columns;
         document.getElementById('filter-rows').innerHTML = '';
         addFilterRow('where', columnName, 'equals', value);
@@ -356,7 +338,6 @@ function toggleRowSelection(checkbox) {
         row.style.background = '';
     }
     
-    // Show/hide delete button
     const anyChecked = document.querySelectorAll('.row-checkbox:checked').length > 0;
     document.getElementById('delete-selected-btn').style.display = anyChecked ? 'block' : 'none';
 }
@@ -409,7 +390,6 @@ function formatValue(value, fk = null) {
         return `<span class="value-string">${JSON.stringify(value)}</span>`;
     }
     if (fk) {
-        // show as link-style text (no emoji)
         return `<span class="value-fk">${value}</span>`;
     }
     return `<span class="value-string">${value}</span>`;
@@ -435,14 +415,12 @@ function expandSidebar() {
 
 // Edit cell
 function editCell(cell) {
-    // Don't edit if already editing or if it's a FK cell
     if (cell.querySelector('textarea') || cell.classList.contains('value-fk')) return;
     
     const rowId = cell.dataset.row;
     const column = cell.dataset.column;
     const currentValue = cell.textContent.trim();
     
-    // Use textarea instead of input for multi-line editing
     const textarea = document.createElement('textarea');
     textarea.value = currentValue === 'NULL' ? '' : currentValue;
     
@@ -555,7 +533,6 @@ function showAddRowDialog() {
     });
 }
 
-// Old addRow function - keep for compatibility
 function addRow() {
     showAddRowDialog();
 }
@@ -591,13 +568,13 @@ async function saveChanges() {
             state.changes.clear();
             saveBtn.style.display = 'none';
             document.querySelectorAll('.cell-dirty').forEach(c => c.classList.remove('cell-dirty'));
-            alert('✓ Changes saved successfully');
+            showModal('Success', 'Changes saved successfully', 'success');
             refreshData();
         } else {
-            alert('Error: ' + json.message);
+            showModal('Error', json.message || 'Failed to save', 'error');
         }
     } catch (err) {
-        alert('Failed to save: ' + err.message);
+        showModal('Error', err.message, 'error');
     } finally {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save changes';
@@ -607,45 +584,42 @@ async function saveChanges() {
 // Add row
 function addRow() {
     if (!state.currentTable || !state.data) return;
-    
-    const data = {};
-    state.data.columns.forEach(col => {
-        if (!col.primary_key) {
-            const value = prompt(`${col.name} (${col.type}):`);
-            if (value !== null) data[col.name] = value;
-        }
-    });
-    
-    if (Object.keys(data).length === 0) return;
-    
-    fetch(`/api/tables/${state.currentTable}/add`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data })
-    })
-    .then(res => res.json())
-    .then(json => {
-        if (json.success) {
-            alert('✓ Row added');
-            refreshData();
-        } else {
-            alert('Error: ' + json.message);
+
+    showAddRowModal(state.data.columns, async (data) => {
+        if (!data || Object.keys(data).length === 0) return;
+        try {
+            const res = await fetch(`/api/tables/${state.currentTable}/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data })
+            });
+            const json = await res.json();
+            if (json.success) {
+                showModal('Success', 'Row added', 'success');
+                refreshData();
+            } else {
+                showModal('Error', json.message || 'Failed to add row', 'error');
+            }
+        } catch (err) {
+            showModal('Error', err.message, 'error');
         }
     });
 }
 
 // Delete row
 function deleteRow(rowId) {
-    if (!confirm('Delete this row?')) return;
-    
-    fetch(`/api/tables/${state.currentTable}/rows/${rowId}`, { method: 'DELETE' })
-    .then(res => res.json())
-    .then(json => {
-        if (json.success) {
-            alert('✓ Row deleted');
-            refreshData();
-        } else {
-            alert('Error: ' + json.message);
+    showConfirm('Confirm Delete', 'Delete this row?', async () => {
+        try {
+            const res = await fetch(`/api/tables/${state.currentTable}/rows/${rowId}`, { method: 'DELETE' });
+            const json = await res.json();
+            if (json.success) {
+                showModal('Success', 'Row deleted', 'success');
+                refreshData();
+            } else {
+                showModal('Error', json.message || 'Failed to delete row', 'error');
+            }
+        } catch (err) {
+            showModal('Error', err.message, 'error');
         }
     });
 }
@@ -688,7 +662,6 @@ function updatePagination(data) {
 
 // Modal system - Show a custom modal with title, content, and type
 function showModal(title, content, type = 'info', blocking = false) {
-    // Remove any existing modals first
     document.querySelectorAll('.custom-modal').forEach(m => m.remove());
     
     const iconMap = {
@@ -719,10 +692,8 @@ function showModal(title, content, type = 'info', blocking = false) {
     
     document.body.appendChild(modal);
     
-    // Show modal with animation
     setTimeout(() => modal.classList.add('show'), 10);
     
-    // Close on backdrop click if not blocking
     if (!blocking) {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {

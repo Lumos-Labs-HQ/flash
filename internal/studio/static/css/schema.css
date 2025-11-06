@@ -1,0 +1,238 @@
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'JetBrains Mono', monospace; }
+body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
+
+/* Left Vertical Navbar (Supabase style) */
+.left-navbar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 60px;
+    background: #0f0f0f;
+    border-right: 1px solid #222;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 8px;
+    z-index: 1000;
+}
+.left-navbar-logo {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 20px;
+}
+.left-navbar-link {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    color: #888;
+    text-decoration: none;
+    transition: all 0.2s;
+    position: relative;
+}
+.left-navbar-link span.iconify {
+    font-size: 22px;
+}
+.left-navbar-link:hover {
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
+.left-navbar-link.active {
+    background: #1a3a5a;
+    color: #4a9eff;
+}
+.left-navbar-link .tooltip {
+    visibility: hidden;
+    position: absolute;
+    left: 100%;
+    margin-left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #2a2a2a;
+    padding: 6px 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    font-size: 12px;
+    border: 1px solid #3a3a3a;
+    pointer-events: none;
+}
+.left-navbar-link:hover .tooltip {
+    visibility: visible;
+}
+
+.topbar { 
+    position: fixed;
+    top: 0;
+    left: 60px;
+    right: 0;
+    height: 48px; 
+    background: #1e1e1e; 
+    border-bottom: 1px solid #2d2d2d; 
+    display: flex; 
+    align-items: center; 
+    padding: 0 16px;
+    justify-content: space-between;
+    z-index: 100;
+}
+.topbar h1 { font-size: 14px; font-weight: 500; color: #e0e0e0; }
+.topbar-right { display: flex; gap: 12px; align-items: center; }
+.stats { font-size: 11px; color: #4a9eff; }
+.btn { 
+    padding: 6px 14px; 
+    border-radius: 4px; 
+    border: 1px solid #3a3a3a; 
+    font-size: 11px; 
+    cursor: pointer; 
+    background: #2a2a2a;
+    color: #e0e0e0;
+    transition: all 0.2s;
+}
+.btn:hover { background: #3a3a3a; }
+
+#root {
+    position: fixed;
+    top: 48px;
+    left: 60px;
+    right: 0;
+    bottom: 0;
+    width: calc(100% - 60px);
+    height: calc(100vh - 48px);
+}
+
+.react-flow__node {
+    background: #1e1e1e;
+    border: 2px solid #2d2d2d;
+    border-radius: 4px;
+    min-width: 220px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    cursor: grab;
+}
+
+.react-flow__node.dragging {
+    cursor: grabbing;
+}
+
+.react-flow__node:hover {
+    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+    border-color: #4a9eff;
+}
+
+.react-flow__edge-path {
+    stroke: #4a9eff;
+    stroke-width: 2;
+}
+
+.react-flow__edge-text {
+    fill: #4a9eff;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.react-flow__background {
+    background: #2b2b2b;
+}
+
+.react-flow__minimap {
+    background: #3c3f41 !important;
+    border: 1px solid #555 !important;
+}
+
+.react-flow__minimap-mask {
+    fill: rgba(104, 151, 187, 0.2) !important;
+}
+
+.react-flow__minimap-node {
+    fill: #5a5d5f !important;
+    stroke: #6897bb !important;
+}
+
+.react-flow__handle {
+    width: 8px;
+    height: 8px;
+    background: #6897bb;
+    border: 2px solid #3c3f41;
+}
+
+.table-header {
+    background: linear-gradient(180deg, #4b4b4b 0%, #3f3f3f 100%);
+    padding: 8px 12px;
+    border-bottom: 2px solid #5a5d5f;
+    font-weight: 600;
+    font-size: 12px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 2px 2px 0 0;
+}
+
+.table-body {
+    padding: 0;
+    background: #3c3f41;
+}
+
+.table-field {
+    padding: 6px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #2d2d2d;
+    font-size: 11px;
+}
+
+.table-field:last-child { 
+    border-bottom: none; 
+}
+
+.field-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.field-icon {
+    font-size: 12px;
+    width: 16px;
+    text-align: center;
+}
+
+.field-name { 
+    color: #a9b7c6; 
+    font-weight: 500;
+}
+
+.field-type { 
+    color: #6897bb; 
+    font-size: 10px;
+}
+
+.pk-icon { color: #ffc66d; }
+.fk-icon { color: #10b981; }
+
+.loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 13px;
+    color: #6897bb;
+    gap: 12px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #3a3a3a;
+    border-top-color: #6897bb;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

@@ -28,45 +28,26 @@ func (s *Service) GetTables() ([]TableInfo, error) {
 
 	var result []TableInfo
 
-	// Use goroutines for parallel count fetching (much faster)
-	type tableCount struct {
-		name  string
-		count int
-	}
-
-	countChan := make(chan tableCount, len(tables))
-
+	var targetTables []string
 	for _, table := range tables {
-		if table == "_graft_migrations" {
-			continue
+		if table != "_graft_migrations" {
+			targetTables = append(targetTables, table)
 		}
-
-		go func(tableName string) {
-			count := 0
-			// Fast count using COUNT(*) query
-			count, err := s.adapter.GetTableRowCount(s.ctx, tableName)
-			if err != nil {
-				count = 0
-			}
-			countChan <- tableCount{name: tableName, count: count}
-		}(table)
 	}
 
-	// Collect results
-	tableMap := make(map[string]int)
-	for i := 0; i < len(tables)-1; i++ { // -1 for _graft_migrations
-		tc := <-countChan
-		tableMap[tc.name] = tc.count
+	tableCounts, err := s.adapter.GetAllTableRowCounts(s.ctx, targetTables)
+	if err != nil {
+		tableCounts = make(map[string]int)
+		for _, table := range targetTables {
+			count, _ := s.adapter.GetTableRowCount(s.ctx, table)
+			tableCounts[table] = count
+		}
 	}
 
-	// Build result in order
-	for _, table := range tables {
-		if table == "_graft_migrations" {
-			continue
-		}
+	for _, table := range targetTables {
 		result = append(result, TableInfo{
 			Name:     table,
-			RowCount: tableMap[table],
+			RowCount: tableCounts[table],
 		})
 	}
 
@@ -87,7 +68,7 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, e
 			Nullable:         col.Nullable,
 			PrimaryKey:       col.IsPrimary,
 			Default:          col.Default,
-			AutoIncrement:    col.IsAutoIncrement, // NEW: Pass auto-increment info
+			AutoIncrement:    col.IsAutoIncrement,
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
 		}
@@ -111,7 +92,6 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, e
 }
 
 func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
-	// Get primary key column
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return err
@@ -125,10 +105,8 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 		}
 	}
 
-	// Execute each change
 	for _, change := range changes {
 		if change.Action == "update" {
-			// Build and execute UPDATE query
 			query := fmt.Sprintf("UPDATE %s SET %s = '%s' WHERE %s = '%s'",
 				tableName, change.Column, change.Value, pkColumn, change.RowID)
 
@@ -142,7 +120,6 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 }
 
 func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
-	// Get primary key column
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return err
@@ -156,7 +133,6 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 		}
 	}
 
-	// Delete each row
 	for _, rowID := range rowIDs {
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", tableName, pkColumn, rowID)
 		if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
@@ -177,11 +153,9 @@ func (s *Service) AddRow(tableName string, data map[string]any) error {
 
 	for col, val := range data {
 		columns = append(columns, col)
-		// Format value with proper escaping
 		if val == nil {
 			values = append(values, "NULL")
 		} else {
-			// Escape single quotes and wrap in quotes for strings
 			strVal := fmt.Sprintf("%v", val)
 			escapedVal := strings.ReplaceAll(strVal, "'", "''")
 			values = append(values, fmt.Sprintf("'%s'", escapedVal))
@@ -227,14 +201,24 @@ func (s *Service) getRows(tableName string, limit, offset int) ([]map[string]any
 	return data[start:end], nil
 }
 
-func (s *Service) updateRow(tableName string, change RowChange) error {
-	query := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE id = $2",
-		tableName, change.Column)
-	return s.adapter.ExecuteMigration(s.ctx, query)
-}
-
 func (s *Service) deleteRow(tableName, rowID string) error {
-	query := fmt.Sprintf("DELETE FROM %s WHERE id = $1", tableName)
+	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
+	if err != nil {
+		escaped := strings.ReplaceAll(rowID, "'", "''")
+		query := fmt.Sprintf("DELETE FROM %s WHERE id = '%s'", tableName, escaped)
+		return s.adapter.ExecuteMigration(s.ctx, query)
+	}
+
+	pkColumn := "id"
+	for _, col := range schema {
+		if col.IsPrimary {
+			pkColumn = col.Name
+			break
+		}
+	}
+
+	escaped := strings.ReplaceAll(rowID, "'", "''")
+	query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", tableName, pkColumn, escaped)
 	return s.adapter.ExecuteMigration(s.ctx, query)
 }
 
@@ -249,17 +233,6 @@ func joinColumns(cols []string) string {
 	return result
 }
 
-func placeholders(n int) string {
-	result := ""
-	for i := 1; i <= n; i++ {
-		if i > 1 {
-			result += ", "
-		}
-		result += fmt.Sprintf("$%d", i)
-	}
-	return result
-}
-
 // GetSchemaVisualization returns schema for visualization
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	tables, err := s.adapter.GetCurrentSchema(s.ctx)
@@ -269,7 +242,6 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 
 	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
 
-	// Build nodes (tables)
 	nodes := []map[string]any{}
 	nodeIndex := make(map[string]string)
 
@@ -277,7 +249,6 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 		nodeID := fmt.Sprintf("table-%d", i)
 		nodeIndex[table.Name] = nodeID
 
-		// Prepare columns info
 		columns := []map[string]any{}
 		for _, col := range table.Columns {
 			columns = append(columns, map[string]any{
@@ -330,7 +301,6 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 	query = strings.TrimSpace(query)
 
-	// Check if it's a SELECT query or other query that returns data
 	queryUpper := strings.ToUpper(query)
 	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
 		strings.HasPrefix(queryUpper, "SHOW") ||
@@ -339,18 +309,16 @@ func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 		strings.HasPrefix(queryUpper, "WITH")
 
 	if isSelectQuery {
-		// Execute as a query and return results
 		result, err := s.adapter.ExecuteQuery(s.ctx, query)
 		if err != nil {
 			return nil, fmt.Errorf("query execution failed: %w", err)
 		}
 
-		// Convert to TableData format with ordered columns
 		columns := make([]ColumnInfo, len(result.Columns))
 		for i, col := range result.Columns {
 			columns[i] = ColumnInfo{
 				Name: col,
-				Type: "TEXT", // We don't have type info from query results
+				Type: "TEXT",
 			}
 		}
 
@@ -362,7 +330,6 @@ func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 			Limit:   len(result.Rows),
 		}, nil
 	} else {
-		// Execute as a migration (INSERT, UPDATE, DELETE, CREATE, etc.)
 		if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
 			return nil, fmt.Errorf("query execution failed: %w", err)
 		}

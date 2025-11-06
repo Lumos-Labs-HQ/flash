@@ -38,7 +38,6 @@ function showModal(title, message, type = 'info') {
     
     document.body.appendChild(modal);
     
-    // Auto-remove after 5 seconds for success messages
     if (type === 'success') {
         setTimeout(() => modal.remove(), 5000);
     }
@@ -79,7 +78,6 @@ function showAddRowModal(columns, onSave) {
     const modal = document.createElement('div');
     modal.className = 'custom-modal show';
     
-    // Remove duplicates
     const seen = new Set();
     const uniqueColumns = columns.filter(col => {
         if (seen.has(col.name)) return false;
@@ -88,7 +86,6 @@ function showAddRowModal(columns, onSave) {
     });
     
     const fields = uniqueColumns.map(col => {
-        // Check if auto-increment: use the backend's auto_increment flag
         const isAutoIncrement = col.auto_increment === true;
         const hasDefault = col.default && col.default.trim() !== '';
         const isRequired = !col.nullable && !isAutoIncrement && !hasDefault;
@@ -153,10 +150,8 @@ function showAddRowModal(columns, onSave) {
             const hasDefault = col.default && col.default.trim() !== '';
             const isRequired = !col.nullable && !isAutoIncrement && !hasDefault;
             
-            // Skip auto-increment fields
             if (isAutoIncrement) return;
             
-            // Validate required fields
             if (isRequired && !value) {
                 input.style.borderColor = '#dc2626';
                 hasError = true;
@@ -165,7 +160,6 @@ function showAddRowModal(columns, onSave) {
                 input.style.borderColor = '#3a3a3a';
             }
             
-            // Add value only if provided
             if (value) {
                 data[col.name] = value;
             }
@@ -181,7 +175,6 @@ function showAddRowModal(columns, onSave) {
     };
 }
 
-// Export for use in other scripts
 window.showModal = showModal;
 window.showConfirm = showConfirm;
 window.showAddRowModal = showAddRowModal;

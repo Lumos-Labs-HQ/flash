@@ -11,7 +11,7 @@ type ColumnInfo struct {
 	Nullable         bool   `json:"nullable"`
 	PrimaryKey       bool   `json:"primary_key"`
 	Default          string `json:"default,omitempty"`
-	AutoIncrement    bool   `json:"auto_increment,omitempty"` // NEW: Indicates auto-increment columns
+	AutoIncrement    bool   `json:"auto_increment,omitempty"` 
 	ForeignKeyTable  string `json:"foreign_key_table,omitempty"`
 	ForeignKeyColumn string `json:"foreign_key_column,omitempty"`
 }
@@ -28,7 +28,7 @@ type RowChange struct {
 	RowID  string `json:"row_id"`
 	Column string `json:"column"`
 	Value  any    `json:"value"`
-	Action string `json:"action"` // "update", "insert", "delete"
+	Action string `json:"action"` 
 }
 
 type SaveRequest struct {
