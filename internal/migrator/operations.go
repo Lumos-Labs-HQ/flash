@@ -224,19 +224,24 @@ func (m *Migrator) createExport() error {
 }
 
 // Reset drops all tables and optionally exports data
-func (m *Migrator) Reset(ctx context.Context) error {
+func (m *Migrator) Reset(ctx context.Context, force bool) error {
 	fmt.Println("🗑️  This will drop all tables and data!")
 
-	if !m.askUserConfirmation("Are you sure you want to reset the database?") {
-		fmt.Println("Database reset cancelled")
-		return nil
-	}
-
-	if m.askUserConfirmation("Create export before reset?") {
-		fmt.Println("📦 Creating export...")
-		if err := m.createExport(); err != nil {
-			fmt.Printf("⚠️  Export failed: %v\n", err)
+	// Skip confirmation if force flag is set
+	if !force {
+		if !m.askUserConfirmation("Are you sure you want to reset the database?") {
+			fmt.Println("Database reset cancelled")
+			return nil
 		}
+
+		if m.askUserConfirmation("Create export before reset?") {
+			fmt.Println("📦 Creating export...")
+			if err := m.createExport(); err != nil {
+				fmt.Printf("⚠️  Export failed: %v\n", err)
+			}
+		}
+	} else {
+		fmt.Println("⚡ Force mode: Skipping confirmations and backup")
 	}
 
 	// Drop all tables first

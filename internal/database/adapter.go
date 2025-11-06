@@ -47,6 +47,7 @@ type DatabaseAdapter interface {
 	// Backup operations
 	GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
 	GetTableRowCount(ctx context.Context, tableName string) (int, error)
+	GetAllTableRowCounts(ctx context.Context, tableNames []string) (map[string]int, error)
 	DropTable(ctx context.Context, tableName string) error
 	DropEnum(ctx context.Context, enumName string) error
 
