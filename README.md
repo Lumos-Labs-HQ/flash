@@ -10,7 +10,11 @@
   <a href="https://github.com/Lumos-Labs-HQ/flash/releases">
     <img src="https://img.shields.io/github/v/release/Lumos-Labs-HQ/flash?label=Release" alt="Release">
   </a>
-  <img src="https://img.shields.io/badge/Build-Passing-brightgreen" alt="Build Status">
+  <a href="https://www.npmjs.com/package/flashorm">
+  <img src="https://img.shields.io/npm/v/flashorm?color=blue&label=npm" alt="npm version">
+</a>
+
+  
 </p>
 
 ![image](.github/flash-orm.png)
