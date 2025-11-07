@@ -46,13 +46,13 @@ go install github.com/Lumos-Labs-HQ/graft@latest
 
 ### From Source
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/graftt.git
+git clone https://github.com/Lumos-Labs-HQ/graft.git
 cd Graft
 make build-all
 ```
 
 ### Download Binary
-Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graftt/releases).
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graft/releases).
 # Graft - Database ORM
 
 ## 🏁 Quick Start
@@ -398,7 +398,7 @@ Error: failed to connect to database
 We welcome contributions! Here's how to get started:
 
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/graftt.git
+git clone https://github.com/Lumos-Labs-HQ/graft.git
 cd Graft
 
 make dev-setup

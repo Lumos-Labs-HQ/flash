@@ -551,8 +551,8 @@ const binaryPath = graft.getBinaryPath();
 ## 📚 Examples
 
 Check out complete examples:
-- [TypeScript Example](https://github.com/Lumos-Labs-HQ/graftt/tree/main/example/ts)
-- [Go Example](https://github.com/Lumos-Labs-HQ/graftt/tree/main/example/go)
+- [TypeScript Example](https://github.com/Lumos-Labs-HQ/graft/tree/main/example/ts)
+- [Go Example](https://github.com/Lumos-Labs-HQ/graft/tree/main/example/go)
 
 ## 🐛 Troubleshooting
 
@@ -581,10 +581,10 @@ graft studio --port 3000
 
 ## 📖 Documentation
 
-- [Full Documentation](https://github.com/Lumos-Labs-HQ/graftt)
-- [How It Works](https://github.com/Lumos-Labs-HQ/graftt/blob/main/docs/HOW_IT_WORKS.md)
-- [Technology Stack](https://github.com/Lumos-Labs-HQ/graftt/blob/main/docs/TECHNOLOGY_STACK.md)
-- [Contributing](https://github.com/Lumos-Labs-HQ/graftt/blob/main/docs/CONTRIBUTING.md)
+- [Full Documentation](https://github.com/Lumos-Labs-HQ/graft)
+- [How It Works](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/TECHNOLOGY_STACK.md)
+- [Contributing](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/CONTRIBUTING.md)
 
 ## 🌟 Key Highlights
 
@@ -597,6 +597,6 @@ graft studio --port 3000
 
 ## 📄 License
 
-MIT License - see [LICENSE](https://github.com/Lumos-Labs-HQ/graftt/blob/main/LICENSE)
+MIT License - see [LICENSE](https://github.com/Lumos-Labs-HQ/graft/blob/main/LICENSE)
 
 ---

@@ -26,11 +26,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Lumos-Labs-HQ/graftt.git"
+    "url": "https://github.com/Lumos-Labs-HQ/graft.git"
   },
-  "homepage": "https://github.com/Lumos-Labs-HQ/graftt#readme",
+  "homepage": "https://github.com/Lumos-Labs-HQ/graft#readme",
   "bugs": {
-    "url": "https://github.com/Lumos-Labs-HQ/graftt/issues"
+    "url": "https://github.com/Lumos-Labs-HQ/graft/issues"
   },
   "engines": {
     "node": ">=14.0.0"
