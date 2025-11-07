@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
-	"github.com/Lumos-Labs-HQ/graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 // Apply runs migrations with optional generation
@@ -133,7 +133,7 @@ func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migra
 		if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
 			fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
 			fmt.Printf("   Error: %v\n", err)
-			fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+			fmt.Println("   Transaction rolled back. Fix the error and run 'flash apply' again.")
 			return fmt.Errorf("migration %s failed: %w", migration.ID, err)
 		}
 
@@ -174,7 +174,7 @@ func (m *Migrator) createExport() error {
 
 	var dataTables []string
 	for _, table := range tables {
-		if table != "_graft_migrations" {
+		if table != "_flash_migrations" {
 			dataTables = append(dataTables, table)
 		}
 	}

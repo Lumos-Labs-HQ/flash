@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 var (

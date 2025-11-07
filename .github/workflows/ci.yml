@@ -16,7 +16,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: testpass
           POSTGRES_USER: testuser
-          POSTGRES_DB: graft_test
+          POSTGRES_DB: FlashORM_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -43,14 +43,14 @@ jobs:
 
     - name: Build project
       run: |
-        go build -o graft .
-        chmod +x graft
-        ls -la graft
+        go build -o FlashORM .
+        chmod +x FlashORM
+        ls -la FlashORM
 
     - name: Verify build
       run: |
-        ./graft --version
-        echo "Graft binary built successfully"
+        ./FlashORM --version
+        echo "FlashORM binary built successfully"
 
     - name: Prepare test script
       run: |
@@ -60,7 +60,7 @@ jobs:
 
     - name: Run integration tests
       env:
-        DATABASE_URL: postgres://testuser:testpass@localhost:5432/graft_test?sslmode=disable
+        DATABASE_URL: postgres://testuser:testpass@localhost:5432/FlashORM_test?sslmode=disable
       run: |
         cd ${{ github.workspace }}
         ./test/github-workflow-test.sh

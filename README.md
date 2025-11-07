@@ -1,4 +1,4 @@
-﻿# Graft - Database ORM
+﻿# FlashORM - Database ORM
 
 A powerful, database-agnostic ORM built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
 
@@ -14,14 +14,14 @@ A powerful, database-agnostic ORM built in Go that provides Prisma-like function
 - ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
 - 🔍 **Schema Introspection**: Pull schema from existing databases
-- 📊 **Graft Studio**: similar to Prisma Studio, where users can view and edit data visually
+- 📊 **FlashORM Studio**: similar to Prisma Studio, where users can view and edit data visually
 - 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
 
 ## 📊 Performance Benchmarks
 
-Graft significantly outperforms popular ORMs in real-world scenarios:
+FlashORM significantly outperforms popular ORMs in real-world scenarios:
 
-| Operation | Graft | Drizzle | Prisma |
+| Operation | FlashORM | Drizzle | Prisma |
 |-----------|-------|---------|--------|
 | Insert 1000 Users | **158ms** | 224ms | 230ms |
 | Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms |
@@ -30,37 +30,37 @@ Graft significantly outperforms popular ORMs in real-world scenarios:
 | Stress Test Simple Query x2000 | **122ms** | 160ms | 223ms |
 | **TOTAL** | **6947ms** | **17149ms** | **71551ms** |
 
-*Benchmarks run on PostgreSQL with identical schemas and queries. Graft is **2.5x faster** than Drizzle and **10x faster** than Prisma.*
+*Benchmarks run on PostgreSQL with identical schemas and queries. FlashORM is **2.5x faster** than Drizzle and **10x faster** than Prisma.*
 
 ## 🚀 Installation
 
 ### NPM (Node.js/TypeScript Projects)
 ```bash
-npm install -g graft-orm
+npm install -g FlashORM-orm
 ```
 
 ### Go Install
 ```bash
-go install github.com/Lumos-Labs-HQ/graft@latest
+go install github.com/Lumos-Labs-HQ/FlashORM@latest
 ```
 
 ### From Source
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/graft.git
-cd Graft
+git clone https://github.com/Lumos-Labs-HQ/FlashORM.git
+cd FlashORM
 make build-all
 ```
 
 ### Download Binary
-Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graft/releases).
-# Graft - Database ORM
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/FlashORM/releases).
+# FlashORM - Database ORM
 
 ## 🏁 Quick Start
 
 ### 1. Initialize Your Project
 ```bash
 cd your-project
-graft init --postgresql  # or --mysql, --sqlite
+FlashORM init --postgresql  # or --mysql, --sqlite
 ```
 
 ### 2. Configure Database
@@ -74,33 +74,33 @@ echo "DATABASE_URL=postgres://user:password@localhost:5432/mydb" > .env
 
 ### 3. Create Your First Migration
 ```bash
-graft migrate "create users table"
+FlashORM migrate "create users table"
 ```
 
 ### 4. Apply Migrations Safely
 ```bash
-graft apply
+FlashORM apply
 ```
 
 ### 5. Check Status
 ```bash
-graft status
+FlashORM status
 ```
 
 ## 📋 Commands
 
 | Command | Description |
 |---------|-------------|
-| `graft init` | Initialize project with database-specific templates |
-| `graft migrate <name>` | Create a new migration file |
-| `graft apply` | Apply pending migrations with transaction safety |
-| `graft status` | Show migration status |
-| `graft pull` | Extract schema from existing database |
-| `graft studio` | 
-| `graft export [format]` | Export database (JSON, CSV, SQLite) |
-| `graft reset` | Reset database (⚠️ destructive) |
-| `graft gen` | Generate SQLC types |
-| `graft raw <sql>` | Execute raw SQL |
+| `FlashORM init` | Initialize project with database-specific templates |
+| `FlashORM migrate <name>` | Create a new migration file |
+| `FlashORM apply` | Apply pending migrations with transaction safety |
+| `FlashORM status` | Show migration status |
+| `FlashORM pull` | Extract schema from existing database |
+| `FlashORM studio` | 
+| `FlashORM export [format]` | Export database (JSON, CSV, SQLite) |
+| `FlashORM reset` | Reset database (⚠️ destructive) |
+| `FlashORM gen` | Generate SQLC types |
+| `FlashORM raw <sql>` | Execute raw SQL |
 
 ### Global Flags
 - `--force` - Skip confirmation prompts
@@ -110,25 +110,25 @@ graft status
 
 ### PostgreSQL
 ```bash
-graft init --postgresql
+FlashORM init --postgresql
 export DATABASE_URL="postgres://user:pass@localhost:5432/db"
 ```
 
 ### MySQL
 ```bash
-graft init --mysql
+FlashORM init --mysql
 export DATABASE_URL="user:pass@tcp(localhost:3306)/db"
 ```
 
 ### SQLite
 ```bash
-graft init --sqlite
+FlashORM init --sqlite
 export DATABASE_URL="sqlite://./database.db"
 ```
 
 ## 🔧 Configuration
 
-Graft uses `graft.config.json` for configuration:
+FlashORM uses `FlashORM.config.json` for configuration:
 
 ```json
 {
@@ -151,11 +151,11 @@ Graft uses `graft.config.json` for configuration:
 
 ## 📁 Project Structure
 
-After running `graft init`:
+After running `FlashORM init`:
 
 ```
 your-project/
-├── graft.config.json      # Graft configuration
+├── FlashORM.config.json      # FlashORM configuration
 ├── .env                  # Environment variables
 └── db/
     ├── schema/
@@ -172,7 +172,7 @@ your-project/
 Each migration runs in its own transaction with automatic rollback on failure:
 
 ```bash
-graft apply
+FlashORM apply
 ```
 
 Output:
@@ -195,14 +195,14 @@ If a migration fails, the transaction is automatically rolled back:
   [2/2] 20251021140530_bad_migration
 ❌ Failed at migration: 20251021140530_bad_migration
    Error: syntax error at or near "INVALID"
-   Transaction rolled back. Fix the error and run 'graft apply' again.
+   Transaction rolled back. Fix the error and run 'FlashORM apply' again.
 ```
 
 ## 🔄 Migration Workflow
 
 ### 1. Create Migration
 ```bash
-graft migrate "add user roles"
+FlashORM migrate "add user roles"
 ```
 
 Creates a timestamped SQL file:
@@ -216,12 +216,12 @@ CREATE INDEX idx_users_role ON users(role);
 
 ### 2. Apply Migrations
 ```bash
-graft apply
+FlashORM apply
 ```
 
 ### 3. Check Status
 ```bash
-graft status
+FlashORM status
 ```
 
 Output:
@@ -243,13 +243,13 @@ Migrations: 3 total, 2 applied, 1 pending
 Start the optional Studio UI:
 
 ```bash
-graft studio
+FlashORM studio
 ```
 
-For open Graft studio without projct init
+For open FlashORM studio without projct init
 
 ```bash
-graft studio --db "postgresql://jack:secret123@localhost:5432/mydb"
+FlashORM studio --db "postgresql://jack:secret123@localhost:5432/mydb"
 ```
 
 Open http://localhost:5555 by default (or the port you pass with `--port`).
@@ -257,7 +257,7 @@ Open http://localhost:5555 by default (or the port you pass with `--port`).
 ### Troubleshooting
 
 - Database connection errors: verify `DATABASE_URL` and network access.
-- Migration failures: inspect the migration SQL file, fix and re-run `graft apply`.
+- Migration failures: inspect the migration SQL file, fix and re-run `FlashORM apply`.
 
 
 ## 📤 Export System
@@ -266,9 +266,9 @@ Export your database to multiple formats for portability and analysis:
 
 ### JSON Export (Default)
 ```bash
-graft export
+FlashORM export
 # or
-graft export --json
+FlashORM export --json
 ```
 
 Creates structured JSON with metadata:
@@ -290,7 +290,7 @@ Creates structured JSON with metadata:
 
 ### CSV Export
 ```bash
-graft export --csv
+FlashORM export --csv
 ```
 
 Creates directory with individual CSV files per table:
@@ -303,7 +303,7 @@ db/export/export_2025-10-21_14-00-07_csv/
 
 ### SQLite Export
 ```bash
-graft export --sqlite
+FlashORM export --sqlite
 ```
 
 Creates portable SQLite database file:
@@ -317,10 +317,10 @@ Generate type-safe Go code from SQL:
 
 ```bash
 # Generate types after migrations
-graft gen
+FlashORM gen
 
 # Apply migrations and generate types
-graft apply && graft gen
+FlashORM apply && FlashORM gen
 ```
 
 Example generated code:
@@ -342,35 +342,35 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 ### Production Deployment
 ```bash
 # Deploy without interactive prompts
-graft apply --force
+FlashORM apply --force
 
 # Create export before deployment
-graft export --json
-graft apply --force
+FlashORM export --json
+FlashORM apply --force
 ```
 
 ### Development Workflow
 ```bash
 # Reset database during development
-graft reset --force
+FlashORM reset --force
 
 # Extract schema from existing database
-graft pull
+FlashORM pull
 ```
 
 ### Raw SQL Execution
 ```bash
 # Execute raw SQL
-graft raw "SELECT COUNT(*) FROM users;"
+FlashORM raw "SELECT COUNT(*) FROM users;"
 
 # Execute SQL file
-graft raw scripts/cleanup.sql
+FlashORM raw scripts/cleanup.sql
 ```
 
 ## 🚀 Roadmap & Future Features
 
 ### Coming Soon
-- 🐍 **Python Support**: Use Graft with Python projects
+- 🐍 **Python Support**: Use FlashORM with Python projects
 
 ## 🐛 Troubleshooting
 
@@ -387,19 +387,19 @@ Error: failed to connect to database
 **Migration Failed with Rollback**
 ```bash
 ❌ Failed at migration: 20251021140530_bad_migration
-   Transaction rolled back. Fix the error and run 'graft apply' again.
+   Transaction rolled back. Fix the error and run 'FlashORM apply' again.
 ```
 - Check the migration SQL syntax
 - Verify table/column names exist
-- Fix the migration file and run `graft apply` again
+- Fix the migration file and run `FlashORM apply` again
 
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
 
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/graft.git
-cd Graft
+git clone https://github.com/Lumos-Labs-HQ/FlashORM.git
+cd FlashORM
 
 make dev-setup
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Lumos-Labs-HQ/graft/cmd"
+	"github.com/Lumos-Labs-HQ/flash/cmd"
 )
 
 func main() {

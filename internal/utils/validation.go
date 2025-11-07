@@ -78,12 +78,12 @@ func ValidateTableReferences(sql string, schema interface{}) error {
 				}
 			}
 
-			return fmt.Errorf("# package graft\ndb\\queries\\users.sql:%d:%d: relation \"%s\" does not exist", lineNum, colPos, tableName)
+			return fmt.Errorf("# package FlashORM\ndb\\queries\\users.sql:%d:%d: relation \"%s\" does not exist", lineNum, colPos, tableName)
 		}
 	}
 
 	if foundTableRefs && len(s.Tables) == 0 {
-		return fmt.Errorf("# package graft\ndb\\queries\\users.sql:1:1: no tables found in schema, but query references tables")
+		return fmt.Errorf("# package FlashORMORM\ndb\\queries\\users.sql:1:1: no tables found in schema, but query references tables")
 	}
 
 	return nil
@@ -182,7 +182,7 @@ func ValidateColumnReferences(sql string, schema interface{}) error {
 				}
 			}
 
-			return fmt.Errorf("# package graft\ndb\\queries\\users.sql:%d:%d: column reference \"%s\" not found", lineNum, colPos, columnName)
+			return fmt.Errorf("# package FlashORMORM\ndb\\queries\\users.sql:%d:%d: column reference \"%s\" not found", lineNum, colPos, columnName)
 		}
 	}
 

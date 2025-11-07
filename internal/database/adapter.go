@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
 type QueryResult struct {

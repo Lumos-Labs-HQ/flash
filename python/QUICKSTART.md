@@ -1,4 +1,4 @@
-# Quick Start: Publishing Graft to PyPI
+# Quick Start: Publishing Flash to PyPI
 
 ## 1. Install Tools
 ```bash
@@ -13,8 +13,8 @@ python -m build
 
 ## 3. Test Locally (Optional)
 ```bash
-pip install dist/graft_orm-1.0.0-py3-none-any.whl
-graft --help
+pip install dist/flash_orm-1.0.0-py3-none-any.whl
+flash --help
 ```
 
 ## 4. Upload to PyPI
@@ -33,15 +33,15 @@ twine upload dist/*
 
 ## 5. Verify
 ```bash
-pip install graft-orm
-graft --help
+pip install flash-orm
+flash --help
 ```
 
 ## Update Version
 Edit these files before rebuilding:
 - `setup.py` → VERSION = '1.0.1'
 - `pyproject.toml` → version = "1.0.1"
-- `graft_orm/__init__.py` → __version__ = "1.0.1"
+- `flash_orm/__init__.py` → __version__ = "1.0.1"
 
 Then:
 ```bash

@@ -47,10 +47,10 @@ func showBanner() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "graft",
+	Use:   "flash",
 	Short: "A type-safe ORM with code generation for Go, TypeScript, and JavaScript",
 	Long: `
-Graft is a powerful ORM and database toolkit that generates type-safe code 
+FlashORM is a powerful ORM and database toolkit that generates type-safe code 
 from your SQL schemas and queries for multiple programming languages.
 
 Features:
@@ -76,7 +76,7 @@ Database Support:
 	Run: func(cmd *cobra.Command, args []string) {
 		showVersion, _ := cmd.Flags().GetBool("version")
 		if showVersion {
-			fmt.Printf("Graft CLI version %s\n", Version)
+			fmt.Printf("FlashORM CLI version %s\n", Version)
 			os.Exit(0)
 		}
 
@@ -95,7 +95,7 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./graft.config.json)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./flash.config.json)")
 	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
@@ -113,7 +113,7 @@ func initConfig() {
 	} else {
 		viper.AddConfigPath(".")
 		viper.SetConfigType("json")
-		viper.SetConfigName("graft.config")
+		viper.SetConfigName("flash.config")
 	}
 
 	viper.AutomaticEnv()

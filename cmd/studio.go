@@ -4,24 +4,24 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/studio"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/studio"
 	"github.com/spf13/cobra"
 )
 
 var studioCmd = &cobra.Command{
 	Use:   "studio",
-	Short: "Open Graft Studio - Visual database editor",
+	Short: "Open FlashORM Studio - Visual database editor",
 	Long: `
-Launch Graft Studio, a web-based interface for viewing and editing your database.
+Launch FlashORM Studio, a web-based interface for viewing and editing your database.
 Similar to Prisma Studio, it provides an intuitive UI for managing your data.
 
 The studio will start a local web server and open in your default browser.
 
 Examples:
-  graft studio
-  graft studio --db "postgres://user:pass@localhost:5432/mydb"
-  graft studio --port 3000`,
+  flash studio
+  flash studio --db "postgres://user:pass@localhost:5432/mydb"
+  flash studio --port 3000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

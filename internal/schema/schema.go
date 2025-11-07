@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
 type foreignKeyConstraint struct {

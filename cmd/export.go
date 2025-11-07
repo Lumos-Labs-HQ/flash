@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
-	"github.com/Lumos-Labs-HQ/graft/internal/export"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/export"
 	"github.com/spf13/cobra"
 )
 
@@ -18,10 +18,10 @@ Export all database tables (excluding migration table) to various formats.
 Supported formats: json (default), csv, sqlite
 
 Examples:
-  graft export
-  graft export --sqlite
-  graft export --csv
-  graft export --json`,
+  flash export
+  flash export --sqlite
+  flash export --csv
+  flash export --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {

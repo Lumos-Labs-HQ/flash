@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	graft_gen "example/graft_gen"
+	"example/flash_gen"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -13,7 +13,7 @@ import (
 )
 
 var DB *sql.DB
-var Queries *FlashORMORM_gen.Queries
+var Queries *flash_gen.Queries
 
 func ConnectDatabase() {
 	if err := godotenv.Load(); err != nil {
@@ -37,7 +37,7 @@ func ConnectDatabase() {
 		log.Fatal("Failed to ping database:", err)
 	}
 
-	Queries = graft_gen.New(DB)
+	Queries = flash_gen.New(DB)
 	log.Println("Database connected successfully")
 }
 
@@ -49,7 +49,7 @@ func CloseDatabase() {
 }
 
 // ========== USERS ==========
-func AddUser(name, email string) (*graft_gen.CreateuserRow, error) {
+func AddUser(name, email string) (*flash_gen.CreateuserRow, error) {
 	user, err := Queries.Createuser(name, email)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
@@ -59,7 +59,7 @@ func AddUser(name, email string) (*graft_gen.CreateuserRow, error) {
 	return &user, nil
 }
 
-func GetUser(userID int64) (*graft_gen.GetuserRow, error) {
+func GetUser(userID int64) (*flash_gen.GetuserRow, error) {
 	user, err := Queries.Getuser(userID)
 	if err != nil {
 		log.Printf("Error getting user with ID %d: %v", userID, err)
@@ -69,7 +69,7 @@ func GetUser(userID int64) (*graft_gen.GetuserRow, error) {
 }
 
 // ========== CATEGORIES ==========
-func AddCategory(name string) (*graft_gen.CreatecategoryRow, error) {
+func AddCategory(name string) (*flash_gen.CreatecategoryRow, error) {
 	category, err := Queries.Createcategory(name)
 	if err != nil {
 		log.Printf("Error creating category: %v", err)
@@ -79,7 +79,7 @@ func AddCategory(name string) (*graft_gen.CreatecategoryRow, error) {
 	return &category, nil
 }
 
-func GetUserByEmail(email string) (*graft_gen.GetuserbyemailRow, error) {
+func GetUserByEmail(email string) (*flash_gen.GetuserbyemailRow, error) {
 	user, err := Queries.Getuserbyemail(email)
 	if err != nil {
 		log.Printf("Error getting user with email %s: %v", email, err)
@@ -89,8 +89,8 @@ func GetUserByEmail(email string) (*graft_gen.GetuserbyemailRow, error) {
 }
 
 // ========== POSTS ==========
-func AddPost(userID, categoryID int64, title, content string) (*graft_gen.CreatepostRow, error) {
-	post, err := Queries.Createpost(graft_gen.CreatepostParams{
+func AddPost(userID, categoryID int64, title, content string) (*flash_gen.CreatepostRow, error) {
+	post, err := Queries.Createpost(flash_gen.CreatepostParams{
 		UserId:     userID,
 		CategoryId: categoryID,
 		Title:      title,
@@ -105,7 +105,7 @@ func AddPost(userID, categoryID int64, title, content string) (*graft_gen.Create
 }
 
 // ========== COMMENTS ==========
-func AddComment(postID, userID int64, text string) (*graft_gen.CreatecommentRow, error) {
+func AddComment(postID, userID int64, text string) (*flash_gen.CreatecommentRow, error) {
 	comment, err := Queries.Createcomment(postID, userID, text)
 	if err != nil {
 		log.Printf("Error creating comment: %v", err)

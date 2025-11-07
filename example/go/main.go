@@ -2,7 +2,7 @@ package main
 
 import (
 	"example/db"
-	graft "example/graft_gen"
+	"example/flash_gen"
 	"log"
 )
 
@@ -164,21 +164,21 @@ func main() {
 		if err == nil {
 			log.Printf("User Role Type: %T", user.Role)
 			log.Printf("User Role Value: %s", user.Role)
-			log.Printf("Is Admin Role? %v", user.Role == graft.UserRoleAdmin)
-			log.Printf("Is User Role? %v", user.Role == graft.UserRoleUser)
+			log.Printf("Is Admin Role? %v", user.Role == flash_gen.UserRoleAdmin)
+			log.Printf("Is User Role? %v", user.Role == flash_gen.UserRoleUser)
 		}
 	}
 
 	if len(postIDs) > 0 {
 		log.Println("\nAvailable PostStatus enum values:")
-		log.Printf("  - %s", graft.PostStatusDraft)
-		log.Printf("  - %s", graft.PostStatusPublished)
-		log.Printf("  - %s", graft.PostStatusArchived)
+		log.Printf("  - %s", flash_gen.PostStatusDraft)
+		log.Printf("  - %s", flash_gen.PostStatusPublished)
+		log.Printf("  - %s", flash_gen.PostStatusArchived)
 
 		log.Println("\nAvailable UserRole enum values:")
-		log.Printf("  - %s", graft.UserRoleAdmin)
-		log.Printf("  - %s", graft.UserRoleModerator)
-		log.Printf("  - %s", graft.UserRoleUser)
-		log.Printf("  - %s", graft.UserRoleGuest)
+		log.Printf("  - %s", flash_gen.UserRoleAdmin)
+		log.Printf("  - %s", flash_gen.UserRoleModerator)
+		log.Printf("  - %s", flash_gen.UserRoleUser)
+		log.Printf("  - %s", flash_gen.UserRoleGuest)
 	}
 }

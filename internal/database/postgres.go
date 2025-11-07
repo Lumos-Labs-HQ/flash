@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -75,7 +75,7 @@ func (p *PostgresAdapter) Ping(ctx context.Context) error {
 
 // Migration table operations
 func (p *PostgresAdapter) CreateMigrationsTable(ctx context.Context) error {
-	query := `CREATE TABLE IF NOT EXISTS _graft_migrations (
+	query := `CREATE TABLE IF NOT EXISTS _flash_migrations (
 		id VARCHAR(255) PRIMARY KEY,
 		checksum VARCHAR(64) NOT NULL,
 		finished_at TIMESTAMP WITH TIME ZONE,
@@ -90,19 +90,19 @@ func (p *PostgresAdapter) CreateMigrationsTable(ctx context.Context) error {
 }
 
 func (p *PostgresAdapter) EnsureMigrationTableCompatibility(ctx context.Context) error {
-	exists, err := p.columnExists("_graft_migrations", "logs")
+	exists, err := p.columnExists("_flash_migrations", "logs")
 	if err != nil {
 		return err
 	}
 	if !exists {
-		_, err = p.pool.Exec(ctx, "ALTER TABLE _graft_migrations ADD COLUMN logs TEXT")
+		_, err = p.pool.Exec(ctx, "ALTER TABLE _flash_migrations ADD COLUMN logs TEXT")
 	}
 	return err
 }
 
 func (p *PostgresAdapter) CleanupBrokenMigrationRecords(ctx context.Context) error {
 	_, err := p.pool.Exec(ctx, `
-		DELETE FROM _graft_migrations 
+	DELETE FROM _flash_migrations 
 		WHERE finished_at IS NULL AND started_at < NOW() - INTERVAL '1 hour'
 	`)
 	return err
@@ -114,7 +114,7 @@ func (p *PostgresAdapter) GetAppliedMigrations(ctx context.Context) (map[string]
 
 	rows, err := p.pool.Query(ctx, `
 		SELECT id, finished_at 
-		FROM _graft_migrations 
+	FROM _flash_migrations 
 		WHERE finished_at IS NOT NULL 
 		ORDER BY started_at
 	`)
@@ -142,7 +142,7 @@ func (p *PostgresAdapter) RecordMigration(ctx context.Context, migrationID, name
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO _graft_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
+	INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
 		VALUES ($1, $2, $3, NOW(), NOW(), 1)
 	`, migrationID, name, checksum)
 
@@ -283,7 +283,7 @@ func (p *PostgresAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaT
 	// Filter out internal tables
 	var validTables []string
 	for _, name := range tableNames {
-		if name != "_graft_migrations" {
+		if name != "_flash_migrations" {
 			validTables = append(validTables, name)
 		}
 	}
@@ -1106,7 +1106,7 @@ func (p *PostgresAdapter) PullCompleteSchema(ctx context.Context) ([]types.Schem
 		WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
 	) fk ON c.table_name = fk.table_name AND c.column_name = fk.column_name
 	WHERE c.table_schema = 'public' 
-		AND c.table_name NOT LIKE '_graft_%'
+		AND c.table_name NOT LIKE '_flash_%'
 	ORDER BY c.table_name, c.ordinal_position`
 
 	rows, err := p.pool.Query(ctx, query)

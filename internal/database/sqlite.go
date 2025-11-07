@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"github.com/Masterminds/squirrel"
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -57,7 +57,7 @@ func (s *SQLiteAdapter) Ping(ctx context.Context) error {
 
 // Migration table operations
 func (s *SQLiteAdapter) CreateMigrationsTable(ctx context.Context) error {
-	query := `CREATE TABLE IF NOT EXISTS _graft_migrations (
+	query := `CREATE TABLE IF NOT EXISTS _flash_migrations (
 		id TEXT PRIMARY KEY,
 		checksum TEXT NOT NULL,
 		finished_at TIMESTAMP,
@@ -72,26 +72,26 @@ func (s *SQLiteAdapter) CreateMigrationsTable(ctx context.Context) error {
 }
 
 func (s *SQLiteAdapter) EnsureMigrationTableCompatibility(ctx context.Context) error {
-	exists, err := s.columnExists("_graft_migrations", "logs")
+	exists, err := s.columnExists("_flash_migrations", "logs")
 	if err != nil {
 		return err
 	}
 	if !exists {
-		_, err = s.db.ExecContext(ctx, "ALTER TABLE _graft_migrations ADD COLUMN logs TEXT")
+		_, err = s.db.ExecContext(ctx, "ALTER TABLE _flash_migrations ADD COLUMN logs TEXT")
 	}
 	return err
 }
 
 func (s *SQLiteAdapter) CleanupBrokenMigrationRecords(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx,
-		"DELETE FROM _graft_migrations WHERE finished_at IS NULL AND started_at < datetime('now', '-1 hour')")
+		"DELETE FROM _flash_migrations WHERE finished_at IS NULL AND started_at < datetime('now', '-1 hour')")
 	return err
 }
 
 // Core migration operations
 func (s *SQLiteAdapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	applied := make(map[string]*time.Time)
-	query := s.qb.Select("id", "finished_at").From("_graft_migrations").
+	query := s.qb.Select("id", "finished_at").From("_flash_migrations").
 		Where(squirrel.NotEq{"finished_at": nil}).OrderBy("started_at")
 
 	sql, args, err := query.ToSql()
@@ -124,7 +124,7 @@ func (s *SQLiteAdapter) RecordMigration(ctx context.Context, migrationID, name, 
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO _graft_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
+	INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
 	`, migrationID, name, checksum)
 
@@ -272,7 +272,7 @@ func (s *SQLiteAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTab
 	// Filter out internal tables
 	var validTables []string
 	for _, name := range tableNames {
-		if name != "_graft_migrations" {
+		if name != "_flash_migrations" {
 			validTables = append(validTables, name)
 		}
 	}
@@ -754,7 +754,7 @@ func (s *SQLiteAdapter) FormatColumnType(column types.SchemaColumn) string {
 
 func (s *SQLiteAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	// Get all table names first
-	tableQuery := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_graft_%'`
+	tableQuery := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_flash_%'`
 	rows, err := s.db.QueryContext(ctx, tableQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %w", err)

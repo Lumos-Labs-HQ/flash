@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/parser"
-	"github.com/Lumos-Labs-HQ/graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/parser"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 type Generator struct {

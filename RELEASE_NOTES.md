@@ -1,12 +1,12 @@
-# Graft v2.0.0 Release Notes
+# FlashORM v2.0.0 Release Notes
 
-## 🎉 Major Release: Graft Studio, Node.js/TypeScript Support & Massive Performance Improvements
+## 🎉 Major Release: FlashORM Studio, Node.js/TypeScript Support & Massive Performance Improvements
 
-We're excited to announce Graft v2.0.0, a groundbreaking release that introduces **Graft Studio** (visual database editor), first-class Node.js/TypeScript support, raw SQL command execution, and significant performance improvements!
+We're excited to announce FlashORM v2.0.0, a groundbreaking release that introduces **FlashORM Studio** (visual database editor), first-class Node.js/TypeScript support, raw SQL command execution, and significant performance improvements!
 
 ## 🚀 What's New
 
-### 🎨 Graft Studio - Visual Database Editor
+### 🎨 FlashORM Studio - Visual Database Editor
 
 **The biggest feature in v2.0.0!** A powerful web-based database management interface with three interactive pages.
 
@@ -23,13 +23,13 @@ We're excited to announce Graft v2.0.0, a groundbreaking release that introduces
 **Usage:**
 ```bash
 # Launch studio (auto-detects config)
-graft studio
+FlashORM studio
 
 # Custom port
-graft studio --port 3000
+FlashORM studio --port 3000
 
 # Connect to any database directly
-graft studio --db "postgres://user:pass@localhost:5432/mydb"
+FlashORM studio --db "postgres://user:pass@localhost:5432/mydb"
 ```
 
 **Studio Pages:**
@@ -77,15 +77,15 @@ Execute raw SQL files or queries directly against your database!
 **Usage:**
 ```bash
 # Execute SQL file
-graft raw script.sql
-graft raw migrations/seed.sql
+FlashORM raw script.sql
+FlashORM raw migrations/seed.sql
 
 # Execute inline query
-graft raw -q "SELECT * FROM users WHERE active = true"
-graft raw "SELECT COUNT(*) FROM orders"
+FlashORM raw -q "SELECT * FROM users WHERE active = true"
+FlashORM raw "SELECT COUNT(*) FROM orders"
 
 # Force file mode
-graft raw --file queries/complex_query.sql
+FlashORM raw --file queries/complex_query.sql
 ```
 
 **Output Formatting:**
@@ -102,7 +102,7 @@ graft raw --file queries/complex_query.sql
 
 ### 🟢 Node.js/TypeScript Support
 
-Graft now generates fully type-safe JavaScript/TypeScript code for Node.js projects!
+FlashORM now generates fully type-safe JavaScript/TypeScript code for Node.js projects!
 
 **Features:**
 - ✅ Automatic project detection (detects `package.json`)
@@ -113,7 +113,7 @@ Graft now generates fully type-safe JavaScript/TypeScript code for Node.js proje
 
 **Example:**
 ```typescript
-import { New } from './graft_gen/database';
+import { New } from './FlashORM_gen/database';
 import { Pool } from 'pg';
 
 const db = New(new Pool({ connectionString: DATABASE_URL }));
@@ -142,10 +142,10 @@ export class Queries {
 
 ### 📦 NPM Package Distribution
 
-Install Graft via NPM for seamless integration with Node.js projects:
+Install FlashORM via NPM for seamless integration with Node.js projects:
 
 ```bash
-npm install -g graft-orm
+npm install -g FlashORM-orm
 ```
 
 **Features:**
@@ -157,9 +157,9 @@ npm install -g graft-orm
 
 ### ⚡ Performance Improvements
 
-Graft v2.0.0 now significantly outperforms popular ORMs:
+FlashORM v2.0.0 now significantly outperforms popular ORMs:
 
-| Operation | Graft v2.0 | Drizzle | Prisma | Improvement |
+| Operation | FlashORM v2.0 | Drizzle | Prisma | Improvement |
 |-----------|------------|---------|--------|-------------|
 | Insert 1000 Users | **158ms** | 224ms | 230ms | **1.4x faster** |
 | Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms | **1.3x faster** |
@@ -244,7 +244,7 @@ Create export before applying? (y/n): y
 
 ### 🔍 Schema Introspection Improvements
 
-Enhanced `graft pull` command with better schema extraction:
+Enhanced `FlashORM pull` command with better schema extraction:
 
 - ✅ Improved foreign key detection
 - ✅ Better constraint handling
@@ -253,7 +253,7 @@ Enhanced `graft pull` command with better schema extraction:
 - ✅ Backup option before overwrite
 
 ```bash
-graft pull --backup
+FlashORM pull --backup
 ```
 
 ### 📤 Export System Enhancements
@@ -268,7 +268,7 @@ Improved export functionality with better data handling:
 
 ## 🔧 Improvements
 
-### Graft Studio
+### FlashORM Studio
 - **Web Interface**: Full-featured visual database editor
 - **Three Interactive Pages**: Data browser, SQL editor, and schema visualization
 - **React Integration**: Modern React 18.2.0 for schema diagrams
@@ -304,7 +304,7 @@ Improved export functionality with better data handling:
 ### Documentation
 - **Complete Examples**: Full TypeScript and JavaScript examples
 - **API Documentation**: Comprehensive API docs for generated code
-- **Studio Guide**: Complete guide for using Graft Studio
+- **Studio Guide**: Complete guide for using FlashORM Studio
 - **Technology Stack**: Detailed documentation of all dependencies
 - **Migration Guide**: Guide for migrating from other ORMs
 - **Performance Guide**: Tips for optimal performance
@@ -326,25 +326,25 @@ Improved export functionality with better data handling:
 
 ### NPM (New!)
 ```bash
-npm install -g graft-orm
+npm install -g FlashORM-orm
 ```
 
 ### Go
 ```bash
-go install github.com/Lumos-Labs-HQ/graft@latest
+go install github.com/Lumos-Labs-HQ/FlashORM@latest
 ```
 
 ### Binary Download
-Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/graft/releases/tag/v1.7.0)
+Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/FlashORM/releases/tag/v1.7.0)
 
 ## 📚 Documentation
 
-- [Main Documentation](https://github.com/Lumos-Labs-HQ/graft)
-- [NPM Package README](https://www.npmjs.com/package/graft-orm)
-- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/graft/tree/main/example/ts)
-- [How It Works](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/HOW_IT_WORKS.md)
-- [Technology Stack](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/TECHNOLOGY_STACK.md)
-- [Contributing Guide](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/CONTRIBUTING.md)
+- [Main Documentation](https://github.com/Lumos-Labs-HQ/FlashORM)
+- [NPM Package README](https://www.npmjs.com/package/FlashORM-orm)
+- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/FlashORM/tree/main/example/ts)
+- [How It Works](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/TECHNOLOGY_STACK.md)
+- [Contributing Guide](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/CONTRIBUTING.md)
 
 ## 🙏 Acknowledgments
 
@@ -362,7 +362,7 @@ Special thanks to:
 ## 📝 Full Changelog
 
 ### Added
-- **Graft Studio**: Complete visual database editor with 3 pages
+- **FlashORM Studio**: Complete visual database editor with 3 pages
   - Data browser with inline editing (`internal/studio`)
   - SQL editor with CodeMirror syntax highlighting
   - Schema visualization with React + ReactFlow
@@ -423,7 +423,7 @@ Special thanks to:
 
 ## 🐛 Known Issues
 
-- Bun users need to run `bun pm trust graft-orm` after installation
+- Bun users need to run `bun pm trust FlashORM-orm` after installation
 - Windows ARM64 support is experimental
 - MySQL ENUM support is limited (use VARCHAR with CHECK constraint)
 - Studio: Large schemas (200+ tables) may have slow initial load
@@ -432,17 +432,17 @@ Special thanks to:
 ## 💬 Feedback
 
 We'd love to hear your feedback! Please:
-- 🐛 [Report bugs](https://github.com/Lumos-Labs-HQ/graft/issues)
-- 💡 [Request features](https://github.com/Lumos-Labs-HQ/graft/issues)
-- ⭐ [Star the repo](https://github.com/Lumos-Labs-HQ/graft)
+- 🐛 [Report bugs](https://github.com/Lumos-Labs-HQ/FlashORM/issues)
+- 💡 [Request features](https://github.com/Lumos-Labs-HQ/FlashORM/issues)
+- ⭐ [Star the repo](https://github.com/Lumos-Labs-HQ/FlashORM)
 - 🐦 Share on social media
 
 ---
 
-**Download:** [v2.0.0 Release](https://github.com/Lumos-Labs-HQ/graft/releases/tag/v2.0.0)
+**Download:** [v2.0.0 Release](https://github.com/Lumos-Labs-HQ/FlashORM/releases/tag/v2.0.0)
 
-**NPM:** `npm install -g graft-orm`
+**NPM:** `npm install -g FlashORM-orm`
 
-**Go:** `go install github.com/Lumos-Labs-HQ/graft@latest`
+**Go:** `go install github.com/Lumos-Labs-HQ/FlashORM@latest`
 
-**Try Graft Studio:** `graft studio`
+**Try FlashORM Studio:** `FlashORM studio`

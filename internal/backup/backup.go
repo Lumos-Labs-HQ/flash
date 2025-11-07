@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,7 +47,7 @@ func (bm *BackupManager) CreateBackup(ctx context.Context, comment string, getAp
 	}
 
 	for _, table := range tables {
-		if table == "_graft_migrations" {
+		if table == "_flash_migrations" {
 			continue
 		}
 		bm.backupTable(ctx, table, &backup)
@@ -62,7 +62,7 @@ func (bm *BackupManager) shouldCreateBackup(ctx context.Context, tables []string
 	}
 
 	for _, table := range tables {
-		if table != "_graft_migrations" {
+		if table != "_flash_migrations" {
 			var count int
 			if err := bm.db.QueryRow(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", table)).Scan(&count); err == nil && count > 0 {
 				return true
@@ -155,7 +155,7 @@ func (bm *BackupManager) GetAllTableNames(ctx context.Context) ([]string, error)
 // func createMigrationGetter(db *pgxpool.Pool) func(context.Context) (map[string]*time.Time, error) {
 // 	return func(ctx context.Context) (map[string]*time.Time, error) {
 // 		if _, err := db.Exec(ctx, `
-// 			CREATE TABLE IF NOT EXISTS _graft_migrations (
+// 			CREATE TABLE IF NOT EXISTS _flash_migrations (
 // 				id VARCHAR(255) PRIMARY KEY,
 // 				checksum VARCHAR(64) NOT NULL,
 // 				finished_at TIMESTAMP WITH TIME ZONE,
@@ -171,7 +171,7 @@ func (bm *BackupManager) GetAllTableNames(ctx context.Context) ([]string, error)
 // 		applied := make(map[string]*time.Time)
 // 		rows, err := db.Query(ctx, `
 // 			SELECT id, finished_at
-// 			FROM _graft_migrations
+// 			FROM _flash_migrations
 // 			WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)
 // 		if err != nil {
 // 			return nil, err
@@ -209,7 +209,7 @@ func PerformBackupWithAdapter(ctx context.Context, adapter database.DatabaseAdap
 	}
 
 	for _, tableName := range tables {
-		if tableName == "_graft_migrations" {
+		if tableName == "_flash_migrations" {
 			continue
 		}
 

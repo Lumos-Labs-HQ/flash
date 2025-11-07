@@ -1,4 +1,4 @@
-# Publishing Graft to PyPI
+# Publishing flash to PyPI
 
 ## Prerequisites
 
@@ -19,8 +19,8 @@ python -m build
 ```
 
 This creates:
-- `dist/graft-orm-1.0.0.tar.gz` (source distribution)
-- `dist/graft_orm-1.0.0-py3-none-any.whl` (wheel)
+- `dist/flash-orm-1.0.0.tar.gz` (source distribution)
+- `dist/flash_orm-1.0.0-py3-none-any.whl` (wheel)
 
 ## Test on TestPyPI (Recommended First)
 
@@ -29,7 +29,7 @@ This creates:
 twine upload --repository testpypi dist/*
 
 # Test installation
-pip install --index-url https://test.pypi.org/simple/ graft-orm
+pip install --index-url https://test.pypi.org/simple/ flash-orm
 ```
 
 ## Publish to PyPI
@@ -43,8 +43,8 @@ Enter your PyPI username and API token when prompted.
 ## Verify Installation
 
 ```bash
-pip install graft-orm
-graft --help
+pip install flash-orm
+flash --help
 ```
 
 ## Update Version
@@ -52,7 +52,7 @@ graft --help
 1. Update version in:
    - `setup.py` (VERSION variable)
    - `pyproject.toml` ([project] version)
-   - `graft_orm/__init__.py` (__version__)
+   - `flash_orm/__init__.py` (__version__)
 
 2. Rebuild and republish:
 ```bash

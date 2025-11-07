@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Test script for Graft Studio
+# Test script for FlashORM Studio
 
-echo "🧪 Testing Graft Studio Setup"
+echo "🧪 Testing FlashORM Studio Setup"
 echo "=============================="
 
 # Set DATABASE_URL (edit this with your database connection)
@@ -17,9 +17,9 @@ echo "📝 DATABASE_URL set to: $DATABASE_URL"
 echo ""
 
 # Check if binary exists
-if [ ! -f "./graft.exe" ]; then
-    echo "❌ graft.exe not found. Building..."
-    go build -o graft.exe .
+if [ ! -f "./FlashORM.exe" ]; then
+    echo "❌ FlashORM.exe not found. Building..."
+    go build -o FlashORM.exe .
 fi
 
 # Check if templates directory exists
@@ -36,11 +36,11 @@ fi
 
 echo "✅ All files present"
 echo ""
-echo "🚀 Starting Graft Studio..."
+echo "🚀 Starting FlashORM Studio..."
 echo "   Browser will open at http://localhost:5555"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
 # Run studio
-./graft.exe studio
+./FlashORM.exe studio

@@ -4,8 +4,8 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '1.6.0';
-const REPO = 'Rana718/Graft';
+const VERSION = '2.0.2';
+const REPO = 'Lumos-Labs-HQ/FlashORM';
 
 const platform = process.platform;
 const arch = process.arch;
@@ -29,14 +29,14 @@ if (!mappedPlatform || !mappedArch) {
   process.exit(1);
 }
 
-const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
-const downloadName = `graft-${mappedPlatform}-${mappedArch}${platform === 'win32' ? '.exe' : ''}`;
+const binaryName = platform === 'win32' ? 'flash.exe' : 'flash';
+const downloadName = `flash-${mappedPlatform}-${mappedArch}${platform === 'win32' ? '.exe' : ''}`;
 const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/${downloadName}`;
 
 const binDir = path.join(__dirname, '..', 'bin');
 const binaryPath = path.join(binDir, binaryName);
 
-console.log(`📦 Installing Graft v${VERSION} for ${platform}-${arch}...`);
+console.log(`📦 Installing flash v${VERSION} for ${platform}-${arch}...`);
 console.log(`📥 Downloading from: ${downloadUrl}`);
 
 if (!fs.existsSync(binDir)) {
@@ -52,8 +52,8 @@ https.get(downloadUrl, (response) => {
       file.on('finish', () => {
         file.close(() => {
           fs.chmodSync(binaryPath, 0o755);
-          console.log(`✅ Graft installed successfully!`);
-          console.log(`🚀 Run 'graft --help' to get started!`);
+          console.log(`✅ flash installed successfully!`);
+          console.log(`🚀 Run 'flash --help' to get started!`);
         });
       });
     });
@@ -62,8 +62,8 @@ https.get(downloadUrl, (response) => {
     file.on('finish', () => {
       file.close(() => {
         fs.chmodSync(binaryPath, 0o755);
-        console.log(`✅ Graft installed successfully!`);
-        console.log(`🚀 Run 'graft --help' to get started!`);
+        console.log(`✅ flash installed successfully!`);
+        console.log(`🚀 Run 'flash --help' to get started!`);
       });
     });
   }

@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -35,7 +35,7 @@ func PerformExport(ctx context.Context, adapter database.DatabaseAdapter, export
 	}
 
 	for _, tableName := range tables {
-		if tableName == "_graft_migrations" {
+		if tableName == "_flash_migrations" {
 			continue
 		}
 

@@ -6,7 +6,7 @@ import os
 import stat
 
 VERSION = '1.0.0'
-REPO = 'Lumos-Labs-HQ/graft'
+REPO = 'Lumos-Labs-HQ/flash'
 
 class PostInstallCommand(install):
     def run(self):
@@ -26,36 +26,36 @@ class PostInstallCommand(install):
         if not mapped_platform or not mapped_arch:
             raise Exception(f"Unsupported platform: {system}-{machine}")
         
-        binary_name = 'graft.exe' if system == 'windows' else 'graft'
-        download_name = f"graft-{mapped_platform}-{mapped_arch}{'.exe' if system == 'windows' else ''}"
+        binary_name = 'flash.exe' if system == 'windows' else 'flash'
+        download_name = f"flash-{mapped_platform}-{mapped_arch}{'.exe' if system == 'windows' else ''}"
         url = f"https://github.com/{REPO}/releases/download/v{VERSION}/{download_name}"
         
-        bin_dir = os.path.join(os.path.dirname(__file__), 'graft_orm', 'bin')
+        bin_dir = os.path.join(os.path.dirname(__file__), 'flash_orm', 'bin')
         os.makedirs(bin_dir, exist_ok=True)
         binary_path = os.path.join(bin_dir, binary_name)
         
-        print(f"📦 Installing Graft v{VERSION} for {system}-{machine}...")
+        print(f"📦 Installing flash v{VERSION} for {system}-{machine}...")
         print(f"📥 Downloading from: {url}")
         
         urllib.request.urlretrieve(url, binary_path)
         os.chmod(binary_path, os.stat(binary_path).st_mode | stat.S_IEXEC)
         
-        print("✅ Graft installed successfully!")
+        print("✅ flash installed successfully!")
 
 setup(
-    name='graft-orm',
+    name='flash-orm',
     version=VERSION,
     description='A powerful, database-agnostic ORM with multi-database support and type-safe code generation',
     long_description=open('../README.md').read(),
     long_description_content_type='text/markdown',
     author='Rana718',
     author_email='',
-    url='https://github.com/Lumos-Labs-HQ/graft',
+    url='https://github.com/Lumos-Labs-HQ/flash',
     packages=find_packages(),
     cmdclass={'install': PostInstallCommand},
     entry_points={
         'console_scripts': [
-            'graft=graft_orm.cli:main',
+            'flash=flash_orm.cli:main',
         ],
     },
     classifiers=[
@@ -72,7 +72,7 @@ setup(
     python_requires='>=3.7',
     keywords='orm database migration postgresql mysql sqlite cli',
     project_urls={
-        'Bug Reports': 'https://github.com/Lumos-Labs-HQ/graft/issues',
-        'Source': 'https://github.com/Lumos-Labs-HQ/graft',
+        'Bug Reports': 'https://github.com/Lumos-Labs-HQ/flash/issues',
+        'Source': 'https://github.com/Lumos-Labs-HQ/flash',
     },
 )

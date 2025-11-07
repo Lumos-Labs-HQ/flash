@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
 )
 
 type Service struct {
@@ -30,7 +30,7 @@ func (s *Service) GetTables() ([]TableInfo, error) {
 
 	var targetTables []string
 	for _, table := range tables {
-		if table != "_graft_migrations" {
+		if table != "_flash_migrations" {
 			targetTables = append(targetTables, table)
 		}
 	}
