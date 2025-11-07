@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/migrator"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/migrator"
 
 	"github.com/spf13/cobra"
 )
@@ -27,10 +27,10 @@ The migration file will include:
 - Auto-generated SQL based on schema differences (if --auto flag is used)
 
 Examples:
-  graft migrate "create users table"
-  graft migrate "add email index" --auto
-  graft migrate --empty "custom migration"
-  graft migrate  # Interactive mode`,
+  flash migrate "create users table"
+  flash migrate "add email index" --auto
+  flash migrate --empty "custom migration"
+  flash migrate  # Interactive mode`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -85,8 +85,8 @@ Examples:
 
 		fmt.Println("✅ Migration generated successfully")
 		fmt.Println("📝 Edit the migration file to add your SQL statements")
-		fmt.Println("💡 Run 'graft apply' to apply the migration")
-		fmt.Println("🔧 Run 'graft gen' to generate SQLC types after applying migrations")
+		fmt.Println("💡 Run 'FlashORMORM apply' to apply the migration")
+		fmt.Println("🔧 Run 'FlashORMORM gen' to generate SQLC types after applying migrations")
 
 		return nil
 	},

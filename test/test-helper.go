@@ -52,7 +52,7 @@ func main() {
 
 func verifyConnection(dbURL string) {
 	fmt.Println("🔗 Verifying database connection...")
-	
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
@@ -78,7 +78,7 @@ func verifyConnection(dbURL string) {
 
 func countTables(dbURL string) {
 	fmt.Println("📋 Counting database tables...")
-	
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
@@ -132,7 +132,7 @@ func countTables(dbURL string) {
 
 func checkData(dbURL, tableName, expectedCountStr string) {
 	fmt.Printf("🔍 Checking data in table: %s\n", tableName)
-	
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
@@ -143,7 +143,7 @@ func checkData(dbURL, tableName, expectedCountStr string) {
 	defer cancel()
 
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)
-	
+
 	var actualCount int
 	err = db.QueryRowContext(ctx, query).Scan(&actualCount)
 	if err != nil {
@@ -166,7 +166,7 @@ func checkData(dbURL, tableName, expectedCountStr string) {
 
 func verifyMigrationTable(dbURL string) {
 	fmt.Println("🔍 Verifying migration table...")
-	
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
@@ -181,7 +181,7 @@ func verifyMigrationTable(dbURL string) {
 		SELECT EXISTS (
 			SELECT FROM information_schema.tables 
 			WHERE table_schema = 'public' 
-			AND table_name = '_graft_migrations'
+			AND table_name = '_flash_migrations'
 		)
 	`
 
@@ -197,7 +197,7 @@ func verifyMigrationTable(dbURL string) {
 	}
 
 	// Count migrations
-	countQuery := "SELECT COUNT(*) FROM _graft_migrations"
+	countQuery := "SELECT COUNT(*) FROM _flash_migrations"
 	var migrationCount int
 	err = db.QueryRowContext(ctx, countQuery).Scan(&migrationCount)
 	if err != nil {
@@ -210,7 +210,7 @@ func verifyMigrationTable(dbURL string) {
 	if migrationCount > 0 {
 		listQuery := `
 			SELECT id, migration_name, started_at 
-			FROM _graft_migrations 
+			FROM _flash_migrations 
 			ORDER BY started_at
 		`
 

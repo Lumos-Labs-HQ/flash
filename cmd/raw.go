@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/Lumos-Labs-HQ/graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -17,11 +17,11 @@ You can either:
   3. Pass a SQL query inline (without flag if it starts with SELECT/INSERT/UPDATE/DELETE)
 	
 Examples:
-  graft raw script.sql
-  graft raw queries/update_users.sql
-  graft raw -q "SELECT * FROM users"
-  graft raw "SELECT * FROM users WHERE id = 1"
-  graft raw --file script.sql`,
+  flash raw script.sql
+  flash raw queries/update_users.sql
+  flash raw -q "SELECT * FROM users"
+  flash raw "SELECT * FROM users WHERE id = 1"
+  flash raw --file script.sql`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return utils.RunRaw(cmd, args, rawQueryFlag, rawFileFlag)

@@ -1,4 +1,4 @@
-module github.com/Lumos-Labs-HQ/graft
+module github.com/Lumos-Labs-HQ/flash
 
 go 1.24.2
 

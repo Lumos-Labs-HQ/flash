@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
-	"github.com/Lumos-Labs-HQ/graft/internal/schema"
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
-	"github.com/Lumos-Labs-HQ/graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/schema"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 type Migrator struct {

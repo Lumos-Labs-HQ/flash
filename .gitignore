@@ -4,8 +4,8 @@
 *.dll
 *.so
 *.dylib
-graft
-graft.exe
+FlashORM
+FlashORM.exe
 
 # Test binary, built with `go test -c`
 *.test
@@ -48,7 +48,7 @@ Thumbs.db
 # db/migrations/
 
 # SQLC generated files
-# **/graft_gen/
+# **/FlashORM_gen/
 
 # Logs
 *.log

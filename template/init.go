@@ -74,7 +74,7 @@ func NewProjectTemplate(dbType DatabaseType, isNodeProject bool) *ProjectTemplat
 	}
 }
 
-func (pt *ProjectTemplate) GetGraftConfig() string {
+func (pt *ProjectTemplate) GetFlashORMConfig() string {
 	cfg := dbConfigs[pt.DatabaseType]
 
 	var genSection string

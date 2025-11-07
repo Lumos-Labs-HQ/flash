@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/spf13/cobra"
 )
 

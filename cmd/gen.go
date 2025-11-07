@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/gogen"
-	"github.com/Lumos-Labs-HQ/graft/internal/jsgen"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gogen"
+	"github.com/Lumos-Labs-HQ/flash/internal/jsgen"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +18,7 @@ Automatically detects project type and generates appropriate code:
 - Go projects: Generate Go code with custom generator
 - Node.js projects: Generate JavaScript code with type annotations
 
-Configuration is read from graft.config.json`,
+Configuration is read from flash.config.json`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -42,7 +42,7 @@ Configuration is read from graft.config.json`,
 				return fmt.Errorf("failed to generate Go code: %w", err)
 			}
 			fmt.Println("🎉 Go code generated successfully!")
-			fmt.Println("   Output: graft_gen/")
+			fmt.Println("   Output: FlashORM_gen/")
 		}
 
 		return nil

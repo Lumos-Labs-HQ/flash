@@ -1,7 +1,7 @@
-# Graft CLI Makefile
+# FlashORM CLI Makefile
 
 # Variables
-BINARY_NAME=graft
+BINARY_NAME=flash
 BINARY_UNIX=$(BINARY_NAME)_unix
 BINARY_WINDOWS=$(BINARY_NAME).exe
 BUILD_DIR=build
@@ -18,19 +18,19 @@ build-all:
 	@mkdir -p $(BUILD_DIR)
 
 	# Linux AMD64
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-linux-x64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-linux-amd64 .
 
 	# Linux ARM64
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-linux-arm64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-linux-arm64 .
 
 	# Windows AMD64
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-win32-x64.exe .
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-windows-amd64.exe .
 
 	# macOS AMD64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-darwin-x64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-darwin-amd64 .
 
 	# macOS ARM64
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-darwin-arm64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-darwin-arm64 .
 
 	@echo "Cross-platform build complete in $(BUILD_DIR)/"
 
@@ -39,11 +39,11 @@ build-all:
 compress: build-all
 	@echo "Compressing binaries with UPX..."
 	@if command -v upx &> /dev/null; then \
-		upx --best --lzma $(BUILD_DIR)/graft-linux-x64; \
-		upx --best --lzma $(BUILD_DIR)/graft-linux-arm64; \
-		upx --best --lzma $(BUILD_DIR)/graft-win32-x64.exe; \
-		upx --best --lzma $(BUILD_DIR)/graft-darwin-x64; \
-		upx --best --lzma $(BUILD_DIR)/graft-darwin-arm64; \
+		upx --best --lzma $(BUILD_DIR)/flash-linux-amd64; \
+		upx --best --lzma $(BUILD_DIR)/flash-linux-arm64; \
+		upx --best --lzma $(BUILD_DIR)/flash-windows-amd64.exe; \
+		upx --best --lzma $(BUILD_DIR)/flash-darwin-amd64; \
+		upx --best --lzma $(BUILD_DIR)/flash-darwin-arm64; \
 		echo "Compression complete!"; \
 	else \
 		echo "UPX not found. Install from https://upx.github.io/"; \

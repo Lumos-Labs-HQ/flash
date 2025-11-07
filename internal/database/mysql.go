@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"github.com/Masterminds/squirrel"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -57,7 +57,7 @@ func (m *MySQLAdapter) Ping(ctx context.Context) error {
 
 // Migration table operations
 func (m *MySQLAdapter) CreateMigrationsTable(ctx context.Context) error {
-	query := `CREATE TABLE IF NOT EXISTS _graft_migrations (
+	query := `CREATE TABLE IF NOT EXISTS _flash_migrations (
 		id VARCHAR(255) PRIMARY KEY,
 		checksum VARCHAR(64) NOT NULL,
 		finished_at TIMESTAMP NULL,
@@ -72,19 +72,19 @@ func (m *MySQLAdapter) CreateMigrationsTable(ctx context.Context) error {
 }
 
 func (m *MySQLAdapter) EnsureMigrationTableCompatibility(ctx context.Context) error {
-	exists, err := m.columnExists("_graft_migrations", "logs")
+	exists, err := m.columnExists("_flash_migrations", "logs")
 	if err != nil {
 		return err
 	}
 	if !exists {
-		_, err = m.db.ExecContext(ctx, "ALTER TABLE _graft_migrations ADD COLUMN logs TEXT")
+		_, err = m.db.ExecContext(ctx, "ALTER TABLE _flash_migrations ADD COLUMN logs TEXT")
 	}
 	return err
 }
 
 func (m *MySQLAdapter) CleanupBrokenMigrationRecords(ctx context.Context) error {
 	_, err := m.db.ExecContext(ctx, `
-		DELETE FROM _graft_migrations 
+	DELETE FROM _flash_migrations 
 		WHERE finished_at IS NULL AND started_at < DATE_SUB(NOW(), INTERVAL 1 HOUR)
 	`)
 	return err
@@ -93,7 +93,7 @@ func (m *MySQLAdapter) CleanupBrokenMigrationRecords(ctx context.Context) error 
 // Core migration operations
 func (m *MySQLAdapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	applied := make(map[string]*time.Time)
-	query := m.qb.Select("id", "finished_at").From("_graft_migrations").
+	query := m.qb.Select("id", "finished_at").From("_flash_migrations").
 		Where(squirrel.NotEq{"finished_at": nil}).OrderBy("started_at")
 
 	sql, args, err := query.ToSql()
@@ -126,7 +126,7 @@ func (m *MySQLAdapter) RecordMigration(ctx context.Context, migrationID, name, c
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO _graft_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
+	INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
 		VALUES (?, ?, ?, NOW(), NOW(), 1)
 	`, migrationID, name, checksum)
 
@@ -276,7 +276,7 @@ func (m *MySQLAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTabl
 	// Filter out internal tables
 	var validTables []string
 	for _, name := range tableNames {
-		if name != "_graft_migrations" {
+		if name != "_flash_migrations" {
 			validTables = append(validTables, name)
 		}
 	}
@@ -862,7 +862,7 @@ func (m *MySQLAdapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTa
 		ON k.CONSTRAINT_NAME = r.CONSTRAINT_NAME
 		AND k.TABLE_SCHEMA = r.CONSTRAINT_SCHEMA
 	WHERE c.TABLE_SCHEMA = DATABASE()
-		AND c.TABLE_NAME NOT LIKE '_graft_%'
+		AND c.TABLE_NAME NOT LIKE '_flash_%'
 	ORDER BY c.TABLE_NAME, c.ORDINAL_POSITION`
 
 	rows, err := m.db.QueryContext(ctx, query)

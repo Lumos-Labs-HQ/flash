@@ -1,6 +1,6 @@
 # Technology Stack & Dependencies
 
-This document outlines all the technologies, libraries, and tools used in the Graft project.
+This document outlines all the technologies, libraries, and tools used in the FlashORM project.
 
 ## Table of Contents
 
@@ -11,7 +11,7 @@ This document outlines all the technologies, libraries, and tools used in the Gr
 - [Build Tools](#build-tools)
 - [Code Generation System](#code-generation-system)
 - [Export System](#export-system)
-- [Graft Studio Technologies](#graft-studio-technologies)
+- [FlashORM Studio Technologies](#FlashORM-studio-technologies)
   - [Backend - Go Fiber](#backend---go-fiber)
   - [Frontend Technologies](#frontend-technologies)
   - [Studio Architecture](#studio-architecture)
@@ -66,7 +66,7 @@ This document outlines all the technologies, libraries, and tools used in the Gr
 - Context-aware operations
 - Transaction safety with automatic rollback
 
-**Usage in Graft:**
+**Usage in FlashORM:**
 ```go
 type PostgresAdapter struct {
     pool *pgxpool.Pool
@@ -149,16 +149,16 @@ func (p *PostgresAdapter) Connect(ctx context.Context, url string) error {
 
 | Command | Description | Flags |
 |---------|-------------|-------|
-| `graft init` | Initialize a new Graft project | `--postgresql`, `--mysql`, `--sqlite` |
-| `graft migrate [name]` | Create a new migration | `--empty`, `-e` |
-| `graft apply` | Apply pending migrations | `--force`, `-f` |
-| `graft status` | Show migration status | None |
-| `graft export` | Export database | `--json`, `-j`, `--csv`, `-c`, `--sqlite`, `-s` |
-| `graft reset` | Reset database | `--force`, `-f` |
-| `graft gen` | Generate type-safe code | None |
-| `graft pull` | Extract schema from database | `--backup`, `-b`, `--output`, `-o` |
-| `graft raw <sql>` | Execute raw SQL | `--query`, `-q`, `--file` |
-| `graft studio` | Launch visual database editor | `--port`, `--db` |
+| `FlashORM init` | Initialize a new FlashORM project | `--postgresql`, `--mysql`, `--sqlite` |
+| `FlashORM migrate [name]` | Create a new migration | `--empty`, `-e` |
+| `FlashORM apply` | Apply pending migrations | `--force`, `-f` |
+| `FlashORM status` | Show migration status | None |
+| `FlashORM export` | Export database | `--json`, `-j`, `--csv`, `-c`, `--sqlite`, `-s` |
+| `FlashORM reset` | Reset database | `--force`, `-f` |
+| `FlashORM gen` | Generate type-safe code | None |
+| `FlashORM pull` | Extract schema from database | `--backup`, `-b`, `--output`, `-o` |
+| `FlashORM raw <sql>` | Execute raw SQL | `--query`, `-q`, `--file` |
+| `FlashORM studio` | Launch visual database editor | `--port`, `--db` |
 
 **Additional Dependencies:**
 - `github.com/inconshreveable/mousetrap v1.1.0` - Windows command-line support
@@ -290,7 +290,7 @@ compress:     # Compress binaries with UPX
 
 **Generated Output:**
 ```go
-// graft_gen/models.go
+// FlashORM_gen/models.go
 type Users struct {
     ID        sql.NullInt32  `json:"id" db:"id"`
     Name      string         `json:"name" db:"name"`
@@ -298,7 +298,7 @@ type Users struct {
     CreatedAt time.Time      `json:"created_at" db:"created_at"`
 }
 
-// graft_gen/db.go
+// FlashORM_gen/db.go
 type DBTX interface {
     Exec(query string, args ...interface{}) (sql.Result, error)
     Query(query string, args ...interface{}) (*sql.Rows, error)
@@ -415,7 +415,7 @@ export function New(db: any): Queries;
 - Cross-platform compatibility
 - Relationship maintenance
 
-## Graft Studio Technologies
+## FlashORM Studio Technologies
 
 ### Backend - Go Fiber
 
@@ -433,7 +433,7 @@ export function New(db: any): Queries;
 - Middleware support
 - RESTful API support
 
-**Usage in Graft:**
+**Usage in FlashORM:**
 ```go
 app := fiber.New(fiber.Config{
     Views: engine,
@@ -833,7 +833,7 @@ type ProjectTemplate struct {
     DatabaseType DatabaseType
 }
 
-func (pt *ProjectTemplate) GetGraftConfig() string {
+func (pt *ProjectTemplate) GetFlashORMConfig() string {
     return fmt.Sprintf(`{
   "schema_path": "db/schema/schema.sql",
   "migrations_path": "db/migrations",
@@ -845,11 +845,11 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
   "gen": {
     "go": {
       "enabled": true,
-      "output_path": "graft_gen"
+      "output_path": "FlashORM_gen"
     },
     "js": {
       "enabled": false,
-      "output_path": "graft_gen"
+      "output_path": "FlashORM_gen"
     }
   }
 }`, pt.DatabaseType)
@@ -893,7 +893,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
     if err := m.adapter.ExecuteMigration(ctx, string(content)); err != nil {
         fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
         fmt.Printf("   Error: %v\n", err)
-        fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+        fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
         return err
     }
 
@@ -998,7 +998,7 @@ func (p *PostgresAdapter) GetAllTableRowCounts(ctx context.Context, tables []str
 ```bash
 # If you must use remotely, use SSH tunnel
 ssh -L 5555:localhost:5555 user@server
-graft studio --port 5555
+FlashORM studio --port 5555
 ```
 
 ## Testing Strategy
@@ -1030,14 +1030,14 @@ graft studio --port 5555
 
 ## NPM Distribution System
 
-### Package: graft-orm
+### Package: FlashORM-orm
 
-**Registry**: https://www.npmjs.com/package/graft-orm  
-**Repository**: https://github.com/Lumos-Labs-HQ/graft
+**Registry**: https://www.npmjs.com/package/FlashORM-orm  
+**Repository**: https://github.com/Lumos-Labs-HQ/FlashORM
 
 **Installation:**
 ```bash
-npm install -g graft-orm
+npm install -g FlashORM-orm
 ```
 
 **Features:**
@@ -1051,14 +1051,14 @@ npm install -g graft-orm
 **Binary Download System:**
 ```javascript
 const VERSION = '2.0.0';
-const REPO = 'Lumos-Labs-HQ/graft';
-const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/graft-${platform}-${arch}`;
+const REPO = 'Lumos-Labs-HQ/FlashORM';
+const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/FlashORM-${platform}-${arch}`;
 ```
 
 **Files:**
 - `npm/package.json` - NPM package configuration
 - `npm/index.js` - Programmatic API
-- `npm/bin/graft.js` - CLI wrapper
+- `npm/bin/FlashORM.js` - CLI wrapper
 - `npm/scripts/install.js` - Post-install binary downloader
 
 **GitHub Actions Automation:**
@@ -1078,4 +1078,4 @@ const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/gr
 - v1.5.0: Enhanced schema management and conflict detection
 - Previous versions: Core migration functionality
 
-This comprehensive technology stack ensures Graft is robust, performant, and maintainable while supporting multiple database systems, providing safe migration execution, offering flexible export capabilities, and delivering first-class support for both Go and Node.js ecosystems with a powerful visual database management studio.
+This comprehensive technology stack ensures FlashORM is robust, performant, and maintainable while supporting multiple database systems, providing safe migration execution, offering flexible export capabilities, and delivering first-class support for both Go and Node.js ecosystems with a powerful visual database management studio.

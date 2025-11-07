@@ -1,6 +1,6 @@
-# Contributing to Graft
+# Contributing to FlashORM
 
-Thank you for your interest in contributing to Graft! This guide will help you get started.
+Thank you for your interest in contributing to FlashORM! This guide will help you get started.
 
 ## 🚀 Quick Start
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing to Graft! This guide will help you g
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/YOUR_USERNAME/Graft.git
-cd Graft
+git clone https://github.com/YOUR_USERNAME/FlashORM.git
+cd FlashORM
 
 # Set up development environment
 make dev-setup
@@ -29,7 +29,7 @@ make test
 ## 🏗️ Project Structure
 
 ```
-graft/
+FlashORM/
 ├── cmd/                    # CLI commands
 ├── internal/              # Internal packages
 │   ├── config/            # Configuration management
@@ -71,7 +71,7 @@ make fmt
 make lint
 
 # Test with example project
-cd example && graft apply
+cd example && FlashORM apply
 ```
 
 ### 4. Commit and Push
@@ -191,7 +191,7 @@ if err := doSomething(); err != nil {
 if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
     fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
     fmt.Printf("   Error: %v\n", err)
-    fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+    fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
     return err
 }
 ```
@@ -252,7 +252,7 @@ Brief description of changes
 
 ### Bug Reports
 Include:
-- Graft version (`graft --version`)
+- FlashORM version (`FlashORM --version`)
 - Operating system
 - Database type and version
 - Steps to reproduce
@@ -297,4 +297,4 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for contributing to Graft! 🚀
+Thank you for contributing to FlashORM! 🚀

@@ -4,11 +4,11 @@ const fs = require('fs');
 
 function getBinaryPath() {
   const platform = process.platform;
-  const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
+  const binaryName = platform === 'win32' ? 'flash.exe' : 'flash';
   const binaryPath = path.join(__dirname, 'bin', binaryName);
   
   if (!fs.existsSync(binaryPath)) {
-    throw new Error('Graft binary not found. Please reinstall: npm install -g graft-orm');
+    throw new Error('flash binary not found. Please reinstall: npm install -g FlashORM-orm');
   }
   
   return binaryPath;

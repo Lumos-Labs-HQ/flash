@@ -33,7 +33,7 @@ log_error() {
 }
 
 echo ""
-log_header "GRAFT CLI - GITHUB WORKFLOW INTEGRATION TEST"
+log_header "FlashORM CLI - GITHUB WORKFLOW INTEGRATION TEST"
 echo "=============================================="
 
 # Verify environment
@@ -48,28 +48,28 @@ WORKSPACE_DIR="$(pwd)"
 log_success "Workspace directory: $WORKSPACE_DIR"
 
 # Setup test directory
-TEST_DIR="/tmp/graft-github-test-$(date +%s)"
+TEST_DIR="/tmp/FlashORM-github-test-$(date +%s)"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
 log_success "Test directory: $TEST_DIR"
 
-# Determine graft binary path (check workspace first)
-if [ -f "$WORKSPACE_DIR/graft" ]; then
-    GRAFT_CMD="$WORKSPACE_DIR/graft"
-elif [ -f "../graft" ]; then
-    GRAFT_CMD="../graft"
-elif [ -f "./graft" ]; then
-    GRAFT_CMD="./graft"
-elif command -v graft &> /dev/null; then
-    GRAFT_CMD="graft"
+# Determine FlashORM binary path (check workspace first)
+if [ -f "$WORKSPACE_DIR/FlashORM" ]; then
+    FlashORM_CMD="$WORKSPACE_DIR/FlashORM"
+elif [ -f "../FlashORM" ]; then
+    FlashORM_CMD="../FlashORM"
+elif [ -f "./FlashORM" ]; then
+    FlashORM_CMD="./FlashORM"
+elif command -v FlashORM &> /dev/null; then
+    FlashORM_CMD="FlashORM"
 else
-    log_error "graft binary not found. Please build the project first with 'go build -o graft .'"
+    log_error "FlashORM binary not found. Please build the project first with 'go build -o FlashORM .'"
 fi
 
-GRAFT_VERSION=$($GRAFT_CMD --version 2>/dev/null || echo "Unknown")
-log_success "Graft binary: $GRAFT_CMD"
-log_success "Graft version: $GRAFT_VERSION"
+FlashORM_VERSION=$($FlashORM_CMD --version 2>/dev/null || echo "Unknown")
+log_success "FlashORM binary: $FlashORM_CMD"
+log_success "FlashORM version: $FlashORM_VERSION"
 
 echo ""
 log_header "PHASE 1: PROJECT INITIALIZATION"
@@ -77,13 +77,13 @@ echo "==============================="
 
 # Test 1: Initialize project
 log_step "Initialize project"
-$GRAFT_CMD init --postgresql --force >/dev/null 2>&1
+$FlashORM_CMD init --postgresql --force >/dev/null 2>&1
 echo "DATABASE_URL=$DATABASE_URL" > .env
 log_success "Project initialized"
 
 # Verify project structure
 log_step "Verify project structure"
-required_files=("graft.config.json" ".env" "db/schema/schema.sql")
+required_files=("FlashORM.config.json" ".env" "db/schema/schema.sql")
 for file in "${required_files[@]}"; do
     if [ ! -f "$file" ]; then
         log_error "Required file missing: $file"
@@ -108,8 +108,8 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 SCHEMA
 
-$GRAFT_CMD migrate "create users table" --force >/dev/null 2>&1
-$GRAFT_CMD apply --force >/dev/null 2>&1
+$FlashORM_CMD migrate "create users table" --force >/dev/null 2>&1
+$FlashORM_CMD apply --force >/dev/null 2>&1
 log_success "Initial schema created and applied"
 
 # Test 3: Insert test data
@@ -121,12 +121,12 @@ INSERT INTO users (name, email) VALUES
 ('Charlie Brown', 'charlie@test.com');
 DATA
 
-$GRAFT_CMD raw insert_data.sql >/dev/null 2>&1
+$FlashORM_CMD raw insert_data.sql >/dev/null 2>&1
 log_success "Test data inserted"
 
 # Test 4: Create export
 log_step "Create export"
-$GRAFT_CMD export --json >/dev/null 2>&1
+$FlashORM_CMD export --json >/dev/null 2>&1
 log_success "JSON export created"
 
 # Test 5: Add posts table
@@ -153,8 +153,8 @@ CREATE TABLE posts (
 CREATE INDEX idx_posts_user_id ON posts(user_id);
 SCHEMA2
 
-$GRAFT_CMD migrate "add posts table" --force >/dev/null 2>&1
-$GRAFT_CMD apply --force >/dev/null 2>&1
+$FlashORM_CMD migrate "add posts table" --force >/dev/null 2>&1
+$FlashORM_CMD apply --force >/dev/null 2>&1
 log_success "Posts table added"
 
 # Test 6: Insert posts data
@@ -166,7 +166,7 @@ INSERT INTO posts (user_id, title, content, published) VALUES
 (3, 'Third Post', 'Content of third post', true);
 POSTS
 
-$GRAFT_CMD raw insert_posts.sql >/dev/null 2>&1
+$FlashORM_CMD raw insert_posts.sql >/dev/null 2>&1
 log_success "Posts data inserted"
 
 echo ""
@@ -188,19 +188,19 @@ ORDER BY u.name;
 QUERY
 
 echo "📊 Query Results:"
-$GRAFT_CMD raw complex_query.sql
+$FlashORM_CMD raw complex_query.sql
 log_success "Complex query executed"
 
 # Test 8: Check migration status
 log_step "Check migration status"
 echo "📋 Migration Status:"
-$GRAFT_CMD status
+$FlashORM_CMD status
 log_success "Migration status checked"
 
 # Test 9: Test all export formats
 log_step "Test all export formats"
-$GRAFT_CMD export --csv >/dev/null 2>&1
-$GRAFT_CMD export --sqlite >/dev/null 2>&1
+$FlashORM_CMD export --csv >/dev/null 2>&1
+$FlashORM_CMD export --sqlite >/dev/null 2>&1
 log_success "All export formats tested"
 
 # Test 10: Verify export files
@@ -253,7 +253,7 @@ RESPONSES
 
 # Execute reset with automated responses
 echo "🔄 Executing database reset..."
-$GRAFT_CMD reset < reset_responses.txt
+$FlashORM_CMD reset < reset_responses.txt
 
 log_success "Database reset completed with automated responses"
 
@@ -269,13 +269,13 @@ WHERE table_schema = 'public'
 AND table_type = 'BASE TABLE';
 CHECK
 
-$GRAFT_CMD raw check_tables.sql
+$FlashORM_CMD raw check_tables.sql
 log_success "Database reset verification completed"
 
 # Test 13: Final status check
 log_step "Final migration status check"
 echo "📋 Final Migration Status:"
-$GRAFT_CMD status
+$FlashORM_CMD status
 log_success "Final status checked"
 
 echo ""
@@ -300,7 +300,7 @@ log_success "✅ Migration status tracking"
 log_success "✅ Database reset with automated responses (y/n)"
 log_success "✅ Post-reset verification"
 echo ""
-log_header "🚀 GRAFT CLI - READY FOR GITHUB WORKFLOW!"
+log_header "🚀 FlashORM CLI - READY FOR GITHUB WORKFLOW!"
 echo ""
 log_info "✨ All tests passed - GitHub Actions will run successfully"
 log_info "🔧 Reset command works with automated y/n responses"

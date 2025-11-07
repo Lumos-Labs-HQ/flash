@@ -1,6 +1,6 @@
-# How Graft Works
+# How FlashORM Works
 
-This document explains the internal architecture and workflow of Graft, a database ORM built in Go.
+This document explains the internal architecture and workflow of FlashORM, a database ORM built in Go.
 
 ## Table of Contents
 
@@ -15,14 +15,14 @@ This document explains the internal architecture and workflow of Graft, a databa
 - [Template System](#template-system)
 - [Code Generation System](#code-generation-system)
 - [NPM Distribution](#npm-distribution)
-- [Graft Studio Architecture](#graft-studio-architecture)
+- [FlashORM Studio Architecture](#FlashORM-studio-architecture)
 - [Raw SQL Execution System](#raw-sql-execution-system)
 - [Error Handling and Logging](#error-handling-and-logging)
 - [Performance Considerations](#performance-considerations)
 
 ## Architecture Overview
 
-Graft follows a layered architecture with clear separation of concerns:
+FlashORM follows a layered architecture with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -194,7 +194,7 @@ Multi-format export system with the following features:
 ```
 
 **Export Triggers:**
-- Manual export commands (`graft export`)
+- Manual export commands (`FlashORM export`)
 - Before destructive operations
 - Schema conflict resolution
 - Database reset operations
@@ -254,11 +254,11 @@ var pgTypeMap = map[string]string{
 
 ## Migration Workflow
 
-### 1. Migration Creation (`graft migrate`)
+### 1. Migration Creation (`FlashORM migrate`)
 
 ```mermaid
 graph TD
-    A[User runs 'graft migrate'] --> B[Load Configuration]
+    A[User runs 'FlashORM migrate'] --> B[Load Configuration]
     B --> C[Generate Migration ID]
     C --> D[Parse Current Schema]
     D --> E[Generate Schema Diff]
@@ -266,11 +266,11 @@ graph TD
     F --> G[Write Migration File]
 ```
 
-### 2. Safe Migration Application (`graft apply`)
+### 2. Safe Migration Application (`FlashORM apply`)
 
 ```mermaid
 graph TD
-    A[User runs 'graft apply'] --> B[Load Configuration]
+    A[User runs 'FlashORM apply'] --> B[Load Configuration]
     B --> C[Connect to Database]
     C --> D[Create Migration Table]
     D --> E[Get Applied Migrations]
@@ -326,7 +326,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
     if err := m.adapter.ExecuteMigration(ctx, content); err != nil {
         fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
         fmt.Printf("   Error: %v\n", err)
-        fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+        fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
         return err
     }
     
@@ -352,7 +352,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 
 ### SQL Parsing Engine
 
-Graft includes a custom SQL parser that handles:
+FlashORM includes a custom SQL parser that handles:
 
 **Supported SQL Constructs:**
 - CREATE TABLE statements with all constraints
@@ -388,7 +388,7 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 ### Export Creation Process
 
 1. **Table Discovery**: Queries database for all tables
-2. **Data Extraction**: Retrieves data from each table (excluding `_graft_migrations`)
+2. **Data Extraction**: Retrieves data from each table (excluding `_flash_migrations`)
 3. **Format Conversion**: Converts to requested format (JSON/CSV/SQLite)
 4. **File Writing**: Saves export to timestamped file
 5. **Verification**: Validates export integrity
@@ -428,13 +428,13 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 
 ```bash
 # Export as JSON (default)
-graft export
+FlashORM export
 
 # Export as CSV
-graft export --csv
+FlashORM export --csv
 
 # Export as SQLite
-graft export --sqlite
+FlashORM export --sqlite
 ```
 
 ## Configuration System
@@ -443,7 +443,7 @@ graft export --sqlite
 
 1. Command-line flags (`--config`)
 2. Environment variables
-3. Local config file (`./graft.config.json`)
+3. Local config file (`./FlashORM.config.json`)
 4. Default values
 
 ### Environment Variable Support
@@ -453,8 +453,8 @@ graft export --sqlite
 export DATABASE_URL="postgres://user:pass@localhost:5432/db"
 
 # Override config paths
-export GRAFT_MIGRATIONS_PATH="custom/migrations"
-export GRAFT_SCHEMA_PATH="custom/schema.sql"
+export FlashORM_MIGRATIONS_PATH="custom/migrations"
+export FlashORM_SCHEMA_PATH="custom/schema.sql"
 ```
 
 ### Configuration Structure
@@ -473,7 +473,7 @@ export GRAFT_SCHEMA_PATH="custom/schema.sql"
   "gen": {
     "js": {
       "enabled": true,
-      "out": "graft_gen"
+      "out": "FlashORM_gen"
     }
   }
 }
@@ -490,7 +490,7 @@ type ProjectTemplate struct {
     DatabaseType DatabaseType
 }
 
-func (pt *ProjectTemplate) GetGraftConfig() string {
+func (pt *ProjectTemplate) GetFlashORMConfig() string {
     return fmt.Sprintf(`{
   "version": "2",
   "schema_path": "db/schema/schema.sql",
@@ -512,12 +512,12 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
 
 ### Code Generation Templates
 
-Graft automatically detects project type and generates appropriate code:
+FlashORM automatically detects project type and generates appropriate code:
 
 **Go Projects:**
 - Uses custom Go generator (`internal/gogen/`)
 - Generates type-safe structs and query methods
-- Output: `graft_gen/` directory
+- Output: `FlashORM_gen/` directory
 
 **Node.js Projects:**
 - Detects `package.json` presence
@@ -529,7 +529,7 @@ Graft automatically detects project type and generates appropriate code:
 
 ### Error Propagation
 
-Graft uses Go's standard error handling with context:
+FlashORM uses Go's standard error handling with context:
 
 ```go
 func (m *Migrator) Apply(ctx context.Context, migrationName, schemaPath string) error {
@@ -552,7 +552,7 @@ All errors include contextual information and recovery suggestions:
 ```go
 fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
 fmt.Printf("   Error: %v\n", err)
-fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' again.")
+fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
 ```
 
 ## Performance Considerations
@@ -583,7 +583,7 @@ fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' aga
 
 ### Go Code Generator (`internal/gogen/`)
 
-Graft includes a custom Go code generator that creates type-safe database code:
+FlashORM includes a custom Go code generator that creates type-safe database code:
 
 **Generator Components:**
 - **Schema Parser**: Parses SQL schema to extract table definitions
@@ -593,7 +593,7 @@ Graft includes a custom Go code generator that creates type-safe database code:
 
 **Generated Output:**
 ```go
-// graft_gen/models.go
+// FlashORM_gen/models.go
 type Users struct {
     ID        sql.NullInt32  `json:"id"`
     Name      string         `json:"name"`
@@ -612,9 +612,9 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (*Users, error) {
 
 ### JavaScript/TypeScript Generator (`internal/jsgen/`)
 
-Graft includes a custom JavaScript/TypeScript code generator for Node.js projects:
+FlashORM includes a custom JavaScript/TypeScript code generator for Node.js projects:
 
-Graft includes a custom JavaScript/TypeScript code generator for Node.js projects:
+FlashORM includes a custom JavaScript/TypeScript code generator for Node.js projects:
 
 **Generator Components:**
 - **Schema Parser**: Parses SQL schema to extract table definitions
@@ -646,7 +646,7 @@ var sqlToTSTypeMap = map[string]string{
 
 **Generated Code Structure:**
 ```
-graft_gen/
+FlashORM_gen/
 ├── database.js       # Database client
 ├── queries.js        # Query methods
 └── index.d.ts        # TypeScript definitions
@@ -698,7 +698,7 @@ export interface Users {
 
 **Query Annotations:**
 
-Graft uses special SQL comments to generate typed methods:
+FlashORM uses special SQL comments to generate typed methods:
 
 ```sql
 -- name: GetUser :one
@@ -720,32 +720,32 @@ DELETE FROM users WHERE id = $1;
 - `:many` - Returns array of rows
 - `:exec` - Returns affected row count
 
-This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems with support for both Go and Node.js ecosystems.
+This architecture ensures FlashORM is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems with support for both Go and Node.js ecosystems.
 
 ## NPM Distribution
 
 ### Binary Download System
 
-Graft is distributed via NPM with automatic binary download:
+FlashORM is distributed via NPM with automatic binary download:
 
 **Package Structure:**
 ```
-graft-orm/
+FlashORM-orm/
 ├── package.json      # NPM package config
 ├── index.js          # Programmatic API
 ├── bin/
-│   └── graft.js      # CLI wrapper
+│   └── FlashORM.js      # CLI wrapper
 └── scripts/
     └── install.js    # Postinstall script
 ```
 
 **Installation Flow:**
-1. User runs `npm install -g graft-orm`
+1. User runs `npm install -g FlashORM-orm`
 2. NPM installs the wrapper package (~3KB)
 3. Postinstall script runs automatically
 4. Script detects platform and architecture
 5. Downloads correct binary from GitHub releases
-6. Installs binary to `node_modules/graft-orm/bin/`
+6. Installs binary to `node_modules/FlashORM-orm/bin/`
 7. NPM creates symlink in global bin directory
 
 **Platform Detection:**
@@ -764,8 +764,8 @@ const archMap = {
   'arm64': 'arm64'
 };
 
-const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
-const downloadUrl = `https://github.com/Lumos-Labs-HQ/graft/releases/download/v${VERSION}/graft-${platform}-${arch}`;
+const binaryName = platform === 'win32' ? 'FlashORM.exe' : 'FlashORM';
+const downloadUrl = `https://github.com/Lumos-Labs-HQ/FlashORM/releases/download/v${VERSION}/FlashORM-${platform}-${arch}`;
 ```
 
 **Binary Download:**
@@ -784,7 +784,7 @@ https.get(downloadUrl, (response) => {
 
 **CLI Wrapper:**
 ```javascript
-// bin/graft.js - Spawns the downloaded binary
+// bin/FlashORM.js - Spawns the downloaded binary
 const binaryPath = path.join(__dirname, binaryName);
 const child = spawn(binaryPath, process.argv.slice(2), {
   stdio: 'inherit'
@@ -793,14 +793,14 @@ const child = spawn(binaryPath, process.argv.slice(2), {
 
 **Programmatic API:**
 ```javascript
-const graft = require('graft-orm');
+const FlashORM = require('FlashORM-orm');
 
 // Execute commands
-graft.exec('status');
-graft.exec('migrate "add users"');
+FlashORM.exec('status');
+FlashORM.exec('migrate "add users"');
 
 // Get binary path
-const binaryPath = graft.getBinaryPath();
+const binaryPath = FlashORM.getBinaryPath();
 ```
 
 **GitHub Actions Integration:**
@@ -827,11 +827,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-## Graft Studio Architecture
+## FlashORM Studio Architecture
 
 ### Overview
 
-Graft Studio is a web-based database management interface built with Go Fiber and vanilla JavaScript, providing three main interfaces for database interaction.
+FlashORM Studio is a web-based database management interface built with Go Fiber and vanilla JavaScript, providing three main interfaces for database interaction.
 
 ### Server Architecture
 
@@ -1053,7 +1053,7 @@ app.Use("/static", filesystem.New(filesystem.Config{
 
 ### Overview
 
-The `graft raw` command provides direct SQL execution from the command line with formatted output.
+The `FlashORM raw` command provides direct SQL execution from the command line with formatted output.
 
 ### Execution Flow
 

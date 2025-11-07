@@ -5,11 +5,11 @@ const path = require('path');
 const fs = require('fs');
 
 const platform = process.platform;
-const binaryName = platform === 'win32' ? 'graft.exe' : 'graft';
+const binaryName = platform === 'win32' ? 'flash.exe' : 'flash';
 const binaryPath = path.join(__dirname, binaryName);
 
 if (!fs.existsSync(binaryPath)) {
-  console.error('❌ Graft binary not found. Please reinstall: npm install -g graft-orm');
+  console.error('❌ flash binary not found. Please reinstall: npm install -g FlashORM-orm');
   process.exit(1);
 }
 
@@ -23,6 +23,6 @@ child.on('exit', (code) => {
 });
 
 child.on('error', (err) => {
-  console.error('❌ Failed to start Graft:', err);
+  console.error('❌ Failed to start flash:', err);
   process.exit(1);
 });

@@ -67,7 +67,7 @@ func Load() (*Config, error) {
 		cfg.Database.URLEnv = "DATABASE_URL"
 	}
 	if cfg.Gen.JS.Out == "" && cfg.Gen.JS.Enabled {
-		cfg.Gen.JS.Out = "graft_gen"
+		cfg.Gen.JS.Out = "flash_gen"
 	}
 
 	return &cfg, nil

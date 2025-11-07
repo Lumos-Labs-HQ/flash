@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Lumos-Labs-HQ/graft/template"
+	"github.com/Lumos-Labs-HQ/flash/template"
 	"github.com/spf13/cobra"
 )
 
@@ -16,8 +16,8 @@ var (
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize a new Graft project",
-	Long:  `Initialize a new Graft project with database migrations and code generation configuration.`,
+	Short: "Initialize a new FlashORM project",
+	Long:  `Initialize a new FlashORM project with database migrations and code generation configuration.`,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbType := template.PostgreSQL
@@ -69,7 +69,7 @@ func initializeProject(dbType template.DatabaseType) error {
 	}
 
 	files := map[string]string{
-		"graft.config.json": tmpl.GetGraftConfig(),
+		"flash.config.json": tmpl.GetFlashORMConfig(),
 	}
 
 	if _, err := os.Stat("db/schema/schema.sql"); os.IsNotExist(err) {
@@ -95,7 +95,7 @@ func initializeProject(dbType template.DatabaseType) error {
 		projectType = "Node.js"
 	}
 
-	fmt.Printf("✅ Successfully initialized Graft project for %s with %s database support\n", projectType, dbType)
+	fmt.Printf("✅ Successfully initialized FlashORM project for %s with %s database support\n", projectType, dbType)
 	fmt.Println()
 	fmt.Println("📁 Project structure created:")
 	for _, dir := range directories {
@@ -103,33 +103,33 @@ func initializeProject(dbType template.DatabaseType) error {
 	}
 	fmt.Println()
 	fmt.Println("📝 Configuration file created:")
-	fmt.Println("   graft.config.json")
-	
+	fmt.Println("   flash.config.json")
+
 	if isNodeProject {
 		fmt.Println()
 		fmt.Println("🟢 Node.js project detected!")
 		fmt.Println("   JavaScript code generation is enabled")
-		fmt.Println("   Run 'graft gen' to generate type-safe JS code")
+		fmt.Println("   Run 'flash gen' to generate type-safe JS code")
 	}
-	
+
 	if os.Getenv("DATABASE_URL") != "" {
 		fmt.Println()
 		fmt.Println("ℹ️  Using existing DATABASE_URL from environment")
 	}
-	
+
 	if _, err := os.Stat("db/schema/schema.sql"); err == nil {
 		fmt.Println("ℹ️  Skipped db/schema/schema.sql (already exists)")
 	}
-	
+
 	if _, err := os.Stat("db/queries/users.sql"); err == nil {
 		fmt.Println("ℹ️  Skipped db/queries/users.sql (already exists)")
 	}
-	
+
 	fmt.Println()
 	fmt.Printf("🚀 Next steps:\n")
-	fmt.Printf("   graft migrate \"create users\"  # Create migrations\n")
-	fmt.Printf("   graft apply                    # Apply migrations\n")
-	fmt.Printf("   graft gen                      # Generate code\n")
+	fmt.Printf("   flash migrate \"create users\"  # Create migrations\n")
+	fmt.Printf("   flash apply                    # Apply migrations\n")
+	fmt.Printf("   flash gen                      # Generate code\n")
 
 	return nil
 }

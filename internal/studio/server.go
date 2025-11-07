@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/Lumos-Labs-HQ/graft/internal/config"
-	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
@@ -77,7 +77,7 @@ func (s *Server) setupRoutes() {
 func (s *Server) Start(openBrowser bool) error {
 	url := fmt.Sprintf("http://localhost:%d", s.port)
 
-	fmt.Printf("🚀 Graft Studio starting on %s\n", url)
+	fmt.Printf("🚀 FlashORM Studio starting on %s\n", url)
 
 	if openBrowser {
 		go s.openBrowser(url)
@@ -108,19 +108,19 @@ func (s *Server) openBrowser(url string) {
 // Handlers
 func (s *Server) handleIndex(c *fiber.Ctx) error {
 	return c.Render("templates/index", fiber.Map{
-		"Title": "Graft Studio",
+		"Title": "FlashORM Studio",
 	})
 }
 
 func (s *Server) handleSchema(c *fiber.Ctx) error {
 	return c.Render("templates/schema", fiber.Map{
-		"Title": "Graft Studio",
+		"Title": "FlashORM Studio",
 	})
 }
 
 func (s *Server) handleSQL(c *fiber.Ctx) error {
 	return c.Render("templates/sql", fiber.Map{
-		"Title": "SQL Editor - Graft Studio",
+		"Title": "SQL Editor - FlashORM Studio",
 	})
 }
 
