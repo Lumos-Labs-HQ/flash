@@ -1,11 +1,25 @@
-﻿# 🪴 Flash ORM
+﻿<h1 align="center">⚡ Flash ORM</h1>
 
-[![Go Version](https://img.shields.io/badge/Go-1.23%2B-blue.svg)](https://go.dev/doc/go1.23)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/Lumos-Labs-HQ/flash?label=Release)](https://github.com/Lumos-Labs-HQ/flash/releases>)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)](#)
+<p align="center">
+  <a href="https://go.dev/doc/go1.23">
+    <img src="https://img.shields.io/badge/Go-1.23%2B-blue.svg" alt="Go Version">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
+  </a>
+  <a href="https://github.com/Lumos-Labs-HQ/flash/releases">
+    <img src="https://img.shields.io/github/v/release/Lumos-Labs-HQ/flash?label=Release" alt="Release">
+  </a>
+  <a href="https://www.npmjs.com/package/flashorm">
+  <img src="https://img.shields.io/npm/v/flashorm?color=blue&label=npm" alt="npm version">
+</a>
+
+  
+</p>
 
 ![image](.github/flash-orm.png)
+
+
 ---
 
 
@@ -105,7 +119,7 @@ flash status
 | `flash apply` | Apply pending migrations with transaction safety |
 | `flash status` | Show migration status |
 | `flash pull` | Extract schema from existing database |
-| `flash studio` | 
+| `flash studio` | flash studio |
 | `flash export [format]` | Export database (JSON, CSV, SQLite) |
 | `flash reset` | Reset database (⚠️ destructive) |
 | `flash gen` | Generate SQLC types |

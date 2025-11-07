@@ -286,12 +286,34 @@ func (m *Migrator) Status(ctx context.Context) error {
 		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
+	// Calculate pending migrations (only count migrations that exist in filesystem)
+	pendingCount := 0
+	for _, migration := range migrations {
+		if _, exists := applied[migration.ID]; !exists {
+			pendingCount++
+		}
+	}
+
 	fmt.Println("🗂️  Migration Status")
 	fmt.Println("==================")
-	fmt.Printf("Total: %d | Applied: %d | Pending: %d\n\n", len(migrations), len(applied), len(migrations)-len(applied))
+	fmt.Printf("Total: %d | Applied: %d | Pending: %d\n\n", len(migrations), len(applied), pendingCount)
 
-	if len(migrations) == 0 {
+	if len(migrations) == 0 && len(applied) == 0 {
 		fmt.Println("No migrations found")
+		return nil
+	}
+
+	if len(migrations) == 0 && len(applied) > 0 {
+		fmt.Println("⚠️  Warning: No migration files found, but database has applied migrations.")
+		fmt.Println("   This usually means migration files were deleted.")
+		fmt.Println("\nApplied migrations in database:")
+		for id, t := range applied {
+			timestamp := ""
+			if t != nil {
+				timestamp = fmt.Sprintf(" (applied: %s)", t.Format("2006-01-02 15:04:05"))
+			}
+			fmt.Printf("%-50s Applied%s\n", id, timestamp)
+		}
 		return nil
 	}
 
@@ -304,6 +326,25 @@ func (m *Migrator) Status(ctx context.Context) error {
 			timestamp = fmt.Sprintf(" (applied: %s)", t.Format("2006-01-02 15:04:05"))
 		}
 		fmt.Printf("%-50s %s%s\n", migration.ID, status, timestamp)
+	}
+
+	// Check for orphaned migrations in database
+	orphanedCount := 0
+	for id := range applied {
+		found := false
+		for _, migration := range migrations {
+			if migration.ID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			orphanedCount++
+		}
+	}
+
+	if orphanedCount > 0 {
+		fmt.Printf("\n⚠️  Warning: %d migration(s) in database have no corresponding file\n", orphanedCount)
 	}
 
 	return nil

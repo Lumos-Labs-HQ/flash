@@ -1,4 +1,4 @@
-# FlashORM v2.0.0 Release Notes
+# FlashORM v2.0.6 Release Notes
 
 ## 🎉 Major Release: FlashORM Studio, Node.js/TypeScript Support & Massive Performance Improvements
 
@@ -23,13 +23,13 @@ We're excited to announce FlashORM v2.0.0, a groundbreaking release that introdu
 **Usage:**
 ```bash
 # Launch studio (auto-detects config)
-FlashORM studio
+flash studio
 
 # Custom port
-FlashORM studio --port 3000
+flash studio --port 3000
 
 # Connect to any database directly
-FlashORM studio --db "postgres://user:pass@localhost:5432/mydb"
+flash studio --db "postgres://user:pass@localhost:5432/mydb"
 ```
 
 **Studio Pages:**
@@ -77,15 +77,15 @@ Execute raw SQL files or queries directly against your database!
 **Usage:**
 ```bash
 # Execute SQL file
-FlashORM raw script.sql
-FlashORM raw migrations/seed.sql
+flash raw script.sql
+flash raw migrations/seed.sql
 
 # Execute inline query
-FlashORM raw -q "SELECT * FROM users WHERE active = true"
-FlashORM raw "SELECT COUNT(*) FROM orders"
+flash raw -q "SELECT * FROM users WHERE active = true"
+flash raw "SELECT COUNT(*) FROM orders"
 
 # Force file mode
-FlashORM raw --file queries/complex_query.sql
+flash raw --file queries/complex_query.sql
 ```
 
 **Output Formatting:**
@@ -113,7 +113,7 @@ FlashORM now generates fully type-safe JavaScript/TypeScript code for Node.js pr
 
 **Example:**
 ```typescript
-import { New } from './FlashORM_gen/database';
+import { New } from './flash_gen/database';
 import { Pool } from 'pg';
 
 const db = New(new Pool({ connectionString: DATABASE_URL }));
@@ -145,7 +145,7 @@ export class Queries {
 Install FlashORM via NPM for seamless integration with Node.js projects:
 
 ```bash
-npm install -g FlashORM-orm
+npm install -g flashorm
 ```
 
 **Features:**
@@ -157,9 +157,9 @@ npm install -g FlashORM-orm
 
 ### ⚡ Performance Improvements
 
-FlashORM v2.0.0 now significantly outperforms popular ORMs:
+FlashORM v2.0.6 now significantly outperforms popular ORMs:
 
-| Operation | FlashORM v2.0 | Drizzle | Prisma | Improvement |
+| Operation | FlashORM | Drizzle | Prisma | Improvement |
 |-----------|------------|---------|--------|-------------|
 | Insert 1000 Users | **158ms** | 224ms | 230ms | **1.4x faster** |
 | Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms | **1.3x faster** |
@@ -244,7 +244,7 @@ Create export before applying? (y/n): y
 
 ### 🔍 Schema Introspection Improvements
 
-Enhanced `FlashORM pull` command with better schema extraction:
+Enhanced `flash pull` command with better schema extraction:
 
 - ✅ Improved foreign key detection
 - ✅ Better constraint handling
@@ -253,7 +253,7 @@ Enhanced `FlashORM pull` command with better schema extraction:
 - ✅ Backup option before overwrite
 
 ```bash
-FlashORM pull --backup
+flash pull --backup
 ```
 
 ### 📤 Export System Enhancements
@@ -326,25 +326,25 @@ Improved export functionality with better data handling:
 
 ### NPM (New!)
 ```bash
-npm install -g FlashORM-orm
+npm install -g flashorm
 ```
 
 ### Go
 ```bash
-go install github.com/Lumos-Labs-HQ/FlashORM@latest
+go install github.com/Lumos-Labs-HQ/flash@latest
 ```
 
 ### Binary Download
-Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/FlashORM/releases/tag/v1.7.0)
+Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/flash/releases/tag/v1.7.0)
 
 ## 📚 Documentation
 
-- [Main Documentation](https://github.com/Lumos-Labs-HQ/FlashORM)
-- [NPM Package README](https://www.npmjs.com/package/FlashORM-orm)
-- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/FlashORM/tree/main/example/ts)
-- [How It Works](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/HOW_IT_WORKS.md)
-- [Technology Stack](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/TECHNOLOGY_STACK.md)
-- [Contributing Guide](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/CONTRIBUTING.md)
+- [Main Documentation](https://github.com/Lumos-Labs-HQ/flash)
+- [NPM Package README](https://www.npmjs.com/package/flashorm)
+- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/ts)
+- [How It Works](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/TECHNOLOGY_STACK.md)
+- [Contributing Guide](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/CONTRIBUTING.md)
 
 ## 🙏 Acknowledgments
 
@@ -423,7 +423,7 @@ Special thanks to:
 
 ## 🐛 Known Issues
 
-- Bun users need to run `bun pm trust FlashORM-orm` after installation
+- Bun users need to run `bun pm trust flashorm` after installation
 - Windows ARM64 support is experimental
 - MySQL ENUM support is limited (use VARCHAR with CHECK constraint)
 - Studio: Large schemas (200+ tables) may have slow initial load
@@ -432,17 +432,17 @@ Special thanks to:
 ## 💬 Feedback
 
 We'd love to hear your feedback! Please:
-- 🐛 [Report bugs](https://github.com/Lumos-Labs-HQ/FlashORM/issues)
-- 💡 [Request features](https://github.com/Lumos-Labs-HQ/FlashORM/issues)
-- ⭐ [Star the repo](https://github.com/Lumos-Labs-HQ/FlashORM)
+- 🐛 [Report bugs](https://github.com/Lumos-Labs-HQ/flash/issues)
+- 💡 [Request features](https://github.com/Lumos-Labs-HQ/flash/issues)
+- ⭐ [Star the repo](https://github.com/Lumos-Labs-HQ/flash)
 - 🐦 Share on social media
 
 ---
 
-**Download:** [v2.0.0 Release](https://github.com/Lumos-Labs-HQ/FlashORM/releases/tag/v2.0.0)
+**Download:** [v2.0.6 Release](https://github.com/Lumos-Labs-HQ/flash/releases/tag/v2.0.0)
 
-**NPM:** `npm install -g FlashORM-orm`
+**NPM:** `npm install -g flashorm`
 
-**Go:** `go install github.com/Lumos-Labs-HQ/FlashORM@latest`
+**Go:** `go install github.com/Lumos-Labs-HQ/flash@latest`
 
-**Try FlashORM Studio:** `FlashORM studio`
+**Try FlashORM Studio:** `flash studio`

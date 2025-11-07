@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Test script for FlashORM Studio
+# Test script for flash Studio
 
-echo "🧪 Testing FlashORM Studio Setup"
+echo "🧪 Testing flash Studio Setup"
 echo "=============================="
 
 # Set DATABASE_URL (edit this with your database connection)
@@ -17,9 +17,9 @@ echo "📝 DATABASE_URL set to: $DATABASE_URL"
 echo ""
 
 # Check if binary exists
-if [ ! -f "./FlashORM.exe" ]; then
-    echo "❌ FlashORM.exe not found. Building..."
-    go build -o FlashORM.exe .
+if [ ! -f "./flash.exe" ]; then
+    echo "❌ flash.exe not found. Building..."
+    go build -o flash.exe .
 fi
 
 # Check if templates directory exists
@@ -36,11 +36,11 @@ fi
 
 echo "✅ All files present"
 echo ""
-echo "🚀 Starting FlashORM Studio..."
+echo "🚀 Starting flash Studio..."
 echo "   Browser will open at http://localhost:5555"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""
 
 # Run studio
-./FlashORM.exe studio
+./flash.exe studio

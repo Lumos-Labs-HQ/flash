@@ -43,14 +43,14 @@ jobs:
 
     - name: Build project
       run: |
-        go build -o FlashORM .
-        chmod +x FlashORM
-        ls -la FlashORM
+        go build -o flash .
+        chmod +x flash
+        ls -la flash
 
     - name: Verify build
       run: |
-        ./FlashORM --version
-        echo "FlashORM binary built successfully"
+        ./flash --version
+        echo "flash binary built successfully"
 
     - name: Prepare test script
       run: |
