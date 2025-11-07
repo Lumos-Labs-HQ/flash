@@ -19,17 +19,14 @@ jobs:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
       
-      - name: Get version from tag
+      - name: Get and increment version
         id: version
         run: |
-          TAG=$(git describe --tags --abbrev=0)
-          VERSION=${TAG#v}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-      
-      - name: Update package.json version
-        run: |
           cd npm
-          npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          NEW_VERSION=$(npm version patch --no-git-tag-version | sed 's/v//')
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Bumped version from $CURRENT_VERSION to $NEW_VERSION"
       
       - name: Update install.js version
         run: |
