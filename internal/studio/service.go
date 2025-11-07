@@ -344,3 +344,44 @@ func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 		}, nil
 	}
 }
+
+// UpdateRow updates a single row in a table
+func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
+	var setClauses []string
+	var values []interface{}
+	
+	i := 1
+	for col, val := range data {
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, i))
+		values = append(values, val)
+		i++
+	}
+	
+	values = append(values, id)
+	sql := fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d", 
+		table, strings.Join(setClauses, ", "), i)
+	
+	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
+	return err
+}
+
+// InsertRow inserts a new row into a table
+func (s *Service) InsertRow(table string, data map[string]interface{}) error {
+	var columns []string
+	var placeholders []string
+	var values []interface{}
+	
+	i := 1
+	for col, val := range data {
+		columns = append(columns, col)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
+		values = append(values, val)
+		i++
+	}
+	
+	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", 
+		table, strings.Join(columns, ", "), strings.Join(placeholders, ", "))
+	
+	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
+	return err
+}

@@ -9,6 +9,216 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.8.4/dist/style.css">
     <link rel="stylesheet" href="/static/css/schema.css">
     <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
+    <style>
+        .edit-panel {
+            position: fixed;
+            right: -450px;
+            top: 60px;
+            width: 450px;
+            height: calc(100vh - 60px);
+            background: #1e1e1e;
+            border-left: 1px solid #333;
+            transition: right 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+            box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+        }
+        .edit-panel.open {
+            right: 0;
+        }
+        .panel-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #252525;
+        }
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .panel-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+        .panel-close:hover {
+            background: #333;
+            color: #fff;
+        }
+        .panel-content {
+            padding: 20px;
+        }
+        .panel-section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            letter-spacing: 0.5px;
+        }
+        .action-card {
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .action-card:hover {
+            border-color: #10b981;
+            background: #2a2a2a;
+        }
+        .action-card-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: #fff;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .action-card-desc {
+            font-size: 13px;
+            color: #888;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .form-input, .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: #10b981;
+            background: #252525;
+        }
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #aaa;
+            font-size: 14px;
+        }
+        .preview-box {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'JetBrains Mono', monospace;
+            color: #10b981;
+            font-size: 13px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .change-list {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        .change-list li {
+            padding: 10px;
+            background: #252525;
+            margin: 6px 0;
+            border-radius: 6px;
+            color: #aaa;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .change-list li:before {
+            content: "✓";
+            color: #10b981;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+        }
+        .btn-primary {
+            background: #10b981;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #059669;
+        }
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        .btn-secondary:hover {
+            background: #444;
+        }
+        .btn-danger {
+            background: #dc2626;
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+        .back-btn {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-bottom: 15px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .back-btn:hover {
+            background: #444;
+        }
+    </style>
 </head>
 <body>
     <div class="left-navbar">
@@ -47,6 +257,20 @@
         </div>
     </div>
 
+    <!-- Edit Panel -->
+    <div id="edit-panel" class="edit-panel">
+        <div class="panel-header">
+            <div class="panel-title">
+                <span class="iconify" data-icon="mdi:table-edit"></span>
+                <span id="panel-table-name">Edit Table</span>
+            </div>
+            <button class="panel-close" onclick="closeEditPanel()">×</button>
+        </div>
+        <div class="panel-content" id="panel-content">
+            <!-- Content will be dynamically loaded -->
+        </div>
+    </div>
+
     <script type="importmap">
     {
         "imports": {
@@ -59,5 +283,6 @@
     </script>
 
     <script type="module" src="/static/js/schema.js"></script>
+    <script src="/static/js/schema-panel.js"></script>
 </body>
 </html>

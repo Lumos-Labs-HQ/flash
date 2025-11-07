@@ -72,6 +72,12 @@ func (s *Server) setupRoutes() {
 	api.Post("/tables/:name/delete", s.handleDeleteRows)
 	api.Delete("/tables/:name/rows/:id", s.handleDeleteRow)
 	api.Post("/sql", s.handleExecuteSQL)
+	
+	// Schema Editor API
+	api.Post("/schema/preview", s.handlePreviewSchemaChange)
+	api.Post("/schema/apply", s.handleApplySchemaChange)
+	api.Put("/tables/:name/rows/:id", s.handleUpdateRow)
+	api.Post("/tables/:name/rows", s.handleInsertRow)
 }
 
 func (s *Server) Start(openBrowser bool) error {

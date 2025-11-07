@@ -6,7 +6,7 @@ import dagre from 'dagre';
 const { useState, useEffect } = React;
 
 function TableNode({ data }) {
-    return React.createElement('div', { style: { minWidth: '220px' } },
+    return React.createElement('div', { style: { minWidth: '220px', cursor: 'pointer' }, onClick: () => window.openTableEdit(data.label) },
         React.createElement(Handle, { type: 'target', position: Position.Left }),
         React.createElement(Handle, { type: 'source', position: Position.Right }),
         React.createElement('div', { className: 'table-header' },

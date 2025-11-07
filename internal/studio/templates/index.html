@@ -8,9 +8,146 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/index.css">
     <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
+    <style>
+        /* Side Panel Styles */
+        .side-panel {
+            position: fixed;
+            right: -400px;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background: #1a1a1a;
+            border-left: 1px solid #333;
+            transition: right 0.3s ease;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        .side-panel.open {
+            right: 0;
+        }
+        .side-panel-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .side-panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .side-panel-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .side-panel-content {
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+            font-size: 14px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #10b981;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .edit-icon {
+            cursor: pointer;
+            color: #10b981;
+            font-size: 18px;
+            margin-left: 10px;
+        }
+        .edit-icon:hover {
+            color: #059669;
+        }
+        
+        /* Schema Editor Modal */
+        .schema-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+        .schema-modal.open {
+            display: flex;
+        }
+        .schema-modal-content {
+            background: #1a1a1a;
+            border-radius: 8px;
+            width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .schema-modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .schema-modal-body {
+            padding: 20px;
+        }
+        .preview-box {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            color: #10b981;
+            white-space: pre-wrap;
+        }
+        .change-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        .change-list li {
+            padding: 8px;
+            background: #2a2a2a;
+            margin: 5px 0;
+            border-radius: 4px;
+            color: #aaa;
+        }
+        .change-list li:before {
+            content: "✓ ";
+            color: #10b981;
+            margin-right: 8px;
+        }
+    </style>
 </head>
 <body>
-    <!-- Left Vertical Navbar (Supabase style) -->
+    <!-- Left Vertical Navbar -->
     <div class="left-navbar">
         <img src="/static/image/logo.png" alt="FlashORM" class="left-navbar-logo">
         
@@ -52,6 +189,7 @@
             <div class="topbar">
                 <div class="topbar-left">
                     <span class="table-name" id="current-table">Select a model</span>
+                    <span class="iconify edit-icon" data-icon="mdi:pencil" onclick="openSchemaEditor()" title="Edit Schema"></span>
                 </div>
                 <div class="topbar-right">
                     <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()">
@@ -110,18 +248,53 @@
         </main>
     </div>
 
-    <!-- SQL Query Modal -->
-    <div id="sql-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div class="modal-title">📝 Execute SQL Query</div>
-                <button class="modal-close" onclick="closeSQLModal()">×</button>
+    <!-- Side Panel for Row Editing -->
+    <div id="side-panel" class="side-panel">
+        <div class="side-panel-header">
+            <div class="side-panel-title" id="panel-title">Edit Row</div>
+            <button class="side-panel-close" onclick="closeSidePanel()">×</button>
+        </div>
+        <div class="side-panel-content" id="panel-content">
+            <!-- Dynamic form fields will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Schema Editor Modal -->
+    <div id="schema-modal" class="schema-modal">
+        <div class="schema-modal-content">
+            <div class="schema-modal-header">
+                <div class="side-panel-title">Edit Table Schema</div>
+                <button class="side-panel-close" onclick="closeSchemaModal()">×</button>
             </div>
-            <textarea id="sql-query" class="sql-editor" placeholder="SELECT * FROM users WHERE id = 1;"></textarea>
-            <div class="sql-hint">💡 Tip: Write any SELECT query to search your database</div>
-            <div class="filter-actions">
-                <button class="btn btn-primary" onclick="executeSQLQuery()">▶ Execute</button>
-                <button class="btn btn-secondary" onclick="closeSQLModal()">Cancel</button>
+            <div class="schema-modal-body">
+                <div class="form-group">
+                    <label class="form-label">Action</label>
+                    <select id="schema-action" class="form-input" onchange="updateSchemaForm()">
+                        <option value="add_column">Add Column</option>
+                        <option value="drop_column">Drop Column</option>
+                        <option value="modify_column">Modify Column</option>
+                    </select>
+                </div>
+                
+                <div id="schema-form">
+                    <!-- Dynamic form based on action -->
+                </div>
+
+                <div id="schema-preview" style="display:none;">
+                    <h4 style="color: #fff; margin: 20px 0 10px;">Preview Changes</h4>
+                    <div class="preview-box" id="preview-sql"></div>
+                    <ul class="change-list">
+                        <li>Apply to database immediately</li>
+                        <li>Create migration file</li>
+                        <li>Update db/schema/schema.sql</li>
+                    </ul>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" onclick="previewSchemaChange()">Preview</button>
+                    <button class="btn btn-success" onclick="applySchemaChange()" style="display:none;" id="apply-schema-btn">Apply Changes</button>
+                    <button class="btn btn-secondary" onclick="closeSchemaModal()">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
@@ -129,5 +302,6 @@
     <script src="/static/js/modal.js"></script>
     <script src="/static/js/studio.js"></script>
     <script src="/static/js/index.js"></script>
+    <script src="/static/js/schema-editor.js"></script>
 </body>
 </html>
