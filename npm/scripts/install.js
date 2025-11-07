@@ -4,8 +4,8 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '2.0.2';
-const REPO = 'Lumos-Labs-HQ/FlashORM';
+const VERSION = '2.0.7';
+const REPO = 'Lumos-Labs-HQ/flash';
 
 const platform = process.platform;
 const arch = process.arch;
