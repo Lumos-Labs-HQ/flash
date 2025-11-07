@@ -1,4 +1,13 @@
-﻿# FlashORM - Database ORM
+﻿# 🪴 Flash ORM
+
+[![Go Version](https://img.shields.io/badge/Go-1.23%2B-blue.svg)](https://go.dev/doc/go1.23)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Lumos-Labs-HQ/flash?label=Release)](https://github.com/Lumos-Labs-HQ/flash/releases>)
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)](#)
+
+![image](.github/flash-orm.png)
+---
+
 
 A powerful, database-agnostic ORM built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
 
