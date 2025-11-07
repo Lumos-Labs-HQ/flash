@@ -115,7 +115,7 @@ flash status
 | `flash apply` | Apply pending migrations with transaction safety |
 | `flash status` | Show migration status |
 | `flash pull` | Extract schema from existing database |
-| `flash studio` | 
+| `flash studio` | flash studio |
 | `flash export [format]` | Export database (JSON, CSV, SQLite) |
 | `flash reset` | Reset database (⚠️ destructive) |
 | `flash gen` | Generate SQLC types |
