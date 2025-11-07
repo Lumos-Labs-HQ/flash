@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
-	"github.com/Rana718/Graft/internal/schema"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/schema"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 )
 
 type Options struct {
@@ -23,7 +26,7 @@ type Service struct {
 
 func NewService(cfg *config.Config) (*Service, error) {
 	adapter := database.NewAdapter(cfg.Database.Provider)
-	
+
 	dbURL, err := cfg.GetDatabaseURL()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database URL: %w", err)
@@ -59,8 +62,15 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to pull database schema: %w", err)
 	}
 
-	if len(dbTables) == 0 {
-		fmt.Println("📄 No tables found in database")
+	// Also pull enums for PostgreSQL
+	dbEnums, err := s.adapter.GetCurrentEnums(ctx)
+	if err != nil {
+		// If adapter doesn't support enums, continue with empty list
+		dbEnums = []types.SchemaEnum{}
+	}
+
+	if len(dbTables) == 0 && len(dbEnums) == 0 {
+		fmt.Println("📄 No tables or enums found in database")
 		return nil
 	}
 
@@ -70,7 +80,18 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 	}
 
 	hasChanges, updatedSQL := s.comparator.CompareWithDatabase(existingSQL, dbTables)
-	
+
+	// Add enums at the beginning of the SQL file
+	if len(dbEnums) > 0 {
+		enumSQL := s.generateEnumSQL(dbEnums)
+		if enumSQL != "" {
+			// Remove existing enums from updatedSQL and prepend new ones
+			updatedSQL = s.removeExistingEnums(updatedSQL)
+			updatedSQL = enumSQL + "\n\n" + updatedSQL
+			hasChanges = true
+		}
+	}
+
 	if !hasChanges {
 		fmt.Println("✅ Schema is up to date - no structural changes detected")
 		return nil
@@ -89,7 +110,11 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 	}
 
 	fmt.Printf("✅ Schema updated: %s\n", schemaPath)
-	fmt.Printf("📊 Processed %d tables\n", len(dbTables))
+	if len(dbEnums) > 0 {
+		fmt.Printf("📊 Processed %d enums and %d tables\n", len(dbEnums), len(dbTables))
+	} else {
+		fmt.Printf("📊 Processed %d tables\n", len(dbTables))
+	}
 	fmt.Println("🎯 Only actual structural differences were updated")
 
 	return nil
@@ -100,7 +125,29 @@ func (s *Service) createBackup(schemaPath string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	backupPath := schemaPath + ".backup"
 	return os.WriteFile(backupPath, content, 0644)
+}
+
+func (s *Service) generateEnumSQL(enums []types.SchemaEnum) string {
+	if len(enums) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for _, enum := range enums {
+		values := make([]string, len(enum.Values))
+		for i, v := range enum.Values {
+			values[i] = fmt.Sprintf("'%s'", v)
+		}
+		parts = append(parts, fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", enum.Name, strings.Join(values, ", ")))
+	}
+	return strings.Join(parts, "\n")
+}
+
+func (s *Service) removeExistingEnums(sql string) string {
+	// Remove existing CREATE TYPE statements
+	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+\w+\s+AS\s+ENUM\s*\([^)]+\)\s*;[\s\n]*`)
+	return enumRegex.ReplaceAllString(sql, "")
 }

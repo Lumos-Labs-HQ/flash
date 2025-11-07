@@ -1,6 +1,6 @@
-# Graft - Database Migration CLI Tool
+﻿# Graft - Database ORM
 
-A powerful, database-agnostic migration CLI tool built in Go that provides Prisma-like functionality with multi-database support and SQLC integration.
+A powerful, database-agnostic ORM built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
 
 ## ✨ Features
 
@@ -8,27 +8,52 @@ A powerful, database-agnostic migration CLI tool built in Go that provides Prism
 - 🔄 **Migration Management**: Create, apply, and track migrations
 - 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
 - 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability
-- 🔧 **SQLC Integration**: Generate Go types from SQL schemas
-- ⚡ **Fast & Reliable**: Built in Go for performance and reliability
+- 🔧 **Code Generation**: Generate type-safe code for Go and JavaScript/TypeScript
+- 🟢 **Node.js Support**: First-class JavaScript/TypeScript support with type definitions
+- 🎨 **Enum Support**: PostgreSQL ENUM types with full migration support
+- ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
+- 🔍 **Schema Introspection**: Pull schema from existing databases
+- 📊 **Graft Studio**: similar to Prisma Studio, where users can view and edit data visually
+- 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
+
+## 📊 Performance Benchmarks
+
+Graft significantly outperforms popular ORMs in real-world scenarios:
+
+| Operation | Graft | Drizzle | Prisma |
+|-----------|-------|---------|--------|
+| Insert 1000 Users | **158ms** | 224ms | 230ms |
+| Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms |
+| Complex Query x500 | **4071ms** | 12500ms | 56322ms |
+| Mixed Workload x1000 (75% read, 25% write) | **186ms** | 1174ms | 10863ms |
+| Stress Test Simple Query x2000 | **122ms** | 160ms | 223ms |
+| **TOTAL** | **6947ms** | **17149ms** | **71551ms** |
+
+*Benchmarks run on PostgreSQL with identical schemas and queries. Graft is **2.5x faster** than Drizzle and **10x faster** than Prisma.*
 
 ## 🚀 Installation
 
-### Using Go Install (Recommended)
+### NPM (Node.js/TypeScript Projects)
 ```bash
-go install github.com/Rana718/Graft@latest
+npm install -g graft-orm
+```
+
+### Go Install
+```bash
+go install github.com/Lumos-Labs-HQ/graft@latest
 ```
 
 ### From Source
 ```bash
-git clone https://github.com/Rana718/Graft.git
+git clone https://github.com/Lumos-Labs-HQ/graftt.git
 cd Graft
 make build-all
-# Binary will be in build/ directory
 ```
 
 ### Download Binary
-Download the latest binary from [Releases](https://github.com/Rana718/Graft/releases) for your platform.
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graftt/releases).
+# Graft - Database ORM
 
 ## 🏁 Quick Start
 
@@ -71,13 +96,13 @@ graft status
 | `graft apply` | Apply pending migrations with transaction safety |
 | `graft status` | Show migration status |
 | `graft pull` | Extract schema from existing database |
+| `graft studio` | 
 | `graft export [format]` | Export database (JSON, CSV, SQLite) |
 | `graft reset` | Reset database (⚠️ destructive) |
 | `graft gen` | Generate SQLC types |
 | `graft raw <sql>` | Execute raw SQL |
 
 ### Global Flags
-- `--config` - Specify config file path
 - `--force` - Skip confirmation prompts
 - `--help` - Show help
 
@@ -107,13 +132,19 @@ Graft uses `graft.config.json` for configuration:
 
 ```json
 {
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
+  },
+  "gen": {
+    "js": {
+      "enabled": true
+    }
   }
 }
 ```
@@ -125,7 +156,6 @@ After running `graft init`:
 ```
 your-project/
 ├── graft.config.json      # Graft configuration
-├── sqlc.yml              # SQLC configuration
 ├── .env                  # Environment variables
 └── db/
     ├── schema/
@@ -207,6 +237,28 @@ Migrations: 3 total, 2 applied, 1 pending
 │ 20251021_add_user_roles         │ Pending │ -                   │
 └─────────────────────────────────┴─────────┴─────────────────────┘
 ```
+
+## Studio (visual editor)
+
+Start the optional Studio UI:
+
+```bash
+graft studio
+```
+
+For open Graft studio without projct init
+
+```bash
+graft studio --db "postgresql://jack:secret123@localhost:5432/mydb"
+```
+
+Open http://localhost:5555 by default (or the port you pass with `--port`).
+
+### Troubleshooting
+
+- Database connection errors: verify `DATABASE_URL` and network access.
+- Migration failures: inspect the migration SQL file, fix and re-run `graft apply`.
+
 
 ## 📤 Export System
 
@@ -318,7 +370,6 @@ graft raw scripts/cleanup.sql
 ## 🚀 Roadmap & Future Features
 
 ### Coming Soon
-- 🟨 **JavaScript/TypeScript Support**: Use Graft with Node.js projects
 - 🐍 **Python Support**: Use Graft with Python projects
 
 ## 🐛 Troubleshooting
@@ -342,19 +393,12 @@ Error: failed to connect to database
 - Verify table/column names exist
 - Fix the migration file and run `graft apply` again
 
-**SQLC Not Found**
-```bash
-Error: sqlc not found in PATH
-```
-- Install SQLC: https://docs.sqlc.dev/en/latest/overview/install.html
-- Or remove `sqlc_config_path` from config
-
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
 
 ```bash
-git clone https://github.com/Rana718/Graft.git
+git clone https://github.com/Lumos-Labs-HQ/graftt.git
 cd Graft
 
 make dev-setup

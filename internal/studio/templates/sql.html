@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Editor - Graft Studio</title>
+    <link rel="icon" type="image/png" href="/static/image/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
+    <link rel="stylesheet" href="/static/css/sql.css">
+    <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
+</head>
+<body>
+    <div class="left-navbar">
+        <img src="/static/image/logo.png" alt="Graft" class="left-navbar-logo">
+        
+        <a href="/" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:table"></span>
+            <span class="tooltip">Data</span>
+        </a>
+        
+        <a href="/sql" class="left-navbar-link active">
+            <span class="iconify" data-icon="mdi:code-braces"></span>
+            <span class="tooltip">SQL Editor</span>
+        </a>
+        
+        <a href="/schema" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:file-tree"></span>
+            <span class="tooltip">Schema</span>
+        </a>
+    </div>
+
+    <div class="container">
+        <div class="editor-section">
+            <div class="editor-header">
+                <span class="editor-title">SQL Query</span>
+                <div class="editor-actions">
+                    <button class="btn btn-secondary" onclick="clearEditor()">Clear</button>
+                    <button class="btn btn-primary" onclick="runQuery()">▶ Run Query</button>
+                </div>
+            </div>
+            <div class="editor-wrapper">
+                <textarea id="sql-editor"></textarea>
+            </div>
+        </div>
+        
+        <div class="resize-handle" id="resize-handle"></div>
+        
+        <div class="results-section">
+            <div class="results-header">
+                <span class="results-info" id="results-info">Ready to execute query</span>
+                <button class="btn btn-secondary" onclick="exportResults()" id="export-btn" style="display: none;">Export CSV</button>
+            </div>
+            <div class="results-body" id="results-body">
+                <div class="empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                    <div>Run a query to see results</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
+    <script src="/static/js/sql.js"></script>
+</body>
+</html>

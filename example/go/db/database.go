@@ -1,18 +1,19 @@
 package db
 
 import (
-	"context"
+	"database/sql"
 	"log"
 	"os"
 
-	graft "example/graft_gen"
+	graft_gen "example/graft_gen"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/joho/godotenv"
 )
 
-var DB *pgxpool.Pool
-var Queries *graft.Queries
+var DB *sql.DB
+var Queries *graft_gen.Queries
 
 func ConnectDatabase() {
 	if err := godotenv.Load(); err != nil {
@@ -23,17 +24,20 @@ func ConnectDatabase() {
 		log.Fatal("DATABASE_URL environment variable is not set")
 	}
 
-	var err error
-	DB, err = pgxpool.New(context.Background(), dbURL)
+	config, err := pgx.ParseConfig(dbURL)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatal("Failed to parse connection URL:", err)
 	}
 
-	if err = DB.Ping(context.Background()); err != nil {
+	config.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+
+	DB = stdlib.OpenDB(*config)
+
+	if err = DB.Ping(); err != nil {
 		log.Fatal("Failed to ping database:", err)
 	}
 
-	Queries = graft.New(DB)
+	Queries = graft_gen.New(DB)
 	log.Println("Database connected successfully")
 }
 
@@ -45,8 +49,8 @@ func CloseDatabase() {
 }
 
 // ========== USERS ==========
-func AddUser(ctx context.Context, name, email string) (*graft.User, error) {
-	user, err := Queries.CreateUser(ctx, graft.CreateUserParams{Name: name, Email: email})
+func AddUser(name, email string) (*graft_gen.CreateuserRow, error) {
+	user, err := Queries.Createuser(name, email)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		return nil, err
@@ -55,8 +59,8 @@ func AddUser(ctx context.Context, name, email string) (*graft.User, error) {
 	return &user, nil
 }
 
-func GetUser(ctx context.Context, userID int32) (*graft.User, error) {
-	user, err := Queries.GetUser(ctx, userID)
+func GetUser(userID int64) (*graft_gen.GetuserRow, error) {
+	user, err := Queries.Getuser(userID)
 	if err != nil {
 		log.Printf("Error getting user with ID %d: %v", userID, err)
 		return nil, err
@@ -65,8 +69,8 @@ func GetUser(ctx context.Context, userID int32) (*graft.User, error) {
 }
 
 // ========== CATEGORIES ==========
-func AddCategory(ctx context.Context, name string) (*graft.Category, error) {
-	category, err := Queries.CreateCategory(ctx, name)
+func AddCategory(name string) (*graft_gen.CreatecategoryRow, error) {
+	category, err := Queries.Createcategory(name)
 	if err != nil {
 		log.Printf("Error creating category: %v", err)
 		return nil, err
@@ -75,11 +79,20 @@ func AddCategory(ctx context.Context, name string) (*graft.Category, error) {
 	return &category, nil
 }
 
+func GetUserByEmail(email string) (*graft_gen.GetuserbyemailRow, error) {
+	user, err := Queries.Getuserbyemail(email)
+	if err != nil {
+		log.Printf("Error getting user with email %s: %v", email, err)
+		return nil, err
+	}
+	return &user, nil
+}
+
 // ========== POSTS ==========
-func AddPost(ctx context.Context, userID, categoryID int32, title, content string) (*graft.Post, error) {
-	post, err := Queries.CreatePost(ctx, graft.CreatePostParams{
-		UserID:     userID,
-		CategoryID: categoryID,
+func AddPost(userID, categoryID int64, title, content string) (*graft_gen.CreatepostRow, error) {
+	post, err := Queries.Createpost(graft_gen.CreatepostParams{
+		UserId:     userID,
+		CategoryId: categoryID,
 		Title:      title,
 		Content:    content,
 	})
@@ -92,12 +105,8 @@ func AddPost(ctx context.Context, userID, categoryID int32, title, content strin
 }
 
 // ========== COMMENTS ==========
-func AddComment(ctx context.Context, postID, userID int32, text string) (*graft.Comment, error) {
-	comment, err := Queries.CreateComment(ctx, graft.CreateCommentParams{
-		PostID:  postID,
-		UserID:  userID,
-		Content: text,
-	})
+func AddComment(postID, userID int64, text string) (*graft_gen.CreatecommentRow, error) {
+	comment, err := Queries.Createcomment(postID, userID, text)
 	if err != nil {
 		log.Printf("Error creating comment: %v", err)
 		return nil, err

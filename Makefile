@@ -5,6 +5,7 @@ BINARY_NAME=graft
 BINARY_UNIX=$(BINARY_NAME)_unix
 BINARY_WINDOWS=$(BINARY_NAME).exe
 BUILD_DIR=build
+LDFLAGS=-s -w -extldflags "-static"
 
 # Default target now builds for all platforms
 .PHONY: all
@@ -16,16 +17,38 @@ build-all:
 	@echo "Building for multiple platforms..."
 	@mkdir -p $(BUILD_DIR)
 
-	# Linux
-	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_UNIX) .
+	# Linux AMD64
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-linux-x64 .
 
-	# Windows
-	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_WINDOWS) .
+	# Linux ARM64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-linux-arm64 .
 
-	# macOS
-	GOOS=darwin GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)_darwin .
+	# Windows AMD64
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-win32-x64.exe .
+
+	# macOS AMD64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-darwin-x64 .
+
+	# macOS ARM64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/graft-darwin-arm64 .
 
 	@echo "Cross-platform build complete in $(BUILD_DIR)/"
+
+# Compress binaries with UPX (optional - requires UPX installed)
+.PHONY: compress
+compress: build-all
+	@echo "Compressing binaries with UPX..."
+	@if command -v upx &> /dev/null; then \
+		upx --best --lzma $(BUILD_DIR)/graft-linux-x64; \
+		upx --best --lzma $(BUILD_DIR)/graft-linux-arm64; \
+		upx --best --lzma $(BUILD_DIR)/graft-win32-x64.exe; \
+		upx --best --lzma $(BUILD_DIR)/graft-darwin-x64; \
+		upx --best --lzma $(BUILD_DIR)/graft-darwin-arm64; \
+		echo "Compression complete!"; \
+	else \
+		echo "UPX not found. Install from https://upx.github.io/"; \
+		echo "Skipping compression..."; \
+	fi
 
 # Install the binary to GOPATH/bin (Linux build used by default)
 .PHONY: install
@@ -95,6 +118,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all         - Clean and build for all platforms"
 	@echo "  build-all   - Build for multiple platforms"
+	@echo "  compress    - Compress binaries with UPX (requires UPX)"
 	@echo "  install     - Install Linux binary to GOPATH/bin"
 	@echo "  clean       - Clean build artifacts"
 	@echo "  test        - Run tests"

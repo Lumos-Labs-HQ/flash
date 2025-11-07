@@ -9,8 +9,8 @@
     "url_env": "DATABASE_URL"
   },
   "gen": {
-    "go": {
-      "sql_package": "pgx/v5"
+    "js": {
+      "enabled": true
     }
   }
 }

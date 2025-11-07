@@ -1,21 +1,23 @@
--- Users table
+CREATE TYPE post_status AS ENUM ('draft', 'published', 'archived');
+CREATE TYPE user_role AS ENUM ('admin', 'moderator', 'user', 'guest');
+
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     address VARCHAR(255),
+    isadmin BOOLEAN NOT NULL DEFAULT FALSE,
     email VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    role user_role NOT NULL DEFAULT 'user'
 );
 
--- Categories table
 CREATE TABLE IF NOT EXISTS categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
--- Posts table
 CREATE TABLE IF NOT EXISTS posts (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -23,10 +25,10 @@ CREATE TABLE IF NOT EXISTS posts (
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    status post_status NOT NULL DEFAULT 'draft'
 );
 
--- Comments table
 CREATE TABLE IF NOT EXISTS comments (
     id SERIAL PRIMARY KEY,
     post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
@@ -34,3 +36,5 @@ CREATE TABLE IF NOT EXISTS comments (
     content TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+

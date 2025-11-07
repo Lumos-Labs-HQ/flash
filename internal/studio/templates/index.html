@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/png" href="/static/image/logo.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/index.css">
+    <script src="https://code.iconify.design/3/3.1.0/iconify.min.js"></script>
+</head>
+<body>
+    <!-- Left Vertical Navbar (Supabase style) -->
+    <div class="left-navbar">
+        <img src="/static/image/logo.png" alt="Graft" class="left-navbar-logo">
+        
+        <a href="/" class="left-navbar-link active">
+            <span class="iconify" data-icon="mdi:table"></span>
+            <span class="tooltip">Data</span>
+        </a>
+        
+        <a href="/sql" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:code-braces"></span>
+            <span class="tooltip">SQL Editor</span>
+        </a>
+        
+        <a href="/schema" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:file-tree"></span>
+            <span class="tooltip">Schema</span>
+        </a>
+    </div>
+
+    <div class="studio-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">All Models</div>
+            </div>
+            <div class="search-box">
+                <input type="text" id="search-tables" placeholder="Search models">
+            </div>
+            <div class="tables-list" id="tables-list">
+                <div class="skeleton" style="height: 32px; margin: 4px;"></div>
+                <div class="skeleton" style="height: 32px; margin: 4px;"></div>
+                <div class="skeleton" style="height: 32px; margin: 4px;"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Top bar -->
+            <div class="topbar">
+                <div class="topbar-left">
+                    <span class="table-name" id="current-table">Select a model</span>
+                </div>
+                <div class="topbar-right">
+                    <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()">
+                        <span class="iconify" data-icon="mdi:filter-outline"></span> Filters
+                        <span id="filter-count" class="filter-badge" style="display: none;">0</span>
+                    </button>
+                    <button id="delete-selected-btn" class="btn btn-secondary" style="display: none; background: #dc2626; color: #fff;">Delete selected</button>
+                    <button id="save-btn" class="btn btn-primary" style="display: none;">Save changes</button>
+                    <button id="add-btn" class="btn btn-success">Add record</button>
+                    <button id="refresh-btn" class="btn btn-secondary"><span class="iconify" data-icon="mdi:refresh"></span></button>
+                </div>
+            </div>
+
+            <!-- Filter Panel -->
+            <div id="filter-panel" class="filter-panel">
+                <div class="filter-header">
+                    <div class="filter-title">Filter Records</div>
+                    <button class="btn-sm btn-secondary" onclick="toggleFilters()">✕</button>
+                </div>
+                <div id="filter-rows"></div>
+                <div class="filter-actions">
+                    <button class="btn-sm btn-primary" onclick="addFilterRow()">+ Add filter</button>
+                    <button class="btn-sm btn-success" onclick="applyFilters()">Apply</button>
+                    <button class="btn-sm btn-secondary" onclick="clearFilters()">Clear all</button>
+                </div>
+            </div>
+
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <div class="toolbar-item">
+                    <span>Showing</span>
+                    <span style="color: #e0e0e0;" id="row-count">0 of 0</span>
+                </div>
+            </div>
+
+            <!-- Data Grid -->
+            <div class="data-grid">
+                <div id="grid-container">
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                        </svg>
+                        <div>Select a model to view data</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination" style="display: none;">
+                <div><span id="page-info">0-0 of 0</span></div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="prev-btn">← Previous</button>
+                    <button id="next-btn">Next →</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SQL Query Modal -->
+    <div id="sql-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">📝 Execute SQL Query</div>
+                <button class="modal-close" onclick="closeSQLModal()">×</button>
+            </div>
+            <textarea id="sql-query" class="sql-editor" placeholder="SELECT * FROM users WHERE id = 1;"></textarea>
+            <div class="sql-hint">💡 Tip: Write any SELECT query to search your database</div>
+            <div class="filter-actions">
+                <button class="btn btn-primary" onclick="executeSQLQuery()">▶ Execute</button>
+                <button class="btn btn-secondary" onclick="closeSQLModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/modal.js"></script>
+    <script src="/static/js/studio.js"></script>
+    <script src="/static/js/index.js"></script>
+</body>
+</html>

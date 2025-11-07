@@ -5,13 +5,24 @@ This document outlines all the technologies, libraries, and tools used in the Gr
 ## Table of Contents
 
 - [Core Technologies](#core-technologies)
-- [Go Dependencies](#go-dependencies)
 - [Database Drivers](#database-drivers)
 - [CLI Framework](#cli-framework)
 - [Configuration Management](#configuration-management)
 - [Build Tools](#build-tools)
-- [Development Tools](#development-tools)
-- [External Integrations](#external-integrations)
+- [Code Generation System](#code-generation-system)
+- [Export System](#export-system)
+- [Graft Studio Technologies](#graft-studio-technologies)
+  - [Backend - Go Fiber](#backend---go-fiber)
+  - [Frontend Technologies](#frontend-technologies)
+  - [Studio Architecture](#studio-architecture)
+  - [Studio Pages](#studio-pages)
+- [Architecture Patterns](#architecture-patterns)
+- [Safe Migration System](#safe-migration-system)
+- [Performance Optimizations](#performance-optimizations)
+- [Security Considerations](#security-considerations)
+- [Testing Strategy](#testing-strategy)
+- [NPM Distribution System](#npm-distribution-system)
+- [Version Information](#version-information)
 
 ## Core Technologies
 
@@ -36,13 +47,14 @@ This document outlines all the technologies, libraries, and tools used in the Gr
 - Error handling with wrapped errors
 - Reflection for configuration unmarshaling
 - Transaction management for safe migrations
+- Embedded file system (go:embed) for static assets
 
 ## Database Drivers
 
 ### PostgreSQL - pgx/v5
 
 **Repository**: https://github.com/jackc/pgx  
-**Version**: v5.4.3
+**Version**: v5.7.6
 
 **Features:**
 - High-performance PostgreSQL driver
@@ -77,25 +89,13 @@ func (p *PostgresAdapter) Connect(ctx context.Context, url string) error {
     p.pool = pool
     return nil
 }
-
-func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-    tx, err := p.pool.Begin(ctx)
-    if err != nil {
-        return fmt.Errorf("failed to begin transaction: %w", err)
-    }
-    defer tx.Rollback(ctx) // Auto-rollback on error
-
-    statements := p.parseSQLStatements(migrationSQL)
-    
-    for _, stmt := range statements {
-        if _, err := tx.Exec(ctx, stmt); err != nil {
-            return fmt.Errorf("failed to execute statement: %w", err)
-        }
-    }
-    
-    return tx.Commit(ctx)
-}
 ```
+
+**Additional Dependencies:**
+- `github.com/jackc/pgpassfile v1.0.0` - Password file parsing
+- `github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761` - Service file support
+- `github.com/jackc/puddle/v2 v2.2.2` - Connection pooling
+- `github.com/lib/pq v1.10.9` - PostgreSQL driver (legacy support)
 
 ### MySQL - go-sql-driver/mysql
 
@@ -112,35 +112,8 @@ func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL str
 - Custom data types
 - Transaction safety
 
-**Usage in Graft:**
-```go
-type MySQLAdapter struct {
-    db *sql.DB
-    qb squirrel.StatementBuilderType
-}
-
-func (m *MySQLAdapter) Connect(ctx context.Context, url string) error {
-    db, err := sql.Open("mysql", url)
-    if err != nil {
-        return fmt.Errorf("failed to open MySQL connection: %w", err)
-    }
-    m.db = db
-    return nil
-}
-
-func (m *MySQLAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-    tx, err := m.db.BeginTx(ctx, nil)
-    if err != nil {
-        return fmt.Errorf("failed to begin transaction: %w", err)
-    }
-    defer tx.Rollback() // Auto-rollback on error
-    
-    // Execute statements safely
-    // ...
-    
-    return tx.Commit()
-}
-```
+**Additional Dependency:**
+- `filippo.io/edwards25519 v1.1.0` - Cryptographic operations
 
 ### SQLite - mattn/go-sqlite3
 
@@ -156,29 +129,12 @@ func (m *MySQLAdapter) ExecuteMigration(ctx context.Context, migrationSQL string
 - Export/import APIs
 - Transaction safety
 
-**Usage in Graft:**
-```go
-type SQLiteAdapter struct {
-    db *sql.DB
-    qb squirrel.StatementBuilderType
-}
-
-func (s *SQLiteAdapter) Connect(ctx context.Context, url string) error {
-    db, err := sql.Open("sqlite3", url)
-    if err != nil {
-        return fmt.Errorf("failed to open SQLite connection: %w", err)
-    }
-    s.db = db
-    return nil
-}
-```
-
 ## CLI Framework
 
 ### Cobra
 
 **Repository**: https://github.com/spf13/cobra  
-**Version**: v1.8.0
+**Version**: v1.10.1
 
 **Features:**
 - Powerful CLI framework
@@ -189,33 +145,24 @@ func (s *SQLiteAdapter) Connect(ctx context.Context, url string) error {
 - Man page generation
 - POSIX-compliant flags
 
-**Usage in Graft:**
-```go
-var rootCmd = &cobra.Command{
-    Use:   "graft",
-    Short: "A database migration CLI tool",
-    Long:  `Graft is a Go-based CLI tool...`,
-}
-
-var migrateCmd = &cobra.Command{
-    Use:   "migrate [name]",
-    Short: "Create a new migration",
-    RunE: func(cmd *cobra.Command, args []string) error {
-        // Migration logic with safe execution
-    },
-}
-```
-
 **Commands Implemented:**
-- `graft init` - Project initialization with database templates
-- `graft migrate` - Create migrations with schema diff
-- `graft apply` - Apply migrations with transaction safety
-- `graft status` - Show migration status with detailed info
-- `graft export` - Export database (JSON, CSV, SQLite)
-- `graft reset` - Reset database with export option
-- `graft gen` - Generate SQLC code
-- `graft pull` - Extract schema from database
-- `graft raw` - Execute raw SQL files
+
+| Command | Description | Flags |
+|---------|-------------|-------|
+| `graft init` | Initialize a new Graft project | `--postgresql`, `--mysql`, `--sqlite` |
+| `graft migrate [name]` | Create a new migration | `--empty`, `-e` |
+| `graft apply` | Apply pending migrations | `--force`, `-f` |
+| `graft status` | Show migration status | None |
+| `graft export` | Export database | `--json`, `-j`, `--csv`, `-c`, `--sqlite`, `-s` |
+| `graft reset` | Reset database | `--force`, `-f` |
+| `graft gen` | Generate type-safe code | None |
+| `graft pull` | Extract schema from database | `--backup`, `-b`, `--output`, `-o` |
+| `graft raw <sql>` | Execute raw SQL | `--query`, `-q`, `--file` |
+| `graft studio` | Launch visual database editor | `--port`, `--db` |
+
+**Additional Dependencies:**
+- `github.com/inconshreveable/mousetrap v1.1.0` - Windows command-line support
+- `github.com/spf13/pflag v1.0.10` - POSIX flag parsing
 
 ### Color Output - fatih/color
 
@@ -228,22 +175,16 @@ var migrateCmd = &cobra.Command{
 - Windows support
 - Performance optimized
 
-**Usage in Graft:**
-```go
-func showBanner() {
-    greenColor := color.New(color.FgGreen, color.Bold)
-    greenColor.Println("✅ Migration applied successfully")
-    
-    color.New(color.FgRed, color.Bold).Printf("❌ Failed at migration: %s\n", migration.ID)
-}
-```
+**Additional Dependencies:**
+- `github.com/mattn/go-colorable v0.1.14` - Colorable writer
+- `github.com/mattn/go-isatty v0.0.20` - TTY detection
 
 ## Configuration Management
 
 ### Viper
 
 **Repository**: https://github.com/spf13/viper  
-**Version**: v1.18.2
+**Version**: v1.21.0
 
 **Features:**
 - Configuration management
@@ -253,29 +194,31 @@ func showBanner() {
 - Configuration watching
 - Default value handling
 
-**Usage in Graft:**
+**Configuration Structure:**
 ```go
-func initConfig() {
-    if cfgFile != "" {
-        viper.SetConfigFile(cfgFile)
-    } else {
-        viper.AddConfigPath(".")
-        viper.SetConfigType("json")
-        viper.SetConfigName("graft.config")
-    }
-    
-    viper.AutomaticEnv()
-    viper.ReadInConfig()
+type Config struct {
+    SchemaPath     string    `json:"schema_path"`
+    MigrationsPath string    `json:"migrations_path"`
+    ExportPath     string    `json:"export_path"`
+    Database       Database  `json:"database"`
+    Gen            GenConfig `json:"gen"`
 }
 
-type Config struct {
-    SchemaPath     string   `json:"schema_path"`
-    MigrationsPath string   `json:"migrations_path"`
-    SqlcConfigPath string   `json:"sqlc_config_path"`
-    ExportPath     string   `json:"export_path"`
-    Database       Database `json:"database"`
+type GenConfig struct {
+    Go GenLanguageConfig `json:"go"`
+    JS GenLanguageConfig `json:"js"`
 }
 ```
+
+**Additional Dependencies:**
+- `github.com/fsnotify/fsnotify v1.9.0` - File system notifications
+- `github.com/go-viper/mapstructure/v2 v2.4.0` - Struct mapping
+- `github.com/pelletier/go-toml/v2 v2.2.4` - TOML support
+- `github.com/sagikazarmark/locafero v0.12.0` - Virtual file system
+- `github.com/spf13/afero v1.15.0` - File system abstraction
+- `github.com/spf13/cast v1.10.0` - Type casting
+- `github.com/subosito/gotenv v1.6.0` - Environment loading
+- `go.yaml.in/yaml/v3 v3.0.4` - YAML support
 
 ### godotenv
 
@@ -287,16 +230,6 @@ type Config struct {
 - Multiple .env file support
 - Variable expansion
 - Override protection
-
-**Usage in Graft:**
-```go
-func initConfig() {
-    if err := godotenv.Load(); err != nil {
-        godotenv.Load(".env")
-        godotenv.Load(".env.local")
-    }
-}
-```
 
 ## Build Tools
 
@@ -319,6 +252,7 @@ deps:         # Download dependencies
 fmt:          # Format code
 lint:         # Lint code
 release:      # Create release build
+compress:     # Compress binaries with UPX
 ```
 
 ### Go Modules
@@ -330,7 +264,100 @@ release:      # Create release build
 - Vendor directory support
 - Replace directives for local development
 
-## Development Tools
+### Additional Build Dependencies
+
+- `github.com/google/go-cmp v0.7.0` - Value comparison
+- `github.com/mattn/go-runewidth v0.0.16` - Unicode width calculation
+- `github.com/rogpeppe/go-internal v1.10.0` - Internal utilities
+- `github.com/rivo/uniseg v0.2.0` - Unicode segmentation
+- `github.com/google/uuid v1.6.0` - UUID generation
+- `golang.org/x/crypto v0.43.0` - Cryptographic operations
+- `golang.org/x/sync v0.17.0` - Concurrency primitives
+- `golang.org/x/sys v0.37.0` - System calls
+- `golang.org/x/text v0.30.0` - Text processing
+
+## Code Generation System
+
+### Custom Go Generator (`internal/gogen/`)
+
+**Features:**
+- Type-safe Go code generation from SQL
+- Automatic struct generation from tables
+- Query method generation with context support
+- PostgreSQL ENUM to Go const types
+- Null-safe type handling with sql.Null* types
+- Zero runtime dependencies
+
+**Generated Output:**
+```go
+// graft_gen/models.go
+type Users struct {
+    ID        sql.NullInt32  `json:"id" db:"id"`
+    Name      string         `json:"name" db:"name"`
+    Email     string         `json:"email" db:"email"`
+    CreatedAt time.Time      `json:"created_at" db:"created_at"`
+}
+
+// graft_gen/db.go
+type DBTX interface {
+    Exec(query string, args ...interface{}) (sql.Result, error)
+    Query(query string, args ...interface{}) (*sql.Rows, error)
+    QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+func New(db DBTX) *Queries {
+    return &Queries{db: db}
+}
+```
+
+**Query Annotations:**
+- `:one` - Returns single row or null
+- `:many` - Returns array of rows
+- `:exec` - Returns affected row count
+
+### Custom JavaScript/TypeScript Generator (`internal/jsgen/`)
+
+**Features:**
+- Type-safe JavaScript/TypeScript code generation
+- Automatic TypeScript definition generation
+- Query parsing with special annotations
+- PostgreSQL ENUM to TypeScript union types
+- Zero runtime dependencies
+- Full IntelliSense support
+
+**Type Mapping:**
+```go
+var sqlToTSTypeMap = map[string]string{
+    "SERIAL":                      "number",
+    "INTEGER":                     "number",
+    "BIGINT":                      "number",
+    "VARCHAR":                     "string",
+    "TEXT":                        "string",
+    "BOOLEAN":                     "boolean",
+    "TIMESTAMP WITH TIME ZONE":    "Date",
+    "JSONB":                       "any",
+    "UUID":                        "string",
+}
+```
+
+**Generated Output:**
+```typescript
+// index.d.ts
+export interface Users {
+  id: number | null;
+  name: string;
+  email: string;
+  created_at: Date;
+}
+
+export class Queries {
+  getUser(id: number): Promise<Users | null>;
+  createUser(name: string, email: string): Promise<Users | null>;
+  listUsers(): Promise<Users[]>;
+}
+
+export function New(db: any): Queries;
+```
 
 ### Query Builder - Squirrel
 
@@ -344,57 +371,9 @@ release:      # Create release build
 - Query caching
 - Type-safe query construction
 
-**Usage in Graft:**
-```go
-// PostgreSQL with dollar placeholders
-p.qb = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-
-// MySQL with question mark placeholders
-m.qb = squirrel.StatementBuilder.PlaceholderFormat(squirrel.Question)
-
-// Build queries
-query := p.qb.Select("*").From("users").Where(squirrel.Eq{"id": userID})
-```
-
-## External Integrations
-
-### SQLC Integration
-
-**SQLC**: https://sqlc.dev/
-
-**Features:**
-- Generate Go code from SQL
-- Type-safe database queries
-- Multiple database support
-- Query validation
-- Performance optimization
-
-**Integration in Graft:**
-```go
-func runSQLCGenerate(configPath string) error {
-    if _, err := exec.LookPath("sqlc"); err != nil {
-        return fmt.Errorf("sqlc not found in PATH. Please install SQLC: https://docs.sqlc.dev/en/latest/overview/install.html")
-    }
-
-    cmd := exec.Command("sqlc", "generate", "-f", configPath)
-    cmd.Stdout = os.Stdout
-    cmd.Stderr = os.Stderr
-    return cmd.Run()
-}
-```
-
-**Generated SQLC Config:**
-```yaml
-version: "2"
-sql:
-  - engine: "postgresql"
-    queries: "db/queries/"
-    schema: "db/schema/"
-    gen:
-      go:
-        package: "graft"
-        out: "graft_gen/"
-```
+**Additional Dependencies:**
+- `github.com/lann/builder v0.0.0-20180802200727-47ae307949d0` - Builder pattern
+- `github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0` - Persistent data structures
 
 ## Export System
 
@@ -436,37 +415,402 @@ sql:
 - Cross-platform compatibility
 - Relationship maintenance
 
+## Graft Studio Technologies
+
+### Backend - Go Fiber
+
+#### Web Framework - Fiber v2
+
+**Repository**: https://github.com/gofiber/fiber  
+**Version**: v2.52.9
+
+**Features:**
+- Express-inspired web framework for Go
+- Fast HTTP engine built on fasthttp
+- Zero memory allocation router
+- Template engine support
+- Static file serving
+- Middleware support
+- RESTful API support
+
+**Usage in Graft:**
+```go
+app := fiber.New(fiber.Config{
+    Views: engine,
+})
+
+// UI Routes
+app.Get("/", s.handleIndex)
+app.Get("/sql", s.handleSQL)
+app.Get("/schema", s.handleSchema)
+
+// API Routes
+api := app.Group("/api")
+api.Get("/tables", s.handleGetTables)
+api.Post("/tables/:name/save", s.handleSaveChanges)
+api.Post("/sql", s.handleExecuteSQL)
+```
+
+**Additional Dependencies:**
+- `github.com/valyala/fasthttp v1.51.0` - Fast HTTP implementation
+- `github.com/valyala/bytebufferpool v1.0.0` - Byte buffer pooling
+- `github.com/valyala/tcplisten v1.0.0` - TCP listener
+- `github.com/klauspost/compress v1.17.9` - Compression algorithms
+- `github.com/andybalholm/brotli v1.1.0` - Brotli compression
+
+#### Template Engine - Gofiber HTML
+
+**Repository**: https://github.com/gofiber/template  
+**Version**: v2.1.3
+
+**Features:**
+- HTML template rendering
+- Go template syntax
+- Fast compilation
+- Embedded template support
+
+**Additional Dependencies:**
+- `github.com/gofiber/template v1.8.3` - Base template package
+- `github.com/gofiber/utils v1.1.0` - Utility functions
+
 **Implementation:**
 ```go
-func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data types.BackupData, exportPath string) (string, error) {
-    timestamp := time.Now().Format("2006-01-02_15-04-05")
-    filePath := filepath.Join(exportPath, fmt.Sprintf("export_%s.db", timestamp))
-    
-    sqliteDB, err := sql.Open("sqlite3", filePath)
-    if err != nil {
-        return "", err
+//go:embed static/*
+var StaticFS embed.FS
+
+//go:embed templates/*
+var TemplatesFS embed.FS
+
+engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
+app := fiber.New(fiber.Config{
+    Views: engine,
+})
+```
+
+### Frontend Technologies
+
+#### React Ecosystem (Schema Visualization)
+
+**React**: v18.2.0  
+**React DOM**: v18.2.0  
+**Source**: https://esm.sh (ES Module CDN)
+
+**Features:**
+- Modern React with Hooks
+- Client-side rendering
+- Component-based architecture
+- ES Modules via importmap
+
+**Usage:**
+```html
+<script type="importmap">
+{
+    "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client"
     }
-    defer sqliteDB.Close()
-    
-    // Create tables and insert data
-    // ...
-    
-    return filePath, nil
+}
+</script>
+```
+
+#### ReactFlow (Schema Diagram)
+
+**Package**: @xyflow/react  
+**Version**: v12.8.4  
+**Repository**: https://github.com/xyflow/xyflow
+
+**Features:**
+- Interactive node-based diagrams
+- Automatic graph layout with dagre
+- Drag and drop nodes
+- Zoom and pan controls
+- Custom node rendering
+- Edge relationships
+
+**Additional Library:**
+- **Dagre**: v0.8.5 - Graph layout algorithm for automatic node positioning
+
+**Usage:**
+```jsx
+import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react';
+import dagre from 'dagre';
+
+// Automatic layout
+const dagreGraph = new dagre.graphlib.Graph();
+dagreGraph.setGraph({ rankdir: 'TB' });
+```
+
+#### CodeMirror 5 (SQL Editor)
+
+**Version**: 5.65.2  
+**Source**: https://cdnjs.cloudflare.com
+
+**Features:**
+- Syntax highlighting for SQL
+- Code completion
+- Line numbers
+- Bracket matching
+- Material Darker theme
+- Keyboard shortcuts (Ctrl+Enter to execute)
+- SQL mode support
+
+**Files Loaded:**
+- `codemirror.min.css` - Base styles
+- `theme/material-darker.min.css` - Dark theme
+- `codemirror.min.js` - Core editor
+- `mode/sql/sql.min.js` - SQL syntax highlighting
+
+**Usage:**
+```javascript
+const editor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
+    mode: 'text/x-sql',
+    theme: 'material-darker',
+    lineNumbers: true,
+    autofocus: true,
+    extraKeys: {
+        'Ctrl-Enter': runQuery
+    }
+});
+```
+
+#### Iconify
+
+**Version**: 2.2.1 (index), 3.1.0 (sql/schema)  
+**Source**: https://code.iconify.design
+
+**Features:**
+- Icon framework with 100,000+ icons
+- Material Design Icons (MDI)
+- Zero dependencies
+- On-demand loading
+- SVG-based icons
+
+**Icons Used:**
+- `mdi:table` - Data browser
+- `mdi:code-braces` - SQL editor
+- `mdi:file-tree` - Schema visualization
+- `mdi:refresh` - Refresh button
+- Various action icons
+
+#### Google Fonts
+
+**Fonts Used:**
+- **Inter** (wght@400;500;600) - Main UI font (index, sql pages)
+- **JetBrains Mono** (wght@400;500;600) - Code font (schema page)
+
+**Source**: https://fonts.googleapis.com
+
+#### Vanilla JavaScript
+
+**Custom Scripts:**
+- `static/js/studio.js` - Main table browser logic
+- `static/js/modal.js` - Modal component system
+- `static/js/index.js` - Index page controller
+- `static/js/sql.js` - SQL editor logic
+- `static/js/schema.js` - React schema visualization
+
+**Features:**
+- Fetch API for AJAX requests
+- Real-time table editing
+- Inline cell editing with double-click
+- Pagination and search
+- CSV export from SQL results
+- Resizable split panes
+
+### Studio Architecture
+
+#### Embedded File System
+
+**Go embed Package**: Standard library
+
+**Features:**
+- Embed static files in binary
+- No external file dependencies
+- Single binary distribution
+- Hot reload in development
+
+**Implementation:**
+```go
+//go:embed static/*
+var StaticFS embed.FS
+
+//go:embed templates/*
+var TemplatesFS embed.FS
+
+// Serve static files
+staticFS, _ := fs.Sub(StaticFS, "static")
+app.Use("/static", filesystem.New(filesystem.Config{
+    Root: http.FS(staticFS),
+}))
+```
+
+#### API Design
+
+**RESTful Endpoints:**
+
+```go
+// Table Operations
+GET    /api/tables              // List all tables
+GET    /api/tables/:name        // Get table data with pagination
+POST   /api/tables/:name/save   // Save batch changes
+POST   /api/tables/:name/add    // Add new row
+POST   /api/tables/:name/delete // Delete multiple rows
+DELETE /api/tables/:name/rows/:id // Delete single row
+
+// SQL Operations
+POST   /api/sql                 // Execute SQL query
+
+// Schema Operations
+GET    /api/schema              // Get database schema
+```
+
+**Response Format:**
+```json
+{
+    "columns": [
+        {
+            "name": "id",
+            "type": "INTEGER",
+            "nullable": false,
+            "primaryKey": true
+        }
+    ],
+    "rows": [
+        {"id": 1, "name": "Alice"}
+    ],
+    "total": 100,
+    "page": 1,
+    "limit": 50
 }
 ```
+
+### Studio Pages
+
+#### 1. Data Browser (`/`)
+
+**Technologies:**
+- Vanilla JavaScript
+- Fetch API for AJAX
+- Modal system for forms
+- Real-time table editing
+- Pagination and search
+
+**Features:**
+```javascript
+// Inline editing
+cell.addEventListener('dblclick', () => {
+    cell.contentEditable = true;
+    cell.focus();
+});
+
+// Batch operations
+const changes = [];
+changes.push({ id, column, value });
+await saveChanges(tableName, changes);
+```
+
+**Files:**
+- Template: `templates/index.html`
+- Scripts: `static/js/studio.js`, `static/js/modal.js`, `static/js/index.js`
+- Styles: `static/css/index.css`
+
+#### 2. SQL Editor (`/sql`)
+
+**Technologies:**
+- CodeMirror 5 for SQL editing
+- Split-pane resizable interface
+- CSV export functionality
+- Vanilla JavaScript
+
+**Features:**
+```javascript
+// Execute query with Ctrl+Enter
+async function runQuery() {
+    const sql = editor.getValue();
+    const response = await fetch('/api/sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql })
+    });
+    displayResults(await response.json());
+}
+
+// Export results to CSV
+function exportToCSV() {
+    const csv = generateCSV(results);
+    downloadFile(csv, 'export.csv');
+}
+```
+
+**Files:**
+- Template: `templates/sql.html`
+- Script: `static/js/sql.js`
+- Styles: `static/css/sql.css`
+
+#### 3. Schema Visualization (`/schema`)
+
+**Technologies:**
+- React 18.2.0
+- ReactFlow 12.8.4
+- Dagre 0.8.5 for auto-layout
+- ES Modules
+
+**Features:**
+```javascript
+// Auto-layout with dagre
+function layoutNodes(nodes, edges) {
+    const dagreGraph = new dagre.graphlib.Graph();
+    dagreGraph.setGraph({ rankdir: 'TB' });
+    
+    nodes.forEach(node => {
+        dagreGraph.setNode(node.id, { width: 250, height: 100 });
+    });
+    
+    edges.forEach(edge => {
+        dagreGraph.setEdge(edge.source, edge.target);
+    });
+    
+    dagre.layout(dagreGraph);
+    
+    return nodes.map(node => ({
+        ...node,
+        position: dagreGraph.node(node.id)
+    }));
+}
+
+// Custom table nodes with columns
+function TableNode({ data }) {
+    return (
+        <div className="table-node">
+            <div className="table-name">{data.name}</div>
+            <div className="columns">
+                {data.columns.map(col => (
+                    <div key={col.name} className="column">
+                        {col.name}: {col.type}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+```
+
+**Files:**
+- Template: `templates/schema.html`
+- Script: `static/js/schema.js`
+- Styles: `static/css/schema.css`
 
 ## Architecture Patterns
 
 ### Adapter Pattern
 
-Used for database abstraction with safe migration support:
+Used for database abstraction:
 ```go
 type DatabaseAdapter interface {
     Connect(ctx context.Context, url string) error
-    ExecuteMigration(ctx context.Context, migrationSQL string) error // Transaction-safe
+    ExecuteMigration(ctx context.Context, migrationSQL string) error
     RecordMigration(ctx context.Context, migrationID, name, checksum string) error
     GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
-    // ... other methods
 }
 
 func NewAdapter(provider string) DatabaseAdapter {
@@ -483,7 +827,7 @@ func NewAdapter(provider string) DatabaseAdapter {
 
 ### Template Method Pattern
 
-Used for project initialization with database-specific templates:
+Used for project initialization:
 ```go
 type ProjectTemplate struct {
     DatabaseType DatabaseType
@@ -493,11 +837,20 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
     return fmt.Sprintf(`{
   "schema_path": "db/schema/schema.sql",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"
+  },
+  "gen": {
+    "go": {
+      "enabled": true,
+      "output_path": "graft_gen"
+    },
+    "js": {
+      "enabled": false,
+      "output_path": "graft_gen"
+    }
   }
 }`, pt.DatabaseType)
 }
@@ -561,8 +914,16 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 
 ### Connection Pooling
 
-- **PostgreSQL**: pgxpool with Supabase/PgBouncer optimization
-- **MySQL/SQLite**: database/sql with connection limits
+**PostgreSQL (pgxpool):**
+```go
+config.MaxConns = 10
+config.MinConns = 2
+config.MaxConnLifetime = time.Hour
+config.MaxConnIdleTime = 30 * time.Minute
+config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec // Pooler compatibility
+```
+
+**MySQL/SQLite (database/sql):**
 - Connection reuse and lifecycle management
 - Configurable pool sizes and timeouts
 
@@ -573,6 +934,21 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 - Index-aware query generation
 - Transaction batching for migrations
 - Streaming for large exports
+
+### Studio Performance
+
+**Batch Query Optimization:**
+```go
+// Single query for all table row counts
+func (p *PostgresAdapter) GetAllTableRowCounts(ctx context.Context, tables []string) (map[string]int, error) {
+    query := `
+        SELECT schemaname || '.' || tablename as table_name, n_live_tup as row_count
+        FROM pg_stat_user_tables
+        WHERE tablename = ANY($1)
+    `
+    // 95% fewer database queries
+}
+```
 
 ### Memory Management
 
@@ -604,9 +980,26 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 
 - Parameterized queries only
 - Input validation and sanitization
-- Query builder usage
+- Query builder usage (Squirrel)
 - No dynamic SQL construction
 - Transaction isolation
+
+### Studio Security
+
+**Development Tool - Local Use Only:**
+- No authentication (local development tool)
+- Binds to localhost by default
+- CORS disabled for localhost
+- SQL injection prevention via parameterized queries
+- XSS prevention via proper escaping
+- Transaction rollback on errors
+
+**Production Usage (Not Recommended):**
+```bash
+# If you must use remotely, use SSH tunnel
+ssh -L 5555:localhost:5555 user@server
+graft studio --port 5555
+```
 
 ## Testing Strategy
 
@@ -627,23 +1020,62 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 - Performance benchmarking
 - Export/import roundtrip testing
 
-### Test Dependencies
+### Test Helpers
 
-```go
-// Test-specific dependencies include:
-// - testify for assertions
-// - dockertest for database containers
-// - gomock for mocking
-// - Custom test helpers for database setup
+**Files:**
+- `test/test-helper.go` - Common test utilities
+- `test/db-helper.sh` - Database setup scripts
+- `test/test-studio.sh` - Studio testing
+- `test/github-workflow-test.sh` - CI/CD tests
+
+## NPM Distribution System
+
+### Package: graft-orm
+
+**Registry**: https://www.npmjs.com/package/graft-orm  
+**Repository**: https://github.com/Lumos-Labs-HQ/graft
+
+**Installation:**
+```bash
+npm install -g graft-orm
 ```
+
+**Features:**
+- Automatic binary download from GitHub releases
+- Cross-platform (Linux, macOS, Windows)
+- Multi-architecture (x64, ARM64, ARM)
+- Small package (~3KB)
+- Postinstall script for binary setup
+- Programmatic API
+
+**Binary Download System:**
+```javascript
+const VERSION = '2.0.0';
+const REPO = 'Lumos-Labs-HQ/graft';
+const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/graft-${platform}-${arch}`;
+```
+
+**Files:**
+- `npm/package.json` - NPM package configuration
+- `npm/index.js` - Programmatic API
+- `npm/bin/graft.js` - CLI wrapper
+- `npm/scripts/install.js` - Post-install binary downloader
+
+**GitHub Actions Automation:**
+- Triggers after successful GitHub release
+- Auto-updates version from git tag
+- Publishes to NPM registry
+- Verifies installation
 
 ## Version Information
 
-**Current Version**: v1.6.0
+**Current Version**: v2.0.0
 
 **Version History:**
+- v2.0.0: Full rewrite with Studio, React-based schema visualization, improved CLI
+- v1.7.0: Added JavaScript/TypeScript code generation
 - v1.6.0: Added export system and safe migration features
 - v1.5.0: Enhanced schema management and conflict detection
 - Previous versions: Core migration functionality
 
-This comprehensive technology stack ensures Graft is robust, performant, and maintainable while supporting multiple database systems, providing safe migration execution, and offering flexible export capabilities for an excellent developer experience.
+This comprehensive technology stack ensures Graft is robust, performant, and maintainable while supporting multiple database systems, providing safe migration execution, offering flexible export capabilities, and delivering first-class support for both Go and Node.js ecosystems with a powerful visual database management studio.

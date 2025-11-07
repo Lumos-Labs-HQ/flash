@@ -1,4 +1,4 @@
-﻿package migrator
+package migrator
 
 import (
 	"context"
@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
-	"github.com/Rana718/Graft/internal/schema"
-	"github.com/Rana718/Graft/internal/types"
-	"github.com/Rana718/Graft/internal/utils"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/schema"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/utils"
 )
 
 type Migrator struct {
@@ -63,27 +63,6 @@ func (m *Migrator) createMigrationsTable(ctx context.Context) error {
 	return m.adapter.CreateMigrationsTable(ctx)
 }
 
-func (m *Migrator) applySingleMigration(ctx context.Context, migration types.Migration) error {
-	fmt.Printf("Applying migration: %s\n", migration.ID)
-
-	content, err := os.ReadFile(migration.FilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read migration file: %w", err)
-	}
-
-	if err := m.adapter.ExecuteMigration(ctx, string(content)); err != nil {
-		return fmt.Errorf("failed to execute migration: %w", err)
-	}
-
-	checksum := fmt.Sprintf("%x", len(content))
-	if err := m.adapter.RecordMigration(ctx, migration.ID, migration.Name, checksum); err != nil {
-		return fmt.Errorf("failed to record migration: %w", err)
-	}
-
-	fmt.Printf("Successfully applied migration: %s\n", migration.ID)
-	return nil
-}
-
 func (m *Migrator) getAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
 	return m.adapter.GetAppliedMigrations(ctx)
 }
@@ -125,7 +104,7 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	filepath := filepath.Join(m.migrationsDir, filename)
 
 	var sqlContent string
-	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 {
+	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -143,6 +122,14 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 // generateSQLFromDiff creates SQL from schema differences - simplified
 func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) string {
 	var upStatements []string
+
+	for _, enum := range diff.NewEnums {
+		values := make([]string, len(enum.Values))
+		for i, v := range enum.Values {
+			values[i] = fmt.Sprintf("'%s'", v)
+		}
+		upStatements = append(upStatements, fmt.Sprintf("CREATE TYPE \"%s\" AS ENUM (%s);", enum.Name, strings.Join(values, ", ")))
+	}
 
 	// Generate UP migration only
 	for _, table := range diff.NewTables {
@@ -173,6 +160,10 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) stri
 		upStatements = append(upStatements, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName))
 	}
 
+	for _, enumName := range diff.DroppedEnums {
+		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
+	}
+
 	return m.formatMigrationFile(name, upStatements)
 }
 
@@ -181,18 +172,18 @@ func (m *Migrator) generateEmptyMigrationTemplate(name string) string {
 		"-- Add your SQL statements here",
 		"-- Example: CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL);",
 	}
-	
+
 	return m.formatMigrationFile(name, upStatements)
 }
 
 func (m *Migrator) formatMigrationFile(name string, upStatements []string) string {
 	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
-	
+
 	var builder strings.Builder
-	
+
 	builder.WriteString(fmt.Sprintf("-- Migration: %s\n", name))
 	builder.WriteString(fmt.Sprintf("-- Created: %s\n\n", timestamp))
-	
+
 	if len(upStatements) > 0 {
 		for _, stmt := range upStatements {
 			builder.WriteString(stmt)
@@ -204,7 +195,7 @@ func (m *Migrator) formatMigrationFile(name string, upStatements []string) strin
 	} else {
 		builder.WriteString("-- No migration statements\n")
 	}
-	
+
 	return builder.String()
 }
 

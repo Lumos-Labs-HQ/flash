@@ -48,7 +48,9 @@ Thumbs.db
 # db/migrations/
 
 # SQLC generated files
-**/graft_gen/
+# **/graft_gen/
 
 # Logs
 *.log
+
+test/speed_test

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/migrator"
+	"github.com/Lumos-Labs-HQ/graft/internal/config"
+	"github.com/Lumos-Labs-HQ/graft/internal/migrator"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +46,9 @@ Use --force to skip all confirmation prompts.`,
 		}
 		defer m.Close()
 
-		return m.Reset(ctx)
+		force, _ := cmd.Flags().GetBool("force")
+
+		return m.Reset(ctx, force)
 	},
 }
 

@@ -4,6 +4,11 @@ import (
 	"time"
 )
 
+type SchemaEnum struct {
+	Name   string
+	Values []string
+}
+
 type SchemaTable struct {
 	Name    string
 	Columns []SchemaColumn
@@ -17,9 +22,10 @@ type SchemaColumn struct {
 	Default          string
 	IsPrimary        bool
 	IsUnique         bool
-	ForeignKeyTable  string 
-	ForeignKeyColumn string 
-	OnDeleteAction   string 
+	IsAutoIncrement  bool // NEW: Indicates if column is auto-increment (SERIAL, AUTO_INCREMENT, etc.)
+	ForeignKeyTable  string
+	ForeignKeyColumn string
+	OnDeleteAction   string
 }
 
 type SchemaIndex struct {
@@ -35,6 +41,8 @@ type SchemaDiff struct {
 	ModifiedTables []TableDiff
 	NewIndexes     []SchemaIndex
 	DroppedIndexes []string
+	NewEnums       []SchemaEnum
+	DroppedEnums   []string
 }
 
 type TableDiff struct {

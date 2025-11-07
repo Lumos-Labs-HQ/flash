@@ -5,8 +5,13 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/Rana718/Graft/internal/types"
+	"github.com/Lumos-Labs-HQ/graft/internal/types"
 )
+
+type QueryResult struct {
+	Columns []string
+	Rows    []map[string]interface{}
+}
 
 type DatabaseAdapter interface {
 	Connect(ctx context.Context, url string) error
@@ -22,9 +27,11 @@ type DatabaseAdapter interface {
 	GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error)
 	RecordMigration(ctx context.Context, migrationID, name, checksum string) error
 	ExecuteMigration(ctx context.Context, migrationSQL string) error
+	ExecuteQuery(ctx context.Context, query string) (*QueryResult, error)
 
 	// Schema operations
 	GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error)
+	GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error)
 	GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error)
 	GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)
 	GetAllTableNames(ctx context.Context) ([]string, error)
@@ -39,7 +46,10 @@ type DatabaseAdapter interface {
 
 	// Backup operations
 	GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
+	GetTableRowCount(ctx context.Context, tableName string) (int, error)
+	GetAllTableRowCounts(ctx context.Context, tableNames []string) (map[string]int, error)
 	DropTable(ctx context.Context, tableName string) error
+	DropEnum(ctx context.Context, enumName string) error
 
 	// SQL generation
 	GenerateCreateTableSQL(table types.SchemaTable) string
@@ -69,6 +79,6 @@ func NewAdapter(provider string) DatabaseAdapter {
 	case "sqlite", "sqlite3":
 		return NewSQLiteAdapter()
 	default:
-		return NewPostgresAdapter() 
+		return NewPostgresAdapter()
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Rana718/Graft/template"
+	"github.com/Lumos-Labs-HQ/graft/template"
 	"github.com/spf13/cobra"
 )
 
@@ -17,7 +17,7 @@ var (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new Graft project",
-	Long:  `Initialize a new Graft project with database migrations and SQLC configuration.`,
+	Long:  `Initialize a new Graft project with database migrations and code generation configuration.`,
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbType := template.PostgreSQL
@@ -53,7 +53,13 @@ func init() {
 }
 
 func initializeProject(dbType template.DatabaseType) error {
-	tmpl := template.NewProjectTemplate(dbType)
+	// Detect if this is a Node.js project
+	isNodeProject := false
+	if _, err := os.Stat("package.json"); err == nil {
+		isNodeProject = true
+	}
+
+	tmpl := template.NewProjectTemplate(dbType, isNodeProject)
 
 	directories := tmpl.GetDirectoryStructure()
 	for _, dir := range directories {
@@ -84,7 +90,12 @@ func initializeProject(dbType template.DatabaseType) error {
 		}
 	}
 
-	fmt.Printf("✅ Successfully initialized Graft project with %s database support\n", dbType)
+	projectType := "Go"
+	if isNodeProject {
+		projectType = "Node.js"
+	}
+
+	fmt.Printf("✅ Successfully initialized Graft project for %s with %s database support\n", projectType, dbType)
 	fmt.Println()
 	fmt.Println("📁 Project structure created:")
 	for _, dir := range directories {
@@ -92,7 +103,14 @@ func initializeProject(dbType template.DatabaseType) error {
 	}
 	fmt.Println()
 	fmt.Println("📝 Configuration file created:")
-	fmt.Println("   graft.config.json (includes SQLC configuration)")
+	fmt.Println("   graft.config.json")
+	
+	if isNodeProject {
+		fmt.Println()
+		fmt.Println("🟢 Node.js project detected!")
+		fmt.Println("   JavaScript code generation is enabled")
+		fmt.Println("   Run 'graft gen' to generate type-safe JS code")
+	}
 	
 	if os.Getenv("DATABASE_URL") != "" {
 		fmt.Println()
@@ -109,9 +127,9 @@ func initializeProject(dbType template.DatabaseType) error {
 	
 	fmt.Println()
 	fmt.Printf("🚀 Next steps:\n")
-	fmt.Printf("   graft migrate   # Create migrations\n")
-	fmt.Printf("   graft apply     # Apply initial migrations\n")
-	fmt.Printf("   graft gen       # Generate SQLC code\n")
+	fmt.Printf("   graft migrate \"create users\"  # Create migrations\n")
+	fmt.Printf("   graft apply                    # Apply migrations\n")
+	fmt.Printf("   graft gen                      # Generate code\n")
 
 	return nil
 }

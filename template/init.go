@@ -11,20 +11,21 @@ const (
 )
 
 type ProjectTemplate struct {
-	DatabaseType DatabaseType
+	DatabaseType  DatabaseType
+	IsNodeProject bool
 }
 
 type dbConfig struct {
-	provider          string
-	engine            string
-	primaryKey        string
-	autoIncrement     string
-	textType          string
-	timestampType     string
-	timestampDefault  string
-	queryParam        string
-	returnType        string
-	envExample        string
+	provider         string
+	engine           string
+	primaryKey       string
+	autoIncrement    string
+	textType         string
+	timestampType    string
+	timestampDefault string
+	queryParam       string
+	returnType       string
+	envExample       string
 }
 
 var dbConfigs = map[DatabaseType]dbConfig{
@@ -66,42 +67,60 @@ var dbConfigs = map[DatabaseType]dbConfig{
 	},
 }
 
-func NewProjectTemplate(dbType DatabaseType) *ProjectTemplate {
-	return &ProjectTemplate{DatabaseType: dbType}
+func NewProjectTemplate(dbType DatabaseType, isNodeProject bool) *ProjectTemplate {
+	return &ProjectTemplate{
+		DatabaseType:  dbType,
+		IsNodeProject: isNodeProject,
+	}
 }
 
 func (pt *ProjectTemplate) GetGraftConfig() string {
 	cfg := dbConfigs[pt.DatabaseType]
-	sqlPackage := ""
-	if pt.DatabaseType == PostgreSQL {
-		sqlPackage = `"sql_package": "pgx/v5"`
-	}
-	
-	genSection := ""
-	if sqlPackage != "" {
-		genSection = fmt.Sprintf(`,
-  "gen": {
-    "go": {
-      %s
+
+	var genSection string
+
+	if pt.IsNodeProject {
+		genSection = `  "gen": {
+    "js": {
+      "enabled": true
     }
-  }`, sqlPackage)
+  }`
+	} else {
+		genSection = `  "gen": {
+    "go": {
+      "enabled": true
+    }
+  }`
 	}
-	
-	return fmt.Sprintf(`{
-  "version": "2",
-  "schema_path": "db/schema/schema.sql",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
+
+	configParts := []string{
+		`  "version": "2"`,
+		`  "schema_path": "db/schema/schema.sql"`,
+		`  "queries": "db/queries/"`,
+		`  "migrations_path": "db/migrations"`,
+		`  "export_path": "db/export"`,
+		fmt.Sprintf(`  "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"
-  }%s
-}`, cfg.provider, genSection)
-}
+  }`, cfg.provider),
+	}
 
-func (pt *ProjectTemplate) GetSQLCConfig() string {
-	return ""
+	if genSection != "" {
+		configParts = append(configParts, genSection)
+	}
+
+	config := "{\n"
+	for i, part := range configParts {
+		config += part
+		if i < len(configParts)-1 {
+			config += ",\n"
+		} else {
+			config += "\n"
+		}
+	}
+	config += "}"
+
+	return config
 }
 
 func (pt *ProjectTemplate) GetSchema() string {
@@ -110,7 +129,7 @@ func (pt *ProjectTemplate) GetSchema() string {
 	if pt.DatabaseType == MySQL {
 		updateClause = " ON UPDATE CURRENT_TIMESTAMP"
 	}
-	
+
 	return fmt.Sprintf(`CREATE TABLE users (
     id %s,
     name %s NOT NULL,
@@ -118,8 +137,8 @@ func (pt *ProjectTemplate) GetSchema() string {
     created_at %s NOT NULL DEFAULT %s,
     updated_at %s NOT NULL DEFAULT %s%s
 );
-`, cfg.primaryKey, cfg.textType, cfg.textType, cfg.timestampType, 
-   cfg.timestampDefault, cfg.timestampType, cfg.timestampDefault, updateClause)
+`, cfg.primaryKey, cfg.textType, cfg.textType, cfg.timestampType,
+		cfg.timestampDefault, cfg.timestampType, cfg.timestampDefault, updateClause)
 }
 
 func (pt *ProjectTemplate) GetQueries() string {
@@ -128,7 +147,7 @@ func (pt *ProjectTemplate) GetQueries() string {
 	if pt.DatabaseType == PostgreSQL {
 		param2 = "$2"
 	}
-	
+
 	return fmt.Sprintf(`-- name: GetUser :one
 SELECT id, name, email, created_at, updated_at FROM users
 WHERE id = %s LIMIT 1;
@@ -162,7 +181,7 @@ func ValidateDatabaseType(dbType string) DatabaseType {
 		"postgresql": PostgreSQL,
 		"postgres":   PostgreSQL,
 	}
-	
+
 	if dt, exists := types[dbType]; exists {
 		return dt
 	}

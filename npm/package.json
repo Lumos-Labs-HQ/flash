@@ -1,0 +1,53 @@
+{
+  "name": "graft-orm",
+  "version": "1.0.0",
+  "description": "A powerful, database-agnostic migration CLI tool with multi-database support and type-safe code generation",
+  "main": "index.js",
+  "bin": {
+    "graft": "./bin/graft.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "keywords": [
+    "orm",
+    "database",
+    "migration",
+    "sqlc",
+    "postgresql",
+    "mysql",
+    "sqlite",
+    "cli",
+    "typescript",
+    "javascript",
+    "type-safe"
+  ],
+  "author": "Rana718",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Lumos-Labs-HQ/graftt.git"
+  },
+  "homepage": "https://github.com/Lumos-Labs-HQ/graftt#readme",
+  "bugs": {
+    "url": "https://github.com/Lumos-Labs-HQ/graftt/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "scripts/",
+    "index.js",
+    "README.md"
+  ]
+}

@@ -12,7 +12,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "1.6.0"
+	Version = "2.0.0"
 )
 
 func showBanner() {
@@ -27,11 +27,11 @@ func showBanner() {
 		"║  ╚██████╔╝██║  ██║██║  ██║██║        ██║                     ║",
 		"║   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝        ╚═╝                     ║",
 		"║                                                              ║",
-		"║        🚀 Database Migration CLI Tool 🚀                     ║",
+		"║      🚀 Type-Safe ORM & Migration Tool 🚀                    ║",
 		"║                                                              ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓             ║",
 		"║     ▓                                                ▓       ║",
-		"║     ▓  Migration • Schema • Backup • SQLC           ▓        ║",
+		"║     ▓  Go • TypeScript • JavaScript • Migration    ▓        ║",
 		"║     ▓                                                ▓       ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓             ║",
 		"╚══════════════════════════════════════════════════════════════╝",
@@ -48,18 +48,30 @@ func showBanner() {
 
 var rootCmd = &cobra.Command{
 	Use:   "graft",
-	Short: "A database migration CLI tool",
+	Short: "A type-safe ORM with code generation for Go, TypeScript, and JavaScript",
 	Long: `
-Graft is a Go-based CLI tool that provides database migration capabilities 
-similar to Prisma, with support for schema comparison, backup management, 
-and optional SQLC integration.
+Graft is a powerful ORM and database toolkit that generates type-safe code 
+from your SQL schemas and queries for multiple programming languages.
 
 Features:
-- Project-aware configuration management
-- Database-agnostic design (currently supports PostgreSQL)
-- Migration tracking and validation
-- Automatic backup system
-- SQLC integration`,
+- 🎯 Type-safe code generation for Go, TypeScript, and JavaScript
+- 📦 Schema-first approach with SQL migrations
+- 🔄 Automatic migration tracking and versioning
+- 🎨 Built-in database studio for visual data management
+- 🚀 Query-based code generation (write SQL, get type-safe functions)
+- 💾 Backup and restore capabilities
+- 🔌 Support for PostgreSQL, MySQL, and SQLite
+- 🛠️ CLI tools for complete database workflow
+
+Supported Languages:
+- Go (native type-safe structs and methods)
+- TypeScript (with full type definitions)
+- JavaScript (with JSDoc comments)
+
+Database Support:
+- PostgreSQL (with advanced features)
+- MySQL (full compatibility)
+- SQLite (embedded databases)`,
 
 	Run: func(cmd *cobra.Command, args []string) {
 		showVersion, _ := cmd.Flags().GetBool("version")

@@ -1,111 +1,40 @@
 package cmd
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"strings"
-
-	"github.com/Rana718/Graft/internal/config"
-	"github.com/Rana718/Graft/internal/database"
+	"github.com/Lumos-Labs-HQ/graft/internal/utils"
 	"github.com/spf13/cobra"
 )
 
 var rawCmd = &cobra.Command{
-	Use:   "raw <sql-file>",
-	Short: "Execute a raw SQL file against the database",
+	Use:   "raw <sql-query-or-file>",
+	Short: "Execute raw SQL query or SQL file against the database",
 	Long: `
-Execute a raw SQL file directly against the database using the configured database adapter.
+Execute a raw SQL query or SQL file directly against the database using the configured database adapter.
+
+You can either:
+  1. Pass a SQL file path
+  2. Pass a SQL query directly (use -q flag)
+  3. Pass a SQL query inline (without flag if it starts with SELECT/INSERT/UPDATE/DELETE)
 	
 Examples:
   graft raw script.sql
-  graft raw queries/update_users.sql`,
+  graft raw queries/update_users.sql
+  graft raw -q "SELECT * FROM users"
+  graft raw "SELECT * FROM users WHERE id = 1"
+  graft raw --file script.sql`,
 	Args: cobra.ExactArgs(1),
-	RunE: runRaw,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return utils.RunRaw(cmd, args, rawQueryFlag, rawFileFlag)
+	},
 }
+
+var (
+	rawQueryFlag bool
+	rawFileFlag  bool
+)
 
 func init() {
 	rootCmd.AddCommand(rawCmd)
-}
-
-func runRaw(cmd *cobra.Command, args []string) error {
-	sqlFile := args[0]
-
-	if _, err := os.Stat(sqlFile); os.IsNotExist(err) {
-		return fmt.Errorf("SQL file not found: %s", sqlFile)
-	}
-
-	sqlContent, err := os.ReadFile(sqlFile)
-	if err != nil {
-		return fmt.Errorf("failed to read SQL file: %w", err)
-	}
-
-	if len(sqlContent) == 0 {
-		return fmt.Errorf("SQL file is empty: %s", sqlFile)
-	}
-
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	adapter := database.NewAdapter(cfg.Database.Provider)
-
-	dbURL, err := cfg.GetDatabaseURL()
-	if err != nil {
-		return fmt.Errorf("failed to get database URL: %w", err)
-	}
-
-	ctx := context.Background()
-	if err := adapter.Connect(ctx, dbURL); err != nil {
-		return fmt.Errorf("failed to connect to database: %w", err)
-	}
-	defer adapter.Close()
-
-	fmt.Printf("📄 Executing SQL file: %s\n", sqlFile)
-	fmt.Printf("🎯 Database: %s\n", cfg.Database.Provider)
-	fmt.Println()
-
-	statements := splitSQLStatements(string(sqlContent))
-
-	if len(statements) == 0 {
-		return fmt.Errorf("no SQL statements found in file")
-	}
-
-	fmt.Printf("📝 Found %d SQL statement(s)\n", len(statements))
-	fmt.Println()
-
-	for i, statement := range statements {
-		statement = strings.TrimSpace(statement)
-		if statement == "" {
-			continue
-		}
-
-		fmt.Printf("⚡ Executing statement %d...\n", i+1)
-
-		if err := adapter.ExecuteMigration(ctx, statement); err != nil {
-			return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
-		}
-
-		fmt.Printf("✅ Statement %d executed successfully\n", i+1)
-	}
-
-	fmt.Println()
-	fmt.Printf("🎉 All statements executed successfully!\n")
-	return nil
-}
-
-func splitSQLStatements(content string) []string {
-	var statements []string
-
-	parts := strings.Split(content, ";")
-
-	for _, part := range parts {
-		statement := strings.TrimSpace(part)
-		if statement != "" && !strings.HasPrefix(statement, "--") {
-			statements = append(statements, statement)
-		}
-	}
-
-	return statements
+	rawCmd.Flags().BoolVarP(&rawQueryFlag, "query", "q", false, "Treat argument as SQL query instead of file")
+	rawCmd.Flags().BoolVar(&rawFileFlag, "file", false, "Treat argument as file path (default if file exists)")
 }

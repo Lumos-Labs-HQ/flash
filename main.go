@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Rana718/Graft/cmd"
+	"github.com/Lumos-Labs-HQ/graft/cmd"
 )
 
 func main() {
