@@ -4,6 +4,5 @@ CREATE TABLE users (
   email VARCHAR(255) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  testcol VARCHAR(255),
-  flashh TEXT
+  testcol TEXT
 );
