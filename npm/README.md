@@ -550,8 +550,8 @@ const binaryPath = flash.getBinaryPath();
 ## 📚 Examples
 
 Check out complete examples:
-- [TypeScript Example](https://github.com/Lumos-Labs-HQ/FlashORM/tree/main/example/ts)
-- [Go Example](https://github.com/Lumos-Labs-HQ/FlashORM/tree/main/example/go)
+- [TypeScript Example](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/ts)
+- [Go Example](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/go)
 
 ## 🐛 Troubleshooting
 
@@ -580,10 +580,10 @@ flash studio --port 3000
 
 ## 📖 Documentation
 
-- [Full Documentation](https://github.com/Lumos-Labs-HQ/FlashORM)
-- [How It Works](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/HOW_IT_WORKS.md)
-- [Technology Stack](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/TECHNOLOGY_STACK.md)
-- [Contributing](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/CONTRIBUTING.md)
+- [Full Documentation](https://github.com/Lumos-Labs-HQ/flash)
+- [How It Works](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/TECHNOLOGY_STACK.md)
+- [Contributing](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/CONTRIBUTING.md)
 
 ## 🌟 Key Highlights
 
@@ -596,6 +596,6 @@ flash studio --port 3000
 
 ## 📄 License
 
-MIT License - see [LICENSE](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/LICENSE)
+MIT License - see [LICENSE](https://github.com/Lumos-Labs-HQ/flash/blob/main/LICENSE)
 
 ---

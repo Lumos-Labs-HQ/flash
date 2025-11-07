@@ -331,20 +331,20 @@ npm install -g FlashORM-orm
 
 ### Go
 ```bash
-go install github.com/Lumos-Labs-HQ/FlashORM@latest
+go install github.com/Lumos-Labs-HQ/flash@latest
 ```
 
 ### Binary Download
-Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/FlashORM/releases/tag/v1.7.0)
+Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/flash/releases/tag/v1.7.0)
 
 ## 📚 Documentation
 
-- [Main Documentation](https://github.com/Lumos-Labs-HQ/FlashORM)
+- [Main Documentation](https://github.com/Lumos-Labs-HQ/flash)
 - [NPM Package README](https://www.npmjs.com/package/FlashORM-orm)
-- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/FlashORM/tree/main/example/ts)
-- [How It Works](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/HOW_IT_WORKS.md)
-- [Technology Stack](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/TECHNOLOGY_STACK.md)
-- [Contributing Guide](https://github.com/Lumos-Labs-HQ/FlashORM/blob/main/docs/CONTRIBUTING.md)
+- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/ts)
+- [How It Works](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/TECHNOLOGY_STACK.md)
+- [Contributing Guide](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/CONTRIBUTING.md)
 
 ## 🙏 Acknowledgments
 
@@ -432,17 +432,17 @@ Special thanks to:
 ## 💬 Feedback
 
 We'd love to hear your feedback! Please:
-- 🐛 [Report bugs](https://github.com/Lumos-Labs-HQ/FlashORM/issues)
-- 💡 [Request features](https://github.com/Lumos-Labs-HQ/FlashORM/issues)
-- ⭐ [Star the repo](https://github.com/Lumos-Labs-HQ/FlashORM)
+- 🐛 [Report bugs](https://github.com/Lumos-Labs-HQ/flash/issues)
+- 💡 [Request features](https://github.com/Lumos-Labs-HQ/flash/issues)
+- ⭐ [Star the repo](https://github.com/Lumos-Labs-HQ/flash)
 - 🐦 Share on social media
 
 ---
 
-**Download:** [v2.0.0 Release](https://github.com/Lumos-Labs-HQ/FlashORM/releases/tag/v2.0.0)
+**Download:** [v2.0.0 Release](https://github.com/Lumos-Labs-HQ/flash/releases/tag/v2.0.0)
 
 **NPM:** `npm install -g FlashORM-orm`
 
-**Go:** `go install github.com/Lumos-Labs-HQ/FlashORM@latest`
+**Go:** `go install github.com/Lumos-Labs-HQ/flash@latest`
 
 **Try FlashORM Studio:** `FlashORM studio`

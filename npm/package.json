@@ -26,11 +26,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Lumos-Labs-HQ/FlashORM.git"
+    "url": "https://github.com/Lumos-Labs-HQ/flash.git"
   },
-  "homepage": "https://github.com/Lumos-Labs-HQ/FlashORM#readme",
+  "homepage": "https://github.com/Lumos-Labs-HQ/flash#readme",
   "bugs": {
-    "url": "https://github.com/Lumos-Labs-HQ/FlashORM/issues"
+    "url": "https://github.com/Lumos-Labs-HQ/flash/issues"
   },
   "engines": {
     "node": ">=14.0.0"
