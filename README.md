@@ -1,6 +1,6 @@
-# Graft - Database Migration CLI Tool
+﻿# Graft - Database ORM
 
-A powerful, database-agnostic migration CLI tool built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
+A powerful, database-agnostic ORM built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
 
 ## ✨ Features
 
@@ -8,13 +8,13 @@ A powerful, database-agnostic migration CLI tool built in Go that provides Prism
 - 🔄 **Migration Management**: Create, apply, and track migrations
 - 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
 - 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability
-- 🔧 **Code Generation**: Generate type-safe code for Go (SQLC) and JavaScript/TypeScript
+- 🔧 **Code Generation**: Generate type-safe code for Go and JavaScript/TypeScript
 - 🟢 **Node.js Support**: First-class JavaScript/TypeScript support with type definitions
 - 🎨 **Enum Support**: PostgreSQL ENUM types with full migration support
 - ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
 - 🔍 **Schema Introspection**: Pull schema from existing databases
-- 🗺️ **Schema Visualization**: Visual database diagram with relationships (GoLand/DataGrip style)
+- 📊 **Graft Studio**: similar to Prisma Studio, where users can view and edit data visually
 - 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
 
 ## 📊 Performance Benchmarks
@@ -53,37 +53,7 @@ make build-all
 
 ### Download Binary
 Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graftt/releases).
-# Graft - Database Migration CLI Tool
-
-A powerful, database-agnostic migration CLI tool built in Go that provides Prisma-like functionality with multi-database support and SQLC integration.
-
-## ✨ Features
-
-- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite
-- 🔄 **Migration Management**: Create, apply, and track migrations
-- 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
-- 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability
-- 🔧 **SQLC Integration**: Generate Go types from SQL schemas
-- ⚡ **Fast & Reliable**: Built in Go for performance and reliability
-- 🎯 **Prisma-like Commands**: Familiar CLI interface
-
-## 🚀 Installation
-
-### Using Go Install (Recommended)
-```bash
-go install github.com/Lumos-Labs-HQ/graft@latest
-```
-
-### From Source
-```bash
-git clone https://github.com/Lumos-Labs-HQ/graftt.git
-cd Graft
-make build-all
-# Binary will be in build/ directory
-```
-
-### Download Binary
-Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/graftt/releases) for your platform.
+# Graft - Database ORM
 
 ## 🏁 Quick Start
 
@@ -125,55 +95,16 @@ graft status
 | `graft migrate <name>` | Create a new migration file |
 | `graft apply` | Apply pending migrations with transaction safety |
 | `graft status` | Show migration status |
-| `graft studio` | Open visual database editor (like Prisma Studio) |
 | `graft pull` | Extract schema from existing database |
+| `graft studio` | 
 | `graft export [format]` | Export database (JSON, CSV, SQLite) |
 | `graft reset` | Reset database (⚠️ destructive) |
 | `graft gen` | Generate SQLC types |
 | `graft raw <sql>` | Execute raw SQL |
 
 ### Global Flags
-- `--config` - Specify config file path
 - `--force` - Skip confirmation prompts
 - `--help` - Show help
-
-## 🎨 Graft Studio
-
-Visual database editor with a beautiful dark UI, similar to Prisma Studio.
-
-```bash
-# Start studio (uses DATABASE_URL from .env)
-graft studio
-
-# Use custom database URL
-graft studio --db "postgres://user:pass@localhost:5432/mydb"
-
-# Custom port
-graft studio --port 3000
-```
-
-**Features:**
-- 📊 Browse all tables with row counts
-- ✏️ Inline editing (double-click cells)
-- 💾 Batch save changes
-- ☑️ Multi-select rows
-- 🗑️ Delete selected rows
-- 🔍 Search tables
-- 🎨 Dark theme UI
-- 🗺️ **Schema Visualization** - Visual database diagram with relationships (GoLand/DataGrip style)
-
-**Database URL Priority:** `--db` flag → `DATABASE_URL` env → `.env` file
-
-### Schema Visualization
-
-Navigate to `http://localhost:5555/schema` to view your database schema as a visual diagram:
-
-- 📋 All tables with columns and types
-- 🔑 Primary key indicators
-- 🔗 Foreign key relationships with arrows
-- 🎯 Auto-layout in organized grid
-- 🖱️ Interactive hover effects
-- 📐 Professional GoLand/DataGrip style design
 
 ## 🗄️ Database Support
 
@@ -201,13 +132,19 @@ Graft uses `graft.config.json` for configuration:
 
 ```json
 {
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
+  },
+  "gen": {
+    "js": {
+      "enabled": true
+    }
   }
 }
 ```
@@ -219,7 +156,6 @@ After running `graft init`:
 ```
 your-project/
 ├── graft.config.json      # Graft configuration
-├── sqlc.yml              # SQLC configuration
 ├── .env                  # Environment variables
 └── db/
     ├── schema/
@@ -301,6 +237,28 @@ Migrations: 3 total, 2 applied, 1 pending
 │ 20251021_add_user_roles         │ Pending │ -                   │
 └─────────────────────────────────┴─────────┴─────────────────────┘
 ```
+
+## Studio (visual editor)
+
+Start the optional Studio UI:
+
+```bash
+graft studio
+```
+
+For open Graft studio without projct init
+
+```bash
+graft studio --db "postgresql://jack:secret123@localhost:5432/mydb"
+```
+
+Open http://localhost:5555 by default (or the port you pass with `--port`).
+
+### Troubleshooting
+
+- Database connection errors: verify `DATABASE_URL` and network access.
+- Migration failures: inspect the migration SQL file, fix and re-run `graft apply`.
+
 
 ## 📤 Export System
 
@@ -412,7 +370,6 @@ graft raw scripts/cleanup.sql
 ## 🚀 Roadmap & Future Features
 
 ### Coming Soon
-- 🟨 **JavaScript/TypeScript Support**: Use Graft with Node.js projects
 - 🐍 **Python Support**: Use Graft with Python projects
 
 ## 🐛 Troubleshooting
@@ -435,13 +392,6 @@ Error: failed to connect to database
 - Check the migration SQL syntax
 - Verify table/column names exist
 - Fix the migration file and run `graft apply` again
-
-**SQLC Not Found**
-```bash
-Error: sqlc not found in PATH
-```
-- Install SQLC: https://docs.sqlc.dev/en/latest/overview/install.html
-- Or remove `sqlc_config_path` from config
 
 ## 🤝 Contributing
 
@@ -474,3 +424,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - Inspired by [Prisma](https://www.prisma.io/) migration system
 - Built with [Cobra](https://github.com/spf13/cobra) CLI framework
 - Database drivers: [pgx](https://github.com/jackc/pgx), [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql), [go-sqlite3](https://github.com/mattn/go-sqlite3)
+
+---

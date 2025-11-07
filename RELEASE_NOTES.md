@@ -1,10 +1,104 @@
-# Graft v1.7.0 Release Notes
+# Graft v2.0.0 Release Notes
 
-## 🎉 Major Release: Node.js/TypeScript Support & Performance Improvements
+## 🎉 Major Release: Graft Studio, Node.js/TypeScript Support & Massive Performance Improvements
 
-We're excited to announce Graft v1.7.0, a major release that brings first-class Node.js/TypeScript support, significant performance improvements, and enhanced developer experience!
+We're excited to announce Graft v2.0.0, a groundbreaking release that introduces **Graft Studio** (visual database editor), first-class Node.js/TypeScript support, raw SQL command execution, and significant performance improvements!
 
 ## 🚀 What's New
+
+### 🎨 Graft Studio - Visual Database Editor
+
+**The biggest feature in v2.0.0!** A powerful web-based database management interface with three interactive pages.
+
+**Features:**
+- ✅ **Data Browser** - View, edit, and manage table data with real-time updates
+- ✅ **SQL Editor** - Execute SQL queries with CodeMirror syntax highlighting
+- ✅ **Schema Visualization** - Interactive database diagram with React + ReactFlow
+- ✅ Inline cell editing with double-click
+- ✅ Pagination and search across all tables
+- ✅ CSV export from SQL query results
+- ✅ Auto-opens in browser on launch
+- ✅ Similar to Prisma Studio but faster and lighter
+
+**Usage:**
+```bash
+# Launch studio (auto-detects config)
+graft studio
+
+# Custom port
+graft studio --port 3000
+
+# Connect to any database directly
+graft studio --db "postgres://user:pass@localhost:5432/mydb"
+```
+
+**Studio Pages:**
+
+1. **Data Browser (`/`)** - Supabase-like table editor
+   - Real-time inline editing
+   - Batch save changes
+   - Add/delete rows with modals
+   - Foreign key relationship hints
+   - Pagination (50 rows per page)
+
+2. **SQL Editor (`/sql`)** - Execute custom queries
+   - CodeMirror with Material Darker theme
+   - Ctrl+Enter to execute
+   - Split-pane resizable interface
+   - CSV export from results
+   - Query history
+
+3. **Schema Visualization (`/schema`)** - Interactive ER diagram
+   - React + ReactFlow rendering
+   - Automatic layout with Dagre algorithm
+   - Drag-and-drop tables
+   - Zoom and pan controls
+   - Foreign key arrows
+   - MiniMap for navigation
+
+**Performance:**
+- 95% fewer database queries with batch optimization
+- Connection pooling for PostgreSQL
+- Prepared statement caching
+- Single query for all table row counts
+
+### ⚡ Raw SQL Command
+
+Execute raw SQL files or queries directly against your database!
+
+**Features:**
+- ✅ Execute SQL files
+- ✅ Execute inline SQL queries
+- ✅ Auto-detection (file vs query)
+- ✅ Formatted table output for SELECT queries
+- ✅ Transaction support for DML/DDL statements
+- ✅ Multi-statement execution
+
+**Usage:**
+```bash
+# Execute SQL file
+graft raw script.sql
+graft raw migrations/seed.sql
+
+# Execute inline query
+graft raw -q "SELECT * FROM users WHERE active = true"
+graft raw "SELECT COUNT(*) FROM orders"
+
+# Force file mode
+graft raw --file queries/complex_query.sql
+```
+
+**Output Formatting:**
+- SELECT queries: Beautiful table output with columns and rows
+- DML/DDL statements: Success confirmation with execution count
+- Errors: Clear error messages with line numbers
+
+**Use Cases:**
+- Quick database queries without writing code
+- Testing SQL before adding to migrations
+- Running seed scripts
+- Database maintenance tasks
+- Ad-hoc data analysis
 
 ### 🟢 Node.js/TypeScript Support
 
@@ -63,16 +157,43 @@ npm install -g graft-orm
 
 ### ⚡ Performance Improvements
 
-Graft now significantly outperforms popular ORMs:
+Graft v2.0.0 now significantly outperforms popular ORMs:
 
-| Operation | Graft | Drizzle | Prisma | Improvement |
-|-----------|-------|---------|--------|-------------|
+| Operation | Graft v2.0 | Drizzle | Prisma | Improvement |
+|-----------|------------|---------|--------|-------------|
 | Insert 1000 Users | **158ms** | 224ms | 230ms | **1.4x faster** |
 | Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms | **1.3x faster** |
 | Complex Query x500 | **4071ms** | 12500ms | 56322ms | **3x-14x faster** |
 | Mixed Workload x1000 | **186ms** | 1174ms | 10863ms | **6x-58x faster** |
 | Stress Test x2000 | **122ms** | 160ms | 223ms | **1.3x-1.8x faster** |
 | **TOTAL** | **6947ms** | **17149ms** | **71551ms** | **2.5x-10x faster** |
+
+**Performance Optimizations:**
+
+1. **Studio Optimizations**
+   - Batch query optimization (95% fewer queries)
+   - Single query for all table row counts
+   - Connection pooling with pgxpool
+   - Prepared statement caching
+   - Efficient pagination
+
+2. **Code Generation**
+   - Zero runtime overhead
+   - Compiled queries at generation time
+   - Type-safe without reflection
+   - Minimal memory allocation
+
+3. **Database Adapters**
+   - PostgreSQL: pgxpool with Supabase/PgBouncer compatibility
+   - MySQL: Optimized connection pooling
+   - SQLite: In-memory caching for metadata
+   - Transaction batching for migrations
+
+4. **Query Execution**
+   - Prepared statement caching
+   - Batch operations for bulk data
+   - Index-aware query generation
+   - Streaming for large exports
 
 ### 🎨 PostgreSQL ENUM Support
 
@@ -147,6 +268,21 @@ Improved export functionality with better data handling:
 
 ## 🔧 Improvements
 
+### Graft Studio
+- **Web Interface**: Full-featured visual database editor
+- **Three Interactive Pages**: Data browser, SQL editor, and schema visualization
+- **React Integration**: Modern React 18.2.0 for schema diagrams
+- **Embedded Assets**: All frontend code embedded in single binary
+- **Auto-Browser**: Automatically opens in default browser
+- **Connection Pooling**: Optimized for high-performance queries
+
+### Raw SQL Execution
+- **File Support**: Execute .sql files directly
+- **Inline Queries**: Run queries from command line
+- **Auto-Detection**: Smart detection of file vs query
+- **Formatted Output**: Beautiful table formatting for results
+- **Multi-Statement**: Execute multiple SQL statements in one file
+
 ### Code Generation
 - **JavaScript/TypeScript Generator**: New `jsgen` package for Node.js code generation
 - **Type Safety**: Full TypeScript type definitions for all queries
@@ -163,10 +299,13 @@ Improved export functionality with better data handling:
 - **Auto-Detection**: Automatically detects Node.js projects
 - **Flexible Config**: Support for both Go and JS code generation
 - **Environment Variables**: Better .env file handling
+- **Gen Config**: New `gen.js` and `gen.go` configuration sections
 
 ### Documentation
 - **Complete Examples**: Full TypeScript and JavaScript examples
 - **API Documentation**: Comprehensive API docs for generated code
+- **Studio Guide**: Complete guide for using Graft Studio
+- **Technology Stack**: Detailed documentation of all dependencies
 - **Migration Guide**: Guide for migrating from other ORMs
 - **Performance Guide**: Tips for optimal performance
 
@@ -180,6 +319,8 @@ Improved export functionality with better data handling:
 - Fixed postinstall script for Bun users
 - Fixed migration checksum calculation
 - Fixed concurrent migration detection
+- Fixed connection pooling on Supabase
+- Fixed raw command file detection on Windows
 
 ## 📦 Installation
 
@@ -196,60 +337,38 @@ go install github.com/Lumos-Labs-HQ/graft@latest
 ### Binary Download
 Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/graft/releases/tag/v1.7.0)
 
-## 🔄 Migration Guide
-
-### From v1.6.x to v1.7.0
-
-No breaking changes! Simply upgrade:
-
-```bash
-# NPM
-npm install -g graft-orm@latest
-
-# Go
-go install github.com/Lumos-Labs-HQ/graft@latest
-```
-
-### Enabling JavaScript Code Generation
-
-Update your `graft.config.json`:
-
-```json
-{
-  "gen": {
-    "js": {
-      "enabled": true,
-      "out": "graft_gen"
-    }
-  }
-}
-```
-
-Or run `graft init` in a Node.js project (with `package.json`).
-
 ## 📚 Documentation
 
 - [Main Documentation](https://github.com/Lumos-Labs-HQ/graft)
 - [NPM Package README](https://www.npmjs.com/package/graft-orm)
 - [TypeScript Examples](https://github.com/Lumos-Labs-HQ/graft/tree/main/example/ts)
 - [How It Works](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/TECHNOLOGY_STACK.md)
 - [Contributing Guide](https://github.com/Lumos-Labs-HQ/graft/blob/main/docs/CONTRIBUTING.md)
 
 ## 🙏 Acknowledgments
 
 Special thanks to:
 - All contributors who helped with testing and feedback
-- The Go and Node.js communities
-- SQLC project for inspiration
+- Prisma Studio for UI inspiration
 
-## 🔮 What's Next (v1.8.0)
+## 🔮 What's Next (v2.1.0)
 
-- 🐍 Python code generation support
+- 🎯 Studio: Table relationship editor
+- � Studio: Advanced search and filters
+- �🐍 Python code generation support
 - 🦀 Rust code generation support
 
 ## 📝 Full Changelog
 
 ### Added
+- **Graft Studio**: Complete visual database editor with 3 pages
+  - Data browser with inline editing (`internal/studio`)
+  - SQL editor with CodeMirror syntax highlighting
+  - Schema visualization with React + ReactFlow
+  - Fiber v2.52.9 backend with embedded templates
+  - RESTful API endpoints for all operations
+- **Raw SQL Command**: Execute SQL files or inline queries (`cmd/raw.go`)
 - Node.js/TypeScript code generation (`internal/jsgen`)
 - NPM package distribution (`npm/`)
 - PostgreSQL ENUM support with TypeScript types
@@ -260,6 +379,12 @@ Special thanks to:
 - GitHub Actions workflow for NPM releases
 - Comprehensive TypeScript examples
 - Programmatic API for Node.js
+- Studio performance optimizations (batch queries, connection pooling)
+- React 18.2.0 integration for schema diagrams
+- ReactFlow 12.8.4 with Dagre layout algorithm
+- CodeMirror 5.65.2 for SQL editing
+- Iconify for modern icon system
+- Embedded file system for single binary distribution
 
 ### Changed
 - Improved schema introspection algorithm
@@ -267,6 +392,9 @@ Special thanks to:
 - Enhanced export system performance
 - Updated documentation with TypeScript examples
 - Improved CLI output formatting
+- Studio uses connection pooling for better performance
+- ReactFlow-based schema visualization replaces canvas-based approach
+- Embedded assets for zero external dependencies
 
 ### Fixed
 - Transaction rollback in MySQL adapter
@@ -277,19 +405,29 @@ Special thanks to:
 - Postinstall script for Bun
 - Migration checksum calculation
 - Concurrent migration detection
+- Studio connection pooling on Supabase/PgBouncer
+- ReactFlow layout for large schemas (100+ tables)
+- CodeMirror Material Darker theme loading
+- Raw command file detection on Windows paths
 
 ### Performance
-- 2.5x faster than Drizzle
-- 10x faster than Prisma
-- Optimized query execution
-- Reduced memory usage
-- Faster migration application
+- 2.5x faster than Drizzle on average
+- 10x faster than Prisma on average
+- Optimized query execution with prepared statements
+- Reduced memory usage in code generation
+- Faster migration application with transaction batching
+- Studio: 95% fewer database queries with batch optimization
+- Studio: Single query for all table row counts
+- Studio: Connection pooling with pgxpool
+- Raw command: Efficient streaming for large result sets
 
 ## 🐛 Known Issues
 
 - Bun users need to run `bun pm trust graft-orm` after installation
 - Windows ARM64 support is experimental
 - MySQL ENUM support is limited (use VARCHAR with CHECK constraint)
+- Studio: Large schemas (200+ tables) may have slow initial load
+- Studio: No authentication (local development tool only)
 
 ## 💬 Feedback
 
@@ -301,8 +439,10 @@ We'd love to hear your feedback! Please:
 
 ---
 
-**Download:** [v1.7.0 Release](https://github.com/Lumos-Labs-HQ/graft/releases/tag/v1.7.0)
+**Download:** [v2.0.0 Release](https://github.com/Lumos-Labs-HQ/graft/releases/tag/v2.0.0)
 
 **NPM:** `npm install -g graft-orm`
 
 **Go:** `go install github.com/Lumos-Labs-HQ/graft@latest`
+
+**Try Graft Studio:** `graft studio`

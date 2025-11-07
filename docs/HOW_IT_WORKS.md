@@ -1,6 +1,6 @@
 # How Graft Works
 
-This document explains the internal architecture and workflow of Graft, a database migration CLI tool built in Go.
+This document explains the internal architecture and workflow of Graft, a database ORM built in Go.
 
 ## Table of Contents
 
@@ -13,6 +13,12 @@ This document explains the internal architecture and workflow of Graft, a databa
 - [Export System](#export-system)
 - [Configuration System](#configuration-system)
 - [Template System](#template-system)
+- [Code Generation System](#code-generation-system)
+- [NPM Distribution](#npm-distribution)
+- [Graft Studio Architecture](#graft-studio-architecture)
+- [Raw SQL Execution System](#raw-sql-execution-system)
+- [Error Handling and Logging](#error-handling-and-logging)
+- [Performance Considerations](#performance-considerations)
 
 ## Architecture Overview
 
@@ -51,10 +57,11 @@ Built using the [Cobra](https://github.com/spf13/cobra) framework, the CLI layer
 - `apply`: Safe migration execution with transaction rollback
 - `status`: Migration status display with detailed information
 - `export`: Database export operations (JSON, CSV, SQLite)
-- `gen`: SQLC code generation
+- `gen`: Code generation (Go and JavaScript/TypeScript)
 - `reset`: Database reset with export option
 - `pull`: Schema extraction from existing database
 - `raw`: Raw SQL execution
+- `studio`: Visual database editor
 
 ### 2. Configuration System (`internal/config/`)
 
@@ -63,10 +70,20 @@ Uses [Viper](https://github.com/spf13/viper) for configuration management:
 ```go
 type Config struct {
     SchemaPath     string   `json:"schema_path"`
+    QueriesPath    string   `json:"queries"`
     MigrationsPath string   `json:"migrations_path"`
-    SqlcConfigPath string   `json:"sqlc_config_path"`
     ExportPath     string   `json:"export_path"`
     Database       Database `json:"database"`
+    Gen            Gen      `json:"gen"`
+}
+
+type Gen struct {
+    JS JSConfig `json:"js"`
+}
+
+type JSConfig struct {
+    Enabled bool   `json:"enabled"`
+    Out     string `json:"out"`
 }
 ```
 
@@ -444,13 +461,20 @@ export GRAFT_SCHEMA_PATH="custom/schema.sql"
 
 ```json
 {
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "postgresql",
     "url_env": "DATABASE_URL"
+  },
+  "gen": {
+    "js": {
+      "enabled": true,
+      "out": "graft_gen"
+    }
   }
 }
 ```
@@ -468,34 +492,38 @@ type ProjectTemplate struct {
 
 func (pt *ProjectTemplate) GetGraftConfig() string {
     return fmt.Sprintf(`{
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
-  "sqlc_config_path": "sqlc.yml",
   "export_path": "db/export",
   "database": {
     "provider": "%s",
     "url_env": "DATABASE_URL"
+  },
+  "gen": {
+    "js": {
+      "enabled": false
+    }
   }
 }`, pt.DatabaseType)
 }
 ```
 
-### SQLC Integration Templates
+### Code Generation Templates
 
-Generates SQLC configuration for each database type:
+Graft automatically detects project type and generates appropriate code:
 
-**PostgreSQL SQLC Config:**
-```yaml
-version: "2"
-sql:
-  - engine: "postgresql"
-    queries: "db/queries/"
-    schema: "db/schema/"
-    gen:
-      go:
-        package: "graft"
-        out: "graft_gen/"
-```
+**Go Projects:**
+- Uses custom Go generator (`internal/gogen/`)
+- Generates type-safe structs and query methods
+- Output: `graft_gen/` directory
+
+**Node.js Projects:**
+- Detects `package.json` presence
+- Uses custom JavaScript/TypeScript generator (`internal/jsgen/`)
+- Generates TypeScript definitions and JavaScript code
+- Output: Configured via `gen.js.out`
 
 ## Error Handling and Logging
 
@@ -551,26 +579,55 @@ fmt.Println("   Transaction rolled back. Fix the error and run 'graft apply' aga
 - Efficient JSON marshaling
 - Resource cleanup with defer statements
 
-This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems.
+## Code Generation System
 
-## JavaScript/TypeScript Code Generation
+### Go Code Generator (`internal/gogen/`)
 
-### 7. JavaScript Generator (`internal/jsgen/`)
+Graft includes a custom Go code generator that creates type-safe database code:
+
+**Generator Components:**
+- **Schema Parser**: Parses SQL schema to extract table definitions
+- **Query Parser**: Parses query files with special annotations (`:one`, `:many`, `:exec`)
+- **Type Generator**: Generates Go structs from tables
+- **Method Generator**: Generates query methods
+
+**Generated Output:**
+```go
+// graft_gen/models.go
+type Users struct {
+    ID        sql.NullInt32  `json:"id"`
+    Name      string         `json:"name"`
+    Email     string         `json:"email"`
+    CreatedAt time.Time      `json:"created_at"`
+}
+
+type Queries struct {
+    db *sql.DB
+}
+
+func (q *Queries) GetUser(ctx context.Context, id int32) (*Users, error) {
+    // Generated implementation
+}
+```
+
+### JavaScript/TypeScript Generator (`internal/jsgen/`)
+
+Graft includes a custom JavaScript/TypeScript code generator for Node.js projects:
 
 Graft includes a custom JavaScript/TypeScript code generator for Node.js projects:
 
 **Generator Components:**
 - **Schema Parser**: Parses SQL schema to extract table definitions
-- **Query Parser**: Parses SQLC-style query files
+- **Query Parser**: Parses query files with special annotations (`:one`, `:many`, `:exec`)
 - **Type Generator**: Generates TypeScript type definitions
 - **Code Generator**: Generates JavaScript query methods
 
 **Generation Process:**
 1. **Project Detection**: Checks for `package.json` to detect Node.js projects
 2. **Schema Parsing**: Extracts tables, columns, and types from SQL schema
-3. **Query Parsing**: Parses query files with SQLC annotations
+3. **Query Parsing**: Parses query files with special annotations (`:one`, `:many`, `:exec`)
 4. **Type Mapping**: Maps SQL types to TypeScript types
-5. **Code Generation**: Generates type-safe JavaScript code
+5. **Code Generation**: Generates type-safe JavaScript code with TypeScript definitions
 
 **Type Mapping:**
 ```go
@@ -597,15 +654,17 @@ graft_gen/
 
 **Query Method Generation:**
 ```javascript
-// Generated query method with prepared statement caching
+// Generated query method
 async getUser(id) {
-  let stmt = this._stmts.get('getUser');
-  if (!stmt) {
-    stmt = await this.db.prepare('SELECT * FROM users WHERE id = $1');
-    this._stmts.set('getUser', stmt);
-  }
-  const result = await stmt.get(id);
-  return result || null;
+  const query = 'SELECT * FROM users WHERE id = $1';
+  const result = await this.db.query(query, [id]);
+  return result.rows[0] || null;
+}
+
+async listUsers() {
+  const query = 'SELECT * FROM users ORDER BY created_at DESC';
+  const result = await this.db.query(query);
+  return result.rows;
 }
 ```
 
@@ -636,6 +695,32 @@ export interface Users {
   role: UserRole;
 }
 ```
+
+**Query Annotations:**
+
+Graft uses special SQL comments to generate typed methods:
+
+```sql
+-- name: GetUser :one
+SELECT * FROM users WHERE id = $1;
+
+-- name: ListUsers :many
+SELECT * FROM users ORDER BY created_at DESC;
+
+-- name: CreateUser :one
+INSERT INTO users (name, email) 
+VALUES ($1, $2) 
+RETURNING *;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1;
+```
+
+- `:one` - Returns single row or null
+- `:many` - Returns array of rows
+- `:exec` - Returns affected row count
+
+This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems with support for both Go and Node.js ecosystems.
 
 ## NPM Distribution
 
@@ -742,4 +827,388 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
-This architecture ensures Graft is scalable, maintainable, and extensible while providing a robust and safe migration experience across multiple database systems, with first-class support for both Go and Node.js ecosystems.
+## Graft Studio Architecture
+
+### Overview
+
+Graft Studio is a web-based database management interface built with Go Fiber and vanilla JavaScript, providing three main interfaces for database interaction.
+
+### Server Architecture
+
+**Technology Stack:**
+- **Backend**: Go Fiber web framework
+- **Frontend**: Vanilla JavaScript, CodeMirror
+- **Templates**: Go HTML templates with embed.FS
+- **Static Files**: Embedded in binary using Go embed
+
+**Server Initialization:**
+```go
+func NewServer(cfg *config.Config, port int) *Server {
+    adapter := database.NewAdapter(cfg.Database.Provider)
+    
+    dbURL, _ := cfg.GetDatabaseURL()
+    adapter.Connect(context.Background(), dbURL)
+    
+    engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
+    app := fiber.New(fiber.Config{
+        Views: engine,
+    })
+    
+    server := &Server{
+        app:     app,
+        service: NewService(adapter),
+        port:    port,
+    }
+    
+    server.setupRoutes()
+    return server
+}
+```
+
+### Studio Components
+
+#### 1. Data Browser (`/`)
+
+**Purpose**: Interactive table browser for viewing and editing data
+
+**Workflow:**
+1. **Load Tables**: Fetch all table names with row counts
+2. **Display Table**: Show paginated data with columns
+3. **Inline Editing**: Double-click cells to edit
+4. **Batch Save**: Collect changes and save in transaction
+5. **Add/Delete**: Modal forms for adding rows, bulk delete
+
+**Key Methods:**
+```go
+func (s *Service) GetTables() ([]TableInfo, error) {
+    tables, _ := s.adapter.GetAllTableNames(s.ctx)
+    
+    // Batch query optimization - single query for all counts
+    tableCounts, _ := s.adapter.GetAllTableRowCounts(s.ctx, tables)
+    
+    for _, table := range tables {
+        result = append(result, TableInfo{
+            Name:     table,
+            RowCount: tableCounts[table],
+        })
+    }
+    return result, nil
+}
+
+func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
+    // Transaction-based batch update
+    for _, change := range changes {
+        query := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE %s = $2", 
+            tableName, change.Column, pkColumn)
+        s.adapter.ExecuteMigration(s.ctx, query)
+    }
+    return nil
+}
+```
+
+**Performance Optimization:**
+- Batch row count queries (95% fewer DB queries)
+- Pagination for large datasets
+- Transaction-based saves
+
+#### 2. SQL Editor (`/sql`)
+
+**Purpose**: Professional SQL editor with live query execution
+
+**Workflow:**
+1. **Editor Initialization**: Load CodeMirror with SQL mode
+2. **Query Execution**: Parse and execute SQL statements
+3. **Result Display**: Format results as table or show affected rows
+4. **Export**: Convert results to CSV format
+
+**Query Execution Flow:**
+```go
+func (s *Service) ExecuteSQL(query string) (*SQLResult, error) {
+    query = strings.TrimSpace(query)
+    
+    // Detect query type
+    isSelect := strings.HasPrefix(strings.ToUpper(query), "SELECT")
+    
+    if isSelect {
+        // Execute SELECT query
+        result, err := s.adapter.ExecuteQuery(s.ctx, query)
+        return &SQLResult{
+            Columns: result.Columns,
+            Rows:    result.Rows,
+            Success: true,
+        }, nil
+    } else {
+        // Execute DML/DDL in transaction
+        err := s.adapter.ExecuteMigration(s.ctx, query)
+        return &SQLResult{
+            Success: true,
+            Message: "Query executed successfully",
+        }, nil
+    }
+}
+```
+
+**Features:**
+- Syntax highlighting with CodeMirror
+- Keyboard shortcuts (Ctrl+Enter to execute)
+- Multi-statement support
+- Transaction handling for DML queries
+- Error messages with context
+
+#### 3. Schema Visualization (`/schema`)
+
+**Purpose**: Visual database diagram with relationships
+
+**Workflow:**
+1. **Fetch Schema**: Get all tables with columns and relationships
+2. **Auto-Layout**: Calculate positions using grid algorithm
+3. **Render Diagram**: Draw tables and foreign key arrows
+4. **Interactive**: Hover effects and relationship highlighting
+
+**Schema Fetching:**
+```go
+func (s *Service) GetSchema() (*SchemaInfo, error) {
+    tables, _ := s.adapter.GetCurrentSchema(s.ctx)
+    
+    var result []TableSchema
+    for _, table := range tables {
+        columns, _ := s.adapter.GetTableColumns(s.ctx, table.Name)
+        
+        result = append(result, TableSchema{
+            Name:    table.Name,
+            Columns: columns,
+        })
+    }
+    
+    return &SchemaInfo{Tables: result}, nil
+}
+```
+
+**Auto-Layout Algorithm:**
+```javascript
+function layoutTables(tables) {
+    const cols = Math.ceil(Math.sqrt(tables.length));
+    const spacing = { x: 300, y: 400 };
+    
+    tables.forEach((table, i) => {
+        table.x = (i % cols) * spacing.x + 50;
+        table.y = Math.floor(i / cols) * spacing.y + 50;
+    });
+}
+```
+
+### Studio API Endpoints
+
+**REST API Structure:**
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/tables` | GET | List all tables with row counts |
+| `/api/tables/:name` | GET | Get table data with pagination |
+| `/api/tables/:name/save` | POST | Save batch changes |
+| `/api/tables/:name/add` | POST | Add new row |
+| `/api/tables/:name/delete` | POST | Delete multiple rows |
+| `/api/sql` | POST | Execute SQL query |
+| `/api/schema` | GET | Get database schema |
+
+**Response Format:**
+```json
+{
+    "columns": [
+        {"name": "id", "type": "INTEGER", "primaryKey": true}
+    ],
+    "rows": [
+        {"id": 1, "name": "Alice"}
+    ],
+    "total": 100,
+    "page": 1,
+    "limit": 50
+}
+```
+
+### Embedded File System
+
+**Implementation:**
+```go
+//go:embed static/*
+var StaticFS embed.FS
+
+//go:embed templates/*
+var TemplatesFS embed.FS
+
+// Serve static files
+staticFS, _ := fs.Sub(StaticFS, "static")
+app.Use("/static", filesystem.New(filesystem.Config{
+    Root: http.FS(staticFS),
+}))
+```
+
+**Benefits:**
+- Single binary distribution
+- No external file dependencies
+- Fast file serving
+- Cross-platform compatibility
+
+## Raw SQL Execution System
+
+### Overview
+
+The `graft raw` command provides direct SQL execution from the command line with formatted output.
+
+### Execution Flow
+
+```
+User Input → Auto-Detection → SQL Parsing → Execution → Formatted Output
+```
+
+**Auto-Detection Logic:**
+```go
+func RunRaw(cmd *cobra.Command, args []string, queryFlag bool, fileFlag bool) error {
+    input := args[0]
+    var sqlContent string
+    var isFile bool
+    
+    if queryFlag {
+        // Force query mode
+        sqlContent = input
+        isFile = false
+    } else if fileFlag {
+        // Force file mode
+        content, _ := os.ReadFile(input)
+        sqlContent = string(content)
+        isFile = true
+    } else {
+        // Auto-detect
+        if _, err := os.Stat(input); err == nil {
+            // File exists
+            content, _ := os.ReadFile(input)
+            sqlContent = string(content)
+            isFile = true
+        } else {
+            // Treat as query
+            sqlContent = input
+            isFile = false
+        }
+    }
+    
+    return executeSQL(sqlContent, isFile)
+}
+```
+
+### Query Type Detection
+
+**SELECT Queries:**
+- Execute with `ExecuteQuery()`
+- Return rows and columns
+- Display as formatted table
+
+**DML/DDL Queries:**
+- Execute with `ExecuteMigration()` (transaction-safe)
+- Split multiple statements
+- Show success/error for each statement
+
+**Detection Logic:**
+```go
+queryUpper := strings.ToUpper(query)
+isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
+    strings.HasPrefix(queryUpper, "SHOW") ||
+    strings.HasPrefix(queryUpper, "DESCRIBE") ||
+    strings.HasPrefix(queryUpper, "EXPLAIN") ||
+    strings.HasPrefix(queryUpper, "WITH")
+```
+
+### Statement Splitting
+
+**Multi-Statement Files:**
+```go
+func splitSQLStatements(content string) []string {
+    var statements []string
+    
+    parts := strings.Split(content, ";")
+    
+    for _, part := range parts {
+        statement := strings.TrimSpace(part)
+        if statement != "" && !strings.HasPrefix(statement, "--") {
+            statements = append(statements, statement)
+        }
+    }
+    
+    return statements
+}
+```
+
+### Formatted Output
+
+**Table Display:**
+```go
+func displayResultsTable(columns []string, rows []map[string]interface{}) {
+    // Calculate column widths
+    colWidths := make(map[string]int)
+    for _, col := range columns {
+        colWidths[col] = len(col)
+    }
+    
+    for _, row := range rows {
+        for _, col := range columns {
+            val := formatValue(row[col])
+            if len(val) > colWidths[col] {
+                colWidths[col] = len(val)
+            }
+        }
+    }
+    
+    // Draw table with box-drawing characters
+    // ┌─┬─┐
+    // │ │ │
+    // ├─┼─┤
+    // └─┴─┘
+}
+```
+
+**Output Example:**
+```
+📄 Executing SQL query
+🎯 Database: postgresql
+
+⚡ Executing query...
+✅ Query executed successfully
+📊 3 row(s) returned
+
+┌────┬───────────┬─────────────────────┐
+│ id │ name      │ email               │
+├────┼───────────┼─────────────────────┤
+│ 1  │ Alice     │ alice@example.com   │
+│ 2  │ Bob       │ bob@example.com     │
+│ 3  │ Charlie   │ charlie@example.com │
+└────┴───────────┴─────────────────────┘
+```
+
+### Transaction Safety
+
+**DML Execution:**
+```go
+for i, statement := range statements {
+    fmt.Printf("⚡ Executing statement %d...\n", i+1)
+    
+    // Each statement in its own transaction
+    if err := adapter.ExecuteMigration(ctx, statement); err != nil {
+        return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
+    }
+    
+    fmt.Printf("✅ Statement %d executed successfully\n", i+1)
+}
+```
+
+**Benefits:**
+- Automatic rollback on error
+- Safe multi-statement execution
+- Clear error reporting
+
+### Use Cases
+
+1. **Quick Queries**: Test queries without opening Studio
+2. **Seed Data**: Execute seed SQL files
+3. **Maintenance**: Run cleanup scripts
+4. **Debugging**: Test SQL statements quickly
+5. **Automation**: Script database operations
+

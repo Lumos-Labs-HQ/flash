@@ -1,15 +1,17 @@
 # Graft ORM
 
-A powerful, database-agnostic migration CLI tool built in Go with multi-database support and type-safe code generation for JavaScript/TypeScript.
+A powerful, database-agnostic migration CLI tool built in Go with multi-database support, visual database editor (Graft Studio), and type-safe code generation for JavaScript/TypeScript.
 
 ## ✨ Features
 
+- 🎨 **Graft Studio**: Visual database editor with React-based schema visualization
 - 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite
 - 🔄 **Migration Management**: Create, apply, and track migrations
 - 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
 - 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite)
 - 🔧 **Type-Safe Code Generation**: Generate fully typed JavaScript/TypeScript code
 - ⚡ **Blazing Fast**: 2.5x faster than Drizzle, 10x faster than Prisma
+- 💻 **Raw SQL Execution**: Execute SQL files or inline queries
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
 - 🎨 **Enum Support**: Full PostgreSQL ENUM support
 
@@ -204,6 +206,30 @@ main().catch((err) => {
 
 ## 📋 All Commands
 
+### Visual Database Editor
+
+```bash
+# Launch Graft Studio (web-based database editor)
+graft studio
+
+# Launch on custom port
+graft studio --port 3000
+
+# Connect to any database directly
+graft studio --db "postgresql://user:pass@localhost:5432/mydb"
+
+# Launch without opening browser
+graft studio --browser=false
+```
+
+**Studio Features:**
+- 📊 **Data Browser**: View and edit table data with inline editing
+- 💻 **SQL Editor**: Execute queries with CodeMirror syntax highlighting
+- 🎨 **Schema Visualization**: Interactive database diagram with React + ReactFlow
+- 📤 **CSV Export**: Export query results to CSV
+- 🔍 **Search & Filter**: Search across all tables
+- ⚡ **Real-time Updates**: See changes immediately
+
 ### Project Setup
 
 ```bash
@@ -277,11 +303,22 @@ graft reset --force
 
 # Execute raw SQL file
 graft raw script.sql
+graft raw migrations/seed.sql
+
+# Execute inline SQL query
+graft raw -q "SELECT * FROM users WHERE active = true"
+graft raw "SELECT COUNT(*) FROM orders"
+
+# Force file mode
+graft raw --file queries/complex.sql
 ```
 
 ### Help & Info
 
 ```bash
+# Launch Graft Studio
+graft studio
+
 # Show version
 graft --version
 graft -v
@@ -412,6 +449,90 @@ graft export --sqlite
 ```
 Creates portable `.db` file.
 
+## 🎨 Graft Studio
+
+Launch the visual database editor:
+
+```bash
+graft studio
+```
+
+Open http://localhost:5555 (or your custom port)
+
+**Features:**
+
+### 1. Data Browser (`/`)
+- View all tables in sidebar
+- Click any table to view/edit data
+- Double-click cells for inline editing
+- Add/delete rows with intuitive modals
+- Pagination (50 rows per page)
+- Search across tables
+- Foreign key hints
+
+### 2. SQL Editor (`/sql`)
+- Execute custom SQL queries
+- CodeMirror editor with syntax highlighting
+- Press Ctrl+Enter to run queries
+- Export results to CSV
+- Resizable split-pane interface
+- Query history
+
+### 3. Schema Visualization (`/schema`)
+- Interactive database diagram
+- React + ReactFlow rendering
+- Automatic layout with Dagre algorithm
+- Drag and drop tables
+- Zoom and pan controls
+- Foreign key relationship arrows
+- MiniMap for navigation
+
+**Tech Stack:**
+- Backend: Go Fiber v2.52.9
+- Frontend: React 18.2.0, ReactFlow 12.8.4, CodeMirror 5.65.2
+- All assets embedded in single binary
+
+## 💻 Raw SQL Execution
+
+Execute SQL files or inline queries:
+
+```bash
+# Execute SQL file
+graft raw script.sql
+
+# Execute inline query
+graft raw -q "SELECT * FROM users LIMIT 10"
+
+# Auto-detection (file if exists, otherwise query)
+graft raw "SELECT COUNT(*) FROM orders"
+```
+
+**Features:**
+- ✅ Beautiful table output for SELECT queries
+- ✅ Multi-statement execution
+- ✅ Transaction support
+- ✅ Auto-detection of file vs query
+- ✅ Formatted error messages
+
+**Example Output:**
+```bash
+$ graft raw -q "SELECT id, name, email FROM users LIMIT 3"
+
+🎯 Database: postgresql
+
+⚡ Executing query...
+✅ Query executed successfully
+📊 3 row(s) returned
+
+┌────┬────────────┬─────────────────────┐
+│ id │ name       │ email               │
+├────┼────────────┼─────────────────────┤
+│ 1  │ Alice      │ alice@example.com   │
+│ 2  │ Bob        │ bob@example.com     │
+│ 3  │ Charlie    │ charlie@example.com │
+└────┴────────────┴─────────────────────┘
+```
+
 ## 🔧 Programmatic API
 
 ```javascript
@@ -421,6 +542,7 @@ const graft = require('graft-orm');
 graft.exec('status');
 graft.exec('migrate "add users"');
 graft.exec('apply');
+graft.exec('studio'); // Launch Studio
 
 // Get binary path
 const binaryPath = graft.getBinaryPath();
@@ -450,11 +572,28 @@ npm install -g graft-orm --force
 
 Check your `DATABASE_URL` in `.env` file.
 
+### Studio Not Loading
+
+Make sure port 5555 is not in use, or specify a different port:
+```bash
+graft studio --port 3000
+```
+
 ## 📖 Documentation
 
 - [Full Documentation](https://github.com/Lumos-Labs-HQ/graftt)
 - [How It Works](https://github.com/Lumos-Labs-HQ/graftt/blob/main/docs/HOW_IT_WORKS.md)
+- [Technology Stack](https://github.com/Lumos-Labs-HQ/graftt/blob/main/docs/TECHNOLOGY_STACK.md)
 - [Contributing](https://github.com/Lumos-Labs-HQ/graftt/blob/main/docs/CONTRIBUTING.md)
+
+## 🌟 Key Highlights
+
+- **Visual Database Editor**: Manage your database visually with Graft Studio
+- **Raw SQL Support**: Execute SQL files or queries directly from CLI
+- **Type-Safe**: Full TypeScript support with generated types
+- **Fast**: 2.5x-10x faster than popular ORMs
+- **Multi-DB**: PostgreSQL, MySQL, and SQLite support
+- **Zero Config**: Works out of the box with sensible defaults
 
 ## 📄 License
 
