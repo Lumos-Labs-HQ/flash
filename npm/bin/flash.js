@@ -9,7 +9,7 @@ const binaryName = platform === 'win32' ? 'flash.exe' : 'flash';
 const binaryPath = path.join(__dirname, binaryName);
 
 if (!fs.existsSync(binaryPath)) {
-  console.error('❌ flash binary not found. Please reinstall: npm install -g FlashORM-orm');
+  console.error('❌ flash binary not found. Please reinstall: npm install -g flashorm');
   process.exit(1);
 }
 

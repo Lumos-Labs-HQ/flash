@@ -149,16 +149,16 @@ func (p *PostgresAdapter) Connect(ctx context.Context, url string) error {
 
 | Command | Description | Flags |
 |---------|-------------|-------|
-| `FlashORM init` | Initialize a new FlashORM project | `--postgresql`, `--mysql`, `--sqlite` |
-| `FlashORM migrate [name]` | Create a new migration | `--empty`, `-e` |
-| `FlashORM apply` | Apply pending migrations | `--force`, `-f` |
-| `FlashORM status` | Show migration status | None |
-| `FlashORM export` | Export database | `--json`, `-j`, `--csv`, `-c`, `--sqlite`, `-s` |
-| `FlashORM reset` | Reset database | `--force`, `-f` |
-| `FlashORM gen` | Generate type-safe code | None |
-| `FlashORM pull` | Extract schema from database | `--backup`, `-b`, `--output`, `-o` |
-| `FlashORM raw <sql>` | Execute raw SQL | `--query`, `-q`, `--file` |
-| `FlashORM studio` | Launch visual database editor | `--port`, `--db` |
+| `flash init` | Initialize a new FlashORM project | `--postgresql`, `--mysql`, `--sqlite` |
+| `flash migrate [name]` | Create a new migration | `--empty`, `-e` |
+| `flash apply` | Apply pending migrations | `--force`, `-f` |
+| `flash status` | Show migration status | None |
+| `flash export` | Export database | `--json`, `-j`, `--csv`, `-c`, `--sqlite`, `-s` |
+| `flash reset` | Reset database | `--force`, `-f` |
+| `flash gen` | Generate type-safe code | None |
+| `flash pull` | Extract schema from database | `--backup`, `-b`, `--output`, `-o` |
+| `flash raw <sql>` | Execute raw SQL | `--query`, `-q`, `--file` |
+| `flash studio` | Launch visual database editor | `--port`, `--db` |
 
 **Additional Dependencies:**
 - `github.com/inconshreveable/mousetrap v1.1.0` - Windows command-line support
@@ -290,7 +290,7 @@ compress:     # Compress binaries with UPX
 
 **Generated Output:**
 ```go
-// FlashORM_gen/models.go
+// flash_gen/models.go
 type Users struct {
     ID        sql.NullInt32  `json:"id" db:"id"`
     Name      string         `json:"name" db:"name"`
@@ -298,7 +298,7 @@ type Users struct {
     CreatedAt time.Time      `json:"created_at" db:"created_at"`
 }
 
-// FlashORM_gen/db.go
+// flash_gen/db.go
 type DBTX interface {
     Exec(query string, args ...interface{}) (sql.Result, error)
     Query(query string, args ...interface{}) (*sql.Rows, error)
@@ -835,7 +835,9 @@ type ProjectTemplate struct {
 
 func (pt *ProjectTemplate) GetFlashORMConfig() string {
     return fmt.Sprintf(`{
+  "version": "2",
   "schema_path": "db/schema/schema.sql",
+  "queries": "db/queries/",
   "migrations_path": "db/migrations",
   "export_path": "db/export",
   "database": {
@@ -843,13 +845,8 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
     "url_env": "DATABASE_URL"
   },
   "gen": {
-    "go": {
-      "enabled": true,
-      "output_path": "FlashORM_gen"
-    },
     "js": {
-      "enabled": false,
-      "output_path": "FlashORM_gen"
+      "enabled": false
     }
   }
 }`, pt.DatabaseType)
@@ -893,7 +890,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
     if err := m.adapter.ExecuteMigration(ctx, string(content)); err != nil {
         fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
         fmt.Printf("   Error: %v\n", err)
-        fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
+        fmt.Println("   Transaction rolled back. Fix the error and run 'flash apply' again.")
         return err
     }
 
@@ -998,7 +995,7 @@ func (p *PostgresAdapter) GetAllTableRowCounts(ctx context.Context, tables []str
 ```bash
 # If you must use remotely, use SSH tunnel
 ssh -L 5555:localhost:5555 user@server
-FlashORM studio --port 5555
+flash studio --port 5555
 ```
 
 ## Testing Strategy
@@ -1030,14 +1027,14 @@ FlashORM studio --port 5555
 
 ## NPM Distribution System
 
-### Package: FlashORM-orm
+### Package: FlashORM
 
-**Registry**: https://www.npmjs.com/package/FlashORM-orm  
-**Repository**: https://github.com/Lumos-Labs-HQ/FlashORM
+**Registry**: https://www.npmjs.com/package/FlashORM  
+**Repository**: https://github.com/Lumos-Labs-HQ/flash
 
 **Installation:**
 ```bash
-npm install -g FlashORM-orm
+npm install -g FlashORM
 ```
 
 **Features:**
@@ -1050,15 +1047,15 @@ npm install -g FlashORM-orm
 
 **Binary Download System:**
 ```javascript
-const VERSION = '2.0.0';
-const REPO = 'Lumos-Labs-HQ/FlashORM';
-const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/FlashORM-${platform}-${arch}`;
+const VERSION = '2.0.2';
+const REPO = 'Lumos-Labs-HQ/flash';
+const downloadUrl = `https://github.com/${REPO}/releases/download/v${VERSION}/flash-${platform}-${arch}`;
 ```
 
 **Files:**
 - `npm/package.json` - NPM package configuration
 - `npm/index.js` - Programmatic API
-- `npm/bin/FlashORM.js` - CLI wrapper
+- `npm/bin/flash.js` - CLI wrapper
 - `npm/scripts/install.js` - Post-install binary downloader
 
 **GitHub Actions Automation:**

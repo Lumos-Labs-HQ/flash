@@ -30,19 +30,19 @@ jobs:
         mkdir -p release
         
         # Linux AMD64
-        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o release/FlashORM-linux-amd64 .
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o release/flash-linux-amd64 .
         
         # Linux ARM64
-        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o release/FlashORM-linux-arm64 .
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o release/flash-linux-arm64 .
         
         # Windows AMD64
-        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o release/FlashORM-windows-amd64.exe .
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o release/flash-windows-amd64.exe .
         
         # macOS AMD64
-        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o release/FlashORM-darwin-amd64 .
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o release/flash-darwin-amd64 .
         
         # macOS ARM64 (Apple Silicon)
-        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o release/FlashORM-darwin-arm64 .
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o release/flash-darwin-arm64 .
 
     - name: Create checksums
       run: |

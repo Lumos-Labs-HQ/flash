@@ -8,164 +8,136 @@
 ![image](.github/flash-orm.png)
 ---
 
+
 A powerful, database-agnostic ORM built in Go that provides Prisma-like functionality with multi-database support and type-safe code generation for Go, JavaScript, and TypeScript.
 
 ## ✨ Features
 
-- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite  
-- 🔄 **Migration Management**: Create, apply, and track migrations  
-- 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback  
-- 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability  
-- 🔧 **Code Generation**: Generate type-safe code for Go and JavaScript/TypeScript  
-- 🟢 **Node.js Support**: First-class JavaScript/TypeScript support with type definitions  
-- 🎨 **Enum Support**: PostgreSQL ENUM types with full migration support  
-- ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks  
-- 🎯 **Prisma-like Commands**: Familiar CLI interface  
-- 🔍 **Schema Introspection**: Pull schema from existing databases  
-- 📊 **Flash ORM Studio**: Visual data browser and editor for database inspection  
-- 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts  
-
----
+- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite
+- 🔄 **Migration Management**: Create, apply, and track migrations
+- 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
+- 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite) for data portability
+- 🔧 **Code Generation**: Generate type-safe code for Go and JavaScript/TypeScript
+- 🟢 **Node.js Support**: First-class JavaScript/TypeScript support with type definitions
+- 🎨 **Enum Support**: PostgreSQL ENUM types with full migration support
+- ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
+- 🎯 **Prisma-like Commands**: Familiar CLI interface
+- 🔍 **Schema Introspection**: Pull schema from existing databases
+- 📊 **FlashORM Studio**: similar to Prisma Studio, where users can view and edit data visually
+- 🛡️ **Conflict Detection**: Automatic detection and resolution of migration conflicts
 
 ## 📊 Performance Benchmarks
 
-Flash ORM significantly outperforms popular ORMs in real-world scenarios.
+FlashORM significantly outperforms popular ORMs in real-world scenarios:
 
-### 🔹 Summary Chart
-
-| ORM | Relative Performance | Efficiency Ratio |
-|------|----------------------|------------------|
-| **Flash ORM** | 🟢 100% (Baseline) | **1.0x** |
-| **Drizzle** | 🟡 ~42% slower | 2.5x less efficient |
-| **Prisma** | 🔴 ~90% slower | 10x less efficient |
-
-### 📈 Detailed Metrics
-
-| Operation | Flash ORM | Drizzle | Prisma |
+| Operation | FlashORM | Drizzle | Prisma |
 |-----------|-------|---------|--------|
 | Insert 1000 Users | **158ms** | 224ms | 230ms |
 | Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms |
-| Complex Query ×500 | **4071ms** | 12500ms | 56322ms |
-| Mixed Workload ×1000 (75% read, 25% write) | **186ms** | 1174ms | 10863ms |
-| Stress Test Simple Query ×2000 | **122ms** | 160ms | 223ms |
+| Complex Query x500 | **4071ms** | 12500ms | 56322ms |
+| Mixed Workload x1000 (75% read, 25% write) | **186ms** | 1174ms | 10863ms |
+| Stress Test Simple Query x2000 | **122ms** | 160ms | 223ms |
 | **TOTAL** | **6947ms** | **17149ms** | **71551ms** |
 
----
+*Benchmarks run on PostgreSQL with identical schemas and queries. FlashORM is **2.5x faster** than Drizzle and **10x faster** than Prisma.*
 
 ## 🚀 Installation
 
-### NPM (Node.js / TypeScript Projects)
-
+### NPM (Node.js/TypeScript Projects)
 ```bash
-npm install -g Flash ORM-orm
-````
+npm install -g FlashORM
+```
 
 ### Go Install
-
 ```bash
-go install github.com/Lumos-Labs-HQ/Flash ORM@latest
+go install github.com/Lumos-Labs-HQ/flash@latest
 ```
 
 ### From Source
-
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/Flash ORM.git
-cd Flash ORM
+git clone https://github.com/Lumos-Labs-HQ/flash.git
+cd flash
 make build-all
 ```
 
 ### Download Binary
-
-Download the latest binary from [Releases](<https://github.com/Lumos-Labs-HQ/Flash> ORM/releases).
-
----
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/flash/releases).
+# FlashORM - Database ORM
 
 ## 🏁 Quick Start
 
 ### 1. Initialize Your Project
-
 ```bash
 cd your-project
-Flash ORM init --postgresql  # or --mysql, --sqlite
+flash init --postgresql  # or --mysql, --sqlite
 ```
 
 ### 2. Configure Database
-
 ```bash
+# Set your database URL
 export DATABASE_URL="postgres://user:password@localhost:5432/mydb"
+
+# Or create .env file
 echo "DATABASE_URL=postgres://user:password@localhost:5432/mydb" > .env
 ```
 
 ### 3. Create Your First Migration
-
 ```bash
-Flash ORM migrate "create users table"
+flash migrate "create users table"
 ```
 
 ### 4. Apply Migrations Safely
-
 ```bash
-Flash ORM apply
+flash apply
 ```
 
 ### 5. Check Status
-
 ```bash
-Flash ORM status
+flash status
 ```
-
----
 
 ## 📋 Commands
 
-| Command                 | Description                                         |
-| ----------------------- | --------------------------------------------------- |
-| `flash init`            | Initialize project with database-specific templates |
-| `Flash migrate <name>`  | Create a new migration file                         |
-| `Flash apply`           | Apply pending migrations with transaction safety    |
-| `Flash status`          | Show migration status                               |
-| `Flash pull`            | Extract schema from existing database               |
-| `Flash studio`          | Launch Studio visual data browser                   |
-| `Flash export [format]` | Export database (JSON, CSV, SQLite)                 |
-| `Flash reset`           | Reset database (⚠️ destructive)                     |
-| `Flash gen`             | Generate SQLC types                                 |
-| `Flash raw <sql>`       | Execute raw SQL                                     |
+| Command | Description |
+|---------|-------------|
+| `flash init` | Initialize project with database-specific templates |
+| `flash migrate <name>` | Create a new migration file |
+| `flash apply` | Apply pending migrations with transaction safety |
+| `flash status` | Show migration status |
+| `flash pull` | Extract schema from existing database |
+| `flash studio` | 
+| `flash export [format]` | Export database (JSON, CSV, SQLite) |
+| `flash reset` | Reset database (⚠️ destructive) |
+| `flash gen` | Generate SQLC types |
+| `flash raw <sql>` | Execute raw SQL |
 
 ### Global Flags
-
 - `--force` - Skip confirmation prompts
 - `--help` - Show help
-
----
 
 ## 🗄️ Database Support
 
 ### PostgreSQL
-
 ```bash
 flash init --postgresql
 export DATABASE_URL="postgres://user:pass@localhost:5432/db"
 ```
 
 ### MySQL
-
 ```bash
 flash init --mysql
 export DATABASE_URL="user:pass@tcp(localhost:3306)/db"
 ```
 
 ### SQLite
-
 ```bash
 flash init --sqlite
 export DATABASE_URL="sqlite://./database.db"
 ```
 
----
-
 ## 🔧 Configuration
 
-Flash ORM uses `flash.config.json` for configuration.
+FlashORM uses `flash.config.json` for configuration:
 
 ```json
 {
@@ -179,217 +151,287 @@ Flash ORM uses `flash.config.json` for configuration.
     "url_env": "DATABASE_URL"
   },
   "gen": {
-    "js": { "enabled": true }
+    "js": {
+      "enabled": true
+    }
   }
 }
 ```
-
----
 
 ## 📁 Project Structure
 
 After running `flash init`:
 
-```bash
-your-project/
-├── flash.config.json      # Flash ORM configuration
-├── .env                   # Environment variables
-└── db/
-    ├── schema/            # Database schema
-    ├── queries/           # SQL queries for SQLC
-    ├── migrations/        # Migration files (auto-created)
-    └── export/            # Export files (auto-created)
 ```
-
-### Directory Notes
-
-- **`db/schema/`** — Contains your declarative database schema.
-- **`db/migrations/`** — Auto-generated, timestamped SQL migration files.
-- **`db/export/`** — Stores exported data files (JSON, CSV, SQLite).
-
----
+your-project/
+├── flash.config.json      # FlashORM configuration
+├── .env                  # Environment variables
+└── db/
+    ├── schema/
+    │   └── schema.sql    # Database schema
+    ├── queries/
+    │   └── users.sql     # SQL queries for SQLC
+    ├── migrations/       # Migration files (auto-created)
+    └── export/          # Export files (auto-created)
+```
 
 ## 🔒 Safe Migration System
 
-Each migration runs in a [transaction](https://www.postgresql.org/docs/current/sql-transaction.html) and automatically rolls back on failure.
-
-### Example Output
+### Transaction-Based Execution
+Each migration runs in its own transaction with automatic rollback on failure:
 
 ```bash
-📦 Applying 2 migration(s)...
-  [1/2] 20251021132902_init ✅
-  [2/2] 20251021140530_add_users_index ✅
+flash apply
+```
 
+Output:
+```
+📦 Applying 2 migration(s)...
+  [1/2] 20251021132902_init
+      ✅ Applied
+  [2/2] 20251021140530_add_users_index
+      ✅ Applied
 ✅ All migrations applied successfully
 ```
 
-On error:
+### Error Handling
+If a migration fails, the transaction is automatically rolled back:
 
 ```
+📦 Applying 2 migration(s)...
+  [1/2] 20251021132902_init
+      ✅ Applied
+  [2/2] 20251021140530_bad_migration
 ❌ Failed at migration: 20251021140530_bad_migration
-Transaction rolled back. Fix and re-run 'Flash ORM apply'.
+   Error: syntax error at or near "INVALID"
+   Transaction rolled back. Fix the error and run 'flash apply' again.
 ```
-
----
 
 ## 🔄 Migration Workflow
 
-1. **Create Migration**
+### 1. Create Migration
+```bash
+flash migrate "add user roles"
+```
 
-   ```bash
-   Flash ORM migrate "add user roles"
-   ```
+Creates a timestamped SQL file:
+```sql
+-- Migration: add_user_roles
+-- Created: 2025-10-21T13:29:02Z
 
-2. **Apply Migrations**
+ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user';
+CREATE INDEX idx_users_role ON users(role);
+```
 
-   ```bash
-   Flash ORM apply
-   ```
+### 2. Apply Migrations
+```bash
+flash apply
+```
 
-3. **Check Status**
+### 3. Check Status
+```bash
+flash status
+```
 
-   ```bash
-   Flash ORM status
-   ```
+Output:
+```
+Database: Connected ✅
+Migrations: 3 total, 2 applied, 1 pending
 
----
+┌─────────────────────────────────┬─────────┬─────────────────────┐
+│ Migration                       │ Status  │ Applied At          │
+├─────────────────────────────────┼─────────┼─────────────────────┤
+│ 20251021_create_users_table     │ Applied │ 2025-10-21 13:29:02 │
+│ 20251021_add_user_email_index   │ Applied │ 2025-10-21 13:30:15 │
+│ 20251021_add_user_roles         │ Pending │ -                   │
+└─────────────────────────────────┴─────────┴─────────────────────┘
+```
 
-## 🧭 Studio (Visual Editor)
+## Studio (visual editor)
 
-Run the optional visual data editor:
+Start the optional Studio UI:
 
 ```bash
 flash studio
 ```
 
-Or open it directly with a connection:
+For open FlashORM studio without projct init
 
 ```bash
 flash studio --db "postgresql://jack:secret123@localhost:5432/mydb"
 ```
 
-Default interface: [http://localhost:5555](http://localhost:5555)
+Open http://localhost:5555 by default (or the port you pass with `--port`).
 
-### Built With
+### Troubleshooting
 
-- [React](https://react.dev/)
-- [Vite](https://vitejs.dev/)
-- [Tailwind CSS](https://tailwindcss.com/)
-- [Inter Font](https://rsms.me/inter/)
+- Database connection errors: verify `DATABASE_URL` and network access.
+- Migration failures: inspect the migration SQL file, fix and re-run `flash apply`.
 
----
 
 ## 📤 Export System
 
-Export databases in various formats:
+Export your database to multiple formats for portability and analysis:
 
-### JSON Export
-
+### JSON Export (Default)
 ```bash
+flash export
+# or
 flash export --json
 ```
 
-### CSV Export
+Creates structured JSON with metadata:
+```json
+{
+  "timestamp": "2025-10-21 14:00:07",
+  "version": "1.0",
+  "comment": "Database export",
+  "tables": {
+    "users": [
+      {"id": 1, "name": "Alice", "email": "alice@example.com"}
+    ],
+    "posts": [
+      {"id": 1, "user_id": 1, "title": "Hello World"}
+    ]
+  }
+}
+```
 
+### CSV Export
 ```bash
 flash export --csv
 ```
 
-### SQLite Export
+Creates directory with individual CSV files per table:
+```
+db/export/export_2025-10-21_14-00-07_csv/
+├── users.csv
+├── posts.csv
+└── comments.csv
+```
 
+### SQLite Export
 ```bash
 flash export --sqlite
 ```
 
----
+Creates portable SQLite database file:
+```
+db/export/export_2025-10-21_14-00-07.db
+```
 
 ## 🔗 SQLC Integration
 
 Generate type-safe Go code from SQL:
 
 ```bash
+# Generate types after migrations
+flash gen
+
+# Apply migrations and generate types
 flash apply && flash gen
 ```
 
-Uses [SQLC](https://docs.sqlc.dev/en/latest/index.html) for type-safe Go query generation.
+Example generated code:
+```go
+type User struct {
+    ID        int32     `json:"id"`
+    Name      string    `json:"name"`
+    Email     string    `json:"email"`
+    CreatedAt time.Time `json:"created_at"`
+}
 
----
+func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
+    // Generated implementation
+}
+```
 
-## 🧠 Advanced Usage
+## 🛠️ Advanced Usage
 
 ### Production Deployment
-
 ```bash
+# Deploy without interactive prompts
+flash apply --force
+
+# Create export before deployment
+flash export --json
 flash apply --force
 ```
 
 ### Development Workflow
-
 ```bash
+# Reset database during development
 flash reset --force
+
+# Extract schema from existing database
 flash pull
 ```
 
 ### Raw SQL Execution
-
 ```bash
+# Execute raw SQL
 flash raw "SELECT COUNT(*) FROM users;"
+
+# Execute SQL file
+flash raw scripts/cleanup.sql
 ```
 
----
+## 🚀 Roadmap & Future Features
 
-## 🚀 Roadmap
-
-- 🐍 Python Support
-- 🌐 WebAssembly bindings
-- 🧩 Schema visualizer
-
----
+### Coming Soon
+- 🐍 **Python Support**: Use FlashORM with Python projects
 
 ## 🐛 Troubleshooting
 
-**Database Connection Failed**
+### Common Issues
 
+**Database Connection Failed**
 ```bash
 Error: failed to connect to database
 ```
+- Check your `DATABASE_URL` environment variable
+- Verify database is running and accessible
+- Check firewall and network settings
 
-- Verify `DATABASE_URL`
-- Ensure DB service is running
-
-**Migration Failed**
-
+**Migration Failed with Rollback**
 ```bash
-❌ Transaction rolled back
+❌ Failed at migration: 20251021140530_bad_migration
+   Transaction rolled back. Fix the error and run 'flash apply' again.
 ```
-
-- Fix the SQL syntax and re-run
-
----
+- Check the migration SQL syntax
+- Verify table/column names exist
+- Fix the migration file and run `flash apply` again
 
 ## 🤝 Contributing
 
+We welcome contributions! Here's how to get started:
+
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/Flash ORM.git
+git clone https://github.com/Lumos-Labs-HQ/flash.git
 cd flash
+
 make dev-setup
+
 make build-all
 ```
 
----
+### Development Guidelines
+- Follow Go conventions and best practices
+- Add tests for new features
+- Update documentation
+- Use conventional commit messages
+- Test migration safety features
+
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE).
-
----
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- Inspired by [Prisma](https://www.prisma.io/)
-- Built with [Cobra CLI](https://github.com/spf13/cobra)
-- Database drivers:
+- Inspired by [Prisma](https://www.prisma.io/) migration system
+- Built with [Cobra](https://github.com/spf13/cobra) CLI framework
+- Database drivers: [pgx](https://github.com/jackc/pgx), [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql), [go-sqlite3](https://github.com/mattn/go-sqlite3)
 
-  - [pgx](https://github.com/jackc/pgx)
-  - [go-sql-driver/mysql](https://github.com/go-sql-driver/mysql)
-  - [go-sqlite3](https://github.com/mattn/go-sqlite3)
+---
