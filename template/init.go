@@ -11,8 +11,9 @@ const (
 )
 
 type ProjectTemplate struct {
-	DatabaseType  DatabaseType
-	IsNodeProject bool
+	DatabaseType    DatabaseType
+	IsNodeProject   bool
+	IsPythonProject bool
 }
 
 type dbConfig struct {
@@ -67,10 +68,11 @@ var dbConfigs = map[DatabaseType]dbConfig{
 	},
 }
 
-func NewProjectTemplate(dbType DatabaseType, isNodeProject bool) *ProjectTemplate {
+func NewProjectTemplate(dbType DatabaseType, isNodeProject bool, isPythonProject bool) *ProjectTemplate {
 	return &ProjectTemplate{
-		DatabaseType:  dbType,
-		IsNodeProject: isNodeProject,
+		DatabaseType:    dbType,
+		IsNodeProject:   isNodeProject,
+		IsPythonProject: isPythonProject,
 	}
 }
 
@@ -82,6 +84,12 @@ func (pt *ProjectTemplate) GetGraftConfig() string {
 	if pt.IsNodeProject {
 		genSection = `  "gen": {
     "js": {
+      "enabled": true
+    }
+  }`
+	} else if pt.IsPythonProject {
+		genSection = `  "gen": {
+    "python": {
       "enabled": true
     }
   }`

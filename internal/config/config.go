@@ -26,6 +26,7 @@ type Database struct {
 type Gen struct {
 	Go GoGen `json:"go,omitempty" mapstructure:"go"`
 	JS JSGen `json:"js,omitempty" mapstructure:"js"`
+    Python PythonGen `json:"python,omitempty" mapstructure:"python"`
 }
 
 type GoGen struct {
@@ -33,6 +34,10 @@ type GoGen struct {
 }
 
 type JSGen struct {
+	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
+	Out     string `json:"out,omitempty" mapstructure:"out"`
+}
+type PythonGen struct {
 	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
 	Out     string `json:"out,omitempty" mapstructure:"out"`
 }
@@ -68,6 +73,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Gen.JS.Out == "" && cfg.Gen.JS.Enabled {
 		cfg.Gen.JS.Out = "graft_gen"
+	}
+	if cfg.Gen.Python.Out == "" && cfg.Gen.Python.Enabled {
+		cfg.Gen.Python.Out = "graft_gen"
 	}
 
 	return &cfg, nil
