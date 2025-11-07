@@ -13,8 +13,8 @@ Thank you for your interest in contributing to FlashORM! This guide will help yo
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/YOUR_USERNAME/FlashORM.git
-cd FlashORM
+git clone https://github.com/YOUR_USERNAME/flash.git
+cd flash
 
 # Set up development environment
 make dev-setup
@@ -34,6 +34,10 @@ FlashORM/
 ├── internal/              # Internal packages
 │   ├── config/            # Configuration management
 │   ├── database/          # Database adapters
+│   ├── parser/            # query parser
+│   ├── jsgen/             # js query generator
+│   ├── gogen/             # go query generator
+│   ├── studio/            # flash Studio code
 │   ├── migrator/          # Migration logic
 │   ├── schema/            # Schema management
 │   ├── export/            # Export system
@@ -71,7 +75,7 @@ make fmt
 make lint
 
 # Test with example project
-cd example && FlashORM apply
+cd example && flash apply
 ```
 
 ### 4. Commit and Push
@@ -191,7 +195,7 @@ if err := doSomething(); err != nil {
 if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
     fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
     fmt.Printf("   Error: %v\n", err)
-    fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
+    fmt.Println("   Transaction rolled back. Fix the error and run 'flash apply' again.")
     return err
 }
 ```
@@ -252,7 +256,7 @@ Brief description of changes
 
 ### Bug Reports
 Include:
-- FlashORM version (`FlashORM --version`)
+- flash version (`flash --version`)
 - Operating system
 - Database type and version
 - Steps to reproduce

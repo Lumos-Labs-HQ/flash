@@ -36,23 +36,23 @@ FlashORM significantly outperforms popular ORMs in real-world scenarios:
 
 ### NPM (Node.js/TypeScript Projects)
 ```bash
-npm install -g FlashORM-orm
+npm install -g FlashORM
 ```
 
 ### Go Install
 ```bash
-go install github.com/Lumos-Labs-HQ/FlashORM@latest
+go install github.com/Lumos-Labs-HQ/flash@latest
 ```
 
 ### From Source
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/FlashORM.git
-cd FlashORM
+git clone https://github.com/Lumos-Labs-HQ/flash.git
+cd flash
 make build-all
 ```
 
 ### Download Binary
-Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/FlashORM/releases).
+Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/flash/releases).
 # FlashORM - Database ORM
 
 ## 🏁 Quick Start
@@ -60,7 +60,7 @@ Download the latest binary from [Releases](https://github.com/Lumos-Labs-HQ/Flas
 ### 1. Initialize Your Project
 ```bash
 cd your-project
-FlashORM init --postgresql  # or --mysql, --sqlite
+flash init --postgresql  # or --mysql, --sqlite
 ```
 
 ### 2. Configure Database
@@ -74,33 +74,33 @@ echo "DATABASE_URL=postgres://user:password@localhost:5432/mydb" > .env
 
 ### 3. Create Your First Migration
 ```bash
-FlashORM migrate "create users table"
+flash migrate "create users table"
 ```
 
 ### 4. Apply Migrations Safely
 ```bash
-FlashORM apply
+flash apply
 ```
 
 ### 5. Check Status
 ```bash
-FlashORM status
+flash status
 ```
 
 ## 📋 Commands
 
 | Command | Description |
 |---------|-------------|
-| `FlashORM init` | Initialize project with database-specific templates |
-| `FlashORM migrate <name>` | Create a new migration file |
-| `FlashORM apply` | Apply pending migrations with transaction safety |
-| `FlashORM status` | Show migration status |
-| `FlashORM pull` | Extract schema from existing database |
-| `FlashORM studio` | 
-| `FlashORM export [format]` | Export database (JSON, CSV, SQLite) |
-| `FlashORM reset` | Reset database (⚠️ destructive) |
-| `FlashORM gen` | Generate SQLC types |
-| `FlashORM raw <sql>` | Execute raw SQL |
+| `flash init` | Initialize project with database-specific templates |
+| `flash migrate <name>` | Create a new migration file |
+| `flash apply` | Apply pending migrations with transaction safety |
+| `flash status` | Show migration status |
+| `flash pull` | Extract schema from existing database |
+| `flash studio` | 
+| `flash export [format]` | Export database (JSON, CSV, SQLite) |
+| `flash reset` | Reset database (⚠️ destructive) |
+| `flash gen` | Generate SQLC types |
+| `flash raw <sql>` | Execute raw SQL |
 
 ### Global Flags
 - `--force` - Skip confirmation prompts
@@ -110,25 +110,25 @@ FlashORM status
 
 ### PostgreSQL
 ```bash
-FlashORM init --postgresql
+flash init --postgresql
 export DATABASE_URL="postgres://user:pass@localhost:5432/db"
 ```
 
 ### MySQL
 ```bash
-FlashORM init --mysql
+flash init --mysql
 export DATABASE_URL="user:pass@tcp(localhost:3306)/db"
 ```
 
 ### SQLite
 ```bash
-FlashORM init --sqlite
+flash init --sqlite
 export DATABASE_URL="sqlite://./database.db"
 ```
 
 ## 🔧 Configuration
 
-FlashORM uses `FlashORM.config.json` for configuration:
+FlashORM uses `flash.config.json` for configuration:
 
 ```json
 {
@@ -151,11 +151,11 @@ FlashORM uses `FlashORM.config.json` for configuration:
 
 ## 📁 Project Structure
 
-After running `FlashORM init`:
+After running `flash init`:
 
 ```
 your-project/
-├── FlashORM.config.json      # FlashORM configuration
+├── flash.config.json      # FlashORM configuration
 ├── .env                  # Environment variables
 └── db/
     ├── schema/
@@ -172,7 +172,7 @@ your-project/
 Each migration runs in its own transaction with automatic rollback on failure:
 
 ```bash
-FlashORM apply
+flash apply
 ```
 
 Output:
@@ -195,14 +195,14 @@ If a migration fails, the transaction is automatically rolled back:
   [2/2] 20251021140530_bad_migration
 ❌ Failed at migration: 20251021140530_bad_migration
    Error: syntax error at or near "INVALID"
-   Transaction rolled back. Fix the error and run 'FlashORM apply' again.
+   Transaction rolled back. Fix the error and run 'flash apply' again.
 ```
 
 ## 🔄 Migration Workflow
 
 ### 1. Create Migration
 ```bash
-FlashORM migrate "add user roles"
+flash migrate "add user roles"
 ```
 
 Creates a timestamped SQL file:
@@ -216,12 +216,12 @@ CREATE INDEX idx_users_role ON users(role);
 
 ### 2. Apply Migrations
 ```bash
-FlashORM apply
+flash apply
 ```
 
 ### 3. Check Status
 ```bash
-FlashORM status
+flash status
 ```
 
 Output:
@@ -243,13 +243,13 @@ Migrations: 3 total, 2 applied, 1 pending
 Start the optional Studio UI:
 
 ```bash
-FlashORM studio
+flash studio
 ```
 
 For open FlashORM studio without projct init
 
 ```bash
-FlashORM studio --db "postgresql://jack:secret123@localhost:5432/mydb"
+flash studio --db "postgresql://jack:secret123@localhost:5432/mydb"
 ```
 
 Open http://localhost:5555 by default (or the port you pass with `--port`).
@@ -257,7 +257,7 @@ Open http://localhost:5555 by default (or the port you pass with `--port`).
 ### Troubleshooting
 
 - Database connection errors: verify `DATABASE_URL` and network access.
-- Migration failures: inspect the migration SQL file, fix and re-run `FlashORM apply`.
+- Migration failures: inspect the migration SQL file, fix and re-run `flash apply`.
 
 
 ## 📤 Export System
@@ -266,9 +266,9 @@ Export your database to multiple formats for portability and analysis:
 
 ### JSON Export (Default)
 ```bash
-FlashORM export
+flash export
 # or
-FlashORM export --json
+flash export --json
 ```
 
 Creates structured JSON with metadata:
@@ -290,7 +290,7 @@ Creates structured JSON with metadata:
 
 ### CSV Export
 ```bash
-FlashORM export --csv
+flash export --csv
 ```
 
 Creates directory with individual CSV files per table:
@@ -303,7 +303,7 @@ db/export/export_2025-10-21_14-00-07_csv/
 
 ### SQLite Export
 ```bash
-FlashORM export --sqlite
+flash export --sqlite
 ```
 
 Creates portable SQLite database file:
@@ -317,10 +317,10 @@ Generate type-safe Go code from SQL:
 
 ```bash
 # Generate types after migrations
-FlashORM gen
+flash gen
 
 # Apply migrations and generate types
-FlashORM apply && FlashORM gen
+flash apply && flash gen
 ```
 
 Example generated code:
@@ -342,29 +342,29 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
 ### Production Deployment
 ```bash
 # Deploy without interactive prompts
-FlashORM apply --force
+flash apply --force
 
 # Create export before deployment
-FlashORM export --json
-FlashORM apply --force
+flash export --json
+flash apply --force
 ```
 
 ### Development Workflow
 ```bash
 # Reset database during development
-FlashORM reset --force
+flash reset --force
 
 # Extract schema from existing database
-FlashORM pull
+flash pull
 ```
 
 ### Raw SQL Execution
 ```bash
 # Execute raw SQL
-FlashORM raw "SELECT COUNT(*) FROM users;"
+flash raw "SELECT COUNT(*) FROM users;"
 
 # Execute SQL file
-FlashORM raw scripts/cleanup.sql
+flash raw scripts/cleanup.sql
 ```
 
 ## 🚀 Roadmap & Future Features
@@ -387,19 +387,19 @@ Error: failed to connect to database
 **Migration Failed with Rollback**
 ```bash
 ❌ Failed at migration: 20251021140530_bad_migration
-   Transaction rolled back. Fix the error and run 'FlashORM apply' again.
+   Transaction rolled back. Fix the error and run 'flash apply' again.
 ```
 - Check the migration SQL syntax
 - Verify table/column names exist
-- Fix the migration file and run `FlashORM apply` again
+- Fix the migration file and run `flash apply` again
 
 ## 🤝 Contributing
 
 We welcome contributions! Here's how to get started:
 
 ```bash
-git clone https://github.com/Lumos-Labs-HQ/FlashORM.git
-cd FlashORM
+git clone https://github.com/Lumos-Labs-HQ/flash.git
+cd flash
 
 make dev-setup
 
