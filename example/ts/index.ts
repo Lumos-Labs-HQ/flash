@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
-import { New } from './graft_gen/database';
+import { New } from './flash_gen/database';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/graft_test';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/FlashORM_test';
 
 
 async function main() {

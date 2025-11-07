@@ -13,7 +13,7 @@ import (
 )
 
 var DB *sql.DB
-var Queries *graft_gen.Queries
+var Queries *FlashORMORM_gen.Queries
 
 func ConnectDatabase() {
 	if err := godotenv.Load(); err != nil {
