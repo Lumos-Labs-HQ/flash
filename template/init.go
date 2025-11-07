@@ -106,6 +106,7 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
 		`  "schema_path": "db/schema/schema.sql"`,
 		`  "queries": "db/queries/"`,
 		`  "migrations_path": "db/migrations"`,
+		`  "seeds_path": "db/seeds"`,
 		`  "export_path": "db/export"`,
 		fmt.Sprintf(`  "database": {
     "provider": "%s",
@@ -179,7 +180,7 @@ func (pt *ProjectTemplate) GetEnvTemplate() string {
 }
 
 func (pt *ProjectTemplate) GetDirectoryStructure() []string {
-	return []string{"db/schema", "db/queries"}
+	return []string{"db/schema", "db/queries", "db/seeds"}
 }
 
 func ValidateDatabaseType(dbType string) DatabaseType {

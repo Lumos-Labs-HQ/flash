@@ -14,6 +14,7 @@ type Config struct {
 	Queries        string   `json:"queries" mapstructure:"queries"`
 	MigrationsPath string   `json:"migrations_path" mapstructure:"migrations_path"`
 	ExportPath     string   `json:"export_path" mapstructure:"export_path"`
+	SeedsPath     string   `json:"seeds_path" mapstructure:"seeds_path"`
 	Database       Database `json:"database" mapstructure:"database"`
 	Gen            Gen      `json:"gen" mapstructure:"gen"`
 }
@@ -61,6 +62,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.MigrationsPath == "" {
 		cfg.MigrationsPath = "db/migrations"
+	}
+	if cfg.SeedsPath == "" {
+		cfg.SeedsPath = "db/seeds"
 	}
 	if cfg.ExportPath == "" {
 		cfg.ExportPath = "db/export"
