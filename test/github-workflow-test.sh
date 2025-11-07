@@ -83,7 +83,7 @@ log_success "Project initialized"
 
 # Verify project structure
 log_step "Verify project structure"
-required_files=("graft.config.json" "sqlc.yml" ".env" "db/schema/schema.sql")
+required_files=("graft.config.json" ".env" "db/schema/schema.sql")
 for file in "${required_files[@]}"; do
     if [ ! -f "$file" ]; then
         log_error "Required file missing: $file"
