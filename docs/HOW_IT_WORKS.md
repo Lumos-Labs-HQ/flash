@@ -194,7 +194,7 @@ Multi-format export system with the following features:
 ```
 
 **Export Triggers:**
-- Manual export commands (`FlashORM export`)
+- Manual export commands (`flash export`)
 - Before destructive operations
 - Schema conflict resolution
 - Database reset operations
@@ -254,11 +254,11 @@ var pgTypeMap = map[string]string{
 
 ## Migration Workflow
 
-### 1. Migration Creation (`FlashORM migrate`)
+### 1. Migration Creation (`flash migrate`)
 
 ```mermaid
 graph TD
-    A[User runs 'FlashORM migrate'] --> B[Load Configuration]
+    A[User runs 'flash migrate'] --> B[Load Configuration]
     B --> C[Generate Migration ID]
     C --> D[Parse Current Schema]
     D --> E[Generate Schema Diff]
@@ -266,11 +266,11 @@ graph TD
     F --> G[Write Migration File]
 ```
 
-### 2. Safe Migration Application (`FlashORM apply`)
+### 2. Safe Migration Application (`flash apply`)
 
 ```mermaid
 graph TD
-    A[User runs 'FlashORM apply'] --> B[Load Configuration]
+    A[User runs 'flash apply'] --> B[Load Configuration]
     B --> C[Connect to Database]
     C --> D[Create Migration Table]
     D --> E[Get Applied Migrations]
@@ -326,7 +326,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
     if err := m.adapter.ExecuteMigration(ctx, content); err != nil {
         fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
         fmt.Printf("   Error: %v\n", err)
-        fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
+        fmt.Println("   Transaction rolled back. Fix the error and run 'flash apply' again.")
         return err
     }
     
@@ -428,13 +428,13 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 
 ```bash
 # Export as JSON (default)
-FlashORM export
+flash export
 
 # Export as CSV
-FlashORM export --csv
+flash export --csv
 
 # Export as SQLite
-FlashORM export --sqlite
+flash export --sqlite
 ```
 
 ## Configuration System
@@ -443,18 +443,18 @@ FlashORM export --sqlite
 
 1. Command-line flags (`--config`)
 2. Environment variables
-3. Local config file (`./FlashORM.config.json`)
+3. Local config file (`./flash.config.json`)
 4. Default values
 
 ### Environment Variable Support
 
 ```bash
 # Database connection
-export DATABASE_URL="postgres://user:pass@localhost:5432/db"
+"url_env": "DATABASE_URL"
 
 # Override config paths
-export FlashORM_MIGRATIONS_PATH="custom/migrations"
-export FlashORM_SCHEMA_PATH="custom/schema.sql"
+"migrations_path": "db/migrations",
+"schema_path": "db/schema/schema.sql",
 ```
 
 ### Configuration Structure
@@ -473,7 +473,6 @@ export FlashORM_SCHEMA_PATH="custom/schema.sql"
   "gen": {
     "js": {
       "enabled": true,
-      "out": "FlashORM_gen"
     }
   }
 }
@@ -517,7 +516,7 @@ FlashORM automatically detects project type and generates appropriate code:
 **Go Projects:**
 - Uses custom Go generator (`internal/gogen/`)
 - Generates type-safe structs and query methods
-- Output: `FlashORM_gen/` directory
+- Output: `flash_gen/` directory
 
 **Node.js Projects:**
 - Detects `package.json` presence
@@ -552,7 +551,7 @@ All errors include contextual information and recovery suggestions:
 ```go
 fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
 fmt.Printf("   Error: %v\n", err)
-fmt.Println("   Transaction rolled back. Fix the error and run 'FlashORM apply' again.")
+fmt.Println("   Transaction rolled back. Fix the error and run 'flash apply' again.")
 ```
 
 ## Performance Considerations
@@ -593,7 +592,7 @@ FlashORM includes a custom Go code generator that creates type-safe database cod
 
 **Generated Output:**
 ```go
-// FlashORM_gen/models.go
+// flash_gen/models.go
 type Users struct {
     ID        sql.NullInt32  `json:"id"`
     Name      string         `json:"name"`
@@ -646,7 +645,7 @@ var sqlToTSTypeMap = map[string]string{
 
 **Generated Code Structure:**
 ```
-FlashORM_gen/
+flash_gen/
 ├── database.js       # Database client
 ├── queries.js        # Query methods
 └── index.d.ts        # TypeScript definitions
@@ -730,7 +729,7 @@ FlashORM is distributed via NPM with automatic binary download:
 
 **Package Structure:**
 ```
-FlashORM-orm/
+flashorm/
 ├── package.json      # NPM package config
 ├── index.js          # Programmatic API
 ├── bin/
@@ -740,12 +739,12 @@ FlashORM-orm/
 ```
 
 **Installation Flow:**
-1. User runs `npm install -g FlashORM-orm`
+1. User runs `npm install -g flashorm`
 2. NPM installs the wrapper package (~3KB)
 3. Postinstall script runs automatically
 4. Script detects platform and architecture
 5. Downloads correct binary from GitHub releases
-6. Installs binary to `node_modules/FlashORM-orm/bin/`
+6. Installs binary to `node_modules/flashorm/bin/`
 7. NPM creates symlink in global bin directory
 
 **Platform Detection:**
@@ -764,8 +763,8 @@ const archMap = {
   'arm64': 'arm64'
 };
 
-const binaryName = platform === 'win32' ? 'FlashORM.exe' : 'FlashORM';
-const downloadUrl = `https://github.com/Lumos-Labs-HQ/FlashORM/releases/download/v${VERSION}/FlashORM-${platform}-${arch}`;
+const binaryName = platform === 'win32' ? 'flash.exe' : 'flash';
+const downloadUrl = `https://github.com/Lumos-Labs-HQ/flash/releases/download/v${VERSION}/FlashORM-${platform}-${arch}`;
 ```
 
 **Binary Download:**
@@ -784,23 +783,11 @@ https.get(downloadUrl, (response) => {
 
 **CLI Wrapper:**
 ```javascript
-// bin/FlashORM.js - Spawns the downloaded binary
+// bin/flash.js - Spawns the downloaded binary
 const binaryPath = path.join(__dirname, binaryName);
 const child = spawn(binaryPath, process.argv.slice(2), {
   stdio: 'inherit'
 });
-```
-
-**Programmatic API:**
-```javascript
-const FlashORM = require('FlashORM-orm');
-
-// Execute commands
-FlashORM.exec('status');
-FlashORM.exec('migrate "add users"');
-
-// Get binary path
-const binaryPath = FlashORM.getBinaryPath();
 ```
 
 **GitHub Actions Integration:**
@@ -831,7 +818,7 @@ jobs:
 
 ### Overview
 
-FlashORM Studio is a web-based database management interface built with Go Fiber and vanilla JavaScript, providing three main interfaces for database interaction.
+Flash Studio is a web-based database management interface built with Go Fiber and vanilla JavaScript, providing three main interfaces for database interaction.
 
 ### Server Architecture
 
@@ -1053,7 +1040,7 @@ app.Use("/static", filesystem.New(filesystem.Config{
 
 ### Overview
 
-The `FlashORM raw` command provides direct SQL execution from the command line with formatted output.
+The `flash raw` command provides direct SQL execution from the command line with formatted output.
 
 ### Execution Flow
 
