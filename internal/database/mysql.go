@@ -36,7 +36,41 @@ func NewMySQLAdapter() *MySQLAdapter {
 }
 
 func (m *MySQLAdapter) Connect(ctx context.Context, url string) error {
-	db, err := sql.Open("mysql", url)
+	dsn := url
+	if strings.HasPrefix(url, "mysql://") {
+		dsn = strings.TrimPrefix(url, "mysql://")
+
+		atIndex := strings.Index(dsn, "@")
+		if atIndex > 0 {
+			credentials := dsn[:atIndex]
+			remainder := dsn[atIndex+1:]
+
+			slashIndex := strings.Index(remainder, "/")
+			if slashIndex > 0 {
+				hostPort := remainder[:slashIndex]
+				dbAndParams := remainder[slashIndex+1:]
+
+				// Translate common SSL/TLS parameter formats to MySQL driver format
+				// ssl-mode=REQUIRED -> tls=true
+				// ssl-mode=DISABLED -> tls=false
+				// sslmode=require -> tls=true
+				// sslmode=disable -> tls=false
+				dbAndParams = strings.ReplaceAll(dbAndParams, "ssl-mode=REQUIRED", "tls=skip-verify")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "ssl-mode=DISABLED", "tls=false")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "ssl-mode=VERIFY_CA", "tls=true")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "ssl-mode=VERIFY_IDENTITY", "tls=true")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=require", "tls=skip-verify")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=disable", "tls=false")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=verify-ca", "tls=true")
+				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=verify-full", "tls=true")
+
+				// Reconstruct as DSN format
+				dsn = fmt.Sprintf("%s@tcp(%s)/%s", credentials, hostPort, dbAndParams)
+			}
+		}
+	}
+
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open MySQL connection: %w", err)
 	}
@@ -310,8 +344,64 @@ func (m *MySQLAdapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTabl
 }
 
 func (m *MySQLAdapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error) {
-	// MySQL doesn't have native ENUM types like PostgreSQL
-	return []types.SchemaEnum{}, nil
+	// MySQL has ENUM types as column definitions, extract them
+	query := `
+		SELECT DISTINCT
+			CONCAT(table_name, '_', column_name) as enum_name,
+			column_type
+		FROM information_schema.columns
+		WHERE table_schema = DATABASE()
+		AND data_type = 'enum'
+		AND table_name NOT LIKE '_flash_%'
+		ORDER BY table_name, column_name
+	`
+
+	rows, err := m.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var enums []types.SchemaEnum
+	for rows.Next() {
+		var enumName, columnType string
+		if err := rows.Scan(&enumName, &columnType); err != nil {
+			return nil, err
+		}
+
+		// Extract values from enum('val1','val2','val3')
+		values := extractEnumValues(columnType)
+		if len(values) > 0 {
+			enums = append(enums, types.SchemaEnum{
+				Name:   enumName,
+				Values: values,
+			})
+		}
+	}
+
+	return enums, nil
+}
+
+// extractEnumValues extracts values from MySQL enum type definition
+func extractEnumValues(columnType string) []string {
+	if !strings.HasPrefix(columnType, "enum(") {
+		return nil
+	}
+
+	values := strings.TrimPrefix(columnType, "enum(")
+	values = strings.TrimSuffix(values, ")")
+
+	var result []string
+	parts := strings.Split(values, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, "'\"")
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+
+	return result
 }
 
 // GetAllTablesColumns fetches columns for multiple tables in a single query (OPTIMIZED)
@@ -342,8 +432,19 @@ func (m *MySQLAdapter) GetAllTablesColumns(ctx context.Context, tableNames []str
 			CASE WHEN c.column_key = 'PRI' THEN 1 ELSE 0 END as is_primary_key,
 			CASE WHEN c.column_key = 'UNI' THEN 1 ELSE 0 END as is_unique,
 			c.extra,
-			c.ordinal_position
+			c.ordinal_position,
+			k.REFERENCED_TABLE_NAME,
+			k.REFERENCED_COLUMN_NAME,
+			r.DELETE_RULE
 		FROM information_schema.columns c
+		LEFT JOIN information_schema.key_column_usage k
+			ON c.table_schema = k.table_schema
+			AND c.table_name = k.table_name
+			AND c.column_name = k.column_name
+			AND k.referenced_table_name IS NOT NULL
+		LEFT JOIN information_schema.referential_constraints r
+			ON k.constraint_name = r.constraint_name
+			AND k.table_schema = r.constraint_schema
 		WHERE c.table_name IN (%s) AND c.table_schema = DATABASE()
 		ORDER BY c.table_name, c.ordinal_position
 	`, strings.Join(placeholders, ","))
@@ -360,7 +461,7 @@ func (m *MySQLAdapter) GetAllTablesColumns(ctx context.Context, tableNames []str
 		var tableName string
 		var column types.SchemaColumn
 		var dataType, isNullable, columnType, extra string
-		var columnDefault sql.NullString
+		var columnDefault, referencedTable, referencedColumn, onDeleteAction sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique int
 		var ordinalPosition int
@@ -379,6 +480,9 @@ func (m *MySQLAdapter) GetAllTablesColumns(ctx context.Context, tableNames []str
 			&isUnique,
 			&extra,
 			&ordinalPosition,
+			&referencedTable,
+			&referencedColumn,
+			&onDeleteAction,
 		)
 		if err != nil {
 			return nil, err
@@ -390,7 +494,15 @@ func (m *MySQLAdapter) GetAllTablesColumns(ctx context.Context, tableNames []str
 		column.IsUnique = isUnique == 1
 		column.IsAutoIncrement = strings.Contains(strings.ToLower(extra), "auto_increment")
 		if columnDefault.Valid {
-			column.Default = columnDefault.String
+			column.Default = m.formatMySQLDefault(columnDefault.String, column.Type)
+		}
+
+		if referencedTable.Valid && referencedColumn.Valid {
+			column.ForeignKeyTable = referencedTable.String
+			column.ForeignKeyColumn = referencedColumn.String
+			if onDeleteAction.Valid {
+				column.OnDeleteAction = onDeleteAction.String
+			}
 		}
 
 		result[tableName] = append(result[tableName], column)
@@ -405,7 +517,6 @@ func (m *MySQLAdapter) GetAllTablesIndexes(ctx context.Context, tableNames []str
 		return make(map[string][]types.SchemaIndex), nil
 	}
 
-	// Build IN clause for table names
 	placeholders := make([]string, len(tableNames))
 	args := make([]interface{}, len(tableNames))
 	for i, name := range tableNames {
@@ -426,7 +537,6 @@ func (m *MySQLAdapter) GetAllTablesIndexes(ctx context.Context, tableNames []str
 	}
 	defer rows.Close()
 
-	// Group indexes by table name, then by index name
 	type indexKey struct {
 		tableName string
 		indexName string
@@ -470,8 +580,19 @@ func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([
 			c.character_maximum_length, c.numeric_precision, c.numeric_scale, c.column_type,
 			CASE WHEN c.column_key = 'PRI' THEN 1 ELSE 0 END as is_primary_key,
 			CASE WHEN c.column_key = 'UNI' THEN 1 ELSE 0 END as is_unique,
-			c.extra
+			c.extra,
+			k.REFERENCED_TABLE_NAME,
+			k.REFERENCED_COLUMN_NAME,
+			r.DELETE_RULE
 		FROM information_schema.columns c
+		LEFT JOIN information_schema.key_column_usage k
+			ON c.table_schema = k.table_schema
+			AND c.table_name = k.table_name
+			AND c.column_name = k.column_name
+			AND k.referenced_table_name IS NOT NULL
+		LEFT JOIN information_schema.referential_constraints r
+			ON k.constraint_name = r.constraint_name
+			AND k.table_schema = r.constraint_schema
 		WHERE c.table_name = ? AND c.table_schema = DATABASE()
 		ORDER BY c.ordinal_position
 	`, tableName)
@@ -484,13 +605,13 @@ func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([
 	for rows.Next() {
 		var column types.SchemaColumn
 		var dataType, isNullable, columnType, extra string
-		var columnDefault sql.NullString
+		var columnDefault, referencedTable, referencedColumn, onDeleteAction sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique int
 
 		err := rows.Scan(&column.Name, &dataType, &isNullable, &columnDefault,
 			&charMaxLength, &numericPrecision, &numericScale, &columnType,
-			&isPrimary, &isUnique, &extra)
+			&isPrimary, &isUnique, &extra, &referencedTable, &referencedColumn, &onDeleteAction)
 		if err != nil {
 			return nil, err
 		}
@@ -502,7 +623,15 @@ func (m *MySQLAdapter) GetTableColumns(ctx context.Context, tableName string) ([
 		// Detect auto-increment in MySQL
 		column.IsAutoIncrement = strings.Contains(strings.ToLower(extra), "auto_increment")
 		if columnDefault.Valid {
-			column.Default = columnDefault.String
+			column.Default = m.formatMySQLDefault(columnDefault.String, column.Type)
+		}
+
+		if referencedTable.Valid && referencedColumn.Valid {
+			column.ForeignKeyTable = referencedTable.String
+			column.ForeignKeyColumn = referencedColumn.String
+			if onDeleteAction.Valid {
+				column.OnDeleteAction = onDeleteAction.String
+			}
 		}
 
 		columns = append(columns, column)
@@ -679,7 +808,6 @@ func (m *MySQLAdapter) GetAllTableRowCounts(ctx context.Context, tableNames []st
 		return make(map[string]int), nil
 	}
 
-	// Build UNION ALL query to get all counts in one go
 	var queryParts []string
 	for _, tableName := range tableNames {
 		queryParts = append(queryParts, fmt.Sprintf("SELECT '%s' as table_name, COUNT(*) as row_count FROM `%s`", tableName, tableName))
@@ -804,7 +932,15 @@ func (m *MySQLAdapter) FormatColumnType(column types.SchemaColumn) string {
 	}
 
 	if column.Default != "" {
-		parts = append(parts, fmt.Sprintf("DEFAULT %s", column.Default))
+		defaultValue := column.Default
+		if strings.HasPrefix(strings.ToUpper(column.Type), "ENUM(") {
+			trimmed := strings.TrimSpace(defaultValue)
+			if !strings.HasPrefix(trimmed, "'") && !strings.HasPrefix(trimmed, "\"") &&
+				!strings.EqualFold(trimmed, "NULL") && !strings.EqualFold(trimmed, "CURRENT_TIMESTAMP") {
+				defaultValue = fmt.Sprintf("'%s'", trimmed)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("DEFAULT %s", defaultValue))
 	}
 
 	return strings.Join(parts, " ")
@@ -960,6 +1096,14 @@ func (m *MySQLAdapter) formatMySQLDefault(defaultValue, columnType string) strin
 	// Handle MySQL specific defaults
 	if strings.Contains(strings.ToLower(defaultValue), "current_timestamp") {
 		return "CURRENT_TIMESTAMP"
+	}
+
+	// For ENUM types, ensure default value is quoted
+	if strings.HasPrefix(strings.ToUpper(columnType), "ENUM(") {
+		trimmed := strings.TrimSpace(defaultValue)
+		if !strings.HasPrefix(trimmed, "'") && !strings.HasPrefix(trimmed, "\"") {
+			return fmt.Sprintf("'%s'", trimmed)
+		}
 	}
 
 	return defaultValue

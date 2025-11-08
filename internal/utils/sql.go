@@ -276,13 +276,13 @@ func ValidateSchemaSyntax(content, filePath string) error {
 
 		if parenDepth < 0 {
 			relPath := filepath.Base(filePath)
-			return fmt.Errorf("# package FlashORMORM\n%s:%d:2: syntax error: unexpected ')'", relPath, lineNumber)
+			return fmt.Errorf("# package flash\n%s:%d:2: syntax error: unexpected ')'", relPath, lineNumber)
 		}
 	}
 
 	if inCreateTable && parenDepth > 0 {
 		relPath := filepath.Base(filePath)
-		return fmt.Errorf("# package FlashORMORM\n%s:%d:2: syntax error: unclosed CREATE TABLE statement", relPath, tableStartLine)
+		return fmt.Errorf("# package flash\n%s:%d:2: syntax error: unclosed CREATE TABLE statement", relPath, tableStartLine)
 	}
 
 	return nil

@@ -438,6 +438,17 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	sqlTypeLower := strings.ToLower(sqlType)
 
+	if strings.HasPrefix(sqlTypeLower, "enum(") {
+		values := extractEnumValuesFromType(sqlType)
+		if len(values) > 0 {
+			quotedValues := make([]string, len(values))
+			for i, v := range values {
+				quotedValues[i] = fmt.Sprintf("'%s'", v)
+			}
+			return strings.Join(quotedValues, " | ")
+		}
+	}
+
 	if g.schema != nil {
 		for _, enum := range g.schema.Enums {
 			if strings.ToLower(enum.Name) == sqlTypeLower {
@@ -466,6 +477,29 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	default:
 		return "string"
 	}
+}
+
+// extractEnumValuesFromType extracts values from inline ENUM type
+func extractEnumValuesFromType(columnType string) []string {
+	columnType = strings.ToLower(columnType)
+	if !strings.HasPrefix(columnType, "enum(") {
+		return nil
+	}
+
+	values := strings.TrimPrefix(columnType, "enum(")
+	values = strings.TrimSuffix(values, ")")
+
+	var result []string
+	parts := strings.Split(values, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, "'\"")
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+
+	return result
 }
 
 func (g *Generator) convertSQL(sql string) string {
