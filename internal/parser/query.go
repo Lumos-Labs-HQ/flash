@@ -13,15 +13,13 @@ import (
 )
 
 var (
-	fromRegex      *regexp.Regexp
-	paramRegex     *regexp.Regexp
-	insertColRegex *regexp.Regexp
+	fromRegex  *regexp.Regexp
+	paramRegex *regexp.Regexp
 )
 
 func init() {
 	fromRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
 	paramRegex = regexp.MustCompile(`\$\d+|\?`)
-	insertColRegex = regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
 }
 
 type QueryParser struct {
@@ -164,18 +162,26 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	}
 
 	paramMatches := paramRegex.FindAllString(query.SQL, -1)
-	seen := make(map[string]bool, len(paramMatches))
-	uniqueParams := make([]string, 0, len(paramMatches))
 
-	for _, p := range paramMatches {
-		if !seen[p] {
-			seen[p] = true
-			uniqueParams = append(uniqueParams, p)
+	// For PostgreSQL-style ($1, $2), we need unique params
+	// For SQLite-style (?), each ? is a separate parameter
+	var paramCount int
+	if len(paramMatches) > 0 && paramMatches[0] == "?" {
+		// SQLite style - count all occurrences
+		paramCount = len(paramMatches)
+	} else {
+		// PostgreSQL style - count unique $n
+		seen := make(map[string]bool, len(paramMatches))
+		for _, p := range paramMatches {
+			if !seen[p] {
+				seen[p] = true
+				paramCount++
+			}
 		}
 	}
 
-	query.Params = make([]*Param, len(uniqueParams))
-	for i := range uniqueParams {
+	query.Params = make([]*Param, paramCount)
+	for i := 0; i < paramCount; i++ {
 		paramName := fmt.Sprintf("param%d", i+1)
 		paramType := "any"
 
@@ -202,8 +208,21 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		!utils.ContainsSQLKeyword(sqlTrimmed, "UPDATE") &&
 		!utils.ContainsSQLKeyword(sqlTrimmed, "INSERT")
 
-	if isSelectQuery && isNotModifying {
-		columnsStr := utils.ExtractSelectColumns(query.SQL)
+	hasReturning := utils.ContainsSQLKeyword(sqlTrimmed, "RETURNING")
+
+	// Extract columns from SELECT queries or RETURNING clauses
+	if (isSelectQuery && isNotModifying) || hasReturning {
+		var columnsStr string
+
+		if hasReturning {
+			// Extract columns from RETURNING clause
+			returningRegex := regexp.MustCompile(`(?i)RETURNING\s+(.+?)(?:;|\z)`)
+			if matches := returningRegex.FindStringSubmatch(query.SQL); len(matches) > 1 {
+				columnsStr = strings.TrimSpace(matches[1])
+			}
+		} else {
+			columnsStr = utils.ExtractSelectColumns(query.SQL)
+		}
 
 		if columnsStr != "" && strings.TrimSpace(columnsStr) != "*" {
 			colNames := utils.SmartSplitColumns(columnsStr)

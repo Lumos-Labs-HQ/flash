@@ -114,12 +114,10 @@ func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table,
 }
 
 func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
-	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
-	whereRe := regexp.MustCompile(wherePattern)
-	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
-		return match[1]
-	}
+	// Support both PostgreSQL ($1) and SQLite (?) parameter styles
+	// For ?, we need to count occurrences to match the paramIndex
 
+	// Check for INSERT statement first (works for both ? and $n)
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
 		insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
 		if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
@@ -128,6 +126,24 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 				return strings.TrimSpace(colNames[paramIndex-1])
 			}
 		}
+	}
+
+	if strings.Contains(sql, "?") {
+		whereRegex := regexp.MustCompile(`(?i)WHERE\s+(.+?)(?:LIMIT|ORDER|GROUP|HAVING|$)`)
+		if whereMatch := whereRegex.FindStringSubmatch(sql); len(whereMatch) > 1 {
+			whereClause := whereMatch[1]
+			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*\?`)
+			matches := colPattern.FindAllStringSubmatch(whereClause, -1)
+			if paramIndex <= len(matches) && len(matches[paramIndex-1]) > 1 {
+				return matches[paramIndex-1][1]
+			}
+		}
+	}
+
+	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
+	whereRe := regexp.MustCompile(wherePattern)
+	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
 	}
 
 	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)

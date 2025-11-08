@@ -85,8 +85,8 @@ Examples:
 
 		fmt.Println("✅ Migration generated successfully")
 		fmt.Println("📝 Edit the migration file to add your SQL statements")
-		fmt.Println("💡 Run 'FlashORMORM apply' to apply the migration")
-		fmt.Println("🔧 Run 'FlashORMORM gen' to generate SQLC types after applying migrations")
+		fmt.Println("💡 Run 'FlashORM apply' to apply the migration")
+		fmt.Println("🔧 Run 'FlashORM gen' to generate SQLC types after applying migrations")
 
 		return nil
 	},

@@ -23,23 +23,36 @@ Examples:
   flash studio --db "postgres://user:pass@localhost:5432/mydb"
   flash studio --port 3000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
-
-		if err := cfg.Validate(); err != nil {
-			return fmt.Errorf("invalid config: %w", err)
-		}
-
 		dbURL, _ := cmd.Flags().GetString("db")
-		if dbURL != "" {
-			os.Setenv(cfg.Database.URLEnv, dbURL)
-			fmt.Printf("📊 Using database: %s\n", maskDBURL(dbURL))
-		}
-
 		port, _ := cmd.Flags().GetInt("port")
 		browser, _ := cmd.Flags().GetBool("browser")
+
+		var cfg *config.Config
+		var err error
+
+		if dbURL != "" {
+			fmt.Printf("📊 Using database: %s\n", maskDBURL(dbURL))
+
+			provider := detectProvider(dbURL)
+
+			cfg = &config.Config{
+				Database: config.Database{
+					Provider: provider,
+					URLEnv:   "STUDIO_DB_URL",
+				},
+			}
+
+			os.Setenv("STUDIO_DB_URL", dbURL)
+		} else {
+			cfg, err = config.Load()
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			if err := cfg.Validate(); err != nil {
+				return fmt.Errorf("invalid config: %w", err)
+			}
+		}
 
 		server := studio.NewServer(cfg, port)
 		return server.Start(browser)
@@ -61,4 +74,22 @@ func maskDBURL(url string) string {
 		return url[:10] + "***" + url[len(url)-10:]
 	}
 	return "***"
+}
+
+func detectProvider(dbURL string) string {
+	switch {
+	case len(dbURL) >= 10 && (dbURL[:10] == "postgres://" || dbURL[:10] == "postgresql"):
+		return "postgresql"
+	case len(dbURL) >= 8 && dbURL[:8] == "mysql://":
+		return "mysql"
+	case len(dbURL) >= 9 && dbURL[:9] == "sqlite://":
+		return "sqlite"
+	default:
+		if contains := func(s, substr string) bool {
+			return len(s) >= len(substr) && s[:len(substr)] == substr
+		}; contains(dbURL, "postgres") {
+			return "postgresql"
+		}
+		return "postgresql"
+	}
 }

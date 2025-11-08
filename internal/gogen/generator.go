@@ -65,6 +65,9 @@ func (g *Generator) Generate() error {
 }
 
 func (g *Generator) generateModels() error {
+	// Extract inline MySQL ENUMs and add them to schema.Enums
+	enumTypeMap := g.extractInlineEnums()
+
 	// Pre-allocate: ~200 bytes header + ~150 bytes per table + ~100 per enum
 	estimatedSize := 200 + (len(g.schema.Tables) * 150) + (len(g.schema.Enums) * 100)
 	var code strings.Builder
@@ -93,7 +96,7 @@ func (g *Generator) generateModels() error {
 		code.WriteString(fmt.Sprintf("type %s struct {\n", structName))
 		for _, col := range table.Columns {
 			fieldName := utils.ToPascalCase(col.Name)
-			goType := g.mapSQLTypeToGo(col.Type, col.Nullable)
+			goType := g.mapSQLTypeToGoWithEnumMap(col.Type, col.Nullable, enumTypeMap)
 			jsonTag := utils.ToSnakeCase(col.Name)
 			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\" db:\"%s\"`\n", fieldName, goType, jsonTag, col.Name))
 		}
@@ -512,16 +515,26 @@ func (g *Generator) isModifyingQuery(sql string) bool {
 func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	sqlTypeLower := strings.ToLower(sqlType)
 
+	// Check for named ENUM types (both PostgreSQL and extracted MySQL inline ENUMs)
 	if g.schema != nil {
 		for _, enum := range g.schema.Enums {
 			if strings.ToLower(enum.Name) == sqlTypeLower {
 				enumType := utils.ToPascalCase(enum.Name)
+				// For nullable ENUMs, use sql.NullString since Go doesn't support sql.Null<CustomType>
 				if nullable {
-					return "sql.Null" + enumType
+					return "sql.NullString"
 				}
 				return enumType
 			}
 		}
+	}
+
+	// Handle MySQL inline ENUM types: enum('val1','val2','val3')
+	if strings.HasPrefix(sqlTypeLower, "enum(") {
+		if nullable {
+			return "sql.NullString"
+		}
+		return "string"
 	}
 
 	baseType := ""
@@ -565,13 +578,11 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 }
 
 func (g *Generator) mapParamTypeToGo(paramType string) string {
-	// Handle union types (e.g., for enums defined in queries)
 	if strings.Contains(paramType, "|") {
 		parts := strings.Split(paramType, "|")
 		paramType = strings.TrimSpace(parts[0])
 	}
 
-	// Check if it's an enum type
 	if g.schema != nil {
 		for _, enum := range g.schema.Enums {
 			if strings.EqualFold(enum.Name, paramType) {
@@ -580,11 +591,77 @@ func (g *Generator) mapParamTypeToGo(paramType string) string {
 		}
 	}
 
-	// Map SQL types to Go types (non-nullable for parameters)
 	return g.mapSQLTypeToGo(paramType, false)
 }
 
 func (g *Generator) mapColumnTypeToGo(colType string, nullable bool) string {
-	// Simply delegate to the main SQL type mapper
 	return g.mapSQLTypeToGo(colType, nullable)
+}
+
+// mapSQLTypeToGoWithEnumMap maps SQL types to Go types using enum type map for MySQL inline ENUMs
+func (g *Generator) mapSQLTypeToGoWithEnumMap(sqlType string, nullable bool, enumTypeMap map[string]string) string {
+	sqlTypeLower := strings.ToLower(sqlType)
+
+	if enumName, ok := enumTypeMap[sqlTypeLower]; ok {
+		typeName := utils.ToPascalCase(enumName)
+		if nullable {
+			return "sql.NullString"
+		}
+		return typeName
+	}
+
+	return g.mapSQLTypeToGo(sqlType, nullable)
+}
+
+// extractInlineEnums extracts MySQL inline ENUM types and adds them to schema
+func (g *Generator) extractInlineEnums() map[string]string {
+	enumTypeMap := make(map[string]string)
+
+	if g.schema == nil {
+		return enumTypeMap
+	}
+
+	for _, table := range g.schema.Tables {
+		for _, col := range table.Columns {
+			colTypeLower := strings.ToLower(col.Type)
+			if strings.HasPrefix(colTypeLower, "enum(") {
+				values := extractEnumValues(col.Type)
+				if len(values) > 0 {
+					enumName := fmt.Sprintf("%s_%s", table.Name, col.Name)
+
+					enumTypeMap[colTypeLower] = enumName
+
+					g.schema.Enums = append(g.schema.Enums, &parser.Enum{
+						Name:   enumName,
+						Values: values,
+					})
+				}
+			}
+		}
+	}
+
+	return enumTypeMap
+}
+
+// extractEnumValues extracts values from inline ENUM type
+func extractEnumValues(columnType string) []string {
+	columnType = strings.ToLower(columnType)
+	if !strings.HasPrefix(columnType, "enum(") {
+		return nil
+	}
+
+	values := strings.TrimPrefix(columnType, "enum(")
+	values = strings.TrimSuffix(values, ")")
+
+	var result []string
+	parts := strings.Split(values, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, "'\"")
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+
+	return result
 }
