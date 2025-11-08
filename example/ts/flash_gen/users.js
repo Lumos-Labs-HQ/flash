@@ -88,13 +88,13 @@ class Queries {
     return r.rowCount;
   }
 
-  async createCategory(user_id) {
+  async createCategory(name) {
     let stmt = this._stmts.get('createCategory');
     if (!stmt) {
       stmt = `INSERT INTO categories (name) VALUES ($1); SELECT p.id, p.title, p.content, p.created_at, 'post' as activity_type FROM posts p WHERE p.user_id = $1 UNION ALL SELECT c.id, 'Comment' as title, c.content, c.created_at, 'comment' as activity_type FROM comments c WHERE c.user_id = $1 ORDER BY created_at DESC LIMIT 20;`;
       this._stmts.set('createCategory', stmt);
     }
-    const r = await this.db.query(stmt, [user_id]);
+    const r = await this.db.query(stmt, [name]);
     return r.rowCount;
   }
 

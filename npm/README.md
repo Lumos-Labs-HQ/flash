@@ -20,8 +20,10 @@ A powerful, database-agnostic migration CLI tool built in Go with multi-database
 | Operation | FlashORM | Drizzle | Prisma |
 |-----------|-------|---------|--------|
 | Insert 1000 Users | **158ms** | 224ms | 230ms |
+| Insert 10 Cat + 5K Posts + 15K Comments | **2410ms** | 3028ms | 3977ms |
 | Complex Query x500 | **4071ms** | 12500ms | 56322ms |
-| Mixed Workload x1000 | **186ms** | 1174ms | 10863ms |
+| Mixed Workload x1000 (75% read, 25% write) | **186ms** | 1174ms | 10863ms |
+| Stress Test Simple Query x2000 | **122ms** | 160ms | 223ms |
 | **TOTAL** | **6947ms** | **17149ms** | **71551ms** |
 
 ## 🚀 Installation

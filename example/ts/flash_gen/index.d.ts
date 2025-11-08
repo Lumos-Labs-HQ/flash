@@ -132,7 +132,7 @@ export class Queries {
   createUser(name: string, email: string, address: string, isadmin: boolean): Promise<number>;
   createPost(user_id: number, category_id: number, title: string, content: string): Promise<number>;
   createComment(post_id: number, user_id: number, content: string): Promise<number>;
-  createCategory(user_id: number): Promise<number>;
+  createCategory(name: number): Promise<number>;
   getAveragePostsPerUser(): Promise<number | null>;
   getMostCommentedPosts(limit: number): Promise<GetMostCommentedPostsResult[]>;
   checkUserExists(email: string): Promise<boolean | null>;
