@@ -1,4 +1,4 @@
-# FlashORM ORM
+# FlashORM
 
 A powerful, database-agnostic migration CLI tool built in Go with multi-database support, visual database editor (FlashORM Studio), and type-safe code generation for JavaScript/TypeScript.
 
