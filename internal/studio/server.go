@@ -36,7 +36,7 @@ func NewServer(cfg *config.Config, port int) *Server {
 
 	// Use embedded templates
 	engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
-	
+
 	app := fiber.New(fiber.Config{
 		Views: engine,
 	})
@@ -72,10 +72,11 @@ func (s *Server) setupRoutes() {
 	api.Post("/tables/:name/delete", s.handleDeleteRows)
 	api.Delete("/tables/:name/rows/:id", s.handleDeleteRow)
 	api.Post("/sql", s.handleExecuteSQL)
-	
+
 	// Schema Editor API
 	api.Post("/schema/preview", s.handlePreviewSchemaChange)
 	api.Post("/schema/apply", s.handleApplySchemaChange)
+	api.Get("/config/check", s.handleCheckConfig)
 	api.Put("/tables/:name/rows/:id", s.handleUpdateRow)
 	api.Post("/tables/:name/rows", s.handleInsertRow)
 }
@@ -275,7 +276,7 @@ func (s *Server) handleExecuteSQL(c *fiber.Ctx) error {
 	var req struct {
 		Query string `json:"query"`
 	}
-	
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(Response{
 			Success: false,

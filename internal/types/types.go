@@ -5,8 +5,8 @@ import (
 )
 
 type SchemaEnum struct {
-	Name   string
-	Values []string
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
 }
 
 type SchemaTable struct {
