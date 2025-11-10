@@ -279,12 +279,73 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
-	if err := utils.ValidateTableReferences(query.SQL, schema); err != nil {
+	if err := utils.ValidateTableReferences(query.SQL, schema, query.SourceFile); err != nil {
 		return err
 	}
 
-	if err := utils.ValidateColumnReferences(query.SQL, schema); err != nil {
+	if err := utils.ValidateColumnReferences(query.SQL, schema, query.SourceFile); err != nil {
 		return err
+	}
+
+	// Validate that SELECT columns exist in schema
+	// Skip this for queries with JOINs since they span multiple tables and use qualified columns
+	hasJoin := strings.Contains(strings.ToUpper(query.SQL), "JOIN")
+
+	if table != nil && len(query.Columns) > 0 && !hasJoin {
+		for _, queryCol := range query.Columns {
+			if queryCol.Name == "*" {
+				continue
+			}
+
+			// Skip aggregate functions and expressions
+			colNameLower := strings.ToLower(queryCol.Name)
+			if strings.Contains(colNameLower, "count") ||
+				strings.Contains(colNameLower, "sum") ||
+				strings.Contains(colNameLower, "avg") ||
+				strings.Contains(colNameLower, "max") ||
+				strings.Contains(colNameLower, "min") ||
+				strings.Contains(colNameLower, "length") ||
+				strings.Contains(colNameLower, "extract") {
+				continue
+			}
+
+			// Skip if it contains parentheses (function call or expression)
+			if strings.Contains(queryCol.Name, "(") || strings.Contains(queryCol.Name, ")") {
+				continue
+			}
+
+			// Check if column exists in table
+			columnExists := false
+			for _, schemaCol := range table.Columns {
+				if strings.EqualFold(schemaCol.Name, queryCol.Name) {
+					columnExists = true
+					break
+				}
+			}
+
+			if !columnExists {
+				lines := strings.Split(query.SQL, "\n")
+				lineNum := 1
+				colPos := 1
+
+				for i, line := range lines {
+					if strings.Contains(strings.ToUpper(line), strings.ToUpper(queryCol.Name)) {
+						lineNum = i + 1
+						upperLine := strings.ToUpper(line)
+						upperCol := strings.ToUpper(queryCol.Name)
+						colPos = strings.Index(upperLine, upperCol) + 1
+						break
+					}
+				}
+
+				sourceFile := query.SourceFile
+				if sourceFile == "" {
+					sourceFile = "queries"
+				}
+				return fmt.Errorf("# package FlashORM\ndb\\queries\\%s.sql:%d:%d: column \"%s\" does not exist in table \"%s\"",
+					sourceFile, lineNum, colPos, queryCol.Name, table.Name)
+			}
+		}
 	}
 
 	return nil

@@ -234,7 +234,7 @@ func (s *Service) generateSchemaSQL(tables []types.SchemaTable) string {
 	var sql strings.Builder
 	
 	for i, table := range tables {
-		if table.Name == "_flash_migrations" || table.Name == "flash_seeds" {
+		if table.Name == "_flash_migrations" {
 			continue
 		}
 		
