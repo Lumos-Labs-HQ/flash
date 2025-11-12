@@ -200,7 +200,6 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
-	// First, check qualified column references (table.column)
 	columnRefPattern := regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
 	columnRefs := columnRefPattern.FindAllStringSubmatch(sql, -1)
 
@@ -244,25 +243,19 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
-	// Build a set of all known table aliases to skip them in validation
 	knownAliases := make(map[string]bool)
 	for alias := range aliasToTable {
 		knownAliases[alias] = true
 	}
 
-	// Also add single-letter aliases that are commonly used (p, u, c, etc.)
-	// These are extracted from FROM and JOIN clauses
 	aliasExtractPattern := regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
 	aliasMatches := aliasExtractPattern.FindAllStringSubmatch(sql, -1)
 	for _, match := range aliasMatches {
 		if len(match) >= 3 && match[2] != "" {
-			// Has explicit alias
 			knownAliases[strings.ToLower(match[2])] = true
 		}
 	}
 
-	// Now check unqualified column references in WHERE, SET, ORDER BY, GROUP BY, HAVING clauses
-	// Get the primary table from the query
 	var primaryTable *tableInfo
 	fromPattern := regexp.MustCompile(`(?i)\bFROM\s+(\w+)`)
 	if fromMatch := fromPattern.FindStringSubmatch(sql); len(fromMatch) > 1 {
@@ -270,7 +263,6 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		primaryTable = tables[tableName]
 	}
 
-	// Also check INSERT/UPDATE tables
 	if primaryTable == nil {
 		insertPattern := regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+(\w+)`)
 		if insertMatch := insertPattern.FindStringSubmatch(sql); len(insertMatch) > 1 {
@@ -279,13 +271,9 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
-	// Only validate unqualified columns for simple queries without JOINs
-	// For complex queries with JOINs, qualified column references are mandatory and already validated above
 	hasJoin := regexp.MustCompile(`(?i)\bJOIN\b`).MatchString(sql)
 
 	if primaryTable != nil && !hasJoin {
-		// Extract unqualified column names from WHERE, SET, ORDER BY, GROUP BY, HAVING clauses
-		// NOTE: We do NOT validate SELECT clause here because it's already validated by the query parser
 		clausePatterns := []*regexp.Regexp{
 			regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`),
 			regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`),
@@ -294,22 +282,18 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 			regexp.MustCompile(`(?i)\bHAVING\s+(.*?)(?:\s+(?:ORDER|LIMIT|;|$))`),
 		}
 
-		// Precompile regex for numbers/parameters to avoid recompiling in loop
 		paramRegex := regexp.MustCompile(`^\d+$|^\$\d+$|\?`)
 
 		for _, pattern := range clausePatterns {
 			if matches := pattern.FindStringSubmatch(sql); len(matches) > 1 {
 				clauseText := matches[1]
 
-				// Extract potential column names (word boundaries, not preceded by table.)
-				// This regex matches words that are not preceded by a dot and not SQL keywords
 				unqualifiedColPattern := regexp.MustCompile(`\b(\w+)\b`)
 				colMatches := unqualifiedColPattern.FindAllString(clauseText, -1)
 
 				for _, colName := range colMatches {
 					colLower := strings.ToLower(colName)
 
-					// Skip SQL keywords, operators, and common functions
 					if IsSQLKeyword(colName) ||
 						colLower == "true" || colLower == "false" || colLower == "null" ||
 						colLower == "and" || colLower == "or" || colLower == "not" ||
@@ -317,17 +301,14 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 						continue
 					}
 
-					// Skip if it's a number or parameter
 					if paramRegex.MatchString(colName) {
 						continue
 					}
 
-					// Skip if it's a known table alias
 					if knownAliases[colLower] {
 						continue
 					}
 
-					// Check if this column exists in the primary table
 					if !primaryTable.columns[colLower] {
 						lines := strings.Split(sql, "\n")
 						lineNum := 1

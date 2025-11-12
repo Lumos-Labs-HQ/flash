@@ -96,7 +96,6 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 		w.WriteString("from typing import Optional, List, Any\n")
 		w.WriteString("from datetime import datetime\n\n")
 
-		// Generate result types for queries with multiple columns
 		for _, query := range fileQueries {
 			if g.needsResultClass(query) {
 				g.generateResultClass(&w, query)
@@ -309,12 +308,10 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 }
 
 func (g *Generator) needsResultClass(query *parser.Query) bool {
-	// Generate result class for queries that return multiple columns or SELECT *
 	if len(query.Columns) == 0 {
 		return false
 	}
 
-	// Single column that's not * doesn't need a class
 	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
 		return false
 	}
@@ -325,7 +322,6 @@ func (g *Generator) needsResultClass(query *parser.Query) bool {
 func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query) {
 	className := utils.ToPascalCase(query.Name) + "Row"
 
-	// Expand wildcard columns
 	columns := g.expandWildcardColumns(query)
 	if len(columns) == 0 {
 		return
@@ -341,7 +337,6 @@ func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query)
 }
 
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
-	// If we have specific columns (not just *), return them
 	if len(query.Columns) > 1 {
 		return query.Columns
 	}
@@ -350,13 +345,11 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		return query.Columns
 	}
 
-	// Find the table being queried
 	tableName := g.extractTableName(query.SQL)
 	if tableName == "" {
 		return query.Columns
 	}
 
-	// Find table in schema
 	var table *parser.Table
 	for _, t := range g.schema.Tables {
 		if strings.EqualFold(t.Name, tableName) {
@@ -369,7 +362,6 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		return query.Columns
 	}
 
-	// Expand * to all columns
 	expanded := make([]*parser.QueryColumn, 0, len(table.Columns))
 	for _, col := range table.Columns {
 		expanded = append(expanded, &parser.QueryColumn{
@@ -384,19 +376,18 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 }
 
 func (g *Generator) extractTableName(sql string) string {
-	// Try INSERT INTO
+
 	insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
 	if matches := insertRegex.FindStringSubmatch(sql); len(matches) > 1 {
 		return matches[1]
 	}
 
-	// Try FROM
+
 	fromRegex := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
 	if matches := fromRegex.FindStringSubmatch(sql); len(matches) > 1 {
 		return matches[1]
 	}
 
-	// Try UPDATE
 	updateRegex := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
 	if matches := updateRegex.FindStringSubmatch(sql); len(matches) > 1 {
 		return matches[1]
@@ -409,7 +400,7 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 	hasColumns := len(query.Columns) > 0
 	isSingleColumn := len(query.Columns) == 1 && query.Columns[0].Name != "*"
 
-	// Single non-wildcard column
+	
 	if hasColumns && isSingleColumn {
 		pyType := g.sqlTypeToPython(query.Columns[0].Type, false)
 		if query.Cmd == ":one" {
@@ -418,7 +409,7 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 		return fmt.Sprintf("List[%s]", pyType)
 	}
 
-	// Multiple columns or wildcard - use result class
+	
 	if g.needsResultClass(query) {
 		className := utils.ToPascalCase(query.Name) + "Row"
 		if query.Cmd == ":one" {
@@ -427,7 +418,6 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 		return fmt.Sprintf("List[%s]", className)
 	}
 
-	// Fallback for exec queries
 	switch query.Cmd {
 	case ":one":
 		return "Optional[dict]"

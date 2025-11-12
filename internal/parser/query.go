@@ -163,14 +163,11 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 	paramMatches := paramRegex.FindAllString(query.SQL, -1)
 
-	// For PostgreSQL-style ($1, $2), we need unique params
-	// For SQLite-style (?), each ? is a separate parameter
+
 	var paramCount int
 	if len(paramMatches) > 0 && paramMatches[0] == "?" {
-		// SQLite style - count all occurrences
 		paramCount = len(paramMatches)
 	} else {
-		// PostgreSQL style - count unique $n
 		seen := make(map[string]bool, len(paramMatches))
 		for _, p := range paramMatches {
 			if !seen[p] {
@@ -210,12 +207,10 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 	hasReturning := utils.ContainsSQLKeyword(sqlTrimmed, "RETURNING")
 
-	// Extract columns from SELECT queries or RETURNING clauses
 	if (isSelectQuery && isNotModifying) || hasReturning {
 		var columnsStr string
 
 		if hasReturning {
-			// Extract columns from RETURNING clause
 			returningRegex := regexp.MustCompile(`(?i)RETURNING\s+(.+?)(?:;|\z)`)
 			if matches := returningRegex.FindStringSubmatch(query.SQL); len(matches) > 1 {
 				columnsStr = strings.TrimSpace(matches[1])
@@ -287,8 +282,6 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		return err
 	}
 
-	// Validate that SELECT columns exist in schema
-	// Skip this for queries with JOINs since they span multiple tables and use qualified columns
 	hasJoin := strings.Contains(strings.ToUpper(query.SQL), "JOIN")
 
 	if table != nil && len(query.Columns) > 0 && !hasJoin {
@@ -297,7 +290,6 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 				continue
 			}
 
-			// Skip aggregate functions and expressions
 			colNameLower := strings.ToLower(queryCol.Name)
 			if strings.Contains(colNameLower, "count") ||
 				strings.Contains(colNameLower, "sum") ||
@@ -309,12 +301,10 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 				continue
 			}
 
-			// Skip if it contains parentheses (function call or expression)
 			if strings.Contains(queryCol.Name, "(") || strings.Contains(queryCol.Name, ")") {
 				continue
 			}
 
-			// Check if column exists in table
 			columnExists := false
 			for _, schemaCol := range table.Columns {
 				if strings.EqualFold(schemaCol.Name, queryCol.Name) {
