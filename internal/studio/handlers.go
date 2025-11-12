@@ -28,13 +28,10 @@ func (s *Server) handleApplySchemaChange(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	// Try to find config, but don't fail if not found
 	configPath := ""
 	if _, err := os.Stat("./flash.config.json"); err == nil {
 		configPath = "./flash.config.json"
-	} else if _, err := os.Stat("./graft.config.json"); err == nil {
-		configPath = "./graft.config.json"
-	}
+	} 
 
 	if err := s.service.ApplySchemaChange(&change, configPath); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -89,9 +86,7 @@ func (s *Server) handleCheckConfig(c *fiber.Ctx) error {
 	exists := false
 	if _, err := os.Stat("./flash.config.json"); err == nil {
 		exists = true
-	} else if _, err := os.Stat("./graft.config.json"); err == nil {
-		exists = true
-	}
+	} 
 
 	return c.JSON(fiber.Map{
 		"exists": exists,

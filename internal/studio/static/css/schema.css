@@ -3,12 +3,17 @@
     padding: 0;
     box-sizing: border-box;
     font-family: 'JetBrains Mono', monospace;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 body {
     background: #1a1a1a;
     color: #e0e0e0;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Left Vertical Navbar (Supabase style) */
@@ -98,8 +103,11 @@ body {
 
 .topbar h1 {
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
     color: #e0e0e0;
+    letter-spacing: 0.3px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .topbar-right {
@@ -109,19 +117,27 @@ body {
 }
 
 .stats {
-    font-size: 11px;
+    font-size: 12px;
     color: #4a9eff;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .btn {
     padding: 6px 14px;
     border-radius: 4px;
     border: 1px solid #3a3a3a;
-    font-size: 11px;
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
     background: #2a2a2a;
     color: #e0e0e0;
     transition: all 0.2s;
+    letter-spacing: 0.2px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .btn:hover {
@@ -138,6 +154,14 @@ body {
     height: calc(100vh - 48px);
 }
 
+/* Improve SVG text rendering */
+svg text {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+    shape-rendering: geometricPrecision;
+}
+
 .react-flow__node {
     background: #1e1e1e;
     border: 2px solid #2d2d2d;
@@ -145,10 +169,14 @@ body {
     min-width: 220px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     cursor: grab;
+    transition: all 0.3s ease;
+    will-change: transform;
 }
 
 .react-flow__node.dragging {
     cursor: grabbing;
+    transition: none;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.8);
 }
 
 .react-flow__node:hover {
@@ -156,24 +184,119 @@ body {
     border-color: #4a9eff;
 }
 
+/* Node highlighting effects */
+.table-node-wrapper {
+    transition: all 0.3s ease;
+}
+
+/* Tables without relationships - no hover effects */
+.table-node-wrapper.no-relations {
+    cursor: default;
+}
+
+.table-node-wrapper.no-relations .react-flow__node {
+    border-color: #404040 !important;
+}
+
+.table-node-wrapper.highlighted .react-flow__node {
+    border-color: #4a9eff !important;
+    box-shadow: 0 0 20px rgba(74, 158, 255, 0.6), 0 6px 16px rgba(0, 0, 0, 0.6) !important;
+    transform: scale(1.02);
+    transition: all 0.3s ease;
+}
+
+.table-node-wrapper.dimmed {
+    opacity: 0.3;
+    transition: opacity 0.2s ease;
+}
+
+.table-node-wrapper.dimmed .react-flow__node {
+    filter: grayscale(0.5);
+}
+
 .react-flow__edge-path {
-    stroke: #4a9eff;
+    stroke: #6897bb;
     stroke-width: 2;
+    stroke-dasharray: 5 5;
+    transition: all 0.3s ease;
+    will-change: stroke, stroke-width;
+}
+
+.react-flow__edge-path:hover {
+    stroke: #4a9eff;
+    stroke-width: 3;
+    cursor: pointer;
+}
+
+.react-flow__edge.animated .react-flow__edge-path {
+    animation: dashAnimation 0.5s linear infinite;
+}
+
+@keyframes dashAnimation {
+    to {
+        stroke-dashoffset: -10;
+    }
 }
 
 .react-flow__edge-text {
+    fill: #6897bb;
+    font-size: 11px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    letter-spacing: 0.3px;
+    paint-order: stroke fill;
+    stroke: #2b2b2b;
+    stroke-width: 3px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.react-flow__edge-text-bg {
+    fill: #2b2b2b;
+    opacity: 0.95;
+    transition: all 0.3s ease;
+    rx: 4;
+    ry: 4;
+}
+
+.custom-edge {
+    transition: all 0.3s ease;
+}
+
+.custom-edge:hover .react-flow__edge-path {
+    stroke: #4a9eff !important;
+    stroke-width: 3 !important;
+    filter: drop-shadow(0 0 8px rgba(74, 158, 255, 0.8));
+}
+
+.custom-edge:hover .react-flow__edge-text {
     fill: #4a9eff;
-    font-size: 10px;
-    font-weight: 500;
+    font-weight: 700;
+    stroke: #1a3a5a;
+}
+
+.custom-edge:hover .react-flow__edge-text-bg {
+    fill: #1a3a5a;
+    opacity: 1;
 }
 
 .react-flow__background {
     background: #2b2b2b;
 }
 
+.react-flow__renderer {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
 .react-flow__minimap {
     background: #3c3f41 !important;
     border: 1px solid #555 !important;
+}
+
+.react-flow__minimap text {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .react-flow__minimap-mask {
@@ -190,6 +313,52 @@ body {
     height: 8px;
     background: #6897bb;
     border: 2px solid #3c3f41;
+    transition: all 0.3s ease;
+}
+
+.react-flow__handle:hover {
+    width: 12px;
+    height: 12px;
+    background: #4a9eff;
+    box-shadow: 0 0 10px rgba(74, 158, 255, 0.8);
+}
+
+/* Field-level handles */
+.field-handle {
+    width: 6px;
+    height: 6px;
+    background: #6897bb;
+    border: 1px solid #3c3f41;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.table-field:hover .field-handle {
+    opacity: 1;
+}
+
+.field-highlighted .field-handle {
+    opacity: 1 !important;
+    background: #4a9eff !important;
+    width: 8px !important;
+    height: 8px !important;
+    animation: pulseHandle 1s ease-in-out infinite;
+}
+
+.table-node-wrapper.highlighted .react-flow__handle {
+    background: #4a9eff;
+    animation: pulseHandle 1s ease-in-out infinite;
+}
+
+@keyframes pulseHandle {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(74, 158, 255, 0);
+    }
+    50% {
+        transform: scale(1.3);
+        box-shadow: 0 0 10px rgba(74, 158, 255, 0.8);
+    }
 }
 
 .table-header {
@@ -197,17 +366,32 @@ body {
     padding: 8px 12px;
     border-bottom: 2px solid #5a5d5f;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 13px;
     color: #fff;
     display: flex;
     align-items: center;
     gap: 6px;
     border-radius: 2px 2px 0 0;
+    transition: all 0.3s ease;
+    letter-spacing: 0.3px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+.table-node-wrapper.highlighted .table-header {
+    background: linear-gradient(180deg, #5a7a9a 0%, #4a6a8a 100%);
+    border-bottom-color: #4a9eff;
 }
 
 .table-body {
     padding: 0;
     background: #3c3f41;
+    transition: all 0.3s ease;
+}
+
+.table-node-wrapper.highlighted .table-body {
+    background: #404a54;
 }
 
 .table-field {
@@ -216,7 +400,10 @@ body {
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #2d2d2d;
-    font-size: 11px;
+    font-size: 12px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 .table-field:last-child {
@@ -238,11 +425,18 @@ body {
 .field-name {
     color: #a9b7c6;
     font-weight: 500;
+    letter-spacing: 0.2px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .field-type {
     color: #6897bb;
-    font-size: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .pk-icon {
@@ -257,8 +451,48 @@ body {
     position: relative;
 }
 
+.table-field {
+    transition: all 0.2s ease;
+}
+
 .table-field:hover {
     background: #2a2a2a;
+    transform: translateX(2px);
+}
+
+/* Highlighted field in relationships */
+.table-field.field-highlighted {
+    background: linear-gradient(90deg, #404a54 0%, #3c3f41 100%) !important;
+    border-left: 3px solid #4a9eff;
+    animation: fieldPulse 1.5s ease-in-out infinite;
+}
+
+.table-field.field-highlighted .field-name {
+    color: #4a9eff;
+    font-weight: 600;
+}
+
+.table-field.field-highlighted .field-icon {
+    color: #4a9eff;
+    animation: iconBounce 0.5s ease-in-out;
+}
+
+@keyframes fieldPulse {
+    0%, 100% {
+        background: linear-gradient(90deg, #404a54 0%, #3c3f41 100%);
+    }
+    50% {
+        background: linear-gradient(90deg, #4a5a64 0%, #404a54 100%);
+    }
+}
+
+@keyframes iconBounce {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
 }
 
 .field-details {
@@ -292,9 +526,13 @@ body {
     align-items: center;
     justify-content: center;
     height: 100%;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 500;
     color: #6897bb;
     gap: 12px;
+    letter-spacing: 0.3px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .spinner {

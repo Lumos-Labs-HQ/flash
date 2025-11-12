@@ -1025,7 +1025,7 @@ async function showPreview(preview, change) {
     ` : `
         <li>Apply to database immediately</li>
         <li style="color: #f59e0b;">⚠️ Migration files will NOT be created (no config found)</li>
-        <li style="color: #888;">Config files: flash.config.json or graft.config.json not found</li>
+        <li style="color: #888;">Config files: flash.config.json not found</li>
     `;
     
     content.innerHTML = `
@@ -1045,7 +1045,7 @@ async function showPreview(preview, change) {
             
             ${!hasConfig ? `
             <div style="background: #f59e0b20; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin: 15px 0; color: #fbbf24; font-size: 13px;">
-                <strong>ℹ️ Note:</strong> No flash.config.json or graft.config.json found. 
+                <strong>ℹ️ Note:</strong> No flash.config.json found. 
                 Migration files will not be generated. Only the database will be updated.
             </div>
             ` : ''}

@@ -26,9 +26,10 @@ func (s *Service) GetTables() ([]TableInfo, error) {
 		return nil, err
 	}
 
-	var result []TableInfo
+	// Pre-allocate with estimated capacity
+	result := make([]TableInfo, 0, len(tables))
 
-	var targetTables []string
+	targetTables := make([]string, 0, len(tables))
 	for _, table := range tables {
 		if table != "_flash_migrations" {
 			targetTables = append(targetTables, table)
@@ -223,14 +224,7 @@ func (s *Service) deleteRow(tableName, rowID string) error {
 }
 
 func joinColumns(cols []string) string {
-	result := ""
-	for i, col := range cols {
-		if i > 0 {
-			result += ", "
-		}
-		result += col
-	}
-	return result
+	return strings.Join(cols, ", ")
 }
 
 // GetSchemaVisualization returns schema for visualization
@@ -242,15 +236,15 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 
 	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
 
-	nodes := []map[string]any{}
-	nodeIndex := make(map[string]string)
+	nodes := make([]map[string]any, 0, len(tables))   // Pre-allocate
+	nodeIndex := make(map[string]string, len(tables)) // Pre-allocate
 
 	for i, table := range tables {
 		nodeID := fmt.Sprintf("table-%d", i)
 		nodeIndex[table.Name] = nodeID
 
-		columns := []map[string]any{}
-		columnMap := make(map[string]bool) // Track unique columns to avoid duplicates
+		columns := make([]map[string]any, 0, len(table.Columns)) // Pre-allocate
+		columnMap := make(map[string]bool, len(table.Columns))   // Pre-allocate
 
 		for _, col := range table.Columns {
 			// Only add column if not already present
@@ -284,9 +278,9 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 		})
 	}
 
-	// Build edges (relationships)
-	edges := []map[string]any{}
-	edgeMap := make(map[string]bool) // Track unique edges to avoid duplicates
+	estimatedEdges := len(tables) * 2
+	edges := make([]map[string]any, 0, estimatedEdges)
+	edgeMap := make(map[string]bool, estimatedEdges) // Pre-allocate
 
 	for _, table := range tables {
 		sourceID := nodeIndex[table.Name]
@@ -296,14 +290,29 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 					// Create unique edge ID to prevent duplicates
 					edgeID := fmt.Sprintf("%s-%s-%s", sourceID, targetID, col.Name)
 
-					// Only add if not already present
 					if !edgeMap[edgeID] {
 						edgeMap[edgeID] = true
+
+						var targetColumn string
+						for _, targetTable := range tables {
+							if targetTable.Name == col.ForeignKeyTable {
+								for _, targetCol := range targetTable.Columns {
+									if targetCol.IsPrimary {
+										targetColumn = targetCol.Name
+										break
+									}
+								}
+								break
+							}
+						}
+
 						edges = append(edges, map[string]any{
-							"id":     edgeID,
-							"source": sourceID,
-							"target": targetID,
-							"label":  col.Name,
+							"id":           edgeID,
+							"source":       sourceID,
+							"target":       targetID,
+							"label":        col.Name,
+							"sourceHandle": col.Name,
+							"targetHandle": targetColumn,
 						})
 					}
 				}
