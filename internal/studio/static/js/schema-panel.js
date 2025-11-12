@@ -152,7 +152,7 @@ function showTableDetails() {
         </div>
         
         <div class="panel-section">
-            <div class="section-title">Actions</div>
+            <div class="section-title">Column Actions</div>
             
             <div class="action-card" onclick="showAddColumn()">
                 <div class="action-card-title">
@@ -167,6 +167,28 @@ function showTableDetails() {
                     Modify Column
                 </div>
             </div>
+        </div>
+        
+        <div class="panel-section">
+            <div class="section-title">Enum Management</div>
+            
+            <div class="action-card" onclick="showCreateEnum()">
+                <div class="action-card-title">
+                    <span class="iconify" data-icon="mdi:format-list-bulleted-square" style="color: #10b981;"></span>
+                    Create Enum
+                </div>
+            </div>
+            
+            <div class="action-card" onclick="showManageEnums()">
+                <div class="action-card-title">
+                    <span class="iconify" data-icon="mdi:format-list-bulleted" style="color: #a855f7;"></span>
+                    Manage Enums
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel-section">
+            <div class="section-title">Danger Zone</div>
             
             <div class="action-card action-card-danger" onclick="deleteTable()">
                 <div class="action-card-title">
@@ -358,7 +380,7 @@ async function showAddColumn() {
             <div id="enum-section" style="display: none;">
                 <div class="form-group">
                     <label class="form-label">Select Enum Type</label>
-                    <select id="column-enum" class="form-select">
+                    <select id="column-enum" class="form-select" onchange="handleEnumSelection()">
                         <option value="" disabled selected>-- Select Enum --</option>
                         ${enumOptions}
                         <option value="__CREATE_NEW__">+ Create New Enum</option>
@@ -389,9 +411,19 @@ async function showAddColumn() {
             
             <div class="form-group">
                 <label class="form-label">Default Value (optional)</label>
-                <input type="text" id="column-default" class="form-input" placeholder="NULL or expression">
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">
-                    Examples: NULL, 0, 'value', NOW(), gen_random_uuid()
+                <div id="default-value-container">
+                    <input type="text" id="column-default" class="form-input" placeholder="NULL or expression">
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                        Examples: NULL, 0, 'value', NOW(), gen_random_uuid()
+                    </div>
+                </div>
+                <div id="enum-default-container" style="display: none;">
+                    <select id="column-enum-default" class="form-select">
+                        <option value="">-- No Default --</option>
+                    </select>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                        Select a default value from the enum
+                    </div>
                 </div>
             </div>
             
@@ -421,19 +453,207 @@ async function showAddColumn() {
             </div>
         </div>
     `;
+    
+    // Store enums in global scope for later use
+    window.currentEnums = enums;
 }
 
 function handleTypeChange() {
     const typeSelect = document.getElementById('column-type');
     const enumSection = document.getElementById('enum-section');
+    const defaultContainer = document.getElementById('default-value-container');
+    const enumDefaultContainer = document.getElementById('enum-default-container');
     
     if (typeSelect && enumSection) {
+        // Remove any inline enum creation forms
+        const inlineForm = document.querySelector('.inline-enum-form');
+        if (inlineForm) {
+            inlineForm.remove();
+        }
+        
         if (typeSelect.value === 'ENUM') {
             enumSection.style.display = 'block';
+            if (defaultContainer && enumDefaultContainer) {
+                defaultContainer.style.display = 'none';
+                enumDefaultContainer.style.display = 'none'; // Will show after enum selection
+            }
         } else {
             enumSection.style.display = 'none';
+            if (defaultContainer && enumDefaultContainer) {
+                defaultContainer.style.display = 'block';
+                enumDefaultContainer.style.display = 'none';
+            }
         }
     }
+}
+
+async function handleEnumSelection() {
+    const enumSelect = document.getElementById('column-enum');
+    const enumDefaultContainer = document.getElementById('enum-default-container');
+    const enumDefaultSelect = document.getElementById('column-enum-default');
+    
+    if (!enumSelect || !enumDefaultContainer || !enumDefaultSelect) return;
+    
+    // Remove any existing inline enum forms first
+    const existingForm = document.querySelector('.inline-enum-form');
+    if (existingForm) {
+        existingForm.remove();
+    }
+    
+    const selectedValue = enumSelect.value;
+    
+    if (selectedValue === '__CREATE_NEW__') {
+        // Show inline create enum form
+        showInlineCreateEnum();
+    } else if (selectedValue) {
+        // Show default value dropdown with enum values
+        const enums = window.currentEnums || [];
+        const selectedEnum = enums.find(e => e.name === selectedValue);
+        
+        if (selectedEnum && selectedEnum.values) {
+            // Populate default value dropdown
+            enumDefaultSelect.innerHTML = '<option value="">-- No Default --</option>' +
+                selectedEnum.values.map(v => `<option value="'${v}'">${v}</option>`).join('');
+            enumDefaultContainer.style.display = 'block';
+        }
+    } else {
+        enumDefaultContainer.style.display = 'none';
+    }
+}
+
+function showInlineCreateEnum() {
+    const enumSection = document.getElementById('enum-section');
+    if (!enumSection) return;
+    
+    enumSection.innerHTML = `
+        <div class="form-group">
+            <label class="form-label">Select Enum Type</label>
+            <select id="column-enum" class="form-select" onchange="handleEnumSelection()">
+                <option value="" disabled>-- Select Enum --</option>
+                ${window.currentEnums ? window.currentEnums.map(e => `<option value="${e.name}">${e.name}</option>`).join('') : ''}
+                <option value="__CREATE_NEW__" selected>+ Create New Enum</option>
+            </select>
+        </div>
+        <div style="background: #2a2a2a; padding: 15px; border-radius: 6px; margin-top: 10px;">
+            <div style="font-weight: 600; margin-bottom: 10px; color: #10b981;">Create New Enum</div>
+            <div class="form-group">
+                <label class="form-label">Enum Name</label>
+                <input type="text" id="inline-enum-name" class="form-input" placeholder="status, role, priority...">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Values (one per line)</label>
+                <textarea id="inline-enum-values" class="form-input" rows="5" placeholder="active&#10;inactive&#10;pending"></textarea>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" onclick="createInlineEnum()" style="flex: 1;">Create &amp; Use</button>
+                <button class="btn btn-secondary" onclick="cancelInlineEnum()">Cancel</button>
+            </div>
+        </div>
+    `;
+}
+
+async function createInlineEnum() {
+    const enumName = document.getElementById('inline-enum-name')?.value.trim();
+    const valuesText = document.getElementById('inline-enum-values')?.value.trim();
+    
+    if (!enumName) {
+        showModal('Validation', 'Please enter enum name', 'warning');
+        return;
+    }
+    if (!valuesText) {
+        showModal('Validation', 'Please enter enum values', 'warning');
+        return;
+    }
+    
+    const values = valuesText.split('\n').map(v => v.trim()).filter(v => v);
+    if (values.length === 0) {
+        showModal('Validation', 'Please enter at least one enum value', 'warning');
+        return;
+    }
+    
+    const change = {
+        type: 'create_enum',
+        enum_name: enumName,
+        enum_values: values
+    };
+    
+    try {
+        // Preview
+        const previewRes = await fetch('/api/schema/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(change)
+        });
+        const preview = await previewRes.json();
+        
+        const message = `<div style="text-align:left;"><pre style="white-space:pre-wrap; background:#0f0f0f; padding:10px; border-radius:4px;">${preview.sql}</pre></div>`;
+        
+        showConfirm('Create Enum', message, async () => {
+            // Apply
+            const applyRes = await fetch('/api/schema/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(change)
+            });
+            const result = await applyRes.json();
+            
+            if (result.success) {
+                showModal('Success', 'Enum created successfully', 'success');
+                
+                // Remove the inline form
+                const inlineForm = document.querySelector('.inline-enum-form');
+                if (inlineForm) {
+                    inlineForm.remove();
+                }
+                
+                // Refresh the enum list in the dropdown
+                const response = await fetch('/api/schema');
+                const data = await response.json();
+                if (data.success && data.data) {
+                    window.currentEnums = data.data.enums || [];
+                    
+                    // Update the enum dropdown
+                    const enumSelect = document.getElementById('column-enum');
+                    if (enumSelect) {
+                        const enumOptions = window.currentEnums.map(e => 
+                            `<option value="${e.name}">${e.name}</option>`
+                        ).join('');
+                        enumSelect.innerHTML = `
+                            <option value="">-- Select Enum --</option>
+                            ${enumOptions}
+                            <option value="__CREATE_NEW__">+ Create New Enum</option>
+                        `;
+                        
+                        // Select the newly created enum
+                        enumSelect.value = enumName;
+                        handleEnumSelection();
+                    }
+                }
+            } else {
+                showModal('Error', result.error || 'Failed to create enum', 'error');
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        showModal('Error', err.message || 'Failed to create enum', 'error');
+    }
+}
+
+function cancelInlineEnum() {
+    const enumSection = document.getElementById('enum-section');
+    if (!enumSection || !window.currentEnums) return;
+    
+    const enumOptions = window.currentEnums.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+    enumSection.innerHTML = `
+        <div class="form-group">
+            <label class="form-label">Select Enum Type</label>
+            <select id="column-enum" class="form-select" onchange="handleEnumSelection()">
+                <option value="" disabled selected>-- Select Enum --</option>
+                ${enumOptions}
+                <option value="__CREATE_NEW__">+ Create New Enum</option>
+            </select>
+        </div>
+    `;
 }
 
 function toggleForeignKeySection() {
@@ -582,7 +802,7 @@ async function showModifyColumn() {
             <div id="enum-section" style="display: none;">
                 <div class="form-group">
                     <label class="form-label">Select Enum Type</label>
-                    <select id="column-enum" class="form-select">
+                    <select id="column-enum" class="form-select" onchange="handleEnumSelection()">
                         <option value="" disabled selected>-- Select Enum --</option>
                         ${enumOptions}
                         <option value="__CREATE_NEW__">+ Create New Enum</option>
@@ -613,9 +833,19 @@ async function showModifyColumn() {
             
             <div class="form-group">
                 <label class="form-label">Default Value (optional)</label>
-                <input type="text" id="column-default" class="form-input" placeholder="NULL or expression">
-                <div style="font-size: 11px; color: #888; margin-top: 4px;">
-                    Examples: NULL, 0, 'value', NOW(), gen_random_uuid()
+                <div id="default-value-container">
+                    <input type="text" id="column-default" class="form-input" placeholder="NULL or expression">
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                        Examples: NULL, 0, 'value', NOW(), gen_random_uuid()
+                    </div>
+                </div>
+                <div id="enum-default-container" style="display: none;">
+                    <select id="column-enum-default" class="form-select">
+                        <option value="">-- No Default --</option>
+                    </select>
+                    <div style="font-size: 11px; color: #888; margin-top: 4px;">
+                        Select a default value from the enum
+                    </div>
                 </div>
             </div>
             
@@ -645,6 +875,9 @@ async function showModifyColumn() {
             </div>
         </div>
     `;
+    
+    // Store enums in global scope for later use
+    window.currentEnums = enums;
 }
 
 function loadColumnData() {
@@ -707,15 +940,25 @@ async function previewChange() {
     }
     
     let columnType = document.getElementById('column-type')?.value || '';
+    let defaultValue = '';
     
     // Handle ENUM type
     if (columnType === 'ENUM') {
         const enumType = document.getElementById('column-enum')?.value;
-        if (!enumType) {
-            showAlert('Required Field', 'Please select an enum type', 'error');
+        if (!enumType || enumType === '__CREATE_NEW__') {
+            showAlert('Required Field', 'Please select an enum type or create a new one first', 'error');
             return;
         }
         columnType = enumType;
+        
+        // Get enum default value if available
+        const enumDefaultSelect = document.getElementById('column-enum-default');
+        if (enumDefaultSelect && enumDefaultSelect.style.display !== 'none') {
+            defaultValue = enumDefaultSelect.value || '';
+        }
+    } else {
+        // Get regular default value
+        defaultValue = document.getElementById('column-default')?.value || '';
     }
     
     const change = {
@@ -725,7 +968,7 @@ async function previewChange() {
             name: columnName,
             type: columnType,
             nullable: document.getElementById('column-nullable')?.checked || false,
-            default: document.getElementById('column-default')?.value || '',
+            default: defaultValue,
             unique: document.getElementById('column-unique')?.checked || false,
             auto_increment: document.getElementById('column-auto-increment')?.checked || false
         }
@@ -993,30 +1236,42 @@ function showCreateTable() {
 
 let columnBuilderIndex = 0;
 
-async function addColumnToBuilder(name = '', type = 'VARCHAR(255)', nullable = true, defaultVal = '', isPrimary = false, autoIncrement = false, unique = false) {
+async function addColumnToBuilder(name = '', type = 'VARCHAR(255)', nullable = true, defaultVal = '', isPrimary = false, autoIncrement = false, unique = false, foreignTable = '', foreignColumn = '') {
     const index = columnBuilderIndex++;
     const columnList = document.getElementById('column-list');
     
-    // Fetch enums
+    // Fetch enums and tables
     let enums = [];
-    if (schemaData && schemaData.enums) {
-        enums = schemaData.enums;
+    let tables = [];
+    try {
+        const response = await fetch('/api/schema');
+        const data = await response.json();
+        if (data.success && data.data) {
+            enums = data.data.enums || [];
+            tables = data.data.nodes || [];
+        }
+    } catch (error) {
+        console.error('Failed to fetch schema:', error);
     }
     
     const enumOptions = enums.map(e => `<option value="${e.name}" ${type === e.name ? 'selected' : ''}>${e.name}</option>`).join('');
+    const tableOptions = tables.map(t => `<option value="${t.data.label}" ${foreignTable === t.data.label ? 'selected' : ''}>${t.data.label}</option>`).join('');
     
     const columnDiv = document.createElement('div');
     columnDiv.className = 'column-builder-item';
     columnDiv.id = `column-${index}`;
     columnDiv.innerHTML = `
         <div class="column-builder-header">
+            <button class="icon-btn collapse-btn" onclick="toggleColumnFields(${index})" style="margin-right: 8px;">
+                <span class="iconify" data-icon="mdi:minus" id="collapse-icon-${index}"></span>
+            </button>
             <input type="text" class="form-input" value="${name}" placeholder="column_name" style="flex: 1; margin-right: 8px;" id="col-name-${index}">
             <button class="icon-btn delete-btn" onclick="removeColumnFromBuilder(${index})" ${isPrimary ? 'disabled style="opacity: 0.3;"' : ''}>
                 <span class="iconify" data-icon="mdi:delete"></span>
             </button>
         </div>
-        <div class="column-builder-fields">
-            <select class="form-select" id="col-type-${index}" style="margin-bottom: 8px;">
+        <div class="column-builder-fields" id="fields-${index}">
+            <select class="form-select" id="col-type-${index}" onchange="handleBuilderTypeChange(${index})" style="margin-bottom: 8px;">
                 <optgroup label="String Types">
                     <option value="VARCHAR(255)" ${type === 'VARCHAR(255)' ? 'selected' : ''}>VARCHAR(255)</option>
                     <option value="TEXT" ${type === 'TEXT' ? 'selected' : ''}>TEXT</option>
@@ -1035,7 +1290,7 @@ async function addColumnToBuilder(name = '', type = 'VARCHAR(255)', nullable = t
                     <option value="JSON" ${type === 'JSON' ? 'selected' : ''}>JSON</option>
                     <option value="UUID" ${type === 'UUID' ? 'selected' : ''}>UUID</option>
                 </optgroup>
-                ${enumOptions ? `<optgroup label="Enums">${enumOptions}</optgroup>` : ''}
+                ${enumOptions ? `<optgroup label="Enums">${enumOptions}<option value="__CREATE_ENUM__">+ Create New Enum</option></optgroup>` : '<optgroup label="Enums"><option value="__CREATE_ENUM__">+ Create New Enum</option></optgroup>'}
             </select>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <label class="form-checkbox" style="flex: 1;">
@@ -1056,15 +1311,216 @@ async function addColumnToBuilder(name = '', type = 'VARCHAR(255)', nullable = t
                 </label>
             </div>
             <input type="text" class="form-input" value="${defaultVal}" placeholder="Default value..." id="col-default-${index}" style="margin-top: 8px; font-size: 12px;">
+            
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #333;">
+                <label class="form-checkbox">
+                    <input type="checkbox" id="col-is-foreign-${index}" onchange="toggleBuilderForeignKey(${index})" ${foreignTable ? 'checked' : ''}>
+                    <span style="font-size: 11px;">🔗 Foreign Key</span>
+                </label>
+                <div id="col-fk-section-${index}" style="display: ${foreignTable ? 'block' : 'none'}; margin-top: 8px;">
+                    <select class="form-select" id="col-fk-table-${index}" style="margin-bottom: 4px; font-size: 11px;">
+                        <option value="">-- Select Table --</option>
+                        ${tableOptions}
+                    </select>
+                    <input type="text" class="form-input" value="${foreignColumn}" placeholder="Referenced column (e.g., id)" id="col-fk-column-${index}" style="font-size: 11px;">
+                </div>
+            </div>
         </div>
     `;
     
     columnList.appendChild(columnDiv);
 }
 
+function handleBuilderTypeChange(index) {
+    const typeSelect = document.getElementById(`col-type-${index}`);
+    
+    // Always remove any existing enum form first
+    const columnDiv = document.getElementById(`column-${index}`);
+    if (columnDiv) {
+        const existingForm = columnDiv.querySelector('.enum-create-form');
+        if (existingForm) {
+            existingForm.remove();
+        }
+    }
+    
+    // Show enum creation form if selected
+    if (typeSelect.value === '__CREATE_ENUM__') {
+        showQuickCreateEnum(index);
+    }
+}
+
+function toggleBuilderForeignKey(index) {
+    const checkbox = document.getElementById(`col-is-foreign-${index}`);
+    const section = document.getElementById(`col-fk-section-${index}`);
+    if (checkbox && section) {
+        section.style.display = checkbox.checked ? 'block' : 'none';
+    }
+}
+
+async function showQuickCreateEnum(columnIndex) {
+    const columnDiv = document.getElementById(`column-${columnIndex}`);
+    if (!columnDiv) return;
+    
+    // Store original type select value
+    const typeSelect = document.getElementById(`col-type-${columnIndex}`);
+    const originalValue = typeSelect.value;
+    
+    // Find the column-builder-fields div to insert enum form after it
+    const fieldsDiv = columnDiv.querySelector('.column-builder-fields');
+    
+    // Check if enum form already exists
+    let enumFormDiv = columnDiv.querySelector('.enum-create-form');
+    if (enumFormDiv) {
+        enumFormDiv.remove();
+    }
+    
+    // Create enum form
+    enumFormDiv = document.createElement('div');
+    enumFormDiv.className = 'enum-create-form';
+    enumFormDiv.style.cssText = 'background: #2a2a2a; padding: 12px; border-radius: 6px; margin-top: 10px; border: 1px solid #10b981;';
+    enumFormDiv.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 10px; color: #10b981; font-size: 12px;">
+            <span class="iconify" data-icon="mdi:format-list-bulleted-square"></span> Create New Enum
+        </div>
+        <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 11px;">Enum Name</label>
+            <input type="text" id="builder-enum-name-${columnIndex}" class="form-input" placeholder="status, role, priority..." style="font-size: 11px;">
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+            <label class="form-label" style="font-size: 11px;">Values (one per line)</label>
+            <textarea id="builder-enum-values-${columnIndex}" class="form-input" rows="4" placeholder="active&#10;inactive&#10;pending" style="font-size: 11px;"></textarea>
+        </div>
+        <div style="display: flex; gap: 6px;">
+            <button class="btn btn-primary" onclick="createBuilderEnum(${columnIndex})" style="flex: 1; font-size: 11px; padding: 6px;">Create</button>
+            <button class="btn btn-secondary" onclick="cancelBuilderEnum(${columnIndex})" style="font-size: 11px; padding: 6px;">Cancel</button>
+        </div>
+    `;
+    
+    fieldsDiv.appendChild(enumFormDiv);
+}
+
+async function createBuilderEnum(columnIndex) {
+    const enumNameInput = document.getElementById(`builder-enum-name-${columnIndex}`);
+    const enumValuesInput = document.getElementById(`builder-enum-values-${columnIndex}`);
+    
+    const enumName = enumNameInput?.value.trim();
+    const valuesText = enumValuesInput?.value.trim();
+    
+    if (!enumName) {
+        showModal('Validation', 'Please enter enum name', 'warning');
+        return;
+    }
+    
+    if (!valuesText) {
+        showModal('Validation', 'Please enter enum values', 'warning');
+        return;
+    }
+    
+    const values = valuesText.split('\n').map(v => v.trim()).filter(v => v);
+    if (values.length === 0) {
+        showModal('Validation', 'Please enter at least one enum value', 'warning');
+        return;
+    }
+    
+    const change = {
+        type: 'create_enum',
+        enum_name: enumName,
+        enum_values: values
+    };
+    
+    try {
+        const previewRes = await fetch('/api/schema/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(change)
+        });
+        const preview = await previewRes.json();
+        
+        // Show confirmation in preview style
+        const message = `<div style="text-align:left;"><pre style="white-space:pre-wrap; background:#0f0f0f; padding:10px; border-radius:4px; font-size: 11px;">${preview.sql}</pre></div>`;
+        
+        showConfirm('Create Enum', message, async () => {
+            const applyRes = await fetch('/api/schema/apply', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(change)
+            });
+            const result = await applyRes.json();
+            
+            if (result.success) {
+                showModal('Success', `Enum "${enumName}" created successfully!`, 'success');
+                
+                // Remove the enum form first
+                const columnDiv = document.getElementById(`column-${columnIndex}`);
+                const enumForm = columnDiv?.querySelector('.enum-create-form');
+                if (enumForm) {
+                    enumForm.remove();
+                }
+                
+                // Update the select to use the new enum
+                const typeSelect = document.getElementById(`col-type-${columnIndex}`);
+                if (typeSelect) {
+                    // Fetch updated enum list
+                    const response = await fetch('/api/schema');
+                    const data = await response.json();
+                    if (data.success && data.data) {
+                        const enums = data.data.enums || [];
+                        const enumOptions = enums.map(e => `<option value="${e.name}" ${e.name === enumName ? 'selected' : ''}>${e.name}</option>`).join('');
+                        
+                        // Find and update the Enums optgroup
+                        const enumGroup = typeSelect.querySelector('optgroup[label="Enums"]');
+                        if (enumGroup) {
+                            enumGroup.innerHTML = `${enumOptions}<option value="__CREATE_ENUM__">+ Create New Enum</option>`;
+                        }
+                        
+                        // Set the newly created enum as selected
+                        typeSelect.value = enumName;
+                    }
+                }
+            } else {
+                showModal('Error', 'Failed to create enum: ' + (result.error || 'Unknown error'), 'error');
+            }
+        });
+    } catch (err) {
+        console.error(err);
+        showModal('Error', 'Failed to create enum: ' + err.message, 'error');
+    }
+}
+
+function cancelBuilderEnum(columnIndex) {
+    const columnDiv = document.getElementById(`column-${columnIndex}`);
+    if (!columnDiv) return;
+    
+    const enumFormDiv = columnDiv.querySelector('.enum-create-form');
+    if (enumFormDiv) {
+        enumFormDiv.remove();
+    }
+    
+    // Reset type select to VARCHAR
+    const typeSelect = document.getElementById(`col-type-${columnIndex}`);
+    if (typeSelect) {
+        typeSelect.value = 'VARCHAR(255)';
+    }
+}
+
 function removeColumnFromBuilder(index) {
     const column = document.getElementById(`column-${index}`);
     if (column) column.remove();
+}
+
+function toggleColumnFields(index) {
+    const fieldsDiv = document.getElementById(`fields-${index}`);
+    const icon = document.getElementById(`collapse-icon-${index}`);
+    
+    if (fieldsDiv && icon) {
+        if (fieldsDiv.style.display === 'none') {
+            fieldsDiv.style.display = 'block';
+            icon.setAttribute('data-icon', 'mdi:minus');
+        } else {
+            fieldsDiv.style.display = 'none';
+            icon.setAttribute('data-icon', 'mdi:plus');
+        }
+    }
 }
 
 async function createTablePreview() {
@@ -1080,7 +1536,7 @@ async function createTablePreview() {
         const index = item.id.split('-')[1];
         const name = document.getElementById(`col-name-${index}`).value.trim();
         if (name) {
-            columns.push({
+            const column = {
                 name,
                 type: document.getElementById(`col-type-${index}`).value,
                 nullable: document.getElementById(`col-nullable-${index}`).checked,
@@ -1088,7 +1544,23 @@ async function createTablePreview() {
                 unique: document.getElementById(`col-unique-${index}`).checked,
                 auto_increment: document.getElementById(`col-auto-${index}`).checked,
                 is_primary: document.getElementById(`col-primary-${index}`).checked
-            });
+            };
+            
+            // Check for foreign key
+            const isForeign = document.getElementById(`col-is-foreign-${index}`);
+            if (isForeign && isForeign.checked) {
+                const fkTable = document.getElementById(`col-fk-table-${index}`).value;
+                const fkColumn = document.getElementById(`col-fk-column-${index}`).value.trim() || 'id';
+                
+                if (fkTable) {
+                    column.foreign_key = {
+                        table: fkTable,
+                        column: fkColumn
+                    };
+                }
+            }
+            
+            columns.push(column);
         }
     });
     
@@ -1188,73 +1660,165 @@ async function createEnumPreview() {
     }
 }
 
-// Show Enum Details
-function showEnumDetails(enumName) {
-    const enumData = schemaData.enums.find(e => e.name === enumName);
-    if (!enumData) return;
-    
-    document.getElementById('panel-table-name').textContent = enumName;
+// Manage All Enums
+async function showManageEnums() {
+    currentAction = 'manage_enums';
+    document.getElementById('panel-table-name').textContent = 'Manage Enums';
     document.getElementById('edit-panel').classList.add('open');
     
+    // Fetch enums
+    let enums = [];
+    try {
+        const response = await fetch('/api/schema');
+        const data = await response.json();
+        if (data.success && data.data) {
+            enums = data.data.enums || [];
+        }
+    } catch (error) {
+        console.error('Failed to fetch enums:', error);
+    }
+    
     const content = document.getElementById('panel-content');
-    const valuesList = enumData.values ? enumData.values.map(v => 
-        `<div class="badge badge-info" style="margin: 4px;">${v}</div>`
-    ).join('') : '';
+    
+    if (enums.length === 0) {
+        content.innerHTML = `
+            <div class="panel-section">
+                <div class="section-title">All Enums</div>
+                <div style="text-align: center; padding: 40px 20px; color: #888;">
+                    <span class="iconify" data-icon="mdi:format-list-bulleted" style="font-size: 48px; opacity: 0.3;"></span>
+                    <p style="margin-top: 15px;">No enums found</p>
+                    <button class="btn btn-primary" onclick="showCreateEnum()" style="margin-top: 15px;">
+                        <span class="iconify" data-icon="mdi:plus"></span> Create First Enum
+                    </button>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    const enumsList = enums.map(e => {
+        const name = e.name || 'Unknown';
+        const values = e.values || [];
+        const valuesBadges = values.slice(0, 3).map(v => `<span class="badge badge-info">${v}</span>`).join(' ');
+        const moreCount = values.length > 3 ? `<span style="color: #888; font-size: 11px;">+${values.length - 3} more</span>` : '';
+        
+        return `
+            <div class="sidebar-item" onclick="showEnumDetails('${name}')">
+                <span class="iconify sidebar-item-icon" data-icon="mdi:format-list-bulleted" style="color: #a855f7;"></span>
+                <div style="flex: 1;">
+                    <div class="sidebar-item-name">${name}</div>
+                    <div style="margin-top: 4px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+                        ${valuesBadges}
+                        ${moreCount}
+                    </div>
+                </div>
+                <span class="sidebar-item-count">${values.length} values</span>
+            </div>
+        `;
+    }).join('');
     
     content.innerHTML = `
         <div class="panel-section">
-            <div class="section-title">Enum: ${enumName}</div>
-            <div style="margin: 15px 0;">
-                ${valuesList}
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div class="section-title" style="margin: 0;">All Enums (${enums.length})</div>
+                <button class="btn btn-primary" onclick="showCreateEnum()" style="padding: 6px 12px; font-size: 12px;">
+                    <span class="iconify" data-icon="mdi:plus"></span> New
+                </button>
             </div>
-        </div>
-        
-        <div class="panel-section">
-            <div class="section-title">Actions</div>
-            
-            <div class="action-card" onclick="showEditEnum('${enumName}')">
-                <div class="action-card-title">
-                    <span class="iconify" data-icon="mdi:pencil" style="color: #3b82f6;"></span>
-                    Edit Enum Values
-                </div>
-            </div>
-            
-            <div class="action-card action-card-danger" onclick="deleteEnum('${enumName}')">
-                <div class="action-card-title">
-                    <span class="iconify" data-icon="mdi:delete" style="color: #dc2626;"></span>
-                    Delete Enum
-                </div>
-            </div>
+            ${enumsList}
         </div>
     `;
 }
 
+// Show Enum Details
+function showEnumDetails(enumName) {
+    // Need to fetch current enums since we don't have schemaData here
+    fetch('/api/schema')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success || !data.data) return;
+            const enumData = data.data.enums?.find(e => e.name === enumName);
+            if (!enumData) return;
+            
+            document.getElementById('panel-table-name').textContent = enumName;
+            document.getElementById('edit-panel').classList.add('open');
+            
+            const content = document.getElementById('panel-content');
+            const valuesList = enumData.values ? enumData.values.map(v => 
+                `<div class="badge badge-info" style="margin: 4px; display: inline-block;">${v}</div>`
+            ).join('') : '';
+            
+            content.innerHTML = `
+                <button class="back-btn" onclick="showManageEnums()">
+                    <span class="iconify" data-icon="mdi:arrow-left"></span> Back to Enums
+                </button>
+                
+                <div class="panel-section">
+                    <div class="section-title">Enum: ${enumName}</div>
+                    <div style="margin: 15px 0;">
+                        ${valuesList}
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <div class="section-title">Actions</div>
+                    
+                    <div class="action-card" onclick="showEditEnum('${enumName}')">
+                        <div class="action-card-title">
+                            <span class="iconify" data-icon="mdi:pencil" style="color: #3b82f6;"></span>
+                            Edit Enum Values
+                        </div>
+                    </div>
+                    
+                    <div class="action-card action-card-danger" onclick="deleteEnum('${enumName}')">
+                        <div class="action-card-title">
+                            <span class="iconify" data-icon="mdi:delete" style="color: #dc2626;"></span>
+                            Delete Enum
+                        </div>
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Failed to fetch enum details:', error);
+        });
+}
+
 function showEditEnum(enumName) {
-    const enumData = schemaData.enums.find(e => e.name === enumName);
-    if (!enumData) return;
-    
-    const valuesText = enumData.values ? enumData.values.join('\n') : '';
-    
-    const content = document.getElementById('panel-content');
-    content.innerHTML = `
-        <button class="back-btn" onclick="showEnumDetails('${enumName}')">
-            <span class="iconify" data-icon="mdi:arrow-left"></span> Back
-        </button>
-        
-        <div class="panel-section">
-            <div class="section-title">Edit Enum: ${enumName}</div>
+    // Fetch current enum data
+    fetch('/api/schema')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success || !data.data) return;
+            const enumData = data.data.enums?.find(e => e.name === enumName);
+            if (!enumData) return;
             
-            <div class="form-group">
-                <label class="form-label">Values (one per line)</label>
-                <textarea id="enum-values" class="form-input" rows="10">${valuesText}</textarea>
-            </div>
+            const valuesText = enumData.values ? enumData.values.join('\n') : '';
             
-            <div class="btn-group">
-                <button class="btn btn-primary" onclick="updateEnumPreview('${enumName}')">Update Enum</button>
-                <button class="btn btn-secondary" onclick="showEnumDetails('${enumName}')">Cancel</button>
-            </div>
-        </div>
-    `;
+            const content = document.getElementById('panel-content');
+            content.innerHTML = `
+                <button class="back-btn" onclick="showEnumDetails('${enumName}')">
+                    <span class="iconify" data-icon="mdi:arrow-left"></span> Back
+                </button>
+                
+                <div class="panel-section">
+                    <div class="section-title">Edit Enum: ${enumName}</div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Values (one per line)</label>
+                        <textarea id="enum-values" class="form-input" rows="10">${valuesText}</textarea>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="updateEnumPreview('${enumName}')">Update Enum</button>
+                        <button class="btn btn-secondary" onclick="showEnumDetails('${enumName}')">Cancel</button>
+                    </div>
+                </div>
+            `;
+        })
+        .catch(error => {
+            console.error('Failed to fetch enum for editing:', error);
+        });
 }
 
 async function updateEnumPreview(enumName) {

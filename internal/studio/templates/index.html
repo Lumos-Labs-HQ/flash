@@ -35,42 +35,19 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-title">All Models</div>
-            </div>
-            
-            <!-- Tabs for Tables and Enums -->
-            <div class="sidebar-tabs">
-                <div class="sidebar-tab active" onclick="switchIndexTab('tables')">
-                    <span class="iconify" data-icon="mdi:table"></span> Tables
-                </div>
-                <div class="sidebar-tab" onclick="switchIndexTab('enums')">
-                    <span class="iconify" data-icon="mdi:format-list-bulleted-type"></span> Enums
-                </div>
+                <button class="sidebar-add-btn" onclick="showCreateTableForm()" title="Create New Table">
+                    <span class="iconify" data-icon="mdi:plus"></span>
+                </button>
             </div>
             
             <div class="search-box">
-                <input type="text" id="search-tables" placeholder="Search..." oninput="filterIndexItems()">
-            </div>
-            
-            <!-- Add buttons -->
-            <div id="add-table-btn-container" style="padding: 8px;">
-                <button class="btn btn-success btn-block" onclick="showCreateTableForm()">
-                    <span class="iconify" data-icon="mdi:plus"></span> Add Table
-                </button>
-            </div>
-            <div id="add-enum-btn-container" style="padding: 8px; display: none;">
-                <button class="btn btn-success btn-block" onclick="showCreateEnumForm()">
-                    <span class="iconify" data-icon="mdi:plus"></span> Add Enum
-                </button>
+                <input type="text" id="search-tables" placeholder="Search models">
             </div>
             
             <div class="tables-list" id="tables-list">
                 <div class="skeleton" style="height: 32px; margin: 4px;"></div>
                 <div class="skeleton" style="height: 32px; margin: 4px;"></div>
                 <div class="skeleton" style="height: 32px; margin: 4px;"></div>
-            </div>
-            
-            <div class="enums-list" id="enums-list" style="display: none;">
-                <!-- Enums will be loaded dynamically -->
             </div>
         </aside>
 

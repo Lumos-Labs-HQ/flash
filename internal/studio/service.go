@@ -378,7 +378,6 @@ func (s *Service) UpdateRow(table string, id interface{}, data map[string]interf
 		i++
 	}
 
-	values = append(values, id)
 	sql := fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d",
 		table, strings.Join(setClauses, ", "), i)
 

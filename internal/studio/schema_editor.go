@@ -11,7 +11,7 @@ import (
 )
 
 type SchemaChange struct {
-	Type       string           `json:"type"` // add_column, drop_column, modify_column, add_table, drop_table, create_table, create_enum, alter_enum, drop_enum
+	Type       string           `json:"type"` 
 	Table      string           `json:"table"`
 	Column     *ColumnChange    `json:"column,omitempty"`
 	Columns    []ColumnChange   `json:"columns,omitempty"`
@@ -29,6 +29,7 @@ type ColumnChange struct {
 	OldName       string            `json:"old_name,omitempty"`
 	Unique        bool              `json:"unique,omitempty"`
 	AutoIncrement bool              `json:"auto_increment,omitempty"`
+	IsPrimary     bool              `json:"is_primary,omitempty"`
 	ForeignKey    *ForeignKeyChange `json:"foreign_key,omitempty"`
 }
 
@@ -67,7 +68,6 @@ func (s *Service) PreviewSchemaChange(change *SchemaChange) (*SchemaPreview, err
 
 // ApplySchemaChange applies the change to database and syncs files
 func (s *Service) ApplySchemaChange(change *SchemaChange, configPath string) error {
-	// 1. Check if column already exists (for add_column)
 	if change.Type == "add_column" {
 		exists, err := s.adapter.CheckColumnExists(s.ctx, change.Table, change.Column.Name)
 		if err == nil && exists {
@@ -75,23 +75,18 @@ func (s *Service) ApplySchemaChange(change *SchemaChange, configPath string) err
 		}
 	}
 
-	// 2. Apply to database
 	sql := s.generateSQL(change)
 	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
 	if err != nil {
 		return fmt.Errorf("failed to apply schema change: %w", err)
 	}
 
-	// 3. Generate migration file (skip if no config path)
 	if configPath != "" {
 		if err := s.generateMigrationFile(change, sql, configPath); err != nil {
-			// Log but don't fail
 			fmt.Printf("Warning: failed to generate migration: %v\n", err)
 		}
 
-		// 4. Update schema.sql file (skip if no config path)
 		if err := s.syncSchemaFile(configPath); err != nil {
-			// Log but don't fail
 			fmt.Printf("Warning: failed to sync schema file: %v\n", err)
 		}
 	}
@@ -124,6 +119,67 @@ func (s *Service) generateSQL(change *SchemaChange) string {
 	}
 }
 
+// sanitizeDefaultValue ensures default value is safe and valid for PostgreSQL
+func sanitizeDefaultValue(defaultVal string, colType string) string {
+	if defaultVal == "" {
+		return ""
+	}
+
+	defaultVal = strings.TrimSpace(defaultVal)
+
+	// Handle common cases
+	upper := strings.ToUpper(defaultVal)
+
+	if upper == "NULL" {
+		return "NULL"
+	}
+
+	validFunctions := []string{
+		"NOW()", "CURRENT_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIME",
+		"GEN_RANDOM_UUID()", "UUID_GENERATE_V4()",
+		"TRUE", "FALSE",
+	}
+
+	for _, fn := range validFunctions {
+		if upper == fn || upper == strings.TrimSuffix(fn, "()") {
+			return fn
+		}
+	}
+
+	if strings.Contains(strings.ToUpper(colType), "BOOL") {
+		if upper == "TRUE" || upper == "T" || upper == "1" {
+			return "TRUE"
+		}
+		if upper == "FALSE" || upper == "F" || upper == "0" {
+			return "FALSE"
+		}
+	}
+
+	if strings.Contains(strings.ToUpper(colType), "INT") ||
+		strings.Contains(strings.ToUpper(colType), "SERIAL") ||
+		strings.Contains(strings.ToUpper(colType), "DECIMAL") ||
+		strings.Contains(strings.ToUpper(colType), "NUMERIC") ||
+		strings.Contains(strings.ToUpper(colType), "FLOAT") ||
+		strings.Contains(strings.ToUpper(colType), "DOUBLE") ||
+		strings.Contains(strings.ToUpper(colType), "REAL") {
+		if _, err := fmt.Sscanf(defaultVal, "%f", new(float64)); err == nil {
+			return defaultVal
+		}
+	}
+
+	if strings.HasPrefix(defaultVal, "'") && strings.HasSuffix(defaultVal, "'") {
+		return defaultVal
+	}
+
+	if strings.Contains(defaultVal, "(") && strings.Contains(defaultVal, ")") {
+		return defaultVal
+	}
+
+	// Escape single quotes
+	escaped := strings.ReplaceAll(defaultVal, "'", "''")
+	return fmt.Sprintf("'%s'", escaped)
+}
+
 func (s *Service) generateAddColumn(change *SchemaChange) string {
 	col := change.Column
 
@@ -152,7 +208,10 @@ func (s *Service) generateAddColumn(change *SchemaChange) string {
 	}
 
 	if col.Default != "" && !col.AutoIncrement {
-		sql += fmt.Sprintf(" DEFAULT %s", col.Default)
+		sanitized := sanitizeDefaultValue(col.Default, colType)
+		if sanitized != "" {
+			sql += fmt.Sprintf(" DEFAULT %s", sanitized)
+		}
 	}
 
 	sql += ";"
@@ -174,27 +233,95 @@ func (s *Service) generateDropColumn(change *SchemaChange) string {
 
 func (s *Service) generateModifyColumn(change *SchemaChange) string {
 	col := change.Column
-	// PostgreSQL syntax
-	return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s;",
-		change.Table, col.Name, col.Type)
+	var statements []string
+
+	// Handle type change
+	colType := col.Type
+	if col.AutoIncrement {
+		if strings.ToUpper(col.Type) == "INTEGER" {
+			colType = "SERIAL"
+		} else if strings.ToUpper(col.Type) == "BIGINT" {
+			colType = "BIGSERIAL"
+		} else if strings.ToUpper(col.Type) == "SMALLINT" {
+			colType = "SMALLSERIAL"
+		}
+	}
+	statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", change.Table, col.Name, colType))
+
+	if col.Nullable {
+		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL", change.Table, col.Name))
+	} else {
+		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL", change.Table, col.Name))
+	}
+
+	if col.Default != "" && !col.AutoIncrement {
+		sanitized := sanitizeDefaultValue(col.Default, colType)
+		if sanitized != "" {
+			statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s", change.Table, col.Name, sanitized))
+		}
+	} else if !col.AutoIncrement {
+		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT", change.Table, col.Name))
+	}
+
+	return strings.Join(statements, ";\n") + ";"
 }
 
 func (s *Service) generateAddTable(change *SchemaChange) string {
 	var sql strings.Builder
+	var foreignKeys []string
+
 	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", change.TableDef.Name))
 
 	for i, col := range change.TableDef.Columns {
-		sql.WriteString(fmt.Sprintf("  %s %s", col.Name, col.Type))
+		colType := col.Type
+		if col.AutoIncrement {
+			if strings.ToUpper(col.Type) == "INTEGER" {
+				colType = "SERIAL"
+			} else if strings.ToUpper(col.Type) == "BIGINT" {
+				colType = "BIGSERIAL"
+			} else if strings.ToUpper(col.Type) == "SMALLINT" {
+				colType = "SMALLSERIAL"
+			}
+		}
 
-		if !col.Nullable {
+		sql.WriteString(fmt.Sprintf("  %s %s", col.Name, colType))
+
+		isPrimary := col.IsPrimary
+
+		if isPrimary {
+			sql.WriteString(" PRIMARY KEY")
+		}
+
+		if !col.Nullable && !isPrimary {
 			sql.WriteString(" NOT NULL")
 		}
 
-		if col.Default != "" {
-			sql.WriteString(fmt.Sprintf(" DEFAULT %s", col.Default))
+		if col.Unique && !isPrimary {
+			sql.WriteString(" UNIQUE")
 		}
 
-		if i < len(change.TableDef.Columns)-1 {
+		if col.Default != "" && !col.AutoIncrement {
+			sanitized := sanitizeDefaultValue(col.Default, colType)
+			if sanitized != "" {
+				sql.WriteString(fmt.Sprintf(" DEFAULT %s", sanitized))
+			}
+		}
+
+		if col.ForeignKey != nil {
+			constraintName := fmt.Sprintf("fk_%s_%s", change.TableDef.Name, col.Name)
+			fkSQL := fmt.Sprintf("  CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s)",
+				constraintName, col.Name, col.ForeignKey.Table, col.ForeignKey.Column)
+			foreignKeys = append(foreignKeys, fkSQL)
+		}
+
+		if i < len(change.TableDef.Columns)-1 || len(foreignKeys) > 0 {
+			sql.WriteString(",\n")
+		}
+	}
+
+	for i, fk := range foreignKeys {
+		sql.WriteString(fk)
+		if i < len(foreignKeys)-1 {
 			sql.WriteString(",\n")
 		}
 	}
@@ -224,16 +351,10 @@ func (s *Service) getChangeDescription(change *SchemaChange) string {
 }
 
 func (s *Service) generateMigrationFile(change *SchemaChange, sql, configPath string) error {
-	// Get migrations directory from config
 	migrationsPath := "db/migrations"
 	if configPath != "" {
 		dir := filepath.Dir(configPath)
 		migrationsPath = filepath.Join(dir, "db/migrations")
-	}
-
-	// Create migrations directory if not exists
-	if err := os.MkdirAll(migrationsPath, 0755); err != nil {
-		return err
 	}
 
 	// Generate migration filename
@@ -256,53 +377,101 @@ func (s *Service) generateMigrationFile(change *SchemaChange, sql, configPath st
 }
 
 func (s *Service) syncSchemaFile(configPath string) error {
-	// Get schema path from config
 	schemaPath := "db/schema/schema.sql"
 	if configPath != "" {
 		dir := filepath.Dir(configPath)
 		schemaPath = filepath.Join(dir, "db/schema/schema.sql")
 	}
 
-	// Pull current schema from database
 	tables, err := s.adapter.PullCompleteSchema(s.ctx)
 	if err != nil {
 		return err
 	}
 
-	// Generate schema SQL
-	sql := s.generateSchemaSQL(tables)
+	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
 
-	// Write to file
+	sql := s.generateSchemaSQL(tables, enums)
 	return os.WriteFile(schemaPath, []byte(sql), 0644)
 }
 
-func (s *Service) generateSchemaSQL(tables []types.SchemaTable) string {
+func (s *Service) generateSchemaSQL(tables []types.SchemaTable, enums []types.SchemaEnum) string {
 	var sql strings.Builder
+
+	if len(enums) > 0 {
+		for _, enum := range enums {
+			sql.WriteString(fmt.Sprintf("CREATE TYPE \"%s\" AS ENUM (", enum.Name))
+			for i, val := range enum.Values {
+				sql.WriteString(fmt.Sprintf("'%s'", val))
+				if i < len(enum.Values)-1 {
+					sql.WriteString(", ")
+				}
+			}
+			sql.WriteString(");\n")
+		}
+		sql.WriteString("\n")
+	}
 
 	for i, table := range tables {
 		if table.Name == "_flash_migrations" {
 			continue
 		}
 
-		sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", table.Name))
+		sql.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS \"%s\" (\n", table.Name))
 
-		for j, col := range table.Columns {
-			sql.WriteString(fmt.Sprintf("  %s %s", col.Name, col.Type))
+		var foreignKeys []string
 
-			if !col.Nullable {
-				sql.WriteString(" NOT NULL")
-			}
+		for _, col := range table.Columns {
+			if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
+				fkDef := fmt.Sprintf("  FOREIGN KEY (\"%s\") REFERENCES \"%s\"(\"%s\")",
+					col.Name, col.ForeignKeyTable, col.ForeignKeyColumn)
 
-			if col.Default != "" {
-				sql.WriteString(fmt.Sprintf(" DEFAULT %s", col.Default))
-			}
+				if col.OnDeleteAction != "" {
+					fkDef += fmt.Sprintf(" ON DELETE %s", col.OnDeleteAction)
+				}
 
-			if j < len(table.Columns)-1 {
-				sql.WriteString(",\n")
+				foreignKeys = append(foreignKeys, fkDef)
 			}
 		}
 
-		sql.WriteString("\n);")
+		for j, col := range table.Columns {
+			sql.WriteString(fmt.Sprintf("  \"%s\" %s", col.Name, col.Type))
+
+			// PRIMARY KEY
+			if col.IsPrimary {
+				sql.WriteString(" PRIMARY KEY")
+			}
+
+			// UNIQUE (skip if primary key)
+			if col.IsUnique && !col.IsPrimary {
+				sql.WriteString(" UNIQUE")
+			}
+
+			// NOT NULL (skip if primary key)
+			if !col.Nullable && !col.IsPrimary {
+				sql.WriteString(" NOT NULL")
+			}
+
+			// DEFAULT
+			if col.Default != "" && !strings.Contains(col.Default, "nextval") {
+				sql.WriteString(fmt.Sprintf(" DEFAULT %s", col.Default))
+			}
+
+			// Add comma if not last column or if there are foreign keys
+			if j < len(table.Columns)-1 || len(foreignKeys) > 0 {
+				sql.WriteString(",")
+			}
+			sql.WriteString("\n")
+		}
+
+		for j, fkDef := range foreignKeys {
+			sql.WriteString(fkDef)
+			if j < len(foreignKeys)-1 {
+				sql.WriteString(",")
+			}
+			sql.WriteString("\n")
+		}
+
+		sql.WriteString(");")
 
 		if i < len(tables)-1 {
 			sql.WriteString("\n\n")
@@ -314,10 +483,11 @@ func (s *Service) generateSchemaSQL(tables []types.SchemaTable) string {
 
 func (s *Service) generateCreateTable(change *SchemaChange) string {
 	var sql strings.Builder
+	var foreignKeys []string
+
 	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", change.Table))
 
 	for i, col := range change.Columns {
-		// Handle auto-increment
 		colType := col.Type
 		if col.AutoIncrement {
 			if strings.ToUpper(col.Type) == "INTEGER" {
@@ -331,24 +501,45 @@ func (s *Service) generateCreateTable(change *SchemaChange) string {
 
 		sql.WriteString(fmt.Sprintf("  %s %s", col.Name, colType))
 
-		if !col.Nullable {
+		// Check if marked as primary key
+		isPrimary := col.IsPrimary
+
+		if isPrimary {
+			sql.WriteString(" PRIMARY KEY")
+		}
+
+		if !col.Nullable && !isPrimary {
 			sql.WriteString(" NOT NULL")
 		}
 
-		if col.Unique {
+		if col.Unique && !isPrimary {
 			sql.WriteString(" UNIQUE")
 		}
 
 		if col.Default != "" && !col.AutoIncrement {
-			sql.WriteString(fmt.Sprintf(" DEFAULT %s", col.Default))
+			sanitized := sanitizeDefaultValue(col.Default, colType)
+			if sanitized != "" {
+				sql.WriteString(fmt.Sprintf(" DEFAULT %s", sanitized))
+			}
 		}
 
-		// Check if this is primary key column
-		if i == 0 || col.Name == "id" {
-			sql.WriteString(" PRIMARY KEY")
+		// Collect foreign key constraints
+		if col.ForeignKey != nil {
+			constraintName := fmt.Sprintf("fk_%s_%s", change.Table, col.Name)
+			fkSQL := fmt.Sprintf("  CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s)",
+				constraintName, col.Name, col.ForeignKey.Table, col.ForeignKey.Column)
+			foreignKeys = append(foreignKeys, fkSQL)
 		}
 
-		if i < len(change.Columns)-1 {
+		if i < len(change.Columns)-1 || len(foreignKeys) > 0 {
+			sql.WriteString(",\n")
+		}
+	}
+
+	// Add foreign key constraints
+	for i, fk := range foreignKeys {
+		sql.WriteString(fk)
+		if i < len(foreignKeys)-1 {
 			sql.WriteString(",\n")
 		}
 	}
@@ -366,7 +557,6 @@ func (s *Service) generateCreateEnum(change *SchemaChange) string {
 }
 
 func (s *Service) generateAlterEnum(change *SchemaChange) string {
-	// PostgreSQL doesn't support ALTER TYPE directly, need to drop and recreate
 	var sql strings.Builder
 	sql.WriteString(fmt.Sprintf("-- Recreating enum %s\n", change.EnumName))
 	sql.WriteString(fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE;\n", change.EnumName))
