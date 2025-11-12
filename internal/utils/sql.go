@@ -7,45 +7,58 @@ import (
 	"strings"
 )
 
+var blockCommentRegex = regexp.MustCompile(`/\*[\s\S]*?\*/`)
+
 func RemoveComments(sql string) string {
 	var result strings.Builder
-	lines := strings.Split(sql, "\n")
+	result.Grow(len(sql)) // Pre-allocate buffer
 
-	for _, line := range lines {
-		if idx := strings.Index(line, "--"); idx != -1 {
-			line = line[:idx]
+	start := 0
+	for i := 0; i < len(sql); i++ {
+		// Check for line comment
+		if i+1 < len(sql) && sql[i] == '-' && sql[i+1] == '-' {
+			result.WriteString(sql[start:i])
+			// Skip to newline
+			for i < len(sql) && sql[i] != '\n' {
+				i++
+			}
+			if i < len(sql) {
+				result.WriteByte('\n') // Preserve newline
+			}
+			start = i + 1
 		}
-		result.WriteString(line)
-		result.WriteString("\n")
 	}
+	result.WriteString(sql[start:])
 
-	cleaned := result.String()
-	blockCommentRegex := regexp.MustCompile(`/\*[\s\S]*?\*/`)
-	return blockCommentRegex.ReplaceAllString(cleaned, "")
+	// Remove block comments
+	return blockCommentRegex.ReplaceAllString(result.String(), "")
 }
 
 func SplitColumns(columnsStr string) []string {
-	var result []string
+	result := make([]string, 0, 8) // Pre-allocate with reasonable capacity
 	var current strings.Builder
+	current.Grow(64) // Pre-allocate buffer for column strings
 	parenDepth := 0
 
-	for _, char := range columnsStr {
+	for i := 0; i < len(columnsStr); i++ {
+		char := columnsStr[i]
 		switch char {
 		case '(':
 			parenDepth++
-			current.WriteRune(char)
+			current.WriteByte(char)
 		case ')':
 			parenDepth--
-			current.WriteRune(char)
+			current.WriteByte(char)
 		case ',':
 			if parenDepth == 0 {
 				result = append(result, current.String())
 				current.Reset()
+				current.Grow(64) // Reset with pre-allocation
 			} else {
-				current.WriteRune(char)
+				current.WriteByte(char)
 			}
 		default:
-			current.WriteRune(char)
+			current.WriteByte(char)
 		}
 	}
 
@@ -214,23 +227,22 @@ func min(a, b int) int {
 	return b
 }
 
-func IsSQLKeyword(word string) bool {
-	keywords := []string{
-		"SELECT", "FROM", "WHERE", "JOIN", "INNER", "LEFT", "RIGHT", "OUTER",
-		"ON", "AND", "OR", "NOT", "IN", "LIKE", "BETWEEN", "IS", "NULL",
-		"GROUP", "BY", "HAVING", "ORDER", "ASC", "DESC", "LIMIT", "OFFSET",
-		"INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "ALTER", "TABLE",
-		"INDEX", "VIEW", "AS", "DISTINCT", "COUNT", "SUM", "AVG", "MIN", "MAX",
-		"CASE", "WHEN", "THEN", "ELSE", "END", "WITH", "RECURSIVE",
-	}
+// SQL keywords map 
+var sqlKeywords = map[string]bool{
+	"SELECT": true, "FROM": true, "WHERE": true, "JOIN": true, "INNER": true,
+	"LEFT": true, "RIGHT": true, "OUTER": true, "ON": true, "AND": true,
+	"OR": true, "NOT": true, "IN": true, "LIKE": true, "BETWEEN": true,
+	"IS": true, "NULL": true, "GROUP": true, "BY": true, "HAVING": true,
+	"ORDER": true, "ASC": true, "DESC": true, "LIMIT": true, "OFFSET": true,
+	"INSERT": true, "UPDATE": true, "DELETE": true, "CREATE": true, "DROP": true,
+	"ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true, "AS": true,
+	"DISTINCT": true, "COUNT": true, "SUM": true, "AVG": true, "MIN": true,
+	"MAX": true, "CASE": true, "WHEN": true, "THEN": true, "ELSE": true,
+	"END": true, "WITH": true, "RECURSIVE": true,
+}
 
-	wordUpper := strings.ToUpper(word)
-	for _, kw := range keywords {
-		if wordUpper == kw {
-			return true
-		}
-	}
-	return false
+func IsSQLKeyword(word string) bool {
+	return sqlKeywords[strings.ToUpper(word)]
 }
 
 func ValidateSchemaSyntax(content, filePath string) error {

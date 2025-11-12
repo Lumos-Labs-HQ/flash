@@ -43,8 +43,12 @@ func (p *Adapter) Connect(ctx context.Context, url string) error {
 	}
 
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
-	config.MaxConns = 5
-	config.MinConns = 1
+
+	config.MaxConns = 2                         
+	config.MinConns = 0                         
+	config.MaxConnLifetime = 15 * time.Minute   
+	config.MaxConnIdleTime = 3 * time.Minute    
+	config.HealthCheckPeriod = 30 * time.Second 
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

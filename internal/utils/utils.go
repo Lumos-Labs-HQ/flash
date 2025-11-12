@@ -19,7 +19,7 @@ type FileUtils struct{}
 
 // LoadMigrationsFromDir loads migration files from a directory
 func (f *FileUtils) LoadMigrationsFromDir(migrationsDir string) ([]types.Migration, error) {
-	var migrations []types.Migration
+	migrations := make([]types.Migration, 0, 32) // Pre-allocate with reasonable capacity
 
 	err := filepath.WalkDir(migrationsDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".sql") {
@@ -115,7 +115,6 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 				continue
 			}
 
-			// Smart check: only report conflict if table exists AND has data
 			hasData := c.tableHasData(ctx, adapter, tableName)
 			if !hasData {
 				continue // No conflict if table is empty or doesn't exist
@@ -147,22 +146,22 @@ func (c *ConflictUtils) tableHasData(ctx context.Context, adapter interface{}, t
 
 	checker, ok := adapter.(tableChecker)
 	if !ok {
-		return true // Assume has data if we can't check (safe default)
+		return true 
 	}
 
 	// Check if table exists
 	exists, err := checker.CheckTableExists(ctx, tableName)
 	if err != nil || !exists {
-		return false // Table doesn't exist = no conflict
+		return false 
 	}
 
 	// Check if table has data
 	data, err := checker.GetTableData(ctx, tableName)
 	if err != nil {
-		return true // Assume has data if error (safe default)
+		return true 
 	}
 
-	return len(data) > 0 // Only conflict if table has rows
+	return len(data) > 0 
 }
 
 type SQLUtils struct{}

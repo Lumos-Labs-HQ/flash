@@ -7,6 +7,44 @@ import (
 	"strings"
 )
 
+var (
+	ctePatternRegex            *regexp.Regexp
+	tablePatternRegex          *regexp.Regexp
+	tableAliasPatternRegex     *regexp.Regexp
+	joinPatternRegex           *regexp.Regexp
+	columnRefPatternRegex      *regexp.Regexp
+	aliasExtractPatternRegex   *regexp.Regexp
+	fromPatternRegex           *regexp.Regexp
+	insertPatternRegex         *regexp.Regexp
+	joinCheckRegex             *regexp.Regexp
+	whereClauseRegex           *regexp.Regexp
+	setClauseRegex             *regexp.Regexp
+	orderByClauseRegex         *regexp.Regexp
+	groupByClauseRegex         *regexp.Regexp
+	havingClauseRegex          *regexp.Regexp
+	paramCheckRegex            *regexp.Regexp
+	unqualifiedColPatternRegex *regexp.Regexp
+)
+
+func init() {
+	ctePatternRegex = regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
+	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
+	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
+	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+	columnRefPatternRegex = regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
+	aliasExtractPatternRegex = regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
+	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+(\w+)`)
+	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+(\w+)`)
+	joinCheckRegex = regexp.MustCompile(`(?i)\bJOIN\b`)
+	whereClauseRegex = regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`)
+	setClauseRegex = regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`)
+	orderByClauseRegex = regexp.MustCompile(`(?i)\bORDER\s+BY\s+(.*?)(?:\s+(?:LIMIT|;|$))`)
+	groupByClauseRegex = regexp.MustCompile(`(?i)\bGROUP\s+BY\s+(.*?)(?:\s+(?:HAVING|ORDER|LIMIT|;|$))`)
+	havingClauseRegex = regexp.MustCompile(`(?i)\bHAVING\s+(.*?)(?:\s+(?:ORDER|LIMIT|;|$))`)
+	paramCheckRegex = regexp.MustCompile(`^\d+$|^\$\d+$|\?`)
+	unqualifiedColPatternRegex = regexp.MustCompile(`\b(\w+)\b`)
+}
+
 // ValidateTableReferences checks if tables referenced in queries exist in the schema
 func ValidateTableReferences(sql string, schema interface{}, sourceFile string) error {
 	if schema == nil {
@@ -17,7 +55,6 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		sourceFile = "queries"
 	}
 
-	// Extract tables using reflection to avoid import cycles
 	schemaVal := reflect.ValueOf(schema)
 	if schemaVal.Kind() == reflect.Ptr {
 		schemaVal = schemaVal.Elem()
@@ -33,7 +70,7 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 	}
 
 	// Extract table names from schema
-	tableNames := make(map[string]bool)
+	tableNames := make(map[string]bool, tablesField.Len()) // Pre-allocate
 	for i := 0; i < tablesField.Len(); i++ {
 		tablePtr := tablesField.Index(i)
 		if tablePtr.Kind() == reflect.Ptr {
@@ -47,9 +84,8 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		}
 	}
 
-	cteNames := make(map[string]bool)
-	ctePattern := regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
-	cteMatches := ctePattern.FindAllStringSubmatch(sql, -1)
+	cteNames := make(map[string]bool, 4) // Pre-allocate with reasonable capacity
+	cteMatches := ctePatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range cteMatches {
 		if len(match) > 1 {
 			cteName := match[1]
@@ -59,8 +95,7 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		}
 	}
 
-	tablePattern := regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
-	matches := tablePattern.FindAllStringSubmatch(sql, -1)
+	matches := tablePatternRegex.FindAllStringSubmatch(sql, -1)
 
 	foundTableRefs := false
 
@@ -177,12 +212,9 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
-	tableAliasPattern := regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
-	joinPattern := regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+	aliasToTable := make(map[string]string, 4) // Pre-allocate
 
-	aliasToTable := make(map[string]string)
-
-	matches := tableAliasPattern.FindAllStringSubmatch(sql, -1)
+	matches := tableAliasPatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range matches {
 		if len(match) >= 3 {
 			tableName := match[1]
@@ -191,7 +223,7 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
-	matches = joinPattern.FindAllStringSubmatch(sql, -1)
+	matches = joinPatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range matches {
 		if len(match) >= 3 {
 			tableName := match[1]
@@ -200,8 +232,7 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
-	columnRefPattern := regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
-	columnRefs := columnRefPattern.FindAllStringSubmatch(sql, -1)
+	columnRefs := columnRefPatternRegex.FindAllStringSubmatch(sql, -1)
 
 	for _, ref := range columnRefs {
 		if len(ref) < 3 {
@@ -248,8 +279,7 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		knownAliases[alias] = true
 	}
 
-	aliasExtractPattern := regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
-	aliasMatches := aliasExtractPattern.FindAllStringSubmatch(sql, -1)
+	aliasMatches := aliasExtractPatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range aliasMatches {
 		if len(match) >= 3 && match[2] != "" {
 			knownAliases[strings.ToLower(match[2])] = true
@@ -257,39 +287,34 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 	}
 
 	var primaryTable *tableInfo
-	fromPattern := regexp.MustCompile(`(?i)\bFROM\s+(\w+)`)
-	if fromMatch := fromPattern.FindStringSubmatch(sql); len(fromMatch) > 1 {
+	if fromMatch := fromPatternRegex.FindStringSubmatch(sql); len(fromMatch) > 1 {
 		tableName := strings.ToLower(fromMatch[1])
 		primaryTable = tables[tableName]
 	}
 
 	if primaryTable == nil {
-		insertPattern := regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+(\w+)`)
-		if insertMatch := insertPattern.FindStringSubmatch(sql); len(insertMatch) > 1 {
+		if insertMatch := insertPatternRegex.FindStringSubmatch(sql); len(insertMatch) > 1 {
 			tableName := strings.ToLower(insertMatch[1])
 			primaryTable = tables[tableName]
 		}
 	}
 
-	hasJoin := regexp.MustCompile(`(?i)\bJOIN\b`).MatchString(sql)
+	hasJoin := joinCheckRegex.MatchString(sql)
 
 	if primaryTable != nil && !hasJoin {
 		clausePatterns := []*regexp.Regexp{
-			regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`),
-			regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`),
-			regexp.MustCompile(`(?i)\bORDER\s+BY\s+(.*?)(?:\s+(?:LIMIT|;|$))`),
-			regexp.MustCompile(`(?i)\bGROUP\s+BY\s+(.*?)(?:\s+(?:HAVING|ORDER|LIMIT|;|$))`),
-			regexp.MustCompile(`(?i)\bHAVING\s+(.*?)(?:\s+(?:ORDER|LIMIT|;|$))`),
+			whereClauseRegex,
+			setClauseRegex,
+			orderByClauseRegex,
+			groupByClauseRegex,
+			havingClauseRegex,
 		}
-
-		paramRegex := regexp.MustCompile(`^\d+$|^\$\d+$|\?`)
 
 		for _, pattern := range clausePatterns {
 			if matches := pattern.FindStringSubmatch(sql); len(matches) > 1 {
 				clauseText := matches[1]
 
-				unqualifiedColPattern := regexp.MustCompile(`\b(\w+)\b`)
-				colMatches := unqualifiedColPattern.FindAllString(clauseText, -1)
+				colMatches := unqualifiedColPatternRegex.FindAllString(clauseText, -1)
 
 				for _, colName := range colMatches {
 					colLower := strings.ToLower(colName)
@@ -301,7 +326,7 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 						continue
 					}
 
-					if paramRegex.MatchString(colName) {
+					if paramCheckRegex.MatchString(colName) {
 						continue
 					}
 

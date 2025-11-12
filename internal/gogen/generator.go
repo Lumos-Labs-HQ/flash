@@ -147,8 +147,8 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 	usedNames := make(map[string]int)
 
 	for sourceFile, fileQueries := range queryGroups {
-		// Pre-allocate: ~150 bytes header + ~300 bytes per query
-		estimatedSize := 150 + (len(fileQueries) * 300)
+		// Pre-allocate: ~200 bytes header + ~400 bytes per query + ~200 bytes per table for types
+		estimatedSize := 200 + (len(fileQueries) * 400) + (len(g.schema.Tables) * 200)
 		var code strings.Builder
 		code.Grow(estimatedSize)
 

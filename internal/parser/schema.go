@@ -13,11 +13,13 @@ import (
 
 var (
 	createTableRegex *regexp.Regexp
+	enumRegex        *regexp.Regexp
 	regexOnce        sync.Once
 )
 
 func initRegex() {
 	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(([\s\S]*?)\);`)
+	enumRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 }
 
 type SchemaParser struct {
@@ -143,8 +145,7 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {
 	sql = utils.RemoveComments(sql)
 
-	enums := make([]*Enum, 0)
-	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
+	enums := make([]*Enum, 0, 8) // Pre-allocate with reasonable capacity
 	matches := enumRegex.FindAllStringSubmatch(sql, -1)
 
 	for _, match := range matches {

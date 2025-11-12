@@ -62,10 +62,9 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to pull database schema: %w", err)
 	}
 
-	// Also pull enums for PostgreSQL
+	// pull enums 
 	dbEnums, err := s.adapter.GetCurrentEnums(ctx)
 	if err != nil {
-		// If adapter doesn't support enums, continue with empty list
 		dbEnums = []types.SchemaEnum{}
 	}
 
@@ -81,11 +80,9 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 
 	hasChanges, updatedSQL := s.comparator.CompareWithDatabase(existingSQL, dbTables)
 
-	// Add enums at the beginning of the SQL file
 	if len(dbEnums) > 0 {
 		enumSQL := s.generateEnumSQL(dbEnums)
 		if enumSQL != "" {
-			// Remove existing enums from updatedSQL and prepend new ones
 			updatedSQL = s.removeExistingEnums(updatedSQL)
 			updatedSQL = enumSQL + "\n\n" + updatedSQL
 			hasChanges = true
@@ -147,7 +144,6 @@ func (s *Service) generateEnumSQL(enums []types.SchemaEnum) string {
 }
 
 func (s *Service) removeExistingEnums(sql string) string {
-	// Remove existing CREATE TYPE statements
 	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+\w+\s+AS\s+ENUM\s*\([^)]+\)\s*;[\s\n]*`)
 	return enumRegex.ReplaceAllString(sql, "")
 }

@@ -13,13 +13,17 @@ import (
 )
 
 var (
-	fromRegex  *regexp.Regexp
-	paramRegex *regexp.Regexp
+	fromRegex      *regexp.Regexp
+	paramRegex     *regexp.Regexp
+	returningRegex *regexp.Regexp
+	asRegex        *regexp.Regexp
 )
 
 func init() {
 	fromRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
 	paramRegex = regexp.MustCompile(`\$\d+|\?`)
+	returningRegex = regexp.MustCompile(`(?i)RETURNING\s+(.+?)(?:;|\z)`)
+	asRegex = regexp.MustCompile(`(?i)\s+AS\s+`)
 }
 
 type QueryParser struct {
@@ -163,7 +167,6 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 	paramMatches := paramRegex.FindAllString(query.SQL, -1)
 
-
 	var paramCount int
 	if len(paramMatches) > 0 && paramMatches[0] == "?" {
 		paramCount = len(paramMatches)
@@ -211,7 +214,6 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		var columnsStr string
 
 		if hasReturning {
-			returningRegex := regexp.MustCompile(`(?i)RETURNING\s+(.+?)(?:;|\z)`)
 			if matches := returningRegex.FindStringSubmatch(query.SQL); len(matches) > 1 {
 				columnsStr = strings.TrimSpace(matches[1])
 			}
@@ -224,8 +226,6 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 			if len(colNames) > 0 {
 				query.Columns = make([]*QueryColumn, 0, len(colNames))
-
-				asRegex := regexp.MustCompile(`(?i)\s+AS\s+`)
 
 				for _, colName := range colNames {
 					colName = strings.TrimSpace(colName)

@@ -66,6 +66,11 @@ func (m *Adapter) Connect(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open MySQL connection: %w", err)
 	}
+	db.SetMaxOpenConns(2)                   
+	db.SetMaxIdleConns(0)                   
+	db.SetConnMaxLifetime(15 * time.Minute) 
+	db.SetConnMaxIdleTime(3 * time.Minute)  
+
 	m.db = db
 	return nil
 }

@@ -38,6 +38,12 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite connection: %w", err)
 	}
+
+	db.SetMaxOpenConns(1)                  
+	db.SetMaxIdleConns(1)                  
+	db.SetConnMaxLifetime(0)               
+	db.SetConnMaxIdleTime(5 * time.Minute) 
+
 	s.db = db
 	return nil
 }
