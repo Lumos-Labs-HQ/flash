@@ -14,13 +14,6 @@ async function main() {
     const newuser = await db.createUser('jack', 'jack@gmail.com', '123 street', true);
     console.log('New user ID:', newuser);
 
-    const isAdmin = await db.isadminUser(newuser);
-    if(isAdmin){
-        console.log('User is admin');
-    }else{
-        console.log('User is not admin');
-    }
-
     const user = await db.getUserByEmail('jack@gmail.com');
     console.log('User fetched by email:', user);
 

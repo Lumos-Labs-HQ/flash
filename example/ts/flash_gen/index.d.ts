@@ -36,65 +36,13 @@ export interface Comments {
   created_at: Date;
 }
 
-export interface GetActiveUsersWithStatsResult {
-  id: number;
-  name: string;
-  email: string;
-  isadmin: boolean;
-  total_posts: number;
-  total_comments: number;
-  last_post_date: Date;
-}
-
-export interface GetTopActiveUsersResult {
-  id: number;
-  name: string;
-  email: string;
-  total_posts: number;
-  total_comments: number;
-}
-
-export interface GetMostCommentedPostsResult {
-  id: number;
-  title: string;
-  author: string;
-  comment_count: number;
-}
-
-export interface GetUsersCreatedBetweenResult {
-  id: number;
-  name: string;
-  email: string;
-  created_at: Date;
-}
-
-export interface GetPostsByCategoryResult {
-  id: number;
+export interface GetPostWithCommentsResult {
+  post_id: number;
   title: string;
   content: string;
-  author_name: string;
-  created_at: Date;
-}
-
-export interface GetComplexUserAnalyticsResult {
-  id: number;
-  name: string;
-  email: string;
-  role: 'admin' | 'moderator' | 'user' | 'guest';
-  isadmin: boolean;
-  user_created_at: string;
-  total_posts: number;
-  published_posts: boolean;
-  draft_posts: string;
-  total_comments: number;
-  posts_commented_on: string;
-  categories_used: string;
-  category_names: string;
-  last_post_date: Date;
-  last_comment_date: Date;
-  avg_post_length: number | null;
-  activity_level: string;
-  engagement_score: string;
+  author: string;
+  comment_text: string;
+  commenter: string;
 }
 
 export interface GetPostDetailsWithAllRelationsResult {
@@ -120,28 +68,38 @@ export interface GetPostDetailsWithAllRelationsResult {
   hours_since_created: string;
 }
 
+export interface GetComplexUserAnalyticsResult {
+  id: number;
+  name: string;
+  email: string;
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+  isadmin: boolean;
+  user_created_at: string;
+  total_posts: number;
+  published_posts: boolean;
+  draft_posts: string;
+  total_comments: number;
+  posts_commented_on: string;
+  categories_used: string;
+  category_names: string;
+  last_post_date: Date;
+  last_comment_date: Date;
+  avg_post_length: number | null;
+  activity_level: string;
+  engagement_score: string;
+}
+
 export class Queries {
   constructor(db: any);
 
-  isadminUser(id: number): Promise<boolean | null>;
-  getUserEmail(id: number): Promise<string | null>;
-  getUserName(id: number): Promise<string | null>;
-  getUserByEmail(email: string): Promise<Users | null>;
-  getActiveUsersWithStats(): Promise<GetActiveUsersWithStatsResult[]>;
-  getTopActiveUsers(): Promise<GetTopActiveUsersResult[]>;
   createUser(name: string, email: string, address: string, isadmin: boolean): Promise<number>;
-  createPost(user_id: number, category_id: number, title: string, content: string): Promise<number>;
-  createComment(post_id: number, user_id: number, content: string): Promise<number>;
-  createCategory(name: number): Promise<number>;
-  getAveragePostsPerUser(): Promise<number | null>;
-  getMostCommentedPosts(limit: number): Promise<GetMostCommentedPostsResult[]>;
-  checkUserExists(email: string): Promise<boolean | null>;
-  getUsersCreatedBetween(created_at_start: Date, created_at_end: Date): Promise<GetUsersCreatedBetweenResult[]>;
-  updateUserAdminStatus(id: number, isadmin: boolean): Promise<number>;
-  deleteInactiveUsers(created_at: Date): Promise<number>;
-  getPostsByCategory(category_id: number): Promise<GetPostsByCategoryResult[]>;
-  getComplexUserAnalytics(total_posts: number, total_comments: number, limit: number): Promise<GetComplexUserAnalyticsResult[]>;
+  getUserByEmail(email: string): Promise<Users | null>;
+  createCategory(name: string): Promise<Categories | null>;
+  createPost(user_id: number, category_id: number, title: string, content: string): Promise<Posts | null>;
+  createComment(post_id: number, user_id: number, content: string): Promise<Comments | null>;
+  getPostWithComments(id: number): Promise<GetPostWithCommentsResult[]>;
   getPostDetailsWithAllRelations(id: number): Promise<GetPostDetailsWithAllRelationsResult | null>;
+  getComplexUserAnalytics(total_posts: number, total_comments: number, limit: number): Promise<GetComplexUserAnalyticsResult[]>;
 }
 
 export function New(db: any): Queries;

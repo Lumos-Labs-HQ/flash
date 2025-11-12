@@ -265,3 +265,45 @@ type GetpostdetailswithallrelationsRow struct {
 	HoursSinceCreated string `json:"hours_since_created"`
 }
 
+func (q *Queries) Getcomplexuseranalytics(total_posts int64, total_comments int64, limit int64) ([]GetcomplexuseranalyticsRow, error) {
+	const query = `WITH user_post_stats AS ( SELECT u.id as user_id, u.name, u.email, u.role, u.isadmin, u.created_at as user_created_at, COUNT(DISTINCT p.id) as total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) as published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) as draft_posts, MAX(p.created_at) as last_post_date, AVG(LENGTH(p.content)) as avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id as user_id, COUNT(c.id) as total_comments, COUNT(DISTINCT c.post_id) as posts_commented_on, MAX(c.created_at) as last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) as categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) as category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id as id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) as total_posts, COALESCE(ups.published_posts, 0) as published_posts, COALESCE(ups.draft_posts, 0) as draft_posts, COALESCE(ucs.total_comments, 0) as total_comments, COALESCE(ucs.posts_commented_on, 0) as posts_commented_on, COALESCE(ce.categories_used, 0) as categories_used, COALESCE(ce.category_names, '') as category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) as avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END as activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) as engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;`
+	args := []interface{}{total_posts, total_comments, limit}
+
+	rows, err := q.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []GetcomplexuseranalyticsRow
+	for rows.Next() {
+		var item GetcomplexuseranalyticsRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Email, &item.Role, &item.Isadmin, &item.UserCreatedAt, &item.TotalPosts, &item.PublishedPosts, &item.DraftPosts, &item.TotalComments, &item.PostsCommentedOn, &item.CategoriesUsed, &item.CategoryNames, &item.LastPostDate, &item.LastCommentDate, &item.AvgPostLength, &item.ActivityLevel, &item.EngagementScore); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetcomplexuseranalyticsRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Role UserRole `json:"role"`
+	Isadmin bool `json:"isadmin"`
+	UserCreatedAt string `json:"user_created_at"`
+	TotalPosts string `json:"total_posts"`
+	PublishedPosts string `json:"published_posts"`
+	DraftPosts string `json:"draft_posts"`
+	TotalComments string `json:"total_comments"`
+	PostsCommentedOn string `json:"posts_commented_on"`
+	CategoriesUsed string `json:"categories_used"`
+	CategoryNames string `json:"category_names"`
+	LastPostDate string `json:"last_post_date"`
+	LastCommentDate string `json:"last_comment_date"`
+	AvgPostLength string `json:"avg_post_length"`
+	ActivityLevel string `json:"activity_level"`
+	EngagementScore string `json:"engagement_score"`
+}
+
