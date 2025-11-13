@@ -9,10 +9,20 @@ import (
 
 func (q *Queries) Createuser(name string, email string) (CreateuserRow, error) {
 	const query = `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Createuser_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return CreateuserRow{}, err
+		}
+		q.stmts["Createuser_stmt"] = stmt
+	}
 	args := []interface{}{name, email}
 
 	var result CreateuserRow
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
 	}
@@ -40,10 +50,20 @@ type CreateuserRow struct {
 
 func (q *Queries) Getuser(id int64) (GetuserRow, error) {
 	const query = `SELECT * FROM users WHERE id = $1;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Getuser_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetuserRow{}, err
+		}
+		q.stmts["Getuser_stmt"] = stmt
+	}
 	args := []interface{}{id}
 
 	var result GetuserRow
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
 	}
@@ -71,10 +91,20 @@ type GetuserRow struct {
 
 func (q *Queries) Getuserbyemail(email string) (GetuserbyemailRow, error) {
 	const query = `SELECT * FROM users WHERE email = $1;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Getuserbyemail_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetuserbyemailRow{}, err
+		}
+		q.stmts["Getuserbyemail_stmt"] = stmt
+	}
 	args := []interface{}{email}
 
 	var result GetuserbyemailRow
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
 	}
@@ -102,10 +132,20 @@ type GetuserbyemailRow struct {
 
 func (q *Queries) Createcategory(name string) (CreatecategoryRow, error) {
 	const query = `INSERT INTO categories (name) VALUES ($1) RETURNING *;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Createcategory_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return CreatecategoryRow{}, err
+		}
+		q.stmts["Createcategory_stmt"] = stmt
+	}
 	args := []interface{}{name}
 
 	var result CreatecategoryRow
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
 	}
@@ -166,10 +206,20 @@ type CreatepostRow struct {
 
 func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (CreatecommentRow, error) {
 	const query = `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Createcomment_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return CreatecommentRow{}, err
+		}
+		q.stmts["Createcomment_stmt"] = stmt
+	}
 	args := []interface{}{post_id, user_id, content}
 
 	var result CreatecommentRow
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
 	}
@@ -194,9 +244,19 @@ type CreatecommentRow struct {
 
 func (q *Queries) Getpostwithcomments(id int64) ([]GetpostwithcommentsRow, error) {
 	const query = `SELECT p.id AS post_id, p.title, p.content, u.name AS author, c.content AS comment_text, cu.name AS commenter FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = $1;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Getpostwithcomments_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getpostwithcomments_stmt"] = stmt
+	}
 	args := []interface{}{id}
 
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +274,7 @@ func (q *Queries) Getpostwithcomments(id int64) ([]GetpostwithcommentsRow, error
 }
 
 type GetpostwithcommentsRow struct {
-	PostId string `json:"post_id"`
+	PostId int64 `json:"post_id"`
 	Title string `json:"title"`
 	Content string `json:"content"`
 	Author string `json:"author"`
@@ -224,10 +284,20 @@ type GetpostwithcommentsRow struct {
 
 func (q *Queries) Getpostdetailswithallrelations(id int64) (GetpostdetailswithallrelationsRow, error) {
 	const query = `SELECT p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id as author_id, u.name as author_name, u.email as author_email, u.role as author_role, u.isadmin as author_is_admin, cat.id as category_id, cat.name as category_name, COUNT(DISTINCT c.id) as comment_count, COUNT(DISTINCT c.user_id) as unique_commenters, STRING_AGG(DISTINCT c.content, ' | ' ORDER BY c.content) as all_comments, ARRAY_AGG(DISTINCT cu.name ORDER BY cu.name) as commenter_names, MAX(c.created_at) as last_comment_date, LENGTH(p.content) as content_length, EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 as hours_since_created FROM posts p INNER JOIN users u ON p.user_id = u.id INNER JOIN categories cat ON p.category_id = cat.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = $1 GROUP BY p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id, u.name, u.email, u.role, u.isadmin, cat.id, cat.name;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Getpostdetailswithallrelations_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetpostdetailswithallrelationsRow{}, err
+		}
+		q.stmts["Getpostdetailswithallrelations_stmt"] = stmt
+	}
 	args := []interface{}{id}
 
 	var result GetpostdetailswithallrelationsRow
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
 	}
@@ -256,20 +326,30 @@ type GetpostdetailswithallrelationsRow struct {
 	AuthorIsAdmin string `json:"author_is_admin"`
 	CategoryId int64 `json:"category_id"`
 	CategoryName string `json:"category_name"`
-	CommentCount string `json:"comment_count"`
-	UniqueCommenters string `json:"unique_commenters"`
-	AllComments string `json:"all_comments"`
-	CommenterNames string `json:"commenter_names"`
-	LastCommentDate string `json:"last_comment_date"`
-	ContentLength string `json:"content_length"`
-	HoursSinceCreated string `json:"hours_since_created"`
+	CommentCount int64 `json:"comment_count"`
+	UniqueCommenters int64 `json:"unique_commenters"`
+	AllComments sql.NullString `json:"all_comments"`
+	CommenterNames sql.NullString `json:"commenter_names"`
+	LastCommentDate sql.NullTime `json:"last_comment_date"`
+	ContentLength sql.NullInt64 `json:"content_length"`
+	HoursSinceCreated sql.NullFloat64 `json:"hours_since_created"`
 }
 
 func (q *Queries) Getcomplexuseranalytics(total_posts int64, total_comments int64, limit int64) ([]GetcomplexuseranalyticsRow, error) {
 	const query = `WITH user_post_stats AS ( SELECT u.id as user_id, u.name, u.email, u.role, u.isadmin, u.created_at as user_created_at, COUNT(DISTINCT p.id) as total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) as published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) as draft_posts, MAX(p.created_at) as last_post_date, AVG(LENGTH(p.content)) as avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id as user_id, COUNT(c.id) as total_comments, COUNT(DISTINCT c.post_id) as posts_commented_on, MAX(c.created_at) as last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) as categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) as category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id as id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) as total_posts, COALESCE(ups.published_posts, 0) as published_posts, COALESCE(ups.draft_posts, 0) as draft_posts, COALESCE(ucs.total_comments, 0) as total_comments, COALESCE(ucs.posts_commented_on, 0) as posts_commented_on, COALESCE(ce.categories_used, 0) as categories_used, COALESCE(ce.category_names, '') as category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) as avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END as activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) as engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;`
+	// OPTIMIZED: Use prepared statement cache for hot query
+	stmt := q.stmts["Getcomplexuseranalytics_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getcomplexuseranalytics_stmt"] = stmt
+	}
 	args := []interface{}{total_posts, total_comments, limit}
 
-	rows, err := q.db.Query(query, args...)
+	rows, err := stmt.Query(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +382,7 @@ type GetcomplexuseranalyticsRow struct {
 	CategoryNames string `json:"category_names"`
 	LastPostDate string `json:"last_post_date"`
 	LastCommentDate string `json:"last_comment_date"`
-	AvgPostLength string `json:"avg_post_length"`
+	AvgPostLength float64 `json:"avg_post_length"`
 	ActivityLevel string `json:"activity_level"`
 	EngagementScore string `json:"engagement_score"`
 }
