@@ -197,3 +197,15 @@ selectTable = async function(tableName) {
         currentColumns = state.data.columns;
     }
 };
+function filterIndexItems() {
+    const query = document.getElementById('search-tables').value.toLowerCase();
+    const items = document.querySelectorAll('#tables-list .table-item');
+    items.forEach(item => {
+        const name = item.textContent.toLowerCase();
+        item.style.display = name.includes(query) ? 'flex' : 'none';
+    });
+}
+
+function showCreateTableForm() {
+    window.location.href = '/schema#create-table';
+}

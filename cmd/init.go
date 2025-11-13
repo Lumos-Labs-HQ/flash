@@ -53,13 +53,21 @@ func init() {
 }
 
 func initializeProject(dbType template.DatabaseType) error {
-	// Detect if this is a Node.js project
+	// Detect project type
 	isNodeProject := false
+	isPythonProject := false
+	
 	if _, err := os.Stat("package.json"); err == nil {
 		isNodeProject = true
 	}
+	
+	if _, err := os.Stat("requirements.txt"); err == nil {
+		isPythonProject = true
+	} else if _, err := os.Stat("pyproject.toml"); err == nil {
+		isPythonProject = true
+	}
 
-	tmpl := template.NewProjectTemplate(dbType, isNodeProject)
+	tmpl := template.NewProjectTemplate(dbType, isNodeProject, isPythonProject)
 
 	directories := tmpl.GetDirectoryStructure()
 	for _, dir := range directories {
@@ -93,6 +101,8 @@ func initializeProject(dbType template.DatabaseType) error {
 	projectType := "Go"
 	if isNodeProject {
 		projectType = "Node.js"
+	} else if isPythonProject {
+		projectType = "Python"
 	}
 
 	fmt.Printf("✅ Successfully initialized FlashORM project for %s with %s database support\n", projectType, dbType)
@@ -111,6 +121,14 @@ func initializeProject(dbType template.DatabaseType) error {
 		fmt.Println("   JavaScript code generation is enabled")
 		fmt.Println("   Run 'flash gen' to generate type-safe JS code")
 	}
+	
+	if isPythonProject {
+		fmt.Println()
+		fmt.Println("🐍 Python project detected!")
+		fmt.Println("   Python code generation is enabled")
+		fmt.Println("   Run 'Flash gen' to generate type-safe Python code")
+	}
+	
 
 	if os.Getenv("DATABASE_URL") != "" {
 		fmt.Println()

@@ -26,9 +26,10 @@ func (s *Service) GetTables() ([]TableInfo, error) {
 		return nil, err
 	}
 
-	var result []TableInfo
+	// Pre-allocate with estimated capacity
+	result := make([]TableInfo, 0, len(tables))
 
-	var targetTables []string
+	targetTables := make([]string, 0, len(tables))
 	for _, table := range tables {
 		if table != "_flash_migrations" {
 			targetTables = append(targetTables, table)
@@ -223,14 +224,7 @@ func (s *Service) deleteRow(tableName, rowID string) error {
 }
 
 func joinColumns(cols []string) string {
-	result := ""
-	for i, col := range cols {
-		if i > 0 {
-			result += ", "
-		}
-		result += col
-	}
-	return result
+	return strings.Join(cols, ", ")
 }
 
 // GetSchemaVisualization returns schema for visualization
@@ -242,21 +236,33 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 
 	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
 
-	nodes := []map[string]any{}
-	nodeIndex := make(map[string]string)
+	nodes := make([]map[string]any, 0, len(tables))   // Pre-allocate
+	nodeIndex := make(map[string]string, len(tables)) // Pre-allocate
 
 	for i, table := range tables {
 		nodeID := fmt.Sprintf("table-%d", i)
 		nodeIndex[table.Name] = nodeID
 
-		columns := []map[string]any{}
+		columns := make([]map[string]any, 0, len(table.Columns)) // Pre-allocate
+		columnMap := make(map[string]bool, len(table.Columns))   // Pre-allocate
+
 		for _, col := range table.Columns {
-			columns = append(columns, map[string]any{
-				"name":      col.Name,
-				"type":      col.Type,
-				"isPrimary": col.IsPrimary,
-				"isForeign": col.ForeignKeyTable != "",
-			})
+			// Only add column if not already present
+			if !columnMap[col.Name] {
+				columnMap[col.Name] = true
+				columns = append(columns, map[string]any{
+					"name":             col.Name,
+					"type":             col.Type,
+					"isPrimary":        col.IsPrimary,
+					"isForeign":        col.ForeignKeyTable != "",
+					"nullable":         col.Nullable,
+					"default":          col.Default,
+					"foreignKeyTable":  col.ForeignKeyTable,
+					"foreignKeyColumn": col.ForeignKeyColumn,
+					"isUnique":         col.IsUnique,
+					"isAutoIncrement":  col.IsAutoIncrement,
+				})
+			}
 		}
 
 		nodes = append(nodes, map[string]any{
@@ -272,19 +278,43 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 		})
 	}
 
-	// Build edges (relationships)
-	edges := []map[string]any{}
+	estimatedEdges := len(tables) * 2
+	edges := make([]map[string]any, 0, estimatedEdges)
+	edgeMap := make(map[string]bool, estimatedEdges) // Pre-allocate
+
 	for _, table := range tables {
 		sourceID := nodeIndex[table.Name]
 		for _, col := range table.Columns {
 			if col.ForeignKeyTable != "" {
 				if targetID, ok := nodeIndex[col.ForeignKeyTable]; ok {
-					edges = append(edges, map[string]any{
-						"id":     fmt.Sprintf("%s-%s", sourceID, targetID),
-						"source": sourceID,
-						"target": targetID,
-						"label":  col.Name,
-					})
+					// Create unique edge ID to prevent duplicates
+					edgeID := fmt.Sprintf("%s-%s-%s", sourceID, targetID, col.Name)
+
+					if !edgeMap[edgeID] {
+						edgeMap[edgeID] = true
+
+						var targetColumn string
+						for _, targetTable := range tables {
+							if targetTable.Name == col.ForeignKeyTable {
+								for _, targetCol := range targetTable.Columns {
+									if targetCol.IsPrimary {
+										targetColumn = targetCol.Name
+										break
+									}
+								}
+								break
+							}
+						}
+
+						edges = append(edges, map[string]any{
+							"id":           edgeID,
+							"source":       sourceID,
+							"target":       targetID,
+							"label":        col.Name,
+							"sourceHandle": col.Name,
+							"targetHandle": targetColumn,
+						})
+					}
 				}
 			}
 		}
@@ -343,4 +373,44 @@ func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 			Limit:   0,
 		}, nil
 	}
+}
+
+// UpdateRow updates a single row in a table
+func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
+	var setClauses []string
+	var values []interface{}
+
+	i := 1
+	for col, val := range data {
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, i))
+		values = append(values, val)
+		i++
+	}
+
+	sql := fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d",
+		table, strings.Join(setClauses, ", "), i)
+
+	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
+	return err
+}
+
+// InsertRow inserts a new row into a table
+func (s *Service) InsertRow(table string, data map[string]interface{}) error {
+	var columns []string
+	var placeholders []string
+	var values []interface{}
+
+	i := 1
+	for col, val := range data {
+		columns = append(columns, col)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
+		values = append(values, val)
+		i++
+	}
+
+	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		table, strings.Join(columns, ", "), strings.Join(placeholders, ", "))
+
+	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
+	return err
 }

@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" href="/static/image/logo.png">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.8.4/dist/style.css">
+    <link rel="stylesheet" href="/static/css/index.css">
     <link rel="stylesheet" href="/static/css/schema.css">
     <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
 </head>
@@ -47,6 +48,20 @@
         </div>
     </div>
 
+    <!-- Edit Panel -->
+    <div id="edit-panel" class="edit-panel">
+        <div class="panel-header">
+            <div class="panel-title">
+                <span class="iconify" data-icon="mdi:table-edit"></span>
+                <span id="panel-table-name">Edit Table</span>
+            </div>
+            <button class="panel-close" onclick="closeEditPanel()">×</button>
+        </div>
+        <div class="panel-content" id="panel-content">
+            <!-- Content will be dynamically loaded -->
+        </div>
+    </div>
+
     <script type="importmap">
     {
         "imports": {
@@ -59,5 +74,7 @@
     </script>
 
     <script type="module" src="/static/js/schema.js"></script>
+    <script src="/static/js/modal.js"></script>
+    <script src="/static/js/schema-panel.js"></script>
 </body>
 </html>

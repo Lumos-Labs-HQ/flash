@@ -6,13 +6,32 @@ import (
 	"strings"
 )
 
-type TypeInferrer struct{}
+type TypeInferrer struct {
+	cache map[string]string
+}
 
 func NewTypeInferrer() *TypeInferrer {
-	return &TypeInferrer{}
+	return &TypeInferrer{
+		cache: make(map[string]string, 64),
+	}
 }
 
 func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table, paramName string) string {
+	cacheKey := fmt.Sprintf("%s:%d:%s", table.Name, paramIndex, paramName)
+	if cached, ok := ti.cache[cacheKey]; ok {
+		return cached
+	}
+
+	result := ti.inferParamTypeInternal(sql, paramIndex, table, paramName)
+
+	if result != "" {
+		ti.cache[cacheKey] = result
+	}
+
+	return result
+}
+
+func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table *Table, paramName string) string {
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) ||
@@ -25,11 +44,16 @@ func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table,
 
 	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(aggregatePattern, sql); matched {
-		return "INTEGER" // Aggregate functions return numeric
+		return "INTEGER"
 	}
 
-	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*`, paramIndex, paramIndex)
+	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)_?\w*`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(numericAliasPattern, sql); matched {
+		return "INTEGER"
+	}
+
+	coalescePattern := fmt.Sprintf(`(?i)COALESCE\([^,)]*\.(cnt|count|sum|avg|total|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)[^)]*\)\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*COALESCE\([^,)]*\.(cnt|count|sum|avg|total|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)[^)]*\)`, paramIndex, paramIndex)
+	if matched, _ := regexp.MatchString(coalescePattern, sql); matched {
 		return "INTEGER"
 	}
 
@@ -114,9 +138,6 @@ func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table,
 }
 
 func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
-	// Support both PostgreSQL ($1) and SQLite (?) parameter styles
-	// For ?, we need to count occurrences to match the paramIndex
-
 	// Check for INSERT statement first (works for both ? and $n)
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
 		insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)

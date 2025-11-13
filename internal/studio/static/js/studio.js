@@ -138,17 +138,31 @@ function renderDataGrid(data) {
             const schemaInfo = `
                 <div class="table-schema-info">
                     <div class="schema-title">
+                        <span class="iconify" data-icon="mdi:table" style="font-size: 20px;"></span>
                         Table Structure: ${state.currentTable}
                     </div>
-                    <div class="schema-columns">
-                        ${data.columns.map(col => `
-                            <div class="schema-column">
-                                <span class="schema-column-name">${col.name}</span>
-                                <span class="schema-column-type">${col.type}</span>
-                                ${col.primary_key ? '<span class="schema-column-badge">PK</span>' : ''}
-                                ${!col.nullable ? '<span class="schema-column-badge" style="background: #3a2f1a; color: #f59e0b;">NOT NULL</span>' : ''}
-                            </div>
-                        `).join('')}
+                    <div class="schema-columns-grid">
+                        ${data.columns.map(col => {
+                            let badges = [];
+                            if (col.primary_key) badges.push('<span class="badge badge-primary">PK</span>');
+                            if (col.foreign_key_table) badges.push('<span class="badge badge-purple">FK → ' + col.foreign_key_table + '.' + col.foreign_key_column + '</span>');
+                            if (col.isUnique) badges.push('<span class="badge badge-success">Unique</span>');
+                            if (col.isAutoIncrement) badges.push('<span class="badge badge-warning">Auto Inc</span>');
+                            if (!col.nullable) badges.push('<span class="badge badge-info">NOT NULL</span>');
+                            if (col.default !== null && col.default !== undefined && col.default !== '') badges.push('<span class="badge badge-secondary">Default: ' + col.default + '</span>');
+                            
+                            return `
+                                <div class="schema-column-card">
+                                    <div class="schema-column-header">
+                                        <div class="schema-column-main">
+                                            <div class="schema-column-name">${col.name}</div>
+                                            <div class="schema-column-type">${col.type}</div>
+                                        </div>
+                                    </div>
+                                    ${badges.length > 0 ? '<div class="schema-column-badges">' + badges.join('') + '</div>' : ''}
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             `;
@@ -629,6 +643,7 @@ function refreshData() {
     state.changes.clear();
     document.getElementById('save-btn').style.display = 'none';
     loadTableData();
+    loadTables();
 }
 
 // Pagination

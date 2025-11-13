@@ -12,7 +12,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "2.0.8"
+	Version = "2.1.0"
 )
 
 func showBanner() {
@@ -31,7 +31,7 @@ func showBanner() {
 		"║                                                              ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓            ║",
 		"║     ▓                                                ▓       ║",
-		"║     ▓  Go • TypeScript • JavaScript • ORM          ▓        ║",
+		"║     ▓      Go • TS • JS • Python • ORM              ▓        ║",
 		"║     ▓                                                ▓       ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓              ║",
 		"╚══════════════════════════════════════════════════════════════╝",
@@ -57,6 +57,7 @@ Supported Languages:
 - Go (native type-safe structs and methods)
 - TypeScript (with full type definitions)
 - JavaScript (with JSDoc comments)
+- Python (with async support)
 
 Database Support:
 - PostgreSQL (with advanced features)

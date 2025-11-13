@@ -2,28 +2,90 @@ package utils
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 )
 
-// ValidateTableReferences checks if tables referenced in queries exist in the schema
-func ValidateTableReferences(sql string, schema interface{}) error {
-	type Table struct {
-		Name string
-	}
-	type Schema struct {
-		Tables []*Table
-	}
+var (
+	ctePatternRegex            *regexp.Regexp
+	tablePatternRegex          *regexp.Regexp
+	tableAliasPatternRegex     *regexp.Regexp
+	joinPatternRegex           *regexp.Regexp
+	columnRefPatternRegex      *regexp.Regexp
+	aliasExtractPatternRegex   *regexp.Regexp
+	fromPatternRegex           *regexp.Regexp
+	insertPatternRegex         *regexp.Regexp
+	joinCheckRegex             *regexp.Regexp
+	whereClauseRegex           *regexp.Regexp
+	setClauseRegex             *regexp.Regexp
+	orderByClauseRegex         *regexp.Regexp
+	groupByClauseRegex         *regexp.Regexp
+	havingClauseRegex          *regexp.Regexp
+	paramCheckRegex            *regexp.Regexp
+	unqualifiedColPatternRegex *regexp.Regexp
+)
 
-	s, ok := schema.(*Schema)
-	if !ok {
-		// Try to convert from parser.Schema
+func init() {
+	ctePatternRegex = regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
+	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
+	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
+	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+	columnRefPatternRegex = regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
+	aliasExtractPatternRegex = regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
+	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+(\w+)`)
+	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+(\w+)`)
+	joinCheckRegex = regexp.MustCompile(`(?i)\bJOIN\b`)
+	whereClauseRegex = regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`)
+	setClauseRegex = regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`)
+	orderByClauseRegex = regexp.MustCompile(`(?i)\bORDER\s+BY\s+(.*?)(?:\s+(?:LIMIT|;|$))`)
+	groupByClauseRegex = regexp.MustCompile(`(?i)\bGROUP\s+BY\s+(.*?)(?:\s+(?:HAVING|ORDER|LIMIT|;|$))`)
+	havingClauseRegex = regexp.MustCompile(`(?i)\bHAVING\s+(.*?)(?:\s+(?:ORDER|LIMIT|;|$))`)
+	paramCheckRegex = regexp.MustCompile(`^\d+$|^\$\d+$|\?`)
+	unqualifiedColPatternRegex = regexp.MustCompile(`\b(\w+)\b`)
+}
+
+// ValidateTableReferences checks if tables referenced in queries exist in the schema
+func ValidateTableReferences(sql string, schema interface{}, sourceFile string) error {
+	if schema == nil {
 		return nil
 	}
 
-	cteNames := make(map[string]bool)
-	ctePattern := regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
-	cteMatches := ctePattern.FindAllStringSubmatch(sql, -1)
+	if sourceFile == "" {
+		sourceFile = "queries"
+	}
+
+	schemaVal := reflect.ValueOf(schema)
+	if schemaVal.Kind() == reflect.Ptr {
+		schemaVal = schemaVal.Elem()
+	}
+
+	if schemaVal.Kind() != reflect.Struct {
+		return nil
+	}
+
+	tablesField := schemaVal.FieldByName("Tables")
+	if !tablesField.IsValid() || tablesField.Kind() != reflect.Slice {
+		return nil
+	}
+
+	// Extract table names from schema
+	tableNames := make(map[string]bool, tablesField.Len()) // Pre-allocate
+	for i := 0; i < tablesField.Len(); i++ {
+		tablePtr := tablesField.Index(i)
+		if tablePtr.Kind() == reflect.Ptr {
+			tablePtr = tablePtr.Elem()
+		}
+		if tablePtr.Kind() == reflect.Struct {
+			nameField := tablePtr.FieldByName("Name")
+			if nameField.IsValid() && nameField.Kind() == reflect.String {
+				tableNames[strings.ToLower(nameField.String())] = true
+			}
+		}
+	}
+
+	cteNames := make(map[string]bool, 4) // Pre-allocate with reasonable capacity
+	cteMatches := ctePatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range cteMatches {
 		if len(match) > 1 {
 			cteName := match[1]
@@ -33,8 +95,7 @@ func ValidateTableReferences(sql string, schema interface{}) error {
 		}
 	}
 
-	tablePattern := regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
-	matches := tablePattern.FindAllStringSubmatch(sql, -1)
+	matches := tablePatternRegex.FindAllStringSubmatch(sql, -1)
 
 	foundTableRefs := false
 
@@ -55,13 +116,8 @@ func ValidateTableReferences(sql string, schema interface{}) error {
 
 		foundTableRefs = true
 
-		tableExists := false
-		for _, t := range s.Tables {
-			if strings.EqualFold(t.Name, tableName) {
-				tableExists = true
-				break
-			}
-		}
+		// Check if table exists in schema
+		tableExists := tableNames[strings.ToLower(tableName)]
 
 		if !tableExists {
 			lines := strings.Split(sql, "\n")
@@ -78,60 +134,108 @@ func ValidateTableReferences(sql string, schema interface{}) error {
 				}
 			}
 
-			return fmt.Errorf("# package FlashORM\ndb\\queries\\users.sql:%d:%d: relation \"%s\" does not exist", lineNum, colPos, tableName)
+			return fmt.Errorf("# package FlashORM\ndb\\queries\\%s.sql:%d:%d: relation \"%s\" does not exist", sourceFile, lineNum, colPos, tableName)
 		}
 	}
 
-	if foundTableRefs && len(s.Tables) == 0 {
-		return fmt.Errorf("# package flash\ndb\\queries\\users.sql:1:1: no tables found in schema, but query references tables")
+	if foundTableRefs && len(tableNames) == 0 {
+		return fmt.Errorf("# package flash\ndb\\queries\\%s.sql:1:1: no tables found in schema, but query references tables", sourceFile)
 	}
 
 	return nil
 }
 
 // ValidateColumnReferences checks if columns referenced in queries exist in the schema
-func ValidateColumnReferences(sql string, schema interface{}) error {
-	type Column struct {
-		Name string
-	}
-	type Table struct {
-		Name    string
-		Columns []*Column
-	}
-	type Schema struct {
-		Tables []*Table
-	}
-
-	s, ok := schema.(*Schema)
-	if !ok {
+func ValidateColumnReferences(sql string, schema interface{}, sourceFile string) error {
+	if schema == nil {
 		return nil
 	}
 
-	tableAliasPattern := regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
-	joinPattern := regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+	if sourceFile == "" {
+		sourceFile = "queries"
+	}
 
-	aliasToTable := make(map[string]string)
+	if strings.Contains(strings.ToUpper(sql), "UNION") {
+		return nil
+	}
 
-	matches := tableAliasPattern.FindAllStringSubmatch(sql, -1)
+	schemaVal := reflect.ValueOf(schema)
+	if schemaVal.Kind() == reflect.Ptr {
+		schemaVal = schemaVal.Elem()
+	}
+
+	if schemaVal.Kind() != reflect.Struct {
+		return nil
+	}
+
+	tablesField := schemaVal.FieldByName("Tables")
+	if !tablesField.IsValid() || tablesField.Kind() != reflect.Slice {
+		return nil
+	}
+
+	// Build table structure with columns
+	type tableInfo struct {
+		name    string
+		columns map[string]bool
+	}
+
+	tables := make(map[string]*tableInfo)
+	for i := 0; i < tablesField.Len(); i++ {
+		tablePtr := tablesField.Index(i)
+		if tablePtr.Kind() == reflect.Ptr {
+			tablePtr = tablePtr.Elem()
+		}
+		if tablePtr.Kind() == reflect.Struct {
+			nameField := tablePtr.FieldByName("Name")
+			columnsField := tablePtr.FieldByName("Columns")
+
+			if nameField.IsValid() && nameField.Kind() == reflect.String {
+				tableName := strings.ToLower(nameField.String())
+				tblInfo := &tableInfo{
+					name:    nameField.String(),
+					columns: make(map[string]bool),
+				}
+
+				if columnsField.IsValid() && columnsField.Kind() == reflect.Slice {
+					for j := 0; j < columnsField.Len(); j++ {
+						colPtr := columnsField.Index(j)
+						if colPtr.Kind() == reflect.Ptr {
+							colPtr = colPtr.Elem()
+						}
+						if colPtr.Kind() == reflect.Struct {
+							colNameField := colPtr.FieldByName("Name")
+							if colNameField.IsValid() && colNameField.Kind() == reflect.String {
+								tblInfo.columns[strings.ToLower(colNameField.String())] = true
+							}
+						}
+					}
+				}
+				tables[tableName] = tblInfo
+			}
+		}
+	}
+
+	aliasToTable := make(map[string]string, 4) // Pre-allocate
+
+	matches := tableAliasPatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range matches {
 		if len(match) >= 3 {
 			tableName := match[1]
 			alias := match[2]
-			aliasToTable[alias] = tableName
+			aliasToTable[strings.ToLower(alias)] = strings.ToLower(tableName)
 		}
 	}
 
-	matches = joinPattern.FindAllStringSubmatch(sql, -1)
+	matches = joinPatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range matches {
 		if len(match) >= 3 {
 			tableName := match[1]
 			alias := match[2]
-			aliasToTable[alias] = tableName
+			aliasToTable[strings.ToLower(alias)] = strings.ToLower(tableName)
 		}
 	}
 
-	columnRefPattern := regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
-	columnRefs := columnRefPattern.FindAllStringSubmatch(sql, -1)
+	columnRefs := columnRefPatternRegex.FindAllStringSubmatch(sql, -1)
 
 	for _, ref := range columnRefs {
 		if len(ref) < 3 {
@@ -145,30 +249,17 @@ func ValidateColumnReferences(sql string, schema interface{}) error {
 			continue
 		}
 
-		tableName := tableOrAlias
-		if realTable, ok := aliasToTable[tableOrAlias]; ok {
+		tableName := strings.ToLower(tableOrAlias)
+		if realTable, ok := aliasToTable[tableName]; ok {
 			tableName = realTable
 		}
 
-		var table *Table
-		for _, t := range s.Tables {
-			if strings.EqualFold(t.Name, tableName) {
-				table = t
-				break
-			}
-		}
-
-		if table == nil {
+		table, tableExists := tables[tableName]
+		if !tableExists {
 			continue
 		}
 
-		columnExists := false
-		for _, col := range table.Columns {
-			if strings.EqualFold(col.Name, columnName) {
-				columnExists = true
-				break
-			}
-		}
+		columnExists := table.columns[strings.ToLower(columnName)]
 
 		if !columnExists {
 			lines := strings.Split(sql, "\n")
@@ -182,7 +273,90 @@ func ValidateColumnReferences(sql string, schema interface{}) error {
 				}
 			}
 
-			return fmt.Errorf("# package flash\ndb\\queries\\users.sql:%d:%d: column reference \"%s\" not found", lineNum, colPos, columnName)
+			return fmt.Errorf("# package flash\ndb\\queries\\%s.sql:%d:%d: column reference \"%s\" not found in table \"%s\"", sourceFile, lineNum, colPos, columnName, table.name)
+		}
+	}
+
+	knownAliases := make(map[string]bool)
+	for alias := range aliasToTable {
+		knownAliases[alias] = true
+	}
+
+	aliasMatches := aliasExtractPatternRegex.FindAllStringSubmatch(sql, -1)
+	for _, match := range aliasMatches {
+		if len(match) >= 3 && match[2] != "" {
+			knownAliases[strings.ToLower(match[2])] = true
+		}
+	}
+
+	var primaryTable *tableInfo
+	if fromMatch := fromPatternRegex.FindStringSubmatch(sql); len(fromMatch) > 1 {
+		tableName := strings.ToLower(fromMatch[1])
+		primaryTable = tables[tableName]
+	}
+
+	if primaryTable == nil {
+		if insertMatch := insertPatternRegex.FindStringSubmatch(sql); len(insertMatch) > 1 {
+			tableName := strings.ToLower(insertMatch[1])
+			primaryTable = tables[tableName]
+		}
+	}
+
+	hasJoin := joinCheckRegex.MatchString(sql)
+
+	if primaryTable != nil && !hasJoin {
+		clausePatterns := []*regexp.Regexp{
+			whereClauseRegex,
+			setClauseRegex,
+			orderByClauseRegex,
+			groupByClauseRegex,
+			havingClauseRegex,
+		}
+
+		for _, pattern := range clausePatterns {
+			if matches := pattern.FindStringSubmatch(sql); len(matches) > 1 {
+				clauseText := matches[1]
+
+				colMatches := unqualifiedColPatternRegex.FindAllString(clauseText, -1)
+
+				for _, colName := range colMatches {
+					colLower := strings.ToLower(colName)
+
+					if IsSQLKeyword(colName) ||
+						colLower == "true" || colLower == "false" || colLower == "null" ||
+						colLower == "and" || colLower == "or" || colLower == "not" ||
+						strings.Contains(clauseText, colName+"(") { // Skip functions
+						continue
+					}
+
+					if paramCheckRegex.MatchString(colName) {
+						continue
+					}
+
+					if knownAliases[colLower] {
+						continue
+					}
+
+					if !primaryTable.columns[colLower] {
+						lines := strings.Split(sql, "\n")
+						lineNum := 1
+						colPos := 1
+
+						for i, line := range lines {
+							if strings.Contains(strings.ToUpper(line), strings.ToUpper(colName)) {
+								lineNum = i + 1
+								upperLine := strings.ToUpper(line)
+								upperCol := strings.ToUpper(colName)
+								colPos = strings.Index(upperLine, upperCol) + 1
+								break
+							}
+						}
+
+						return fmt.Errorf("# package flash\ndb\\queries\\%s.sql:%d:%d: column \"%s\" does not exist in table \"%s\"",
+							sourceFile, lineNum, colPos, colName, primaryTable.name)
+					}
+				}
+			}
 		}
 	}
 

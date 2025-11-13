@@ -5,13 +5,9 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
-
-type QueryResult struct {
-	Columns []string
-	Rows    []map[string]interface{}
-}
 
 type DatabaseAdapter interface {
 	Connect(ctx context.Context, url string) error
@@ -27,7 +23,7 @@ type DatabaseAdapter interface {
 	GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error)
 	RecordMigration(ctx context.Context, migrationID, name, checksum string) error
 	ExecuteMigration(ctx context.Context, migrationSQL string) error
-	ExecuteQuery(ctx context.Context, query string) (*QueryResult, error)
+	ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error)
 
 	// Schema operations
 	GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error)
@@ -68,17 +64,4 @@ type DatabaseConnection interface {
 	QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row
 	Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	Begin(ctx context.Context) (*sql.Tx, error)
-}
-
-func NewAdapter(provider string) DatabaseAdapter {
-	switch provider {
-	case "postgresql", "postgres":
-		return NewPostgresAdapter()
-	case "mysql":
-		return NewMySQLAdapter()
-	case "sqlite", "sqlite3":
-		return NewSQLiteAdapter()
-	default:
-		return NewPostgresAdapter()
-	}
 }

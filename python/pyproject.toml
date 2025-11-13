@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flashorm"
+version = "2.0.8"
+description = "A powerful, database-agnostic ORM with multi-database support and type-safe code generation"
+readme = "README.md"
+requires-python = ">=3.7"
+license = "MIT"
+authors = [{name = "Rana718"}]
+keywords = ["orm", "database", "migration", "postgresql", "mysql", "sqlite", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+
+[project.urls]
+Homepage = "https://github.com/Lumos-Labs-HQ/flash"
+Repository = "https://github.com/Lumos-Labs-HQ/flash"
+Issues = "https://github.com/Lumos-Labs-HQ/flash/issues"
+
+[project.scripts]
+flash = "flashorm.cli:main"

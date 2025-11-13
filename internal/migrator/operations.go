@@ -30,7 +30,7 @@ func (m *Migrator) Apply(ctx context.Context, name, schemaPath string) error {
 
 // ApplyWithConflictDetection applies pending migrations with conflict detection
 func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
-	_ = m.cleanupBrokenMigrationRecords(ctx) // Warning only
+	_ = m.cleanupBrokenMigrationRecords(ctx) 
 
 	migrations, err := m.loadMigrationsFromDir()
 	if err != nil {
@@ -129,7 +129,6 @@ func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migra
 	for i, migration := range migrations {
 		fmt.Printf("  [%d/%d] %s\n", i+1, len(migrations), migration.ID)
 
-		// Apply migration with ExecuteMigration + RecordMigration in same transaction
 		if err := m.applySingleMigrationSafely(ctx, migration); err != nil {
 			fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
 			fmt.Printf("   Error: %v\n", err)
@@ -250,11 +249,15 @@ func (m *Migrator) Reset(ctx context.Context, force bool) error {
 		return fmt.Errorf("failed to get table names: %w", err)
 	}
 
+	m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 0")
+
 	for _, table := range tables {
 		if err := m.adapter.DropTable(ctx, table); err != nil {
 			fmt.Printf("Warning: Failed to drop table %s: %v\n", table, err)
 		}
 	}
+
+	m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 1")
 
 	// Drop all enums
 	enums, err := m.adapter.GetCurrentEnums(ctx)
@@ -286,7 +289,6 @@ func (m *Migrator) Status(ctx context.Context) error {
 		return fmt.Errorf("failed to get applied migrations: %w", err)
 	}
 
-	// Calculate pending migrations (only count migrations that exist in filesystem)
 	pendingCount := 0
 	for _, migration := range migrations {
 		if _, exists := applied[migration.ID]; !exists {

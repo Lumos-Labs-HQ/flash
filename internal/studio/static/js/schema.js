@@ -3,12 +3,21 @@ import ReactDOM from 'react-dom/client';
 import { ReactFlow, Background, Controls, MiniMap, MarkerType, useNodesState, useEdgesState, Handle, Position } from '@xyflow/react';
 import dagre from 'dagre';
 
-const { useState, useEffect } = React;
+const { useState, useEffect, useCallback, memo } = React;
 
 function TableNode({ data }) {
-    return React.createElement('div', { style: { minWidth: '220px' } },
-        React.createElement(Handle, { type: 'target', position: Position.Left }),
-        React.createElement(Handle, { type: 'source', position: Position.Right }),
+    const isHighlighted = data.isHighlighted;
+    const isDimmed = data.isDimmed;
+    const hasRelations = data.hasRelations || false;
+    const highlightedFields = data.highlightedFields || new Set();
+    
+    const nodeClass = `table-node-wrapper ${isHighlighted ? 'highlighted' : ''} ${isDimmed ? 'dimmed' : ''} ${!hasRelations ? 'no-relations' : ''}`;
+    
+    return React.createElement('div', { 
+        className: nodeClass,
+        style: { minWidth: '220px', cursor: 'pointer' }, 
+        onClick: () => window.openTableEdit(data.label)
+    },
         React.createElement('div', { className: 'table-header' },
             React.createElement('span', null, '📋'),
             data.label
@@ -25,7 +34,28 @@ function TableNode({ data }) {
                     iconClass = 'fk-icon';
                 }
                 
-                return React.createElement('div', { key: idx, className: 'table-field' },
+                const isFieldHighlighted = highlightedFields.has(col.name);
+                const fieldClass = `table-field ${isFieldHighlighted ? 'field-highlighted' : ''}`;
+                
+                return React.createElement('div', { 
+                    key: idx, 
+                    className: fieldClass,
+                    style: { position: 'relative' }
+                },
+                    col.isPrimary && React.createElement(Handle, {
+                        type: 'target',
+                        position: Position.Left,
+                        id: col.name,
+                        className: 'field-handle',
+                        style: { top: '50%', left: '-4px' }
+                    }),
+                    col.isForeign && React.createElement(Handle, {
+                        type: 'source',
+                        position: Position.Right,
+                        id: col.name,
+                        className: 'field-handle',
+                        style: { top: '50%', right: '-4px' }
+                    }),
                     React.createElement('div', { className: 'field-left' },
                         React.createElement('span', { className: `field-icon ${iconClass}` }, icon),
                         React.createElement('span', { className: 'field-name' }, col.name)
@@ -37,7 +67,8 @@ function TableNode({ data }) {
     );
 }
 
-const nodeTypes = { table: TableNode };
+const MemoizedTableNode = memo(TableNode);
+const nodeTypes = { table: MemoizedTableNode };
 
 function SchemaFlow() {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -62,11 +93,23 @@ function SchemaFlow() {
                     
                     const layoutedNodes = getLayoutedElements(rawNodes, rawEdges);
                     
+                    const nodeRelations = new Map();
+                    rawEdges.forEach(edge => {
+                        nodeRelations.set(edge.source, true);
+                        nodeRelations.set(edge.target, true);
+                    });
+                    
                     const formattedNodes = layoutedNodes.map(node => ({
                         id: node.id,
                         type: 'table',
                         position: node.position,
-                        data: node.data,
+                        data: { 
+                            ...node.data, 
+                            isHighlighted: false, 
+                            isDimmed: false,
+                            hasRelations: nodeRelations.has(node.id) || false,
+                            highlightedFields: new Set()
+                        },
                         draggable: true,
                         sourcePosition: Position.Right,
                         targetPosition: Position.Left
@@ -76,7 +119,12 @@ function SchemaFlow() {
                         id: edge.id,
                         source: edge.source,
                         target: edge.target,
+                        sourceHandle: edge.sourceHandle || null,
+                        targetHandle: edge.targetHandle || null,
                         label: edge.label || '',
+                        data: { originalLabel: edge.label || '' },
+                        labelStyle: { fill: '#6897bb', opacity: 1 },
+                        labelBgStyle: { fill: '#2b2b2b', opacity: 0.8 },
                         type: 'smoothstep',
                         animated: false,
                         markerEnd: {
@@ -85,8 +133,10 @@ function SchemaFlow() {
                         },
                         style: { 
                             stroke: '#6897bb', 
-                            strokeWidth: 2
-                        }
+                            strokeWidth: 2,
+                            strokeDasharray: '5 5'
+                        },
+                        className: 'custom-edge'
                     }));
                     
                     setNodes(formattedNodes);
@@ -103,6 +153,201 @@ function SchemaFlow() {
             });
     }, []);
 
+    const handleNodeMouseEnter = useCallback((event, node) => {
+        if (!node.data.hasRelations) return;
+        
+        const connectedEdges = edges.filter(edge => 
+            edge.source === node.id || edge.target === node.id
+        );
+        
+        if (connectedEdges.length === 0) return;
+        
+        const connectedNodeIds = new Set();
+        const nodeFieldMap = new Map(); 
+        
+        connectedEdges.forEach(edge => {
+            connectedNodeIds.add(edge.source);
+            connectedNodeIds.add(edge.target);
+            
+            if (edge.sourceHandle) {
+                if (!nodeFieldMap.has(edge.source)) {
+                    nodeFieldMap.set(edge.source, new Set());
+                }
+                nodeFieldMap.get(edge.source).add(edge.sourceHandle);
+            }
+            if (edge.targetHandle) {
+                if (!nodeFieldMap.has(edge.target)) {
+                    nodeFieldMap.set(edge.target, new Set());
+                }
+                nodeFieldMap.get(edge.target).add(edge.targetHandle);
+            }
+        });
+        
+        setNodes(nds => nds.map(n => {
+            const isConnected = connectedNodeIds.has(n.id);
+            const shouldDim = n.data.hasRelations && !isConnected;
+            
+            return {
+                ...n,
+                data: {
+                    ...n.data,
+                    isHighlighted: isConnected,
+                    isDimmed: shouldDim,
+                    highlightedFields: nodeFieldMap.get(n.id) || new Set()
+                }
+            };
+        }));
+        
+        setEdges(eds => eds.map(edge => {
+            const isConnected = edge.source === node.id || edge.target === node.id;
+            return {
+                ...edge,
+                animated: isConnected,
+                label: isConnected ? edge.label : '',
+                labelStyle: {
+                    fill: isConnected ? '#4a9eff' : '#6897bb',
+                    opacity: isConnected ? 1 : 0.3
+                },
+                labelBgStyle: {
+                    fill: isConnected ? '#1a3a5a' : '#2b2b2b',
+                    opacity: isConnected ? 1 : 0.3
+                },
+                style: {
+                    ...edge.style,
+                    stroke: isConnected ? '#4a9eff' : '#3a3a3a',
+                    strokeWidth: isConnected ? 3 : 2,
+                    opacity: isConnected ? 1 : 0.3
+                },
+                markerEnd: {
+                    ...edge.markerEnd,
+                    color: isConnected ? '#4a9eff' : '#3a3a3a'
+                }
+            };
+        }));
+    }, [edges, setNodes, setEdges]);
+
+    const handleNodeMouseLeave = useCallback(() => {
+        // Reset all nodes
+        setNodes(nds => nds.map(n => ({
+            ...n,
+            data: {
+                ...n.data,
+                isHighlighted: false,
+                isDimmed: false,
+                highlightedFields: new Set()
+            }
+        })));
+        
+        // Reset all edges
+        setEdges(eds => eds.map(edge => {
+            const originalLabel = edge.data?.originalLabel || edge.label;
+            return {
+                ...edge,
+                animated: false,
+                label: originalLabel,
+                labelStyle: { fill: '#6897bb', opacity: 1 },
+                labelBgStyle: { fill: '#2b2b2b', opacity: 0.8 },
+                style: {
+                    ...edge.style,
+                    stroke: '#6897bb',
+                    strokeWidth: 2,
+                    opacity: 1
+                },
+                markerEnd: {
+                    ...edge.markerEnd,
+                    color: '#6897bb'
+                }
+            };
+        }));
+    }, [setNodes, setEdges]);
+
+    // Handle edge hover
+    const handleEdgeMouseEnter = useCallback((event, edge) => {
+        const connectedNodeIds = new Set([edge.source, edge.target]);
+        const nodeFieldMap = new Map();
+        if (edge.sourceHandle) {
+            nodeFieldMap.set(edge.source, new Set([edge.sourceHandle]));
+        }
+        if (edge.targetHandle) {
+            nodeFieldMap.set(edge.target, new Set([edge.targetHandle]));
+        }
+        
+        setNodes(nds => nds.map(n => {
+            const isConnected = connectedNodeIds.has(n.id);
+            const shouldDim = n.data.hasRelations && !isConnected;
+            
+            return {
+                ...n,
+                data: {
+                    ...n.data,
+                    isHighlighted: isConnected,
+                    isDimmed: shouldDim,
+                    highlightedFields: nodeFieldMap.get(n.id) || new Set()
+                }
+            };
+        }));
+        
+        setEdges(eds => eds.map(e => {
+            const isHovered = e.id === edge.id;
+            return {
+                ...e,
+                animated: isHovered,
+                label: isHovered ? e.label : '',
+                labelStyle: {
+                    fill: isHovered ? '#4a9eff' : '#6897bb',
+                    opacity: isHovered ? 1 : 0.3
+                },
+                labelBgStyle: {
+                    fill: isHovered ? '#1a3a5a' : '#2b2b2b',
+                    opacity: isHovered ? 0.3 : 0.1
+                },
+                style: {
+                    ...e.style,
+                    stroke: isHovered ? '#4a9eff' : '#3a3a3a',
+                    strokeWidth: isHovered ? 3 : 2,
+                    opacity: isHovered ? 1 : 0.3
+                },
+                markerEnd: {
+                    ...e.markerEnd,
+                    color: isHovered ? '#4a9eff' : '#3a3a3a'
+                }
+            };
+        }));
+    }, [setNodes, setEdges]);
+
+    const handleEdgeMouseLeave = useCallback(() => {
+        setNodes(nds => nds.map(n => ({
+            ...n,
+            data: {
+                ...n.data,
+                isHighlighted: false,
+                isDimmed: false,
+                highlightedFields: new Set()
+            }
+        })));
+        
+        setEdges(eds => eds.map(edge => {
+            const originalLabel = edge.data?.originalLabel || edge.label;
+            return {
+                ...edge,
+                animated: false,
+                label: originalLabel,
+                labelStyle: { fill: '#6897bb', opacity: 1 },
+                labelBgStyle: { fill: '#2b2b2b', opacity: 0.8 },
+                style: {
+                    ...edge.style,
+                    stroke: '#6897bb',
+                    strokeWidth: 2,
+                    opacity: 1
+                },
+                markerEnd: {
+                    ...edge.markerEnd,
+                    color: '#6897bb'
+                }
+            };
+        }));
+    }, [setNodes, setEdges]);
+
     if (loading) {
         return null;
     }
@@ -112,6 +357,10 @@ function SchemaFlow() {
         edges,
         onNodesChange,
         onEdgesChange,
+        onNodeMouseEnter: handleNodeMouseEnter,
+        onNodeMouseLeave: handleNodeMouseLeave,
+        onEdgeMouseEnter: handleEdgeMouseEnter,
+        onEdgeMouseLeave: handleEdgeMouseLeave,
         nodeTypes,
         nodesDraggable: true,
         nodesConnectable: false,
@@ -123,10 +372,15 @@ function SchemaFlow() {
         zoomOnPinch: true,
         zoomOnDoubleClick: true,
         panOnScroll: false,
+        preventScrolling: false,
+        nodesFocusable: false,
+        edgesFocusable: false,
+        autoPanOnNodeDrag: true,
         defaultViewport: { x: 0, y: 0, zoom: 0.6 },
-        style: { background: '#2b2b2b' }
+        style: { background: '#2b2b2b' },
+        proOptions: { hideAttribution: true }
     },
-        React.createElement(Background, { color: '#3a3a3a', gap: 20, size: 1 }),
+        React.createElement(Background, { color: '#555555', gap: 20, size: 2.5 }),
         React.createElement(Controls, { 
             style: { 
                 background: '#3c3f41', 
