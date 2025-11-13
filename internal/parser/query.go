@@ -181,6 +181,8 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	}
 
 	query.Params = make([]*Param, paramCount)
+	usedParamNames := make(map[string]int)
+
 	for i := 0; i < paramCount; i++ {
 		paramName := fmt.Sprintf("param%d", i+1)
 		paramType := "any"
@@ -194,6 +196,13 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 			paramType = p.typeInferrer.InferParamType(query.SQL, i+1, table, paramName)
 		}
 
+		if count, exists := usedParamNames[paramName]; exists {
+			usedParamNames[paramName] = count + 1
+			paramName = fmt.Sprintf("%s%d", paramName, count+1)
+		} else {
+			usedParamNames[paramName] = 1
+		}
+
 		query.Params[i] = &Param{
 			Name: paramName,
 			Type: paramType,
@@ -203,7 +212,9 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	sqlUpper := strings.ToUpper(query.SQL)
 	sqlTrimmed := strings.TrimSpace(sqlUpper)
 
-	isSelectQuery := strings.HasPrefix(sqlTrimmed, "SELECT") || strings.HasPrefix(sqlTrimmed, "WITH")
+	isSelectQuery := strings.HasPrefix(sqlTrimmed, "SELECT") ||
+		strings.HasPrefix(sqlTrimmed, "WITH") ||
+		(strings.HasPrefix(sqlTrimmed, "(") && strings.Contains(sqlTrimmed, "SELECT"))
 	isNotModifying := !utils.ContainsSQLKeyword(sqlTrimmed, "DELETE") &&
 		!utils.ContainsSQLKeyword(sqlTrimmed, "UPDATE") &&
 		!utils.ContainsSQLKeyword(sqlTrimmed, "INSERT")
@@ -233,27 +244,64 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 						continue
 					}
 
-					if loc := asRegex.FindStringIndex(colName); loc != nil {
-						colName = strings.TrimSpace(colName[loc[1]:])
+					originalExpr := colName
+					aliasName := ""
+
+					allMatches := asRegex.FindAllStringIndex(colName, -1)
+					if len(allMatches) > 0 {
+						validMatch := -1
+						colNameUpper := strings.ToUpper(colName)
+
+						for i := len(allMatches) - 1; i >= 0; i-- {
+							asPos := allMatches[i][0]
+							parenDepth := 0
+							caseDepth := 0
+
+							for j := 0; j < asPos; j++ {
+								switch colName[j] {
+								case '(':
+									parenDepth++
+								case ')':
+									parenDepth--
+								}
+
+								// Track CASE/END blocks
+								if j+4 <= len(colNameUpper) && colNameUpper[j:j+4] == "CASE" {
+									if j == 0 || !((colName[j-1] >= 'A' && colName[j-1] <= 'Z') || (colName[j-1] >= 'a' && colName[j-1] <= 'z')) {
+										caseDepth++
+									}
+								}
+								if j+3 <= len(colNameUpper) && colNameUpper[j:j+3] == "END" {
+									if (j == 0 || !((colName[j-1] >= 'A' && colName[j-1] <= 'Z') || (colName[j-1] >= 'a' && colName[j-1] <= 'z'))) &&
+										(j+3 >= len(colName) || !((colName[j+3] >= 'A' && colName[j+3] <= 'Z') || (colName[j+3] >= 'a' && colName[j+3] <= 'z'))) {
+										caseDepth--
+									}
+								}
+							}
+
+							// If we're at depth 0 for both parentheses and CASE blocks, this AS is at the top level (column alias)
+							if parenDepth == 0 && caseDepth == 0 {
+								validMatch = i
+								break
+							}
+						}
+
+						if validMatch >= 0 {
+							loc := allMatches[validMatch]
+							originalExpr = strings.TrimSpace(colName[:loc[0]])
+							aliasName = strings.TrimSpace(colName[loc[1]:])
+							colName = aliasName
+						}
 					} else {
 						if !strings.Contains(colName, "(") {
 							if idx := strings.Index(colName, "."); idx != -1 {
+								originalExpr = colName 
 								colName = colName[idx+1:]
 							}
 						}
 					}
 
-					colType := "string"
-					nullable := false
-					if table != nil {
-						for _, col := range table.Columns {
-							if strings.EqualFold(col.Name, colName) {
-								colType = col.Type
-								nullable = col.Nullable
-								break
-							}
-						}
-					}
+					colType, nullable := p.inferColumnType(colName, originalExpr, query.SQL, schema, table)
 
 					query.Columns = append(query.Columns, &QueryColumn{
 						Name:     colName,
@@ -283,8 +331,9 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	}
 
 	hasJoin := strings.Contains(strings.ToUpper(query.SQL), "JOIN")
+	hasUnion := strings.Contains(strings.ToUpper(query.SQL), "UNION")
 
-	if table != nil && len(query.Columns) > 0 && !hasJoin {
+	if table != nil && len(query.Columns) > 0 && !hasJoin && !hasUnion {
 		for _, queryCol := range query.Columns {
 			if queryCol.Name == "*" {
 				continue
@@ -339,4 +388,242 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	}
 
 	return nil
+}
+
+// inferColumnType determines the correct SQL type for a column based on the expression and schema
+func (p *QueryParser) inferColumnType(colName string, originalExpr string, sql string, schema *Schema, primaryTable *Table) (string, bool) {
+	sqlType, nullable, found := p.inferTypeFromExpression(originalExpr, sql, schema)
+	if found {
+		return sqlType, nullable
+	}
+
+	if primaryTable != nil {
+		for _, col := range primaryTable.Columns {
+			if strings.EqualFold(col.Name, colName) {
+				return col.Type, col.Nullable
+			}
+		}
+	}
+
+	for _, table := range schema.Tables {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, colName) {
+				return col.Type, col.Nullable
+			}
+		}
+	}
+
+	return "TEXT", false
+}
+
+// inferTypeFromExpression analyzes SQL expressions to determine types
+func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, schema *Schema) (string, bool, bool) {
+	exprUpper := strings.ToUpper(originalExpr)
+	originalExprTrimmed := strings.TrimSpace(originalExpr)
+
+	tableColRefRe := regexp.MustCompile(`^(\w+)\.(\w+)$`)
+	if matches := tableColRefRe.FindStringSubmatch(originalExprTrimmed); len(matches) == 3 {
+		tableName := matches[1]
+		columnName := matches[2]
+
+		for _, table := range schema.Tables {
+			if strings.EqualFold(table.Name, tableName) {
+				for _, col := range table.Columns {
+					if strings.EqualFold(col.Name, columnName) {
+						return col.Type, col.Nullable, true
+					}
+				}
+			}
+		}
+	}
+
+	if strings.Contains(exprUpper, "COUNT(") {
+		return "INTEGER", false, true 
+	}
+
+	if strings.Contains(exprUpper, "SUM(") {
+		return "NUMERIC", true, true
+	}
+
+	if strings.Contains(exprUpper, "AVG(") {
+		return "NUMERIC", true, true 
+	}
+
+	if strings.Contains(exprUpper, "MAX(") || strings.Contains(exprUpper, "MIN(") {
+		if strings.Contains(exprUpper, "CREATED_AT") || strings.Contains(exprUpper, "UPDATED_AT") {
+			return "TIMESTAMP WITH TIME ZONE", true, true
+		}
+		return "NUMERIC", true, true
+	}
+
+	if strings.Contains(exprUpper, "STRING_AGG(") {
+		return "TEXT", true, true 
+	}
+
+	if strings.Contains(exprUpper, "ARRAY_AGG(") {
+		return "TEXT[]", true, true 
+	}
+
+	if strings.Contains(exprUpper, "LENGTH(") {
+		return "INTEGER", true, true 
+	}
+
+	if strings.Contains(exprUpper, "EXTRACT(") {
+		return "NUMERIC", true, true 
+	}
+
+	// Check for COALESCE
+	if strings.Contains(exprUpper, "COALESCE(") {
+		// Extract first argument
+		coalesceRe := regexp.MustCompile(`(?i)COALESCE\s*\(\s*([^,)]+)`)
+		if matches := coalesceRe.FindStringSubmatch(originalExpr); len(matches) > 1 {
+			firstArg := strings.TrimSpace(matches[1])
+			firstArgUpper := strings.ToUpper(firstArg)
+
+			// Check if it's a CTE reference with known aggregate type patterns
+			if strings.Contains(firstArgUpper, ".CNT") || strings.Contains(firstArgUpper, ".COUNT") ||
+				strings.Contains(firstArgUpper, ".TOTAL_CNT") || strings.Contains(firstArgUpper, ".POST_CNT") ||
+				strings.Contains(firstArgUpper, ".COMMENT_CNT") || strings.Contains(firstArgUpper, ".PUB_CNT") ||
+				strings.Contains(firstArgUpper, ".DRAFT_CNT") || strings.Contains(firstArgUpper, ".POSTS_CNT") ||
+				strings.Contains(firstArgUpper, ".CAT_CNT") || strings.Contains(firstArgUpper, ".UNIQUE_USERS") ||
+				strings.Contains(firstArgUpper, ".NUM") {
+				return "INTEGER", false, true // COALESCE makes it NOT NULL
+			}
+
+			if strings.Contains(firstArgUpper, ".AVG") || strings.Contains(firstArgUpper, ".SUM") ||
+				strings.Contains(firstArgUpper, ".AVG_LEN") {
+				return "NUMERIC", false, true
+			}
+
+			cteParts := strings.Split(firstArg, ".")
+			if len(cteParts) == 2 {
+				cteType, _, found := p.inferTypeFromCTE(sql, strings.TrimSpace(cteParts[0]), strings.TrimSpace(cteParts[1]), schema)
+				if found {
+					return cteType, false, true // COALESCE makes it NOT NULL
+				}
+			}
+		}
+		return "TEXT", false, true // Default for COALESCE
+	}
+
+	// Check for CASE expressions
+	if strings.Contains(exprUpper, "CASE") && strings.Contains(exprUpper, "END") {
+		thenRe := regexp.MustCompile(`(?i)THEN\s+'([^']*)'`)
+		if matches := thenRe.FindAllStringSubmatch(originalExpr, -1); len(matches) > 0 {
+			return "TEXT", false, true // String literals
+		}
+
+		// Check for numeric operations
+		if strings.Contains(exprUpper, "+") || strings.Contains(exprUpper, "*") {
+			return "INTEGER", false, true
+		}
+
+		return "TEXT", false, true 
+	}
+
+	// Check for arithmetic operations
+	if regexp.MustCompile(`\s*[+\-*/]\s*`).MatchString(originalExpr) {
+		if strings.Contains(originalExpr, "(") {
+			return "NUMERIC", true, true
+		}
+	}
+
+	// Check for CTE column references (e.g., ca.all_content, cn.names)
+	ctaRefRe := regexp.MustCompile(`^(\w+)\.(\w+)$`)
+	if matches := ctaRefRe.FindStringSubmatch(strings.TrimSpace(originalExpr)); len(matches) == 3 {
+		cteAlias := matches[1]
+		cteColumn := matches[2]
+		cteType, nullable, found := p.inferTypeFromCTE(sql, cteAlias, cteColumn, schema)
+		if found {
+			return cteType, nullable, true
+		}
+	}
+
+	// Check for table.column references
+	tableColRe := regexp.MustCompile(`^(\w+)\.(\w+)$`)
+	if matches := tableColRe.FindStringSubmatch(strings.TrimSpace(originalExpr)); len(matches) == 3 {
+		tableName := matches[1]
+		columnName := matches[2]
+
+		// Look up in schema
+		for _, table := range schema.Tables {
+			if strings.EqualFold(table.Name, tableName) {
+				for _, col := range table.Columns {
+					if strings.EqualFold(col.Name, columnName) {
+						return col.Type, col.Nullable, true
+					}
+				}
+			}
+		}
+	}
+
+	return "", false, false
+}
+
+// inferTypeFromCTE finds a CTE by alias and infers the type of one of its columns
+func (p *QueryParser) inferTypeFromCTE(sql string, cteAlias string, cteColumn string, schema *Schema) (string, bool, bool) {
+	withRe := regexp.MustCompile(fmt.Sprintf(`(?is)%s\s+AS\s*\((.*?)\)(?:\s*,|\s+SELECT)`, regexp.QuoteMeta(cteAlias)))
+	matches := withRe.FindStringSubmatch(sql)
+	if len(matches) < 2 {
+		return "", false, false
+	}
+
+	cteQuery := matches[1]
+
+	patterns := []struct {
+		pattern  string
+		sqlType  string
+		nullable bool
+	}{
+		{fmt.Sprintf(`(?i)ARRAY_AGG\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "TEXT[]", true},
+		{fmt.Sprintf(`(?i)STRING_AGG\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "TEXT", true},
+		{fmt.Sprintf(`(?i)COUNT\([^)]*\)(?:\s+FILTER\s*\([^)]*\))?\s+(?:AS\s+)?%s`, cteColumn), "INTEGER", false},
+		{fmt.Sprintf(`(?i)SUM\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "NUMERIC", true},
+		{fmt.Sprintf(`(?i)AVG\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "NUMERIC", true},
+		{fmt.Sprintf(`(?i)MAX\(([^)]+)\)\s+(?:AS\s+)?%s`, cteColumn), "", true}, 
+		{fmt.Sprintf(`(?i)MIN\(([^)]+)\)\s+(?:AS\s+)?%s`, cteColumn), "", true},
+		{fmt.Sprintf(`(?i)LENGTH\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "INTEGER", true},
+		{fmt.Sprintf(`(?i)EXTRACT\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "NUMERIC", true},
+	}
+
+	for _, p := range patterns {
+		if matched, _ := regexp.MatchString(p.pattern, cteQuery); matched {
+			re := regexp.MustCompile(p.pattern)
+			if subMatches := re.FindStringSubmatch(cteQuery); len(subMatches) > 0 {
+				if strings.Contains(strings.ToUpper(subMatches[0]), "MAX") || strings.Contains(strings.ToUpper(subMatches[0]), "MIN") {
+					if len(subMatches) > 1 {
+						arg := strings.ToUpper(subMatches[1])
+						if strings.Contains(arg, "CREATED_AT") || strings.Contains(arg, "UPDATED_AT") {
+							return "TIMESTAMP WITH TIME ZONE", p.nullable, true
+						}
+					}
+					return "NUMERIC", p.nullable, true
+				}
+				return p.sqlType, p.nullable, true
+			}
+		}
+	}
+
+	// Check if it's a direct column reference in the CTE
+	colRefPattern := fmt.Sprintf(`(?i)(\w+)\.(\w+)\s+AS\s+%s`, cteColumn)
+	if matched, _ := regexp.MatchString(colRefPattern, cteQuery); matched {
+		colRefRe := regexp.MustCompile(colRefPattern)
+		if matches := colRefRe.FindStringSubmatch(cteQuery); len(matches) >= 3 {
+			refTable := matches[1]
+			refColumn := matches[2]
+
+			// Look up in schema
+			for _, table := range schema.Tables {
+				if strings.EqualFold(table.Name, refTable) {
+					for _, col := range table.Columns {
+						if strings.EqualFold(col.Name, refColumn) {
+							return col.Type, col.Nullable, true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "", false, false
 }

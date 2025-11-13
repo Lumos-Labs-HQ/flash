@@ -18,12 +18,11 @@ func RemoveComments(sql string) string {
 		// Check for line comment
 		if i+1 < len(sql) && sql[i] == '-' && sql[i+1] == '-' {
 			result.WriteString(sql[start:i])
-			// Skip to newline
 			for i < len(sql) && sql[i] != '\n' {
 				i++
 			}
 			if i < len(sql) {
-				result.WriteByte('\n') // Preserve newline
+				result.WriteByte('\n') 
 			}
 			start = i + 1
 		}
@@ -103,8 +102,30 @@ func SmartSplitColumns(columnsStr string) []string {
 
 func ExtractSelectColumns(sql string) string {
 	sqlUpper := strings.ToUpper(sql)
+	sqlTrimmed := strings.TrimSpace(sqlUpper)
 
-	if strings.HasPrefix(strings.TrimSpace(sqlUpper), "WITH") {
+	if strings.HasPrefix(sqlTrimmed, "(") {
+		parenDepth := 0
+		for i := 0; i < len(sqlUpper)-6; i++ {
+			switch sql[i] {
+			case '(':
+				parenDepth++
+			case ')':
+				parenDepth--
+			case 'S', 's':
+				if parenDepth == 1 && i+6 <= len(sqlUpper) {
+					if strings.ToUpper(sql[i:i+6]) == "SELECT" {
+						if (i == 0 || !isAlphaNum(sql[i-1])) &&
+							(i+6 >= len(sql) || !isAlphaNum(sql[i+6])) {
+							return extractColumnsFromSelect(sql, i)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if strings.HasPrefix(sqlTrimmed, "WITH") {
 		var selectPositions []int
 		parenDepth := 0
 
@@ -227,7 +248,7 @@ func min(a, b int) int {
 	return b
 }
 
-// SQL keywords map 
+// SQL keywords map
 var sqlKeywords = map[string]bool{
 	"SELECT": true, "FROM": true, "WHERE": true, "JOIN": true, "INNER": true,
 	"LEFT": true, "RIGHT": true, "OUTER": true, "ON": true, "AND": true,

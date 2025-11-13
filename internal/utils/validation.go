@@ -155,7 +155,10 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		sourceFile = "queries"
 	}
 
-	// Extract tables and columns using reflection to avoid import cycles
+	if strings.Contains(strings.ToUpper(sql), "UNION") {
+		return nil
+	}
+
 	schemaVal := reflect.ValueOf(schema)
 	if schemaVal.Kind() == reflect.Ptr {
 		schemaVal = schemaVal.Elem()

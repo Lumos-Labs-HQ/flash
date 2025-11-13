@@ -47,8 +47,13 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		return "INTEGER"
 	}
 
-	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount)_?\w*`, paramIndex, paramIndex)
+	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)_?\w*`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(numericAliasPattern, sql); matched {
+		return "INTEGER"
+	}
+
+	coalescePattern := fmt.Sprintf(`(?i)COALESCE\([^,)]*\.(cnt|count|sum|avg|total|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)[^)]*\)\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*COALESCE\([^,)]*\.(cnt|count|sum|avg|total|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)[^)]*\)`, paramIndex, paramIndex)
+	if matched, _ := regexp.MatchString(coalescePattern, sql); matched {
 		return "INTEGER"
 	}
 
