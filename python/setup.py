@@ -1,52 +1,30 @@
 from setuptools import setup, find_packages
 from setuptools.command.install import install
-import platform
-import urllib.request
+import subprocess
+import sys
 import os
-import stat
 
-VERSION = '1.0.0'
-REPO = 'Lumos-Labs-HQ/flash'
+VERSION = '2.0.8'
 
 class PostInstallCommand(install):
     def run(self):
         install.run(self)
-        self.download_binary()
-    
-    def download_binary(self):
-        system = platform.system().lower()
-        machine = platform.machine().lower()
-        
-        platform_map = {'darwin': 'darwin', 'linux': 'linux', 'windows': 'win32'}
-        arch_map = {'x86_64': 'x64', 'amd64': 'x64', 'arm64': 'arm64', 'aarch64': 'arm64'}
-        
-        mapped_platform = platform_map.get(system)
-        mapped_arch = arch_map.get(machine)
-        
-        if not mapped_platform or not mapped_arch:
-            raise Exception(f"Unsupported platform: {system}-{machine}")
-        
-        binary_name = 'flash.exe' if system == 'windows' else 'flash'
-        download_name = f"flash-{mapped_platform}-{mapped_arch}{'.exe' if system == 'windows' else ''}"
-        url = f"https://github.com/{REPO}/releases/download/v{VERSION}/{download_name}"
-        
-        bin_dir = os.path.join(os.path.dirname(__file__), 'flash_orm', 'bin')
-        os.makedirs(bin_dir, exist_ok=True)
-        binary_path = os.path.join(bin_dir, binary_name)
-        
-        print(f"📦 Installing flash v{VERSION} for {system}-{machine}...")
-        print(f"📥 Downloading from: {url}")
-        
-        urllib.request.urlretrieve(url, binary_path)
-        os.chmod(binary_path, os.stat(binary_path).st_mode | stat.S_IEXEC)
-        
-        print("✅ flash installed successfully!")
+        install_script = os.path.join(self.install_lib, 'flashorm', 'install.py')
+        if os.path.exists(install_script):
+            subprocess.check_call([sys.executable, install_script])
+
+def read_readme():
+    readme_path = os.path.join(os.path.dirname(__file__), 'README.md')
+    if os.path.exists(readme_path):
+        with open(readme_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    return 'A powerful, database-agnostic ORM with multi-database support and type-safe code generation'
 
 setup(
-    name='flash-orm',
+    name='flashorm',
     version=VERSION,
     description='A powerful, database-agnostic ORM with multi-database support and type-safe code generation',
-    long_description=open('../README.md').read(),
+    long_description=read_readme(),
     long_description_content_type='text/markdown',
     author='Rana718',
     author_email='',
@@ -55,13 +33,12 @@ setup(
     cmdclass={'install': PostInstallCommand},
     entry_points={
         'console_scripts': [
-            'flash=flash_orm.cli:main',
+            'flash=flashorm.cli:main',
         ],
     },
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',

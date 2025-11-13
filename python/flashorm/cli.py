@@ -10,7 +10,7 @@ def main():
     
     if not os.path.exists(bin_path):
         print(f"❌ flash binary not found at {bin_path}")
-        print("Please reinstall: pip install --force-reinstall flash-orm")
+        print("Please reinstall: pip install --force-reinstall flashorm")
         sys.exit(1)
     
     try:

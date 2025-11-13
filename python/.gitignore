@@ -4,4 +4,6 @@ __pycache__/
 dist/
 build/
 .eggs/
-graft_orm/bin/
+flashorm/bin/
+
+venv/
