@@ -229,6 +229,7 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 }
 
 func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
+	// The 'execute' method automatically prepares and caches statements
 	w.WriteString("    const sql = typeof stmt === 'string' ? stmt : stmt.text;\n")
 	if len(paramNames) > 0 {
 		w.WriteString("    const r = await this.db.execute(sql, [" + strings.Join(paramNames, ", ") + "]);\n")
@@ -458,6 +459,12 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 		}
 	}
 
+	// Check for array types (TEXT[], INTEGER[], etc.)
+	if strings.HasSuffix(sqlTypeLower, "[]") {
+		baseType := strings.TrimSuffix(sqlTypeLower, "[]")
+		return g.mapSQLTypeToJS(baseType) + "[]"
+	}
+
 	switch {
 	case strings.Contains(sqlTypeLower, "int"), strings.Contains(sqlTypeLower, "serial"):
 		return "number"
@@ -544,7 +551,7 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 		w.WriteString(fmt.Sprintf("export interface %s {\n", interfaceName))
 
 		for _, col := range query.Columns {
-			colType := g.inferColumnTypeFromSchema(col, query, schema)
+			colType := g.inferColumnTypeFromSchema(col)
 			w.WriteString(fmt.Sprintf("  %s: %s;\n", col.Name, colType))
 		}
 		w.WriteString("}\n\n")
@@ -598,78 +605,10 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 	return os.WriteFile(path, []byte(w.String()), 0644)
 }
 
-func (g *Generator) inferColumnTypeFromSchema(col *parser.QueryColumn, query *parser.Query, schema *parser.Schema) string {
-	colName := strings.ToLower(col.Name)
-
-	if strings.Contains(colName, "count") || strings.Contains(colName, "total") ||
-		strings.Contains(colName, "sum") {
-		return "number"
+func (g *Generator) inferColumnTypeFromSchema(col *parser.QueryColumn) string {
+	jsType := g.mapSQLTypeToJS(col.Type)
+	if col.Nullable {
+		jsType += " | null"
 	}
-	if strings.Contains(colName, "avg") {
-		return "number | null"
-	}
-
-	if col.Table != "" {
-		for _, table := range schema.Tables {
-			if strings.EqualFold(table.Name, col.Table) {
-				for _, schemaCol := range table.Columns {
-					if strings.EqualFold(schemaCol.Name, col.Name) {
-						jsType := g.mapSQLTypeToJS(schemaCol.Type)
-						if schemaCol.Nullable {
-							jsType += " | null"
-						}
-						return jsType
-					}
-				}
-			}
-		}
-	}
-
-	tableAliases := g.extractTableAliases(query.SQL)
-
-	for _, tableName := range tableAliases {
-		for _, table := range schema.Tables {
-			if strings.EqualFold(table.Name, tableName) {
-				for _, schemaCol := range table.Columns {
-					if strings.EqualFold(schemaCol.Name, col.Name) {
-						jsType := g.mapSQLTypeToJS(schemaCol.Type)
-						if schemaCol.Nullable {
-							jsType += " | null"
-						}
-						return jsType
-					}
-				}
-			}
-		}
-	}
-
-	if strings.Contains(colName, "date") || strings.Contains(colName, "time") {
-		return "Date"
-	}
-	if strings.Contains(colName, "id") || strings.HasSuffix(colName, "_id") {
-		return "number"
-	}
-	if strings.Contains(colName, "is") || strings.Contains(colName, "has") {
-		return "boolean"
-	}
-
-	return "string"
-}
-
-func (g *Generator) extractTableAliases(sql string) map[string]string {
-	aliases := make(map[string]string)
-
-	fromRe := regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
-	if matches := fromRe.FindStringSubmatch(sql); len(matches) > 2 {
-		aliases[matches[2]] = matches[1]
-	}
-
-	joinRe := regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
-	for _, matches := range joinRe.FindAllStringSubmatch(sql, -1) {
-		if len(matches) > 2 {
-			aliases[matches[2]] = matches[1]
-		}
-	}
-
-	return aliases
+	return jsType
 }
