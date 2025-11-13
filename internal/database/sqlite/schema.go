@@ -108,6 +108,31 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 		column.IsUnique, _ = s.isColumnUnique(ctx, tableName, column.Name)
 		columns = append(columns, column)
 	}
+
+	fkRows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName))
+	if err == nil {
+		defer fkRows.Close()
+
+		for fkRows.Next() {
+			var id, seq int
+			var table, from, to, onUpdate, onDelete, match string
+
+			err := fkRows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match)
+			if err != nil {
+				continue
+			}
+
+			for i := range columns {
+				if columns[i].Name == from {
+					columns[i].ForeignKeyTable = table
+					columns[i].ForeignKeyColumn = to
+					columns[i].OnDeleteAction = onDelete
+					break
+				}
+			}
+		}
+	}
+
 	return columns, nil
 }
 

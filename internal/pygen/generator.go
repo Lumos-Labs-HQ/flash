@@ -223,6 +223,8 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 }
 
 func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
+	returnType := utils.ToPascalCase(query.Name) + "Row"
+
 	w.WriteString("        async with self.db.cursor() as cursor:\n")
 	if len(paramNames) > 0 {
 		w.WriteString(fmt.Sprintf("            await cursor.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
@@ -233,16 +235,21 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 	switch query.Cmd {
 	case ":one":
 		w.WriteString("            result = await cursor.fetchone()\n")
-		w.WriteString("            return dict(result) if result else None\n")
+		w.WriteString("            if result:\n")
+		w.WriteString("                row_dict = {k: result[k] for k in result.keys()}\n")
+		w.WriteString(fmt.Sprintf("                return %s._make_fast(row_dict)\n", returnType))
+		w.WriteString("            return None\n")
 	case ":many":
 		w.WriteString("            result = await cursor.fetchall()\n")
-		w.WriteString("            return [dict(row) for row in result]\n")
+		w.WriteString(fmt.Sprintf("            return [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", returnType))
 	default:
 		w.WriteString("            return cursor.rowcount\n")
 	}
 }
 
 func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
+	returnType := utils.ToPascalCase(query.Name) + "Row"
+
 	w.WriteString("        async with self.db.execute(stmt")
 	if len(paramNames) > 0 {
 		w.WriteString(fmt.Sprintf(", (%s,)", strings.Join(paramNames, ", ")))
@@ -252,10 +259,13 @@ func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []str
 	switch query.Cmd {
 	case ":one":
 		w.WriteString("            result = await cursor.fetchone()\n")
-		w.WriteString("            return dict(result) if result else None\n")
+		w.WriteString("            if result:\n")
+		w.WriteString("                row_dict = {k: result[k] for k in result.keys()}\n")
+		w.WriteString(fmt.Sprintf("                return %s._make_fast(row_dict)\n", returnType))
+		w.WriteString("            return None\n")
 	case ":many":
 		w.WriteString("            result = await cursor.fetchall()\n")
-		w.WriteString("            return [dict(row) for row in result]\n")
+		w.WriteString(fmt.Sprintf("            return [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", returnType))
 	default:
 		w.WriteString("            return cursor.rowcount\n")
 	}
@@ -362,7 +372,7 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 	sqlTypeLower := strings.ToLower(sqlType)
 	var pyType string
 
-	// Check for enum types 
+	// Check for enum types
 	if g.schema != nil {
 		for _, enum := range g.schema.Enums {
 			if strings.ToLower(enum.Name) == sqlTypeLower {

@@ -34,15 +34,19 @@ func New() *Adapter {
 
 func (s *Adapter) Connect(ctx context.Context, url string) error {
 	dbPath := strings.TrimPrefix(url, "sqlite://")
+	if !strings.Contains(dbPath, "?") {
+		dbPath += "?cache=shared&_journal_mode=WAL"
+	}
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite connection: %w", err)
 	}
 
-	db.SetMaxOpenConns(1)                  
-	db.SetMaxIdleConns(1)                  
-	db.SetConnMaxLifetime(0)               
-	db.SetConnMaxIdleTime(5 * time.Minute) 
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	s.db = db
 	return nil
