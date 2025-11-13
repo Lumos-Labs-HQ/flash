@@ -102,7 +102,12 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 		w.WriteString("from dataclasses import dataclass\n")
 		w.WriteString("from typing import Optional, List, Any, Literal\n")
 		w.WriteString("from datetime import datetime\n")
-		w.WriteString("from decimal import Decimal\n\n")
+		w.WriteString("from decimal import Decimal\n")
+
+		if g.Config.Database.Provider == "mysql" {
+			w.WriteString("import aiomysql.cursors\n")
+		}
+		w.WriteString("\n")
 
 		for _, query := range fileQueries {
 			if g.needsResultClass(query) {
@@ -224,31 +229,52 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 
 func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
 	returnType := utils.ToPascalCase(query.Name) + "Row"
+	isSingleColumn := len(query.Columns) == 1
+	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
+	needsResultClass := g.needsResultClass(query)
 
-	w.WriteString("        async with self.db.cursor() as cursor:\n")
+	w.WriteString("        async with self.db.acquire() as conn:\n")
+	w.WriteString("            async with conn.cursor(aiomysql.cursors.DictCursor) as cursor:\n")
 	if len(paramNames) > 0 {
-		w.WriteString(fmt.Sprintf("            await cursor.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
+		w.WriteString(fmt.Sprintf("                await cursor.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
 	} else {
-		w.WriteString("            await cursor.execute(stmt)\n")
+		w.WriteString("                await cursor.execute(stmt)\n")
 	}
 
 	switch query.Cmd {
 	case ":one":
-		w.WriteString("            result = await cursor.fetchone()\n")
-		w.WriteString("            if result:\n")
-		w.WriteString("                row_dict = {k: result[k] for k in result.keys()}\n")
-		w.WriteString(fmt.Sprintf("                return %s._make_fast(row_dict)\n", returnType))
-		w.WriteString("            return None\n")
+		w.WriteString("                result = await cursor.fetchone()\n")
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("                return result['%s'] if result else None\n", query.Columns[0].Name))
+		} else {
+			w.WriteString("                if result:\n")
+			if needsResultClass {
+				w.WriteString(fmt.Sprintf("                    return %s._make_fast(result)\n", returnType))
+			} else {
+				w.WriteString("                    return dict(result)\n")
+			}
+			w.WriteString("                return None\n")
+		}
 	case ":many":
-		w.WriteString("            result = await cursor.fetchall()\n")
-		w.WriteString(fmt.Sprintf("            return [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", returnType))
+		w.WriteString("                result = await cursor.fetchall()\n")
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("                return [row['%s'] for row in result]\n", query.Columns[0].Name))
+		} else if needsResultClass {
+			w.WriteString(fmt.Sprintf("                return [%s._make_fast(row) for row in result]\n", returnType))
+		} else {
+			w.WriteString("                return [dict(row) for row in result]\n")
+		}
 	default:
-		w.WriteString("            return cursor.rowcount\n")
+		w.WriteString("                await conn.commit()\n")
+		w.WriteString("                return cursor.rowcount\n")
 	}
 }
 
 func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
 	returnType := utils.ToPascalCase(query.Name) + "Row"
+	isSingleColumn := len(query.Columns) == 1
+	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
+	needsResultClass := g.needsResultClass(query)
 
 	w.WriteString("        async with self.db.execute(stmt")
 	if len(paramNames) > 0 {
@@ -259,13 +285,27 @@ func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []str
 	switch query.Cmd {
 	case ":one":
 		w.WriteString("            result = await cursor.fetchone()\n")
-		w.WriteString("            if result:\n")
-		w.WriteString("                row_dict = {k: result[k] for k in result.keys()}\n")
-		w.WriteString(fmt.Sprintf("                return %s._make_fast(row_dict)\n", returnType))
-		w.WriteString("            return None\n")
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("            return result['%s'] if result else None\n", query.Columns[0].Name))
+		} else {
+			w.WriteString("            if result:\n")
+			if needsResultClass {
+				w.WriteString("                row_dict = {k: result[k] for k in result.keys()}\n")
+				w.WriteString(fmt.Sprintf("                return %s._make_fast(row_dict)\n", returnType))
+			} else {
+				w.WriteString("                return {k: result[k] for k in result.keys()}\n")
+			}
+			w.WriteString("            return None\n")
+		}
 	case ":many":
 		w.WriteString("            result = await cursor.fetchall()\n")
-		w.WriteString(fmt.Sprintf("            return [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", returnType))
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("            return [row['%s'] for row in result]\n", query.Columns[0].Name))
+		} else if needsResultClass {
+			w.WriteString(fmt.Sprintf("            return [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", returnType))
+		} else {
+			w.WriteString("            return [{k: row[k] for k in row.keys()} for row in result]\n")
+		}
 	default:
 		w.WriteString("            return cursor.rowcount\n")
 	}
@@ -362,7 +402,11 @@ func (g *Generator) convertSQL(sql string) string {
 	provider := g.Config.Database.Provider
 	if provider == "mysql" {
 		for i := 1; i <= 20; i++ {
-			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "?")
+			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "%s")
+		}
+		placeholderCount := strings.Count(sql, "?")
+		for i := 0; i < placeholderCount; i++ {
+			sql = strings.Replace(sql, "?", "%s", 1)
 		}
 	}
 	return sql

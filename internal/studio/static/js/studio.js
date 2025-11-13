@@ -643,6 +643,7 @@ function refreshData() {
     state.changes.clear();
     document.getElementById('save-btn').style.display = 'none';
     loadTableData();
+    loadTables();
 }
 
 // Pagination
