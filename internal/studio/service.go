@@ -28,9 +28,7 @@ func (s *Service) ensureCorrectSchema() error {
 	if err != nil {
 		return err
 	}
-	if cfg.Database.Provider != "postgresql" && cfg.Database.Provider != "postgres" {
-		return nil
-	}
+	
 	branchMgr := branch.NewMetadataManager(cfg.MigrationsPath)
 	store, err := branchMgr.Load()
 	if err != nil {
@@ -40,9 +38,21 @@ func (s *Service) ensureCorrectSchema() error {
 	if currentBranch == nil {
 		return nil
 	}
-	query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
-	_, err = s.adapter.ExecuteQuery(s.ctx, query)
-	return err
+	
+	if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
+		query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
+		_, err = s.adapter.ExecuteQuery(s.ctx, query)
+		return err
+	} else if cfg.Database.Provider == "mysql" {
+		type DatabaseSwitcher interface {
+			SwitchDatabase(ctx context.Context, dbName string) error
+		}
+		if switcher, ok := s.adapter.(DatabaseSwitcher); ok {
+			return switcher.SwitchDatabase(s.ctx, currentBranch.Schema)
+		}
+	}
+	
+	return nil
 }
 
 func (s *Service) GetTables() ([]TableInfo, error) {
@@ -120,6 +130,7 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, e
 }
 
 func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
+	s.ensureCorrectSchema()
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return err
@@ -148,6 +159,7 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 }
 
 func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
+	s.ensureCorrectSchema()
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return err
@@ -172,6 +184,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 }
 
 func (s *Service) AddRow(tableName string, data map[string]any) error {
+	s.ensureCorrectSchema()
 	if len(data) == 0 {
 		return fmt.Errorf("no data provided")
 	}
@@ -256,6 +269,7 @@ func joinColumns(cols []string) string {
 
 // GetSchemaVisualization returns schema for visualization
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {
+	s.ensureCorrectSchema()
 	tables, err := s.adapter.GetCurrentSchema(s.ctx)
 	if err != nil {
 		return nil, err
@@ -356,6 +370,7 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 
 // ExecuteSQL executes a raw SQL query
 func (s *Service) ExecuteSQL(query string) (*TableData, error) {
+	s.ensureCorrectSchema()
 	query = strings.TrimSpace(query)
 
 	queryUpper := strings.ToUpper(query)
@@ -495,11 +510,20 @@ func (s *Service) SwitchBranch(branchName string) error {
 		return err
 	}
 
-
 	if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
 		query := fmt.Sprintf("SET search_path TO %s, public", branchSchema)
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to set search_path: %w", err)
+		}
+	} else if cfg.Database.Provider == "mysql" {
+		// Use SwitchDatabase for MySQL
+		type DatabaseSwitcher interface {
+			SwitchDatabase(ctx context.Context, dbName string) error
+		}
+		if switcher, ok := s.adapter.(DatabaseSwitcher); ok {
+			if err := switcher.SwitchDatabase(ctx, branchSchema); err != nil {
+				return fmt.Errorf("failed to switch database: %w", err)
+			}
 		}
 	}
 

@@ -20,6 +20,9 @@ func (a *Adapter) DropBranchSchema(ctx context.Context, branchName string) error
 }
 
 func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetSchema string) error {
+	if err := a.DropBranchSchema(ctx, targetSchema); err != nil {
+		return fmt.Errorf("failed to drop existing schema: %w", err)
+	}
 	if err := a.CreateBranchSchema(ctx, targetSchema); err != nil {
 		return err
 	}
@@ -30,6 +33,11 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetS
 	}
 
 	for _, table := range tables {
+		// Skip the migrations table - it will be created by the migration system
+		if table == "_flash_migrations" {
+			continue
+		}
+
 		// Create table structure
 		createQuery := fmt.Sprintf(
 			"CREATE TABLE %s.%s (LIKE %s.%s INCLUDING ALL)",

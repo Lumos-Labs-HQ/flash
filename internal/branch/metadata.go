@@ -36,7 +36,7 @@ func NewMetadataManager(migrationsPath string) *MetadataManager {
 
 func (m *MetadataManager) Load() (*BranchStore, error) {
 	if _, err := os.Stat(m.filePath); os.IsNotExist(err) {
-		return m.initDefault(), nil
+		return m.initDefault("public"), nil
 	}
 
 	data, err := os.ReadFile(m.filePath)
@@ -61,14 +61,14 @@ func (m *MetadataManager) Save(store *BranchStore) error {
 	return os.WriteFile(m.filePath, data, 0644)
 }
 
-func (m *MetadataManager) initDefault() *BranchStore {
+func (m *MetadataManager) initDefault(defaultSchema string) *BranchStore {
 	return &BranchStore{
 		Current: "main",
 		Branches: []*BranchMetadata{
 			{
 				Name:      "main",
 				Parent:    "",
-				Schema:    "public",
+				Schema:    defaultSchema,
 				CreatedAt: time.Now(),
 				IsDefault: true,
 			},

@@ -1,32 +1,18 @@
 {
-  "current": "dev",
+  "current": "main",
   "branches": [
     {
       "name": "main",
       "parent": "",
       "schema": "public",
-      "created_at": "2025-11-14T12:32:35.741620803+05:30",
+      "created_at": "2025-11-14T23:17:42.0830808+05:30",
       "is_default": true
     },
     {
-      "name": "dev",
+      "name": "tes",
       "parent": "main",
-      "schema": "flash_branch_dev",
-      "created_at": "2025-11-14T12:32:40.890817547+05:30",
-      "is_default": false
-    },
-    {
-      "name": "test",
-      "parent": "main",
-      "schema": "flash_branch_test",
-      "created_at": "2025-11-14T12:47:46.4205753+05:30",
-      "is_default": false
-    },
-    {
-      "name": "test_branch",
-      "parent": "dev",
-      "schema": "flash_branch_test_branch",
-      "created_at": "2025-11-14T13:19:39.679168916+05:30",
+      "schema": "flash_branch_tes",
+      "created_at": "2025-11-14T23:17:47.0286148+05:30",
       "is_default": false
     }
   ]

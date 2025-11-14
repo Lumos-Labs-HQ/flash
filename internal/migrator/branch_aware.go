@@ -39,7 +39,7 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 		branchSchema: currentBranch.Schema,
 	}
 
-	// Set search_path for PostgreSQL to use branch schema
+	// Set search_path for PostgreSQL or USE for MySQL to use branch schema
 	ctx := context.Background()
 	if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
 		if currentBranch.Schema != "public" && currentBranch.Schema != "" {
@@ -48,6 +48,21 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 				fmt.Printf("Warning: Could not set search_path to %s: %v\n", currentBranch.Schema, err)
 			} else {
 				fmt.Printf("🔧 Using schema: %s\n", currentBranch.Schema)
+			}
+		}
+	} else if cfg.Database.Provider == "mysql" {
+		// For MySQL, switch to the branch database by reconnecting
+		if currentBranch.Schema != "" {
+			// Check if adapter has SwitchDatabase method (MySQL specific)
+			type DatabaseSwitcher interface {
+				SwitchDatabase(ctx context.Context, dbName string) error
+			}
+			if switcher, ok := migrator.adapter.(DatabaseSwitcher); ok {
+				if err := switcher.SwitchDatabase(ctx, currentBranch.Schema); err != nil {
+					fmt.Printf("Warning: Could not switch to database %s: %v\n", currentBranch.Schema, err)
+				} else {
+					fmt.Printf("🔧 Using database: %s\n", currentBranch.Schema)
+				}
 			}
 		}
 	}

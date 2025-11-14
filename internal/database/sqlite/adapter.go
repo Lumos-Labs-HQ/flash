@@ -140,6 +140,49 @@ func (s *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	return tx.Commit()
 }
 
+func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// First, record the migration with started_at only
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, applied_steps_count)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP, 0)
+	`, migrationID, name, checksum)
+	if err != nil {
+		return fmt.Errorf("failed to record migration start: %w", err)
+	}
+
+	// Execute the migration SQL
+	if migrationSQL != "" {
+		statements := common.ParseSQLStatements(migrationSQL)
+		for i, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
+			}
+		}
+	}
+
+	// Update the migration record with finished_at
+	_, err = tx.ExecContext(ctx, `
+		UPDATE _flash_migrations 
+		SET finished_at = CURRENT_TIMESTAMP, applied_steps_count = 1
+		WHERE id = ?
+	`, migrationID)
+	if err != nil {
+		return fmt.Errorf("failed to update migration finish time: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 func (s *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

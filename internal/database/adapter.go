@@ -23,6 +23,7 @@ type DatabaseAdapter interface {
 	GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error)
 	RecordMigration(ctx context.Context, migrationID, name, checksum string) error
 	ExecuteMigration(ctx context.Context, migrationSQL string) error
+	ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error
 	ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error)
 
 	// Schema operations

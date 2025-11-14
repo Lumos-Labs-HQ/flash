@@ -26,19 +26,19 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetS
 
 	tables, err := a.GetTableNamesInSchema(ctx, sourceSchema)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get tables from schema %s: %w", sourceSchema, err)
 	}
 
 	for _, table := range tables {
 		// Create table structure
-		createQuery := fmt.Sprintf("CREATE TABLE %s.%s LIKE %s.%s", targetSchema, table, sourceSchema, table)
-		if _, err := a.ExecuteQuery(ctx, createQuery); err != nil {
+		createQuery := fmt.Sprintf("CREATE TABLE `%s`.`%s` LIKE `%s`.`%s`", targetSchema, table, sourceSchema, table)
+		if _, err := a.db.ExecContext(ctx, createQuery); err != nil {
 			return fmt.Errorf("failed to create table %s: %w", table, err)
 		}
 
 		// Copy data
-		insertQuery := fmt.Sprintf("INSERT INTO %s.%s SELECT * FROM %s.%s", targetSchema, table, sourceSchema, table)
-		if _, err := a.ExecuteQuery(ctx, insertQuery); err != nil {
+		insertQuery := fmt.Sprintf("INSERT INTO `%s`.`%s` SELECT * FROM `%s`.`%s`", targetSchema, table, sourceSchema, table)
+		if _, err := a.db.ExecContext(ctx, insertQuery); err != nil {
 			return fmt.Errorf("failed to copy data for table %s: %w", table, err)
 		}
 	}
