@@ -57,6 +57,14 @@ type DatabaseAdapter interface {
 	// Data type mapping
 	MapColumnType(dbType string) string
 	FormatColumnType(column types.SchemaColumn) string
+
+	// Branch operations
+	CreateBranchSchema(ctx context.Context, branchName string) error
+	DropBranchSchema(ctx context.Context, branchName string) error
+	CloneSchemaToBranch(ctx context.Context, sourceSchema, targetSchema string) error
+	GetSchemaForBranch(ctx context.Context, branchSchema string) ([]types.SchemaTable, error)
+	SetActiveSchema(ctx context.Context, schemaName string) error
+	GetTableNamesInSchema(ctx context.Context, schemaName string) ([]string, error)
 }
 
 type DatabaseConnection interface {
