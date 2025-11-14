@@ -103,10 +103,7 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 		w.WriteString("from typing import Optional, List, Any, Literal\n")
 		w.WriteString("from datetime import datetime\n")
 		w.WriteString("from decimal import Decimal\n")
-
-		if g.Config.Database.Provider == "mysql" {
-			w.WriteString("import aiomysql.cursors\n")
-		}
+		
 		w.WriteString("\n")
 
 		for _, query := range fileQueries {
@@ -155,8 +152,15 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	}
 
 	returnType := g.getReturnType(query)
-	w.WriteString(fmt.Sprintf("    async def %s(self, %s) -> %s:\n",
-		methodName, strings.Join(paramTypes, ", "), returnType))
+	
+	// Generate async or sync method based on config
+	if g.Config.Gen.Python.Async {
+		w.WriteString(fmt.Sprintf("    async def %s(self, %s) -> %s:\n",
+			methodName, strings.Join(paramTypes, ", "), returnType))
+	} else {
+		w.WriteString(fmt.Sprintf("    def %s(self, %s) -> %s:\n",
+			methodName, strings.Join(paramTypes, ", "), returnType))
+	}
 	w.WriteString(fmt.Sprintf("        stmt = \"\"\"%s\"\"\"\n", sql))
 
 	provider := g.Config.Database.Provider
@@ -175,21 +179,38 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
 	hasColumns := len(query.Columns) > 0
 	isSingleColumn := len(query.Columns) == 1
+	isAsync := g.Config.Gen.Python.Async
 
 	if query.Cmd == ":exec" {
-		if len(paramNames) > 0 {
-			w.WriteString(fmt.Sprintf("        await self.db.execute(stmt, %s)\n", strings.Join(paramNames, ", ")))
+		if isAsync {
+			if len(paramNames) > 0 {
+				w.WriteString(fmt.Sprintf("        await self.db.execute(stmt, %s)\n", strings.Join(paramNames, ", ")))
+			} else {
+				w.WriteString("        await self.db.execute(stmt)\n")
+			}
 		} else {
-			w.WriteString("        await self.db.execute(stmt)\n")
+			if len(paramNames) > 0 {
+				w.WriteString(fmt.Sprintf("        self.db.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
+			} else {
+				w.WriteString("        self.db.execute(stmt)\n")
+			}
 		}
 		w.WriteString("        return 1\n")
 		return
 	}
 
-	if len(paramNames) > 0 {
-		w.WriteString(fmt.Sprintf("        result = await self.db.fetch(stmt, %s)\n", strings.Join(paramNames, ", ")))
+	if isAsync {
+		if len(paramNames) > 0 {
+			w.WriteString(fmt.Sprintf("        result = await self.db.fetch(stmt, %s)\n", strings.Join(paramNames, ", ")))
+		} else {
+			w.WriteString("        result = await self.db.fetch(stmt)\n")
+		}
 	} else {
-		w.WriteString("        result = await self.db.fetch(stmt)\n")
+		if len(paramNames) > 0 {
+			w.WriteString(fmt.Sprintf("        result = self.db.execute(stmt, (%s,)).fetchall()\n", strings.Join(paramNames, ", ")))
+		} else {
+			w.WriteString("        result = self.db.execute(stmt).fetchall()\n")
+		}
 	}
 
 	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
@@ -233,40 +254,80 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
 	needsResultClass := g.needsResultClass(query)
 
-	w.WriteString("        async with self.db.acquire() as conn:\n")
-	w.WriteString("            async with conn.cursor(aiomysql.cursors.DictCursor) as cursor:\n")
-	if len(paramNames) > 0 {
-		w.WriteString(fmt.Sprintf("                await cursor.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
+	isAsync := g.Config.Gen.Python.Async
+	
+	if isAsync {
+		w.WriteString("        async with self.db.acquire() as conn:\n")
+		w.WriteString("            async with conn.cursor() as cursor:\n")
 	} else {
-		w.WriteString("                await cursor.execute(stmt)\n")
+		w.WriteString("        with self.db.cursor() as cursor:\n")
+	}
+	
+	indent := "            "
+	if !isAsync {
+		indent = "        "
+	}
+	
+	if len(paramNames) > 0 {
+		if isAsync {
+			w.WriteString(fmt.Sprintf("                await cursor.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
+		} else {
+			w.WriteString(fmt.Sprintf("%s    cursor.execute(stmt, (%s,))\n", indent, strings.Join(paramNames, ", ")))
+		}
+	} else {
+		if isAsync {
+			w.WriteString("                await cursor.execute(stmt)\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    cursor.execute(stmt)\n", indent))
+		}
 	}
 
 	switch query.Cmd {
 	case ":one":
-		w.WriteString("                result = await cursor.fetchone()\n")
-		if isSingleNonWildcard {
-			w.WriteString(fmt.Sprintf("                return result['%s'] if result else None\n", query.Columns[0].Name))
+		if isAsync {
+			w.WriteString("                result = await cursor.fetchone()\n")
 		} else {
-			w.WriteString("                if result:\n")
+			w.WriteString(fmt.Sprintf("%s    result = cursor.fetchone()\n", indent))
+		}
+		
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("%s    return result['%s'] if result else None\n", indent, query.Columns[0].Name))
+		} else {
+			w.WriteString(fmt.Sprintf("%s    if result:\n", indent))
+			// Convert to dict if needed (works with any cursor type)
+			w.WriteString(fmt.Sprintf("%s        row_dict = dict(result) if hasattr(result, 'keys') else {desc[0]: result[i] for i, desc in enumerate(cursor.description)}\n", indent))
 			if needsResultClass {
-				w.WriteString(fmt.Sprintf("                    return %s._make_fast(result)\n", returnType))
+				w.WriteString(fmt.Sprintf("%s        return %s._make_fast(row_dict)\n", indent, returnType))
 			} else {
-				w.WriteString("                    return dict(result)\n")
+				w.WriteString(fmt.Sprintf("%s        return row_dict\n", indent))
 			}
-			w.WriteString("                return None\n")
+			w.WriteString(fmt.Sprintf("%s    return None\n", indent))
 		}
 	case ":many":
-		w.WriteString("                result = await cursor.fetchall()\n")
-		if isSingleNonWildcard {
-			w.WriteString(fmt.Sprintf("                return [row['%s'] for row in result]\n", query.Columns[0].Name))
-		} else if needsResultClass {
-			w.WriteString(fmt.Sprintf("                return [%s._make_fast(row) for row in result]\n", returnType))
+		if isAsync {
+			w.WriteString("                result = await cursor.fetchall()\n")
 		} else {
-			w.WriteString("                return [dict(row) for row in result]\n")
+			w.WriteString(fmt.Sprintf("%s    result = cursor.fetchall()\n", indent))
+		}
+		
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("%s    return [row['%s'] for row in result]\n", indent, query.Columns[0].Name))
+		} else {
+			w.WriteString(fmt.Sprintf("%s    rows = [dict(row) if hasattr(row, 'keys') else {cursor.description[i][0]: row[i] for i in range(len(row))} for row in result]\n", indent))
+			if needsResultClass {
+				w.WriteString(fmt.Sprintf("%s    return [%s._make_fast(row) for row in rows]\n", indent, returnType))
+			} else {
+				w.WriteString(fmt.Sprintf("%s    return rows\n", indent))
+			}
 		}
 	default:
-		w.WriteString("                await conn.commit()\n")
-		w.WriteString("                return cursor.rowcount\n")
+		if isAsync {
+			w.WriteString("                await conn.commit()\n")
+			w.WriteString("                return cursor.rowcount\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    conn.commit()\n", indent))
+			w.WriteString(fmt.Sprintf("%s    return cursor.rowcount\n", indent))
+		}
 	}
 }
 
@@ -275,39 +336,65 @@ func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []str
 	isSingleColumn := len(query.Columns) == 1
 	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
 	needsResultClass := g.needsResultClass(query)
+	isAsync := g.Config.Gen.Python.Async
 
-	w.WriteString("        async with self.db.execute(stmt")
-	if len(paramNames) > 0 {
-		w.WriteString(fmt.Sprintf(", (%s,)", strings.Join(paramNames, ", ")))
+	if isAsync {
+		w.WriteString("        async with self.db.execute(stmt")
+		if len(paramNames) > 0 {
+			w.WriteString(fmt.Sprintf(", (%s,)", strings.Join(paramNames, ", ")))
+		}
+		w.WriteString(") as cursor:\n")
+	} else {
+		w.WriteString("        cursor = self.db.execute(stmt")
+		if len(paramNames) > 0 {
+			w.WriteString(fmt.Sprintf(", (%s,)", strings.Join(paramNames, ", ")))
+		}
+		w.WriteString(")\n")
 	}
-	w.WriteString(") as cursor:\n")
+	
+	indent := "            "
+	if !isAsync {
+		indent = "        "
+	}
 
 	switch query.Cmd {
 	case ":one":
-		w.WriteString("            result = await cursor.fetchone()\n")
-		if isSingleNonWildcard {
-			w.WriteString(fmt.Sprintf("            return result['%s'] if result else None\n", query.Columns[0].Name))
+		if isAsync {
+			w.WriteString("            result = await cursor.fetchone()\n")
 		} else {
-			w.WriteString("            if result:\n")
+			w.WriteString("        result = cursor.fetchone()\n")
+		}
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("%sreturn result['%s'] if result else None\n", indent, query.Columns[0].Name))
+		} else {
+			w.WriteString(fmt.Sprintf("%sif result:\n", indent))
 			if needsResultClass {
-				w.WriteString("                row_dict = {k: result[k] for k in result.keys()}\n")
-				w.WriteString(fmt.Sprintf("                return %s._make_fast(row_dict)\n", returnType))
+				w.WriteString(fmt.Sprintf("%s    row_dict = {k: result[k] for k in result.keys()}\n", indent))
+				w.WriteString(fmt.Sprintf("%s    return %s._make_fast(row_dict)\n", indent, returnType))
 			} else {
-				w.WriteString("                return {k: result[k] for k in result.keys()}\n")
+				w.WriteString(fmt.Sprintf("%s    return {k: result[k] for k in result.keys()}\n", indent))
 			}
-			w.WriteString("            return None\n")
+			w.WriteString(fmt.Sprintf("%sreturn None\n", indent))
 		}
 	case ":many":
-		w.WriteString("            result = await cursor.fetchall()\n")
-		if isSingleNonWildcard {
-			w.WriteString(fmt.Sprintf("            return [row['%s'] for row in result]\n", query.Columns[0].Name))
-		} else if needsResultClass {
-			w.WriteString(fmt.Sprintf("            return [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", returnType))
+		if isAsync {
+			w.WriteString("            result = await cursor.fetchall()\n")
 		} else {
-			w.WriteString("            return [{k: row[k] for k in row.keys()} for row in result]\n")
+			w.WriteString("        result = cursor.fetchall()\n")
+		}
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("%sreturn [row['%s'] for row in result]\n", indent, query.Columns[0].Name))
+		} else if needsResultClass {
+			w.WriteString(fmt.Sprintf("%sreturn [%s._make_fast({k: row[k] for k in row.keys()}) for row in result]\n", indent, returnType))
+		} else {
+			w.WriteString(fmt.Sprintf("%sreturn [{k: row[k] for k in row.keys()} for row in result]\n", indent))
 		}
 	default:
-		w.WriteString("            return cursor.rowcount\n")
+		w.WriteString(fmt.Sprintf("%sreturn cursor.rowcount\n", indent))
+	}
+	
+	if !isAsync {
+		w.WriteString("        cursor.close()\n")
 	}
 }
 

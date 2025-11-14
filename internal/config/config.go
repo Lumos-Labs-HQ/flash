@@ -40,6 +40,7 @@ type JSGen struct {
 type PythonGen struct {
 	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
 	Out     string `json:"out,omitempty" mapstructure:"out"`
+	Async   bool   `json:"async,omitempty" mapstructure:"async"`  // true = async (default), false = sync
 }
 
 func Load() (*Config, error) {
@@ -76,6 +77,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.Gen.Python.Out == "" && cfg.Gen.Python.Enabled {
 		cfg.Gen.Python.Out = "flash_gen"
+	}
+	if cfg.Gen.Python.Enabled && !viper.IsSet("gen.python.async") {
+		cfg.Gen.Python.Async = true
 	}
 
 	return &cfg, nil
