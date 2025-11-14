@@ -60,7 +60,7 @@ Configuration is read from flash.config.json`,
 				return fmt.Errorf("failed to generate Go code: %w", err)
 			}
 			fmt.Println("🎉 Go code generated successfully!")
-			fmt.Println("   Output: FlashORM_gen/")
+			fmt.Println("   Output: flash_gen/")
 		}
 
 		return nil

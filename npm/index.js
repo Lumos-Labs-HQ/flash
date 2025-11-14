@@ -8,7 +8,7 @@ function getBinaryPath() {
   const binaryPath = path.join(__dirname, 'bin', binaryName);
   
   if (!fs.existsSync(binaryPath)) {
-    throw new Error('flash binary not found. Please reinstall: npm install -g FlashORM-orm');
+    throw new Error('flash binary not found. Please reinstall: npm install -g flashorm');
   }
   
   return binaryPath;

@@ -1,35 +1,14 @@
-# FlashORM v2.1.0 Release Notes
+# FlashORM v2.1.1 Release Notes
 
-## 🎉 Major Features
+## 🎉 New Features
 
-### 🐍 Python Support
+### 🐍 Python Async/Sync Code Generation
 
-**Full Python Async Support:**
-- ✅ **Python Code Generation** - Generate type-safe Python code from SQL queries
-- ✅ **asyncpg Support** - First-class PostgreSQL async support with asyncpg
-- ✅ **aiomysql Support** - MySQL async operations with aiomysql
-- ✅ **aiosqlite Support** - SQLite async support with aiosqlite
-- ✅ **Type Hints** - Full type annotations with dataclasses for models
-- ✅ **Query Classes** - Generated Queries class with all your SQL operations
-- ✅ **Database Factory** - Simple `new(db)` function to create database clients
-
-**Usage Example:**
-```python
-import asyncio
-import asyncpg
-from flash_gen.database import new
-
-async def main():
-    pool = await asyncpg.create_pool('postgresql://...')
-    db = new(pool)
-    
-    user = await db.create_user('Alice', 'alice@example.com')
-    users = await db.get_all_users()
-    
-    await pool.close()
-
-asyncio.run(main())
-```
+**Flexible Python Generation:**
+- ✅ **Async Mode (Default)** - Generate async/await Python code for high-performance applications
+- ✅ **Sync Mode** - Generate synchronous Python code for simpler applications or legacy codebases
+- ✅ **Driver-Agnostic MySQL** - MySQL code now works with ANY Python MySQL driver (pymysql, aiomysql, mysql-connector-python, etc.)
+- ✅ **No Library Dependencies** - Generated code adapts to your chosen driver automatically
 
 **Configuration:**
 ```json
@@ -37,64 +16,86 @@ asyncio.run(main())
   "gen": {
     "python": {
       "enabled": true,
+      "async": false  // true = async (default), false = sync
     }
   }
 }
 ```
 
-### 📊 Enhanced FlashORM Studio
+**Async Example (async: true):**
+```python
+import asyncio
+import aiomysql
+from flash_gen.database import new
 
-**New Studio Features:**
-- ✅ **Add Tables** - Create new tables directly from the Studio UI
-- ✅ **Edit Tables** - Modify existing table structures with visual editor
-- ✅ **Auto-Migration Creation** - Automatically generates migration files from schema changes
-- ✅ **Improved UI/UX** - Better visibility with enhanced background dots and contrast
-- ✅ **Data Management** - Insert, update, and delete records with spreadsheet-like interface
-- ✅ **Relationship Visualization** - Interactive schema diagram showing all foreign keys
+async def main():
+    pool = await aiomysql.create_pool(
+        host='localhost',
+        user='root',
+        password='password',
+        db='mydb'
+    )
+    db = new(pool)
+    
+    # Async operations with await
+    user = await db.create_user('Alice', 'alice@example.com')
+    users = await db.get_all_users()
+    count = await db.get_user_count()  # Single-column queries return values directly
+    
+    pool.close()
+    await pool.wait_closed()
 
-**Schema Visualizer:**
-
-![Schema Visualizer](img/s1.png)
-*Hover over connection lines or tables to see context menu with quick actions*
-
-**Table Editor:**
-
-![Table Editor](img/s2.png)
-*Visual table editor for modifying schema with auto-migration generation*
-
-**Studio Usage:**
-```bash
-# Auto-detect from config
-flash studio
-
-# Or specify database directly
-flash studio --db "postgresql://user:pass@localhost/db"
-
-# Custom port
-flash studio --port 3000
+asyncio.run(main())
 ```
 
-### ⚡ Performance Optimizations
+**Sync Example (async: false):**
+```python
+import pymysql
+from flash_gen.database import new
 
-**Memory & Speed Improvements:**
-- ✅ **Reduced RAM Usage** - Optimized memory allocation for large-scale operations
-- ✅ **Efficient Code Generation** - Reduced memory footprint during code generation
-- ✅ **Buffer Pre-allocation** - Smart buffer sizing reduces allocations by 40%
-- ✅ **Batch Operations** - Optimized batch inserts and updates for better throughput
+def main():
+    conn = pymysql.connect(
+        host='localhost',
+        user='root',
+        password='password',
+        db='mydb'
+    )
+    db = new(conn)
+    
+    # Synchronous operations - no await needed
+    user = db.create_user('Alice', 'alice@example.com')
+    users = db.get_all_users()
+    count = db.get_user_count()
+    
+    conn.close()
 
-### 🐛 Bug Fixes & Improvements
+main()
+```
 
-**SQL Parser Enhancements:**
-- ✅ **Fixed CAST AS Alias Extraction** - Now correctly uses the last `AS` occurrence for aliases, not the first one inside `CAST()` expressions
-- ✅ **UNION Query Support** - Proper detection and handling of UNION queries (queries starting with `(` containing SELECT)
-- ✅ **Column Validation** - Skips column validation for UNION queries to prevent false errors
-- ✅ **Nested SELECT Handling** - Improved extraction of SELECT columns from nested/parenthesized queries
+**Driver Compatibility:**
+```python
+# Works with aiomysql (async)
+import aiomysql
+pool = await aiomysql.create_pool(...)
+db = new(pool)
 
-**Validation & Error Messages:**
-- ✅ **Duplicate Parameter Detection** - Prevents duplicate parameter names in generated code
-- ✅ **CASE/CAST Boundary Detection** - Better parsing of SQL keywords within expressions
-- ✅ **Improved Error Messages** - Clearer validation errors with helpful context
+# Works with PyMySQL (sync)
+import pymysql
+conn = pymysql.connect(...)
+db = new(conn)
 
+# Works with mysql-connector-python (sync)
+import mysql.connector
+conn = mysql.connector.connect(...)
+db = new(conn)
+
+# Works with any driver that supports cursor() and execute()
+```
+
+**Key Improvements:**
+- 🔧 **Flexible** - Switch between async/sync without regenerating your SQL queries
+- 🎯 **Smart Type Detection** - Single-column queries return primitives, multi-column returns typed dataclasses
+- 📦 **Universal MySQL Support** - Works with any MySQL driver's cursor interface
 
 ## 📦 Installation
 
