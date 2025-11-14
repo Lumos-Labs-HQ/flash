@@ -13,8 +13,10 @@ import (
 )
 
 type Adapter struct {
-	db *sql.DB
-	qb squirrel.StatementBuilderType
+	db           *sql.DB
+	qb           squirrel.StatementBuilderType
+	originalPath string
+	currentPath  string
 }
 
 var typeMap = map[string]string{
@@ -38,6 +40,13 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 		dbPath += "?cache=shared&_journal_mode=WAL"
 	}
 
+	// Store original path without query parameters
+	s.originalPath = strings.TrimPrefix(url, "sqlite://")
+	if idx := strings.Index(s.originalPath, "?"); idx > 0 {
+		s.originalPath = s.originalPath[:idx]
+	}
+	s.currentPath = s.originalPath
+
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite connection: %w", err)
@@ -56,6 +65,37 @@ func (s *Adapter) Close() error {
 	if s.db != nil {
 		return s.db.Close()
 	}
+	return nil
+}
+
+func (s *Adapter) SwitchDatabase(ctx context.Context, branchFile string) error {
+	if s.currentPath == branchFile {
+		return nil // Already on this file
+	}
+
+	// Close existing connection
+	if s.db != nil {
+		s.db.Close()
+	}
+
+	// Open new database file
+	dbPath := branchFile
+	if !strings.Contains(dbPath, "?") {
+		dbPath += "?cache=shared&_journal_mode=WAL"
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to switch to database %s: %w", branchFile, err)
+	}
+
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(0)
+	db.SetConnMaxIdleTime(5 * time.Minute)
+
+	s.db = db
+	s.currentPath = branchFile
 	return nil
 }
 

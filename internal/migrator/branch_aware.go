@@ -50,10 +50,9 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 				fmt.Printf("🔧 Using schema: %s\n", currentBranch.Schema)
 			}
 		}
-	} else if cfg.Database.Provider == "mysql" {
-		// For MySQL, switch to the branch database by reconnecting
+	} else if cfg.Database.Provider == "mysql" || cfg.Database.Provider == "sqlite" || cfg.Database.Provider == "sqlite3" {
+		// For MySQL and SQLite, switch database by reconnecting
 		if currentBranch.Schema != "" {
-			// Check if adapter has SwitchDatabase method (MySQL specific)
 			type DatabaseSwitcher interface {
 				SwitchDatabase(ctx context.Context, dbName string) error
 			}
@@ -61,7 +60,11 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 				if err := switcher.SwitchDatabase(ctx, currentBranch.Schema); err != nil {
 					fmt.Printf("Warning: Could not switch to database %s: %v\n", currentBranch.Schema, err)
 				} else {
-					fmt.Printf("🔧 Using database: %s\n", currentBranch.Schema)
+					if cfg.Database.Provider == "mysql" {
+						fmt.Printf("🔧 Using database: %s\n", currentBranch.Schema)
+					} else {
+						fmt.Printf("🔧 Using file: %s\n", currentBranch.Schema)
+					}
 				}
 			}
 		}

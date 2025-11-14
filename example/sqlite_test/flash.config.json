@@ -5,12 +5,7 @@
   "migrations_path": "db/migrations",
   "export_path": "db/export",
   "database": {
-    "provider": "sqllite",
+    "provider": "sqlite",
     "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "python": {
-      "enabled": true
-    }
   }
 }

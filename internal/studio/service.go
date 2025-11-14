@@ -43,7 +43,7 @@ func (s *Service) ensureCorrectSchema() error {
 		query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
-	} else if cfg.Database.Provider == "mysql" {
+	} else if cfg.Database.Provider == "mysql" || cfg.Database.Provider == "sqlite" || cfg.Database.Provider == "sqlite3" {
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
 		}
@@ -515,8 +515,7 @@ func (s *Service) SwitchBranch(branchName string) error {
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to set search_path: %w", err)
 		}
-	} else if cfg.Database.Provider == "mysql" {
-		// Use SwitchDatabase for MySQL
+	} else if cfg.Database.Provider == "mysql" || cfg.Database.Provider == "sqlite" || cfg.Database.Provider == "sqlite3" {
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
 		}

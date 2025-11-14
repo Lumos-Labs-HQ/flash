@@ -124,7 +124,8 @@ func (m *Manager) generateSchemaName(branchName string) string {
 	case "mysql":
 		return fmt.Sprintf("flash_branch_%s", branchName)
 	case "sqlite", "sqlite3":
-		return fmt.Sprintf("flash_branch_%s.db", branchName)
+		// For SQLite, return just the branch name - the adapter will handle file path
+		return branchName
 	default:
 		return fmt.Sprintf("flash_branch_%s", branchName)
 	}
