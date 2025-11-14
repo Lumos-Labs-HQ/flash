@@ -101,7 +101,7 @@ func (p *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[str
 		return []map[string]interface{}{}, nil
 	}
 
-	selectQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectCols, ", "), tableName)
+	selectQuery := fmt.Sprintf("SELECT %s FROM \"%s\"", strings.Join(selectCols, ", "), tableName)
 	rows, err := p.pool.Query(ctx, selectQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query table %s: %w", tableName, err)
@@ -175,7 +175,7 @@ func isStandardPostgresType(udtName string) bool {
 
 func (p *Adapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
 	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)
+	query := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", tableName)
 	err := p.pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count rows in table %s: %w", tableName, err)
@@ -190,7 +190,7 @@ func (p *Adapter) GetAllTableRowCounts(ctx context.Context, tableNames []string)
 
 	var queryParts []string
 	for _, tableName := range tableNames {
-		queryParts = append(queryParts, fmt.Sprintf("SELECT '%s' as table_name, COUNT(*) as row_count FROM %s", tableName, tableName))
+		queryParts = append(queryParts, fmt.Sprintf("SELECT '%s' as table_name, COUNT(*) as row_count FROM \"%s\"", tableName, tableName))
 	}
 
 	query := strings.Join(queryParts, " UNION ALL ")

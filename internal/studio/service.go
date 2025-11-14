@@ -92,6 +92,10 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*TableData, e
 	}, nil
 }
 
+func quoteIdentifier(name string) string {
+	return fmt.Sprintf("\"%s\"", name)
+}
+
 func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
@@ -109,7 +113,7 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 	for _, change := range changes {
 		if change.Action == "update" {
 			query := fmt.Sprintf("UPDATE %s SET %s = '%s' WHERE %s = '%s'",
-				tableName, change.Column, change.Value, pkColumn, change.RowID)
+				quoteIdentifier(tableName), quoteIdentifier(change.Column), change.Value, quoteIdentifier(pkColumn), change.RowID)
 
 			if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
 				return fmt.Errorf("failed to update %s.%s: %w", tableName, change.Column, err)
@@ -135,7 +139,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 	}
 
 	for _, rowID := range rowIDs {
-		query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", tableName, pkColumn, rowID)
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", quoteIdentifier(tableName), quoteIdentifier(pkColumn), rowID)
 		if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
 			return fmt.Errorf("failed to delete row %s: %w", rowID, err)
 		}
@@ -153,7 +157,7 @@ func (s *Service) AddRow(tableName string, data map[string]any) error {
 	values := []string{}
 
 	for col, val := range data {
-		columns = append(columns, col)
+		columns = append(columns, quoteIdentifier(col))
 		if val == nil {
 			values = append(values, "NULL")
 		} else {
@@ -164,8 +168,8 @@ func (s *Service) AddRow(tableName string, data map[string]any) error {
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		tableName,
-		joinColumns(columns),
+		quoteIdentifier(tableName),
+		strings.Join(columns, ", "),
 		strings.Join(values, ", "))
 
 	return s.adapter.ExecuteMigration(s.ctx, query)
@@ -206,7 +210,7 @@ func (s *Service) deleteRow(tableName, rowID string) error {
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		escaped := strings.ReplaceAll(rowID, "'", "''")
-		query := fmt.Sprintf("DELETE FROM %s WHERE id = '%s'", tableName, escaped)
+		query := fmt.Sprintf("DELETE FROM %s WHERE id = '%s'", quoteIdentifier(tableName), escaped)
 		return s.adapter.ExecuteMigration(s.ctx, query)
 	}
 
@@ -219,7 +223,7 @@ func (s *Service) deleteRow(tableName, rowID string) error {
 	}
 
 	escaped := strings.ReplaceAll(rowID, "'", "''")
-	query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", tableName, pkColumn, escaped)
+	query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'", quoteIdentifier(tableName), quoteIdentifier(pkColumn), escaped)
 	return s.adapter.ExecuteMigration(s.ctx, query)
 }
 
@@ -382,13 +386,13 @@ func (s *Service) UpdateRow(table string, id interface{}, data map[string]interf
 
 	i := 1
 	for col, val := range data {
-		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", col, i))
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", quoteIdentifier(col), i))
 		values = append(values, val)
 		i++
 	}
 
 	sql := fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d",
-		table, strings.Join(setClauses, ", "), i)
+		quoteIdentifier(table), strings.Join(setClauses, ", "), i)
 
 	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
 	return err
@@ -402,14 +406,14 @@ func (s *Service) InsertRow(table string, data map[string]interface{}) error {
 
 	i := 1
 	for col, val := range data {
-		columns = append(columns, col)
+		columns = append(columns, quoteIdentifier(col))
 		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
 		values = append(values, val)
 		i++
 	}
 
 	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		table, strings.Join(columns, ", "), strings.Join(placeholders, ", "))
+		quoteIdentifier(table), strings.Join(columns, ", "), strings.Join(placeholders, ", "))
 
 	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
 	return err

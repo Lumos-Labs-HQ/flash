@@ -12,7 +12,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "2.1.0"
+	Version = "2.1.11"
 )
 
 func showBanner() {
