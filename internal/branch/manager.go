@@ -87,6 +87,64 @@ func (m *Manager) SwitchBranch(ctx context.Context, branchName string) error {
 	return m.metadata.Save(store)
 }
 
+func (m *Manager) DeleteBranch(ctx context.Context, branchName string) error {
+	store, err := m.metadata.Load()
+	if err != nil {
+		return err
+	}
+
+	branch := store.GetBranch(branchName)
+	if branch == nil {
+		return fmt.Errorf("branch '%s' not found", branchName)
+	}
+
+	if branch.IsDefault {
+		return fmt.Errorf("cannot delete default branch '%s'", branchName)
+	}
+
+	if store.Current == branchName {
+		return fmt.Errorf("cannot delete current branch '%s'", branchName)
+	}
+
+	// Drop the schema
+	if err := m.adapter.DropBranchSchema(ctx, branch.Schema); err != nil {
+		return fmt.Errorf("failed to drop branch schema: %w", err)
+	}
+
+	// Remove from metadata
+	if err := store.RemoveBranch(branchName); err != nil {
+		return err
+	}
+
+	return m.metadata.Save(store)
+}
+
+func (m *Manager) RenameBranch(oldName, newName string) error {
+	store, err := m.metadata.Load()
+	if err != nil {
+		return err
+	}
+
+	branch := store.GetBranch(oldName)
+	if branch == nil {
+		return fmt.Errorf("branch '%s' not found", oldName)
+	}
+
+	if store.GetBranch(newName) != nil {
+		return fmt.Errorf("branch '%s' already exists", newName)
+	}
+
+	// Update branch name
+	branch.Name = newName
+
+	// Update current if needed
+	if store.Current == oldName {
+		store.Current = newName
+	}
+
+	return m.metadata.Save(store)
+}
+
 func (m *Manager) ListBranches() ([]*BranchMetadata, string, error) {
 	store, err := m.metadata.Load()
 	if err != nil {

@@ -12,18 +12,10 @@ import (
 )
 
 var branchCmd = &cobra.Command{
-	Use:   "branch",
-	Short: "Manage database branches",
-	Long:  `Create, switch, list, and compare database branches for isolated development.`,
-}
-
-var branchCreateCmd = &cobra.Command{
-	Use:   "create <name>",
-	Short: "Create a new branch from current branch",
-	Args:  cobra.ExactArgs(1),
+	Use:   "branch [name]",
+	Short: "List, create, or delete branches",
+	Long:  `List, create, or delete branches. Similar to git branch.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		branchName := args[0]
-
 		cfg, err := config.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
@@ -35,38 +27,35 @@ var branchCreateCmd = &cobra.Command{
 		}
 		defer manager.Close()
 
-		currentBranch, err := manager.GetCurrentBranch()
-		if err != nil {
-			return err
+		// Handle delete flag
+		deleteBranch, _ := cmd.Flags().GetString("delete")
+		if deleteBranch != "" {
+			return handleDeleteBranch(manager, deleteBranch, cmd)
 		}
 
-		force, _ := cmd.Flags().GetBool("force")
-		if !force {
-			color.Yellow("⚠️  This will copy all schema and data from '%s' to '%s'.", currentBranch, branchName)
-			fmt.Print("Continue? (y/N): ")
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
-				color.Red("✗ Cancelled")
-				return nil
+		// Handle rename flag
+		renameTo, _ := cmd.Flags().GetString("move")
+		if renameTo != "" {
+			if len(args) == 0 {
+				return fmt.Errorf("branch name required for rename")
 			}
+			return handleRenameBranch(manager, renameTo, args[0])
 		}
 
-		color.Cyan("Creating branch '%s'...", branchName)
-		
-		ctx := context.Background()
-		if err := manager.CreateBranch(ctx, branchName); err != nil {
-			return fmt.Errorf("failed to create branch: %w", err)
+		// Create branch if name provided
+		if len(args) > 0 {
+			return handleCreateBranch(manager, args[0], cmd)
 		}
 
-		color.Green("✓ Branch '%s' created successfully", branchName)
-		return nil
+		// List branches (default)
+		return handleListBranches(manager)
 	},
 }
 
-var branchSwitchCmd = &cobra.Command{
-	Use:   "switch <name>",
-	Short: "Switch to a different branch",
+var checkoutCmd = &cobra.Command{
+	Use:   "checkout <branch>",
+	Short: "Switch branches or create and switch",
+	Long:  `Switch to a branch. Use -b to create and switch. Similar to git checkout.`,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		branchName := args[0]
@@ -82,6 +71,16 @@ var branchSwitchCmd = &cobra.Command{
 		}
 		defer manager.Close()
 
+		createNew, _ := cmd.Flags().GetBool("b")
+		
+		if createNew {
+			// Create and switch
+			if err := handleCreateBranch(manager, branchName, cmd); err != nil {
+				return err
+			}
+		}
+
+		// Switch to branch
 		ctx := context.Background()
 		if err := manager.SwitchBranch(ctx, branchName); err != nil {
 			return fmt.Errorf("failed to switch branch: %w", err)
@@ -92,79 +91,109 @@ var branchSwitchCmd = &cobra.Command{
 	},
 }
 
-var branchListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all branches",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
+func handleCreateBranch(manager *branch.Manager, branchName string, cmd *cobra.Command) error {
+	currentBranch, err := manager.GetCurrentBranch()
+	if err != nil {
+		return err
+	}
 
-		manager, err := branch.NewManager(cfg)
-		if err != nil {
-			return err
-		}
-		defer manager.Close()
-
-		branches, current, err := manager.ListBranches()
-		if err != nil {
-			return err
-		}
-
-		if len(branches) == 0 {
-			color.Yellow("No branches found")
+	force, _ := cmd.Flags().GetBool("force")
+	if !force {
+		color.Yellow("⚠️  This will copy all schema and data from '%s' to '%s'.", currentBranch, branchName)
+		fmt.Print("Continue? (y/N): ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			color.Red("✗ Cancelled")
 			return nil
 		}
+	}
 
-		fmt.Println()
-		for _, b := range branches {
-			prefix := "  "
-			if b.Name == current {
-				prefix = color.GreenString("* ")
-			}
+	color.Cyan("Creating branch '%s'...", branchName)
+	
+	ctx := context.Background()
+	if err := manager.CreateBranch(ctx, branchName); err != nil {
+		return fmt.Errorf("failed to create branch: %w", err)
+	}
 
-			status := ""
-			if b.IsDefault {
-				status = color.CyanString(" (default)")
-			} else if b.Name == current {
-				status = color.GreenString(" (active)")
-			}
-
-			age := time.Since(b.CreatedAt)
-			ageStr := formatDuration(age)
-
-			fmt.Printf("%s%-15s %s - Created %s ago\n", prefix, b.Name, status, ageStr)
-		}
-		fmt.Println()
-
-		return nil
-	},
+	color.Green("✓ Branch '%s' created successfully", branchName)
+	return nil
 }
 
-var branchStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show current branch",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
-		}
+func handleDeleteBranch(manager *branch.Manager, branchName string, cmd *cobra.Command) error {
+	force, _ := cmd.Flags().GetBool("force")
+	
+	current, err := manager.GetCurrentBranch()
+	if err != nil {
+		return err
+	}
 
-		manager, err := branch.NewManager(cfg)
-		if err != nil {
-			return err
-		}
-		defer manager.Close()
+	if current == branchName {
+		return fmt.Errorf("cannot delete the current branch '%s'", branchName)
+	}
 
-		current, err := manager.GetCurrentBranch()
-		if err != nil {
-			return err
+	if !force {
+		color.Yellow("⚠️  This will permanently delete branch '%s'.", branchName)
+		fmt.Print("Continue? (y/N): ")
+		var response string
+		fmt.Scanln(&response)
+		if response != "y" && response != "Y" {
+			color.Red("✗ Cancelled")
+			return nil
 		}
+	}
 
-		color.Cyan("Current branch: %s", color.GreenString(current))
+	ctx := context.Background()
+	if err := manager.DeleteBranch(ctx, branchName); err != nil {
+		return fmt.Errorf("failed to delete branch: %w", err)
+	}
+
+	color.Green("✓ Branch '%s' deleted successfully", branchName)
+	return nil
+}
+
+func handleRenameBranch(manager *branch.Manager, oldName, newName string) error {
+	if err := manager.RenameBranch(oldName, newName); err != nil {
+		return fmt.Errorf("failed to rename branch: %w", err)
+	}
+
+	color.Green("✓ Branch '%s' renamed to '%s'", oldName, newName)
+	return nil
+}
+
+func handleListBranches(manager *branch.Manager) error {
+	branches, current, err := manager.ListBranches()
+	if err != nil {
+		return err
+	}
+
+	if len(branches) == 0 {
+		color.Yellow("No branches found")
 		return nil
-	},
+	}
+
+	fmt.Println()
+	for _, b := range branches {
+		prefix := "  "
+		if b.Name == current {
+			prefix = color.GreenString("* ")
+		}
+
+		status := ""
+		if b.IsDefault {
+			status = color.CyanString(" (default)")
+		} else if b.Name == current {
+			status = color.GreenString(" (active)")
+		}
+
+		age := time.Since(b.CreatedAt)
+		ageStr := formatDuration(age)
+
+		fmt.Printf("%s%-15s %s - Created %s ago\n", prefix, b.Name, status, ageStr)
+	}
+	fmt.Println()
+
+	return nil
 }
 
 var branchDiffCmd = &cobra.Command{
@@ -231,12 +260,16 @@ func formatDuration(d time.Duration) string {
 
 func init() {
 	rootCmd.AddCommand(branchCmd)
+	rootCmd.AddCommand(checkoutCmd)
 	
-	branchCmd.AddCommand(branchCreateCmd)
-	branchCmd.AddCommand(branchSwitchCmd)
-	branchCmd.AddCommand(branchListCmd)
-	branchCmd.AddCommand(branchStatusCmd)
 	branchCmd.AddCommand(branchDiffCmd)
 
-	branchCreateCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt")
+	// Branch command flags
+	branchCmd.Flags().StringP("delete", "d", "", "Delete a branch")
+	branchCmd.Flags().StringP("move", "m", "", "Rename a branch")
+	branchCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt")
+
+	// Checkout command flags
+	checkoutCmd.Flags().BoolP("b", "b", false, "Create a new branch and switch to it")
+	checkoutCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt")
 }
