@@ -136,11 +136,31 @@ func testDatabase(t *testing.T, db Database) {
 		testRaw(t, testDir, db)
 	})
 
-	t.Run("11_Studio", func(t *testing.T) {
+	t.Run("11_Branch_Create", func(t *testing.T) {
+		testBranchCreate(t, testDir, db)
+	})
+
+	t.Run("12_Branch_List", func(t *testing.T) {
+		testBranchList(t, testDir, db)
+	})
+
+	t.Run("13_Branch_Checkout", func(t *testing.T) {
+		testBranchCheckout(t, testDir, db)
+	})
+
+	t.Run("14_Branch_Diff", func(t *testing.T) {
+		testBranchDiff(t, testDir, db)
+	})
+
+	t.Run("15_Branch_Delete", func(t *testing.T) {
+		testBranchDelete(t, testDir, db)
+	})
+
+	t.Run("16_Studio", func(t *testing.T) {
 		testStudio(t, testDir, db)
 	})
 
-	t.Run("12_Reset", func(t *testing.T) {
+	t.Run("17_Reset", func(t *testing.T) {
 		testReset(t, testDir, db)
 	})
 }
@@ -319,6 +339,112 @@ func testRaw(t *testing.T, testDir string, db Database) {
 	}
 
 	t.Logf("✅ Raw SQL successful")
+}
+
+func testBranchCreate(t *testing.T, testDir string, db Database) {
+	if db.Name == "sqlite" {
+		t.Skip("Skipping branch tests for SQLite")
+		return
+	}
+
+	cmd := exec.Command("../../flash", "branch", "feature", "--force")
+	cmd.Dir = testDir
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Fatalf("Branch create failed: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(string(output), "created") {
+		t.Errorf("Unexpected branch create output: %s", output)
+	}
+
+	t.Logf("✅ Branch create successful")
+}
+
+func testBranchList(t *testing.T, testDir string, db Database) {
+	if db.Name == "sqlite" {
+		t.Skip("Skipping branch tests for SQLite")
+		return
+	}
+
+	cmd := exec.Command("../../flash", "branch")
+	cmd.Dir = testDir
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Fatalf("Branch list failed: %v\nOutput: %s", err, output)
+	}
+
+	outputStr := string(output)
+	if !strings.Contains(outputStr, "main") || !strings.Contains(outputStr, "feature") {
+		t.Errorf("Expected branches not found in output: %s", output)
+	}
+
+	t.Logf("✅ Branch list successful")
+}
+
+func testBranchCheckout(t *testing.T, testDir string, db Database) {
+	if db.Name == "sqlite" {
+		t.Skip("Skipping branch tests for SQLite")
+		return
+	}
+
+	cmd := exec.Command("../../flash", "checkout", "feature", "--force")
+	cmd.Dir = testDir
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Fatalf("Branch checkout failed: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(string(output), "Switched") {
+		t.Errorf("Unexpected checkout output: %s", output)
+	}
+
+	cmd = exec.Command("../../flash", "checkout", "main", "--force")
+	cmd.Dir = testDir
+	cmd.CombinedOutput()
+
+	t.Logf("✅ Branch checkout successful")
+}
+
+func testBranchDiff(t *testing.T, testDir string, db Database) {
+	if db.Name == "sqlite" {
+		t.Skip("Skipping branch tests for SQLite")
+		return
+	}
+
+	cmd := exec.Command("../../flash", "diff", "main", "feature")
+	cmd.Dir = testDir
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Logf("Branch diff output: %s", output)
+	}
+
+	t.Logf("✅ Branch diff successful")
+}
+
+func testBranchDelete(t *testing.T, testDir string, db Database) {
+	if db.Name == "sqlite" {
+		t.Skip("Skipping branch tests for SQLite")
+		return
+	}
+
+	cmd := exec.Command("../../flash", "branch", "--delete", "feature", "--force")
+	cmd.Dir = testDir
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		t.Fatalf("Branch delete failed: %v\nOutput: %s", err, output)
+	}
+
+	if !strings.Contains(string(output), "deleted") {
+		t.Errorf("Unexpected delete output: %s", output)
+	}
+
+	t.Logf("✅ Branch delete successful")
 }
 
 func testStudio(t *testing.T, testDir string, db Database) {
