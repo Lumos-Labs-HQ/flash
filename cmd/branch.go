@@ -27,13 +27,11 @@ var branchCmd = &cobra.Command{
 		}
 		defer manager.Close()
 
-		// Handle delete flag
 		deleteBranch, _ := cmd.Flags().GetString("delete")
 		if deleteBranch != "" {
 			return handleDeleteBranch(manager, deleteBranch, cmd)
 		}
 
-		// Handle rename flag
 		renameTo, _ := cmd.Flags().GetString("move")
 		if renameTo != "" {
 			if len(args) == 0 {
@@ -42,12 +40,10 @@ var branchCmd = &cobra.Command{
 			return handleRenameBranch(manager, renameTo, args[0])
 		}
 
-		// Create branch if name provided
 		if len(args) > 0 {
 			return handleCreateBranch(manager, args[0], cmd)
 		}
 
-		// List branches (default)
 		return handleListBranches(manager)
 	},
 }
@@ -74,13 +70,11 @@ var checkoutCmd = &cobra.Command{
 		createNew, _ := cmd.Flags().GetBool("b")
 		
 		if createNew {
-			// Create and switch
 			if err := handleCreateBranch(manager, branchName, cmd); err != nil {
 				return err
 			}
 		}
 
-		// Switch to branch
 		ctx := context.Background()
 		if err := manager.SwitchBranch(ctx, branchName); err != nil {
 			return fmt.Errorf("failed to switch branch: %w", err)

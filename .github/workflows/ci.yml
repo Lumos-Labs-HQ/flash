@@ -42,25 +42,11 @@ jobs:
         done
 
     - name: Build project
-      run: |
-        go build -o flash .
-        chmod +x flash
-        ls -la flash
-
-    - name: Verify build
-      run: |
-        ./flash --version
-        echo "flash binary built successfully"
-
-    - name: Prepare test script
-      run: |
-        chmod +x test/github-workflow-test.sh
-        chmod +x test/db-helper.sh
-        ls -la test/
+      run: go build -o flash .
 
     - name: Run integration tests
       env:
         DATABASE_URL: postgres://testuser:testpass@localhost:5432/FlashORM_test?sslmode=disable
       run: |
-        cd ${{ github.workspace }}
-        ./test/github-workflow-test.sh
+        cd test/integration
+        go test -v -timeout 30m

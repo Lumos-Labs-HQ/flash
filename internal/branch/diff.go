@@ -36,12 +36,12 @@ func (m *Manager) GetSchemaDiff(ctx context.Context, branch1, branch2 string) (*
 		return nil, fmt.Errorf("branch '%s' not found", branch2)
 	}
 
-	schema1, err := m.getSchemaForBranch(ctx, b1.Schema)
+	schema1, err := m.getSchemaForBranch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema for %s: %w", branch1, err)
 	}
 
-	schema2, err := m.getSchemaForBranch(ctx, b2.Schema)
+	schema2, err := m.getSchemaForBranch(ctx,)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema for %s: %w", branch2, err)
 	}
@@ -49,9 +49,7 @@ func (m *Manager) GetSchemaDiff(ctx context.Context, branch1, branch2 string) (*
 	return m.compareSchemas(schema1, schema2), nil
 }
 
-func (m *Manager) getSchemaForBranch(ctx context.Context, schemaName string) ([]types.SchemaTable, error) {
-	// Temporarily switch context to the schema
-	// This is a simplified version - production would need proper schema context handling
+func (m *Manager) getSchemaForBranch(ctx context.Context) ([]types.SchemaTable, error) {
 	return m.adapter.GetCurrentSchema(ctx)
 }
 
@@ -68,21 +66,18 @@ func (m *Manager) compareSchemas(schema1, schema2 []types.SchemaTable) *SchemaDi
 		table2Map[t.Name] = t
 	}
 
-	// Find added tables (in schema2 but not in schema1)
 	for name := range table2Map {
 		if _, exists := table1Map[name]; !exists {
 			diff.TablesAdded = append(diff.TablesAdded, name)
 		}
 	}
 
-	// Find removed tables (in schema1 but not in schema2)
 	for name := range table1Map {
 		if _, exists := table2Map[name]; !exists {
 			diff.TablesRemoved = append(diff.TablesRemoved, name)
 		}
 	}
 
-	// Find changed tables
 	for name, t1 := range table1Map {
 		if t2, exists := table2Map[name]; exists {
 			if tableDiff := m.compareTableColumns(t1, t2); tableDiff != nil {
@@ -108,7 +103,6 @@ func (m *Manager) compareTableColumns(table1, table2 types.SchemaTable) *TableDi
 	diff := &TableDiff{Name: table1.Name}
 	hasChanges := false
 
-	// Find added columns
 	for name := range col2Map {
 		if _, exists := col1Map[name]; !exists {
 			diff.ColumnsAdded = append(diff.ColumnsAdded, name)
@@ -116,7 +110,6 @@ func (m *Manager) compareTableColumns(table1, table2 types.SchemaTable) *TableDi
 		}
 	}
 
-	// Find removed columns
 	for name := range col1Map {
 		if _, exists := col2Map[name]; !exists {
 			diff.ColumnsRemoved = append(diff.ColumnsRemoved, name)
@@ -124,7 +117,6 @@ func (m *Manager) compareTableColumns(table1, table2 types.SchemaTable) *TableDi
 		}
 	}
 
-	// Find changed columns (type or constraints changed)
 	for name, c1 := range col1Map {
 		if c2, exists := col2Map[name]; exists {
 			if c1.Type != c2.Type || c1.Nullable != c2.Nullable {

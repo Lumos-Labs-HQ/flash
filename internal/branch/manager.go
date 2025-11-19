@@ -106,12 +106,10 @@ func (m *Manager) DeleteBranch(ctx context.Context, branchName string) error {
 		return fmt.Errorf("cannot delete current branch '%s'", branchName)
 	}
 
-	// Drop the schema
 	if err := m.adapter.DropBranchSchema(ctx, branch.Schema); err != nil {
 		return fmt.Errorf("failed to drop branch schema: %w", err)
 	}
 
-	// Remove from metadata
 	if err := store.RemoveBranch(branchName); err != nil {
 		return err
 	}
@@ -134,10 +132,8 @@ func (m *Manager) RenameBranch(oldName, newName string) error {
 		return fmt.Errorf("branch '%s' already exists", newName)
 	}
 
-	// Update branch name
 	branch.Name = newName
 
-	// Update current if needed
 	if store.Current == oldName {
 		store.Current = newName
 	}
@@ -182,7 +178,6 @@ func (m *Manager) generateSchemaName(branchName string) string {
 	case "mysql":
 		return fmt.Sprintf("flash_branch_%s", branchName)
 	case "sqlite", "sqlite3":
-		// For SQLite, return just the branch name - the adapter will handle file path
 		return branchName
 	default:
 		return fmt.Sprintf("flash_branch_%s", branchName)
