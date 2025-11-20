@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -61,7 +64,7 @@ The command will:
 }
 
 func init() {
-	rootCmd.AddCommand(pullCmd)
+	// Command is registered by plugin executors, not the base CLI
 	pullCmd.Flags().BoolP("backup", "b", false, "Create backup of existing schema file before overwriting")
 	pullCmd.Flags().StringP("output", "o", "", "Custom output file path (overrides config schema_path)")
 }

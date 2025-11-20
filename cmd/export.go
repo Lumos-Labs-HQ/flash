@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -80,7 +83,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(exportCmd)
+	// Command is registered by plugin executors, not the base CLI
 	exportCmd.Flags().BoolP("json", "j", false, "Export as JSON (default)")
 	exportCmd.Flags().BoolP("csv", "c", false, "Export as CSV")
 	exportCmd.Flags().BoolP("sqlite", "s", false, "Export as SQLite")

@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -53,5 +56,5 @@ Use --force to skip all confirmation prompts.`,
 }
 
 func init() {
-	rootCmd.AddCommand(resetCmd)
+	// Command is registered by plugin executors, not the base CLI
 }

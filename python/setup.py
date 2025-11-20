@@ -4,7 +4,7 @@ import subprocess
 import sys
 import os
 
-VERSION = '2.0.8'
+VERSION = '2.1.11'
 
 class PostInstallCommand(install):
     def run(self):

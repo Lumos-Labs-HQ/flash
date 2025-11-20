@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -45,7 +48,7 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(initCmd)
+	// Command is registered by plugin executors, not the base CLI
 
 	initCmd.Flags().BoolVar(&sqliteFlag, "sqlite", false, "Initialize project for SQLite database")
 	initCmd.Flags().BoolVar(&postgresqlFlag, "postgresql", false, "Initialize project for PostgreSQL database")
@@ -56,11 +59,11 @@ func initializeProject(dbType template.DatabaseType) error {
 	// Detect project type
 	isNodeProject := false
 	isPythonProject := false
-	
+
 	if _, err := os.Stat("package.json"); err == nil {
 		isNodeProject = true
 	}
-	
+
 	if _, err := os.Stat("requirements.txt"); err == nil {
 		isPythonProject = true
 	} else if _, err := os.Stat("pyproject.toml"); err == nil {
@@ -121,14 +124,13 @@ func initializeProject(dbType template.DatabaseType) error {
 		fmt.Println("   JavaScript code generation is enabled")
 		fmt.Println("   Run 'flash gen' to generate type-safe JS code")
 	}
-	
+
 	if isPythonProject {
 		fmt.Println()
 		fmt.Println("🐍 Python project detected!")
 		fmt.Println("   Python code generation is enabled")
 		fmt.Println("   Run 'Flash gen' to generate type-safe Python code")
 	}
-	
 
 	if os.Getenv("DATABASE_URL") != "" {
 		fmt.Println()

@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package main
 
 import (
@@ -8,9 +11,8 @@ import (
 )
 
 func main() {
-	cmd.RegisterBaseCommands()
-
-	if err := cmd.Execute(); err != nil {
+	// This is the studio plugin binary
+	if err := cmd.ExecuteStudioPlugin(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

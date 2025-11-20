@@ -34,6 +34,97 @@ build-all:
 
 	@echo "Cross-platform build complete in $(BUILD_DIR)/"
 
+# Build core CLI only (lightweight version)
+.PHONY: build-core
+build-core:
+	@echo "Building core CLI for multiple platforms..."
+	@mkdir -p $(BUILD_DIR)
+
+	# Linux AMD64
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-core-linux-amd64 .
+
+	# Linux ARM64
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-core-linux-arm64 .
+
+	# Windows AMD64
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-core-windows-amd64.exe .
+
+	# macOS AMD64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-core-darwin-amd64 .
+
+	# macOS ARM64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash-core-darwin-arm64 .
+
+	@echo "Core CLI build complete in $(BUILD_DIR)/"
+
+# Build all plugins
+.PHONY: build-plugins
+build-plugins: build-plugin-core build-plugin-studio build-plugin-all
+	@echo "All plugins built successfully!"
+
+# Build 'core' plugin (ORM features without studio)
+.PHONY: build-plugin-core
+build-plugin-core:
+	@echo "Building 'core' plugin..."
+	@mkdir -p $(BUILD_DIR)
+	
+	# Linux AMD64
+	cd plugins/core && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-core-linux-amd64 .
+	
+	# Linux ARM64
+	cd plugins/core && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-core-linux-arm64 .
+	
+	# Windows AMD64
+	cd plugins/core && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-core-windows-amd64.exe .
+	
+	# macOS AMD64
+	cd plugins/core && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-core-darwin-amd64 .
+	
+	# macOS ARM64
+	cd plugins/core && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-core-darwin-arm64 .
+
+# Build 'all' plugin (complete package: core + studio)
+.PHONY: build-plugin-all
+build-plugin-all:
+	@echo "Building 'all' plugin..."
+	@mkdir -p $(BUILD_DIR)
+	
+	# Linux AMD64
+	cd plugins/all && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-linux-amd64 .
+	
+	# Linux ARM64
+	cd plugins/all && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-linux-arm64 .
+	
+	# Windows AMD64
+	cd plugins/all && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-windows-amd64.exe .
+	
+	# macOS AMD64
+	cd plugins/all && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-darwin-amd64 .
+	
+	# macOS ARM64
+	cd plugins/all && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-darwin-arm64 .
+
+# Build studio plugin
+.PHONY: build-plugin-studio
+build-plugin-studio:
+	@echo "Building studio plugin..."
+	@mkdir -p $(BUILD_DIR)
+	
+	# Linux AMD64
+	cd plugins/studio && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-studio-linux-amd64 .
+	
+	# Linux ARM64
+	cd plugins/studio && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-studio-linux-arm64 .
+	
+	# Windows AMD64
+	cd plugins/studio && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-studio-windows-amd64.exe .
+	
+	# macOS AMD64
+	cd plugins/studio && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-studio-darwin-amd64 .
+	
+	# macOS ARM64
+	cd plugins/studio && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags=plugins -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-studio-darwin-arm64 .
+
 # Compress binaries with UPX (optional - requires UPX installed)
 .PHONY: compress
 compress: build-all
