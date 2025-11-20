@@ -28,7 +28,7 @@ db/backup/
 db/migrations/.snapshots/
 
 # IDE files
-.vscode/
+# .vscode/
 .idea/
 *.swp
 *.swo

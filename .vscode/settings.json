@@ -1,0 +1,7 @@
+{
+    "gopls": {
+        "build.directoryFilters": [
+            "-plugins"
+        ]
+    }
+}

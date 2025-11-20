@@ -1,0 +1,104 @@
+name: Build Binaries (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      is_beta:
+        description: 'Whether this is a beta release'
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      version:
+        description: "Version extracted from tag"
+        value: ${{ jobs.build.outputs.version }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.VERSION }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.2'
+
+    - name: Get tag name and version
+      id: tag
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        VERSION=${TAG_NAME#v}
+        echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Build base CLI binaries
+      run: |
+        mkdir -p release
+        
+        # Base CLI - Linux AMD64
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o release/flash-linux-amd64 .
+        
+        # Base CLI - Linux ARM64
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o release/flash-linux-arm64 .
+        
+        # Base CLI - Windows AMD64
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o release/flash-windows-amd64.exe .
+        
+        # Base CLI - Windows ARM64
+        GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o release/flash-windows-arm64.exe .
+        
+        # Base CLI - macOS AMD64
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o release/flash-darwin-amd64 .
+        
+        # Base CLI - macOS ARM64 (Apple Silicon)
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o release/flash-darwin-arm64 .
+
+    - name: Build plugin binaries
+      run: |
+        # Core Plugin
+        cd plugins/core
+        GOOS=linux GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-core-linux-amd64 .
+        GOOS=linux GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-core-linux-arm64 .
+        GOOS=windows GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-core-windows-amd64.exe .
+        GOOS=windows GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-core-windows-arm64.exe .
+        GOOS=darwin GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-core-darwin-amd64 .
+        GOOS=darwin GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-core-darwin-arm64 .
+        cd ../..
+        
+        # Studio Plugin
+        cd plugins/studio
+        GOOS=linux GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-studio-linux-amd64 .
+        GOOS=linux GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-studio-linux-arm64 .
+        GOOS=windows GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-studio-windows-amd64.exe .
+        GOOS=windows GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-studio-windows-arm64.exe .
+        GOOS=darwin GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-studio-darwin-amd64 .
+        GOOS=darwin GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-studio-darwin-arm64 .
+        cd ../..
+        
+        # All Plugin
+        cd plugins/all
+        GOOS=linux GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-all-linux-amd64 .
+        GOOS=linux GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-all-linux-arm64 .
+        GOOS=windows GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-all-windows-amd64.exe .
+        GOOS=windows GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-all-windows-arm64.exe .
+        GOOS=darwin GOARCH=amd64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-all-darwin-amd64 .
+        GOOS=darwin GOARCH=arm64 go build -tags=plugins -ldflags="-s -w" -o ../../release/flash-plugin-all-darwin-arm64 .
+        cd ../..
+
+    - name: Create checksums
+      run: |
+        cd release
+        sha256sum * > checksums.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries
+        path: release/
+        retention-days: 5
