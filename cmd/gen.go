@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -68,5 +71,5 @@ Configuration is read from flash.config.json`,
 }
 
 func init() {
-	rootCmd.AddCommand(genCmd)
+	// Command is registered by plugin executors, not the base CLI
 }

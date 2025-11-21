@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -59,5 +62,5 @@ This command will:
 }
 
 func init() {
-	rootCmd.AddCommand(applyCmd)
+	// Command is registered by plugin executors, not the base CLI
 }

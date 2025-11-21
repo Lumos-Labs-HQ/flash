@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flashorm"
-version = "2.0.8"
+version = "2.1.11"
 description = "A powerful, database-agnostic ORM with multi-database support and type-safe code generation"
 readme = "README.md"
 requires-python = ">=3.7"

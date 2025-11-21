@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -34,7 +37,7 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(rawCmd)
+	// Command is registered by plugin executors, not the base CLI
 	rawCmd.Flags().BoolVarP(&rawQueryFlag, "query", "q", false, "Treat argument as SQL query instead of file")
 	rawCmd.Flags().BoolVar(&rawFileFlag, "file", false, "Treat argument as file path (default if file exists)")
 }

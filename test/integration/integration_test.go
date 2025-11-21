@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -19,72 +17,55 @@ type Database struct {
 	URL  string
 }
 
-var databases = []Database{
-	{Name: "postgresql", URL: "postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable"},
-	{Name: "mysql", URL: "testuser:testpass@tcp(localhost:3306)/testdb"},
-	{Name: "sqlite", URL: "sqlite://./test.db"},
+func getDatabases() []Database {
+	pgURL := getEnv("POSTGRES_URL", "postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable")
+	mysqlURL := getEnv("MYSQL_URL", "testuser:testpass@tcp(localhost:3306)/testdb")
+	sqliteURL := getEnv("SQLITE_URL", "sqlite://./test.db")
+
+	return []Database{
+		{Name: "postgresql", URL: pgURL},
+		{Name: "mysql", URL: mysqlURL},
+		{Name: "sqlite", URL: sqliteURL},
+	}
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func TestMain(m *testing.M) {
-	ctx := context.Background()
+	fmt.Println("🧪 FlashORM Integration Tests")
+	fmt.Println("================================")
 
-	fmt.Println("🐳 Starting Docker containers...")
-	cmd := exec.Command("docker-compose", "up", "-d")
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("❌ Failed to start Docker: %v\n", err)
-		os.Exit(1)
+	if os.Getenv("CI") == "" && os.Getenv("GITHUB_ACTIONS") == "" {
+		fmt.Println("📦 Local mode: expecting databases from docker-compose")
+		fmt.Println("💡 Run 'docker-compose up -d' before testing")
+	} else {
+		fmt.Println("🔄 CI mode: using GitHub Actions service containers")
 	}
 
-	fmt.Println("⏳ Waiting for databases to be healthy...")
-	if !waitForHealthy(ctx, 30*time.Second) {
-		fmt.Println("❌ Databases failed to become healthy")
-		cleanup()
-		os.Exit(1)
-	}
-	fmt.Println("✅ Databases ready")
+	os.MkdirAll("test_projects", 0755)
 
 	code := m.Run()
 
-	fmt.Println("🧹 Cleaning up...")
-	cleanup()
+	fmt.Println("🧹 Cleaning up test artifacts...")
+	os.RemoveAll("test_projects")
 
 	os.Exit(code)
 }
 
-func waitForHealthy(ctx context.Context, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		cmd := exec.Command("docker-compose", "ps", "--format", "json")
-		output, err := cmd.CombinedOutput()
-		if err == nil && strings.Contains(string(output), "healthy") {
-			time.Sleep(2 * time.Second)
-			return true
-		}
-		time.Sleep(1 * time.Second)
-	}
-	return false
-}
-
-func cleanup() {
-	exec.Command("docker-compose", "down", "-v").Run()
-	os.RemoveAll("test_projects")
-}
-
 func TestAllDatabasesParallel(t *testing.T) {
-	var wg sync.WaitGroup
+	databases := getDatabases()
 
 	for _, db := range databases {
-		wg.Add(1)
-		go func(database Database) {
-			defer wg.Done()
-			t.Run(database.Name, func(t *testing.T) {
-				t.Parallel()
-				testDatabase(t, database)
-			})
-		}(db)
+		t.Run(db.Name, func(t *testing.T) {
+			t.Parallel()
+			testDatabase(t, db)
+		})
 	}
-
-	wg.Wait()
 }
 
 func testDatabase(t *testing.T, db Database) {
@@ -247,7 +228,7 @@ func testStatus(t *testing.T, testDir string, db Database) {
 	t.Logf("✅ Status successful")
 }
 
-func testGen(t *testing.T, testDir string, db Database) {
+func testGen(t *testing.T, testDir string, _ Database) {
 	cmd := exec.Command("../../flash", "gen")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
@@ -264,7 +245,7 @@ func testGen(t *testing.T, testDir string, db Database) {
 	}
 }
 
-func testPull(t *testing.T, testDir string, db Database) {
+func testPull(t *testing.T, testDir string, _ Database) {
 	cmd := exec.Command("../../flash", "pull")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
@@ -279,7 +260,7 @@ func testPull(t *testing.T, testDir string, db Database) {
 	}
 }
 
-func testExportJSON(t *testing.T, testDir string, db Database) {
+func testExportJSON(t *testing.T, testDir string, _ Database) {
 	cmd := exec.Command("../../flash", "export", "--json")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
@@ -294,7 +275,7 @@ func testExportJSON(t *testing.T, testDir string, db Database) {
 	}
 }
 
-func testExportCSV(t *testing.T, testDir string, db Database) {
+func testExportCSV(t *testing.T, testDir string, _ Database) {
 	cmd := exec.Command("../../flash", "export", "--csv")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
@@ -474,7 +455,7 @@ func testStudio(t *testing.T, testDir string, db Database) {
 	cmd.Wait()
 }
 
-func testReset(t *testing.T, testDir string, db Database) {
+func testReset(t *testing.T, testDir string, _ Database) {
 	cmd := exec.Command("../../flash", "reset", "--force")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()

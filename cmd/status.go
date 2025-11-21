@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -49,5 +52,5 @@ and which are still pending.`,
 }
 
 func init() {
-	rootCmd.AddCommand(statusCmd)
+	// Command is registered by plugin executors, not the base CLI
 }

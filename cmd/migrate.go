@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -99,7 +102,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(migrateCmd)
+	// Command is registered by plugin executors, not the base CLI
 
 	migrateCmd.Flags().BoolP("empty", "e", false, "Create an empty migration template without schema diff")
 }

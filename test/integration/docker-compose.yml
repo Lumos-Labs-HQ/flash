@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: flash_test_postgres
     environment:
       POSTGRES_USER: testuser
@@ -15,8 +15,6 @@ services:
       interval: 2s
       timeout: 3s
       retries: 10
-    tmpfs:
-      - /var/lib/postgresql/data
 
   mysql:
     image: mysql:8.0
@@ -34,5 +32,3 @@ services:
       timeout: 3s
       retries: 10
     command: --default-authentication-plugin=mysql_native_password
-    tmpfs:
-      - /var/lib/mysql

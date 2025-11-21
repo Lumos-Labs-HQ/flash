@@ -1,3 +1,6 @@
+//go:build plugins
+// +build plugins
+
 package cmd
 
 import (
@@ -68,7 +71,7 @@ var checkoutCmd = &cobra.Command{
 		defer manager.Close()
 
 		createNew, _ := cmd.Flags().GetBool("b")
-		
+
 		if createNew {
 			if err := handleCreateBranch(manager, branchName, cmd); err != nil {
 				return err
@@ -104,7 +107,7 @@ func handleCreateBranch(manager *branch.Manager, branchName string, cmd *cobra.C
 	}
 
 	color.Cyan("Creating branch '%s'...", branchName)
-	
+
 	ctx := context.Background()
 	if err := manager.CreateBranch(ctx, branchName); err != nil {
 		return fmt.Errorf("failed to create branch: %w", err)
@@ -116,7 +119,7 @@ func handleCreateBranch(manager *branch.Manager, branchName string, cmd *cobra.C
 
 func handleDeleteBranch(manager *branch.Manager, branchName string, cmd *cobra.Command) error {
 	force, _ := cmd.Flags().GetBool("force")
-	
+
 	current, err := manager.GetCurrentBranch()
 	if err != nil {
 		return err
@@ -253,9 +256,7 @@ func formatDuration(d time.Duration) string {
 }
 
 func init() {
-	rootCmd.AddCommand(branchCmd)
-	rootCmd.AddCommand(checkoutCmd)
-	
+	// Command is registered by plugin executors, not the base CLI
 	branchCmd.AddCommand(branchDiffCmd)
 
 	// Branch command flags
