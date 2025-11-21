@@ -16,7 +16,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: testpass
           POSTGRES_USER: testuser
-          POSTGRES_DB: FlashORM_test
+          POSTGRES_DB: testdb
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -24,29 +24,40 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+      
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpass
+          MYSQL_DATABASE: testdb
+          MYSQL_USER: testuser
+          MYSQL_PASSWORD: testpass
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost -u testuser -ptestpass"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3306:3306
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.24'
-
-    - name: Wait for PostgreSQL
-      run: |
-        until pg_isready -h localhost -p 5432 -U testuser; do
-          echo "Waiting for PostgreSQL..."
-          sleep 2
-        done
+        go-version: '1.23.x'
 
     - name: Build project
       run: go build -o flash .
 
     - name: Run integration tests
       env:
-        DATABASE_URL: postgres://testuser:testpass@localhost:5432/FlashORM_test?sslmode=disable
+        CI: true
+        POSTGRES_URL: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+        MYSQL_URL: testuser:testpass@tcp(localhost:3306)/testdb
       run: |
         cd test/integration
         go test -v -timeout 30m
+
