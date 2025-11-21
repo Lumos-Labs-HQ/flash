@@ -32,20 +32,19 @@ A powerful, database-agnostic migration CLI tool built in Go with multi-database
 npm install -g flashorm
 ```
 
-### For Bun Users
+The binary will be automatically downloaded on first use. The package:
+- ✅ Downloads only the binary for your platform (Linux, macOS, Windows)
+- ✅ Automatically cleans up binaries for other platforms
+- ✅ Works seamlessly with npm, yarn, pnpm, and bun
+- ✅ No postinstall scripts (no security warnings!)
 
-Bun blocks postinstall scripts by default. After installation, run:
+### Bun Users
+
+No special configuration needed! The binary downloads on first `flash` command execution:
 
 ```bash
-bun pm trust flashorm
-```
-
-Or add to your `package.json`:
-
-```json
-{
-  "trustedDependencies": ["flashorm"]
-}
+bun add -g flashorm
+flash --version
 ```
 
 ## 🏁 Quick Start

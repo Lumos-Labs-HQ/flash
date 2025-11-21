@@ -8,21 +8,45 @@ const platform = process.platform;
 const binaryName = platform === 'win32' ? 'flash.exe' : 'flash';
 const binaryPath = path.join(__dirname, binaryName);
 
+// If binary doesn't exist, try to download it
 if (!fs.existsSync(binaryPath)) {
-  console.error('❌ flash binary not found. Please reinstall: npm install -g flashorm');
-  process.exit(1);
+  console.log('📥 Binary not found. Downloading...');
+  
+  // Import and wait for download
+  const downloadPromise = require('../scripts/download.js');
+  
+  downloadPromise
+    .then(() => {
+      if (!fs.existsSync(binaryPath)) {
+        console.error('❌ Download completed but binary not found. Please try: npm install flashorm --force');
+        process.exit(1);
+      }
+      executeBinary();
+    })
+    .catch((err) => {
+      console.error('❌ Failed to download flash binary');
+      console.error('Error:', err.message);
+      console.error('');
+      console.error('Please try: npm install flashorm --force');
+      process.exit(1);
+    });
+} else {
+  // Binary exists, execute it
+  executeBinary();
 }
 
-const child = spawn(binaryPath, process.argv.slice(2), {
-  stdio: 'inherit',
-  windowsHide: true
-});
+function executeBinary() {
+  const child = spawn(binaryPath, process.argv.slice(2), {
+    stdio: 'inherit',
+    windowsHide: true
+  });
 
-child.on('exit', (code) => {
-  process.exit(code || 0);
-});
+  child.on('exit', (code) => {
+    process.exit(code || 0);
+  });
 
-child.on('error', (err) => {
-  console.error('❌ Failed to start flash:', err);
-  process.exit(1);
-});
+  child.on('error', (err) => {
+    console.error('❌ Failed to start flash:', err);
+    process.exit(1);
+  });
+}

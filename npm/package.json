@@ -6,9 +6,6 @@
   "bin": {
     "flash": "./bin/flash.js"
   },
-  "scripts": {
-    "install": "node scripts/install.js"
-  },
   "keywords": [
     "orm",
     "database",
@@ -47,8 +44,9 @@
   ],
   "files": [
     "bin/",
-    "scripts/",
+    "scripts/download.js",
     "index.js",
     "README.md"
-  ]
+  ],
+  "optionalDependencies": {}
 }
