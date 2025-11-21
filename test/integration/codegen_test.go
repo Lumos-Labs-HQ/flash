@@ -10,7 +10,10 @@ import (
 )
 
 func TestCodeGenerationAllLanguages(t *testing.T) {
+	databases := getDatabases()
+
 	for _, db := range databases {
+		db := db // capture range variable
 		t.Run(db.Name, func(t *testing.T) {
 			t.Parallel()
 			testDir := filepath.Join("test_projects", "codegen_"+db.Name)
