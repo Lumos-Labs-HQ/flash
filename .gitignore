@@ -43,6 +43,8 @@ db/migrations/.snapshots/
 ehthumbs.db
 Thumbs.db
 
+not_tests
+
 # Migration files (uncomment if you don't want to track them)
 # db/migrations/
 
