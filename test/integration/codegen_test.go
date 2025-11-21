@@ -44,7 +44,7 @@ func setupCodegenProject(t *testing.T, testDir string, db Database) {
 		flag = "--postgresql"
 	}
 
-	cmd := exec.Command("../../flash", "init", flag)
+	cmd := exec.Command(flashBinary, "init", flag)
 	cmd.Dir = testDir
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("Init failed: %v", err)
@@ -53,17 +53,17 @@ func setupCodegenProject(t *testing.T, testDir string, db Database) {
 	envPath := filepath.Join(testDir, ".env")
 	os.WriteFile(envPath, []byte(fmt.Sprintf("DATABASE_URL=%s\n", db.URL)), 0644)
 
-	cmd = exec.Command("../../flash", "migrate", "test_schema")
+	cmd = exec.Command(flashBinary, "migrate", "test_schema")
 	cmd.Dir = testDir
 	cmd.Run()
 
-	cmd = exec.Command("../../flash", "apply", "--force")
+	cmd = exec.Command(flashBinary, "apply", "--force")
 	cmd.Dir = testDir
 	cmd.Run()
 }
 
 func testGoGeneration(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command("../../flash", "gen")
+	cmd := exec.Command(flashBinary, "gen")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -90,7 +90,7 @@ func testJSGeneration(t *testing.T, testDir string, db Database) {
 		os.WriteFile(configPath, []byte(newConfig), 0644)
 	}
 
-	cmd := exec.Command("../../flash", "gen")
+	cmd := exec.Command(flashBinary, "gen")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -117,7 +117,7 @@ func testPythonGeneration(t *testing.T, testDir string, db Database) {
 		os.WriteFile(configPath, []byte(newConfig), 0644)
 	}
 
-	cmd := exec.Command("../../flash", "gen")
+	cmd := exec.Command(flashBinary, "gen")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 

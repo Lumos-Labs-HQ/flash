@@ -3,7 +3,7 @@
 ⚠️ **This is a BETA release** - Use for testing purposes only!
 This release may contain experimental features, bugs, or breaking changes.
 Not recommended for production use.
-
+<!-- 
 ### Installation
 
 #### Option 1: NPM (Node.js)
@@ -131,4 +131,4 @@ pip install --upgrade flashorm==2.2.0b3
 
 # Go - install new tag
 go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta4
-```
+``` -->

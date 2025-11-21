@@ -22,15 +22,15 @@ Available plugins:
   • all     - Complete package with all features (core + studio)
 
 Examples:
-  flash add-plug core             # Install core ORM features
+  flash add-plug core             # Install latest stable version
   flash add-plug studio           # Install studio only
   flash add-plug all              # Install everything
+  flash add-plug core@beta        # Install latest beta version
   flash add-plug core@1.0.0       # Install specific version`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pluginSpec := args[0]
 
-		// Parse plugin name and version
 		parts := strings.Split(pluginSpec, "@")
 		pluginName := parts[0]
 		version := "latest"
@@ -38,7 +38,6 @@ Examples:
 			version = parts[1]
 		}
 
-		// Validate plugin name
 		availablePlugins := plugin.GetAllPlugins()
 		valid := false
 		for _, name := range availablePlugins {
@@ -58,18 +57,15 @@ Examples:
 			return fmt.Errorf("invalid plugin name")
 		}
 
-		// Initialize plugin manager
 		manager, err := plugin.NewManager()
 		if err != nil {
 			return fmt.Errorf("failed to initialize plugin manager: %w", err)
 		}
 
-		// Install plugin
 		if err := manager.InstallPlugin(pluginName, version); err != nil {
 			color.Red("❌ Installation failed: %v", err)
 			fmt.Println()
 
-			// Provide helpful suggestions based on the error
 			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
 				color.Yellow("💡 Suggestions:")
 				color.White("   • Check if the plugin is built for your platform (%s/%s)", runtime.GOOS, runtime.GOARCH)

@@ -22,18 +22,15 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pluginName := args[0]
 
-		// Initialize plugin manager
 		manager, err := plugin.NewManager()
 		if err != nil {
 			return fmt.Errorf("failed to initialize plugin manager: %w", err)
 		}
 
-		// Check if plugin is installed
 		if !manager.IsPluginInstalled(pluginName) {
 			color.Yellow("⚠️  Plugin '%s' is not installed", pluginName)
 			fmt.Println()
 
-			// Show installed plugins
 			plugins := manager.ListPlugins()
 			if len(plugins) > 0 {
 				color.White("Installed plugins:")
@@ -47,10 +44,8 @@ Examples:
 			return nil
 		}
 
-		// Get plugin info before removal
 		info, _ := manager.GetPluginInfo(pluginName)
 
-		// Confirm removal unless --force flag is set
 		force, _ := cmd.Flags().GetBool("force")
 		if !force {
 			color.Yellow("⚠️  This will remove plugin '%s' (v%s)", pluginName, info.Version)
@@ -67,7 +62,6 @@ Examples:
 			}
 		}
 
-		// Remove plugin
 		if err := manager.RemovePlugin(pluginName); err != nil {
 			return fmt.Errorf("failed to remove plugin: %w", err)
 		}

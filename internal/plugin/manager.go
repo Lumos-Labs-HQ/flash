@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	DefaultRepo    = "Lumos-Labs-HQ/flash"
-	DefaultVersion = "latest"
-	PluginPrefix   = "flash-plugin-"
+	DefaultRepo  = "Lumos-Labs-HQ/flash"
+	PluginPrefix = "flash-plugin-"
 )
 
 // Manager handles plugin operations
@@ -38,10 +37,9 @@ func NewManager() (*Manager, error) {
 	registryFile := filepath.Join(homeDir, ".flash", "registry.json")
 
 	config := PluginConfig{
-		PluginDir:      pluginDir,
-		RegistryFile:   registryFile,
-		DefaultRepo:    DefaultRepo,
-		DefaultVersion: DefaultVersion,
+		PluginDir:    pluginDir,
+		RegistryFile: registryFile,
+		DefaultRepo:  DefaultRepo,
 	}
 
 	if err := os.MkdirAll(pluginDir, 0755); err != nil {
@@ -79,8 +77,8 @@ func (m *Manager) InstallPlugin(name, version string) error {
 		return fmt.Errorf("unknown plugin '%s', available plugins: %v", name, validPlugins)
 	}
 
-	if version == "" || version == "latest" {
-		version = DefaultVersion
+	if version == "" {
+		version = "latest"
 	}
 
 	if info, exists := m.registry.Plugins[name]; exists {
@@ -98,7 +96,19 @@ func (m *Manager) InstallPlugin(name, version string) error {
 
 	var downloadURL string
 	if version == "latest" {
-		downloadURL = fmt.Sprintf("https://github.com/%s/releases/latest/download/%s", m.config.DefaultRepo, downloadName)
+		latestVersion, err := m.getLatestStableReleaseVersion()
+		if err != nil {
+			return fmt.Errorf("failed to get latest release version: %w", err)
+		}
+		downloadURL = fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
+			m.config.DefaultRepo, latestVersion, downloadName)
+	} else if version == "beta" {
+		latestBeta, err := m.getLatestBetaReleaseVersion()
+		if err != nil {
+			return fmt.Errorf("failed to get latest beta release version: %w", err)
+		}
+		downloadURL = fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
+			m.config.DefaultRepo, latestBeta, downloadName)
 	} else {
 		versionTag := version
 		if !strings.HasPrefix(version, "v") {
@@ -128,17 +138,9 @@ func (m *Manager) InstallPlugin(name, version string) error {
 	}
 
 	if runtime.GOOS != "windows" {
-		file, err := os.Open(pluginPath)
-		if err == nil {
-			magic := make([]byte, 4)
-			file.Read(magic)
-			file.Close()
-			if !(magic[0] == 0x7f && magic[1] == 0x45 && magic[2] == 0x4c && magic[3] == 0x46) && // ELF
-				!(magic[0] == 0xcf && magic[1] == 0xfa && magic[2] == 0xed && magic[3] == 0xfe) && // Mach-O 64-bit
-				!(magic[0] == 0xce && magic[1] == 0xfa && magic[2] == 0xed && magic[3] == 0xfe) { // Mach-O 32-bit
-				os.Remove(pluginPath)
-				return fmt.Errorf("downloaded file is not a valid executable binary")
-			}
+		if err := m.validateBinary(pluginPath); err != nil {
+			os.Remove(pluginPath)
+			return fmt.Errorf("downloaded file is not a valid executable binary: %w", err)
 		}
 	}
 
@@ -264,7 +266,7 @@ func (m *Manager) GetPluginInfo(name string) (PluginInfo, error) {
 
 // FetchAvailablePlugins fetches metadata about available plugins from GitHub
 func (m *Manager) FetchAvailablePlugins() ([]AvailablePlugin, error) {
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", m.config.DefaultRepo)
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases", m.config.DefaultRepo)
 
 	resp, err := http.Get(apiURL)
 	if err != nil {
@@ -276,33 +278,34 @@ func (m *Manager) FetchAvailablePlugins() ([]AvailablePlugin, error) {
 		return nil, fmt.Errorf("GitHub API returned status: %s", resp.Status)
 	}
 
-	var release struct {
-		TagName string `json:"tag_name"`
-		Assets  []struct {
+	var releases []struct {
+		TagName    string `json:"tag_name"`
+		Prerelease bool   `json:"prerelease"`
+		Assets     []struct {
 			Name string `json:"name"`
 			Size int64  `json:"size"`
 		} `json:"assets"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
 		return nil, fmt.Errorf("failed to parse GitHub response: %w", err)
 	}
 
+	if len(releases) == 0 {
+		return nil, fmt.Errorf("no releases found")
+	}
+
+	release := releases[0]
 	version := strings.TrimPrefix(release.TagName, "v")
 
 	platform := runtime.GOOS
 	arch := runtime.GOARCH
-	archMap := map[string]string{
-		"amd64": "amd64",
-		"arm64": "arm64",
-	}
-	mappedArch := archMap[arch]
 
 	availablePlugins := []AvailablePlugin{}
 	pluginNames := GetAllPlugins()
 
 	for _, name := range pluginNames {
-		expectedName := fmt.Sprintf("flash-plugin-%s-%s-%s", name, platform, mappedArch)
+		expectedName := fmt.Sprintf("flash-plugin-%s-%s-%s", name, platform, arch)
 		if platform == "windows" {
 			expectedName += ".exe"
 		}
@@ -416,16 +419,110 @@ func (m *Manager) getDownloadName(pluginName string) string {
 	platform := runtime.GOOS
 	arch := runtime.GOARCH
 
-	archMap := map[string]string{
-		"amd64": "amd64",
-		"arm64": "arm64",
-	}
-	mappedArch := archMap[arch]
-
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("%s%s-%s-%s.exe", PluginPrefix, pluginName, platform, mappedArch)
+		return fmt.Sprintf("%s%s-%s-%s.exe", PluginPrefix, pluginName, platform, arch)
 	}
-	return fmt.Sprintf("%s%s-%s-%s", PluginPrefix, pluginName, platform, mappedArch)
+	return fmt.Sprintf("%s%s-%s-%s", PluginPrefix, pluginName, platform, arch)
+}
+
+// validateBinary validates that the downloaded file is a valid executable binary
+func (m *Manager) validateBinary(pluginPath string) error {
+	file, err := os.Open(pluginPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	magic := make([]byte, 4)
+	if _, err := file.Read(magic); err != nil {
+		return err
+	}
+
+	// Check for ELF (Linux) or Mach-O (macOS) magic numbers
+	isELF := magic[0] == 0x7f && magic[1] == 0x45 && magic[2] == 0x4c && magic[3] == 0x46
+	isMachO64 := magic[0] == 0xcf && magic[1] == 0xfa && magic[2] == 0xed && magic[3] == 0xfe
+	isMachO32 := magic[0] == 0xce && magic[1] == 0xfa && magic[2] == 0xed && magic[3] == 0xfe
+
+	if !isELF && !isMachO64 && !isMachO32 {
+		return fmt.Errorf("invalid binary format")
+	}
+
+	return nil
+}
+
+// getLatestStableReleaseVersion fetches the latest stable (non-prerelease) version from GitHub
+func (m *Manager) getLatestStableReleaseVersion() (string, error) {
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases", m.config.DefaultRepo)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch releases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status: %s", resp.Status)
+	}
+
+	var releases []struct {
+		TagName    string `json:"tag_name"`
+		Prerelease bool   `json:"prerelease"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return "", fmt.Errorf("failed to parse GitHub response: %w", err)
+	}
+
+	if len(releases) == 0 {
+		return "", fmt.Errorf("no releases found")
+	}
+
+	// Find the first stable release (non-prerelease)
+	for _, release := range releases {
+		if !release.Prerelease {
+			return release.TagName, nil
+		}
+	}
+
+	// If no stable releases found, return the latest (even if prerelease)
+	return releases[0].TagName, nil
+}
+
+// getLatestBetaReleaseVersion fetches the latest beta (prerelease) version from GitHub
+func (m *Manager) getLatestBetaReleaseVersion() (string, error) {
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/releases", m.config.DefaultRepo)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch releases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status: %s", resp.Status)
+	}
+
+	var releases []struct {
+		TagName    string `json:"tag_name"`
+		Prerelease bool   `json:"prerelease"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return "", fmt.Errorf("failed to parse GitHub response: %w", err)
+	}
+
+	if len(releases) == 0 {
+		return "", fmt.Errorf("no releases found")
+	}
+
+	// Find the first prerelease
+	for _, release := range releases {
+		if release.Prerelease {
+			return release.TagName, nil
+		}
+	}
+
+	return "", fmt.Errorf("no beta releases found")
 }
 
 // loadRegistry loads the plugin registry from disk

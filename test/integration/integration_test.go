@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var flashBinary string
+
 type Database struct {
 	Name string
 	URL  string
@@ -39,6 +41,14 @@ func getEnv(key, fallback string) string {
 func TestMain(m *testing.M) {
 	fmt.Println("🧪 FlashORM Integration Tests")
 	fmt.Println("================================")
+
+	// Get absolute path to flash binary
+	var err error
+	flashBinary, err = filepath.Abs("../../flash")
+	if err != nil {
+		fmt.Printf("Failed to get flash binary path: %v\n", err)
+		os.Exit(1)
+	}
 
 	if os.Getenv("CI") == "" && os.Getenv("GITHUB_ACTIONS") == "" {
 		fmt.Println("📦 Local mode: expecting databases from docker-compose")
@@ -152,7 +162,7 @@ func testInit(t *testing.T, testDir string, db Database) {
 		flag = "--postgresql"
 	}
 
-	cmd := exec.Command("../../flash", "init", flag)
+	cmd := exec.Command(flashBinary, "init", flag)
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -177,7 +187,7 @@ func testInit(t *testing.T, testDir string, db Database) {
 }
 
 func testMigrate(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command("../../flash", "migrate", "initial_schema")
+	cmd := exec.Command(flashBinary, "migrate", "initial_schema")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -195,7 +205,7 @@ func testMigrate(t *testing.T, testDir string, db Database) {
 }
 
 func testApply(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command("../../flash", "apply", "--force")
+	cmd := exec.Command(flashBinary, "apply", "--force")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -212,7 +222,7 @@ func testApply(t *testing.T, testDir string, db Database) {
 }
 
 func testStatus(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command("../../flash", "status")
+	cmd := exec.Command(flashBinary, "status")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -229,7 +239,7 @@ func testStatus(t *testing.T, testDir string, db Database) {
 }
 
 func testGen(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command("../../flash", "gen")
+	cmd := exec.Command(flashBinary, "gen")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -246,7 +256,7 @@ func testGen(t *testing.T, testDir string, _ Database) {
 }
 
 func testPull(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command("../../flash", "pull")
+	cmd := exec.Command(flashBinary, "pull")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -261,7 +271,7 @@ func testPull(t *testing.T, testDir string, _ Database) {
 }
 
 func testExportJSON(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command("../../flash", "export", "--json")
+	cmd := exec.Command(flashBinary, "export", "--json")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -276,7 +286,7 @@ func testExportJSON(t *testing.T, testDir string, _ Database) {
 }
 
 func testExportCSV(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command("../../flash", "export", "--csv")
+	cmd := exec.Command(flashBinary, "export", "--csv")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -293,7 +303,7 @@ func testExportSQLite(t *testing.T, testDir string, db Database) {
 		return
 	}
 
-	cmd := exec.Command("../../flash", "export", "--sqlite")
+	cmd := exec.Command(flashBinary, "export", "--sqlite")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -307,7 +317,7 @@ func testExportSQLite(t *testing.T, testDir string, db Database) {
 func testRaw(t *testing.T, testDir string, db Database) {
 	query := "SELECT 1"
 
-	cmd := exec.Command("../../flash", "raw", query)
+	cmd := exec.Command(flashBinary, "raw", query)
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -328,7 +338,7 @@ func testBranchCreate(t *testing.T, testDir string, db Database) {
 		return
 	}
 
-	cmd := exec.Command("../../flash", "branch", "feature", "--force")
+	cmd := exec.Command(flashBinary, "branch", "feature", "--force")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -349,7 +359,7 @@ func testBranchList(t *testing.T, testDir string, db Database) {
 		return
 	}
 
-	cmd := exec.Command("../../flash", "branch")
+	cmd := exec.Command(flashBinary, "branch")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -371,7 +381,7 @@ func testBranchCheckout(t *testing.T, testDir string, db Database) {
 		return
 	}
 
-	cmd := exec.Command("../../flash", "checkout", "feature", "--force")
+	cmd := exec.Command(flashBinary, "checkout", "feature", "--force")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -383,7 +393,7 @@ func testBranchCheckout(t *testing.T, testDir string, db Database) {
 		t.Errorf("Unexpected checkout output: %s", output)
 	}
 
-	cmd = exec.Command("../../flash", "checkout", "main", "--force")
+	cmd = exec.Command(flashBinary, "checkout", "main", "--force")
 	cmd.Dir = testDir
 	cmd.CombinedOutput()
 
@@ -396,7 +406,7 @@ func testBranchDiff(t *testing.T, testDir string, db Database) {
 		return
 	}
 
-	cmd := exec.Command("../../flash", "diff", "main", "feature")
+	cmd := exec.Command(flashBinary, "diff", "main", "feature")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -413,7 +423,7 @@ func testBranchDelete(t *testing.T, testDir string, db Database) {
 		return
 	}
 
-	cmd := exec.Command("../../flash", "branch", "--delete", "feature", "--force")
+	cmd := exec.Command(flashBinary, "branch", "--delete", "feature", "--force")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 
@@ -431,7 +441,7 @@ func testBranchDelete(t *testing.T, testDir string, db Database) {
 func testStudio(t *testing.T, testDir string, db Database) {
 	port := 15555 + getPortOffset(db.Name)
 
-	cmd := exec.Command("../../flash", "studio", "--port", fmt.Sprintf("%d", port), "--browser=false")
+	cmd := exec.Command(flashBinary, "studio", "--port", fmt.Sprintf("%d", port), "--browser=false")
 	cmd.Dir = testDir
 
 	if err := cmd.Start(); err != nil {
@@ -456,7 +466,7 @@ func testStudio(t *testing.T, testDir string, db Database) {
 }
 
 func testReset(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command("../../flash", "reset", "--force")
+	cmd := exec.Command(flashBinary, "reset", "--force")
 	cmd.Dir = testDir
 	output, err := cmd.CombinedOutput()
 

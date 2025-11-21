@@ -50,10 +50,9 @@ type PluginRegistry struct {
 
 // PluginConfig represents configuration for the plugin system
 type PluginConfig struct {
-	PluginDir      string `json:"plugin_dir"`
-	RegistryFile   string `json:"registry_file"`
-	DefaultRepo    string `json:"default_repo"`
-	DefaultVersion string `json:"default_version"`
+	PluginDir    string `json:"plugin_dir"`
+	RegistryFile string `json:"registry_file"`
+	DefaultRepo  string `json:"default_repo"`
 }
 
 // DownloadProgress represents download progress information
