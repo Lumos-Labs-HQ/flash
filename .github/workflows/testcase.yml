@@ -1,4 +1,4 @@
-name: CI
+name: FlashORM-Testcase
 
 on:
   push:
@@ -51,6 +51,11 @@ jobs:
 
     - name: Build project
       run: go build -o flash .
+
+    - name: Verify binary
+      run: |
+        ls -la flash
+        ./flash --version || true
 
     - name: Run integration tests
       env:
