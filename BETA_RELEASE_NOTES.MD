@@ -1,4 +1,4 @@
-## 🧪 FlashORM Beta Release v2.2.0-beta
+## 🧪 FlashORM Beta Release v2.2.0-beta4
 
 ⚠️ **This is a BETA release** - Use for testing purposes only!
 This release may contain experimental features, bugs, or breaking changes.
@@ -9,11 +9,9 @@ Not recommended for production use.
 #### Option 1: NPM (Node.js)
 
 ```bash
-# Install the beta version globally
-npm install -g flashorm@beta
 
-# Or install specific beta version
-npm install -g flashorm@2.2.0-beta
+# install specific beta version
+npm install -g flashorm@2.2.0-beta4
 
 # Verify installation
 flash --version
@@ -23,10 +21,10 @@ flash --version
 
 ```bash
 # Install the beta version
-pip install flashorm==2.2.0b0
+pip install flashorm==2.2.0b3
 
 # Or upgrade if you have a previous version
-pip install --upgrade flashorm==2.2.0b0
+pip install --upgrade flashorm==2.2.0b3
 
 # Verify installation
 flash --version
@@ -36,7 +34,7 @@ flash --version
 
 ```bash
 # Install from source with beta tag
-go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta
+go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta4
 
 # Verify installation
 flash --version
@@ -47,7 +45,7 @@ flash --version
 ```bash
 # Download binary directly from this release
 # For Linux/macOS:
-curl -L https://github.com/Lumos-Labs-HQ/flash/releases/download/v2.2.0-beta/flash-linux-amd64 -o flash
+curl -L https://github.com/Lumos-Labs-HQ/flash/releases/download/v2.2.0-beta4/flash-linux-amd64 -o flash
 chmod +x flash
 sudo mv flash /usr/local/bin/
 
@@ -129,8 +127,8 @@ rm /usr/local/bin/flash  # Linux/macOS
 npm install -g flashorm@beta
 
 # Python - specify exact version
-pip install --upgrade flashorm==2.2.0b0
+pip install --upgrade flashorm==2.2.0b3
 
 # Go - install new tag
-go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta
+go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta4
 ```

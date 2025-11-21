@@ -4,7 +4,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const VERSION = '2.2.0-beta2';
+const VERSION = '2.2.0-beta3';
 const REPO = 'Lumos-Labs-HQ/flash';
 
 const platform = process.platform;

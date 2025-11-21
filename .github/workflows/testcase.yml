@@ -57,8 +57,8 @@ jobs:
     - name: Verify binary exists and works
       run: |
         pwd
-        ls -la flash
-        file flash
+        ls -la
+        file ./flash
         ./flash --version
 
     - name: Run integration tests
@@ -67,8 +67,8 @@ jobs:
         POSTGRES_URL: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
         MYSQL_URL: testuser:testpass@tcp(localhost:3306)/testdb
       run: |
-        pwd
-        ls -la ../../flash
         cd test/integration
+        pwd
+        file ../../flash
         go test -v -timeout 30m
 

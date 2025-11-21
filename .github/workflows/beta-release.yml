@@ -73,7 +73,7 @@ jobs:
       - name: Update download.js version
         run: |
           cd npm/scripts
-          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}')/" download.js
+          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}'/" download.js
 
       - name: Publish to npm with beta tag
         working-directory: ./npm

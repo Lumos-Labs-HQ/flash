@@ -51,7 +51,7 @@ jobs:
         if: steps.check_beta.outputs.is_beta == 'false'
         run: |
           cd npm/scripts
-          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}')/" download.js
+          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}'/" download.js
 
       - name: Publish to npm (stable)
         if: steps.check_beta.outputs.is_beta == 'false'
