@@ -47,11 +47,11 @@ jobs:
           cd npm
           npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
 
-      - name: Update install.js version
+      - name: Update download.js version
         if: steps.check_beta.outputs.is_beta == 'false'
         run: |
           cd npm/scripts
-          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}'/" install.js
+          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}')/" download.js
 
       - name: Publish to npm (stable)
         if: steps.check_beta.outputs.is_beta == 'false'
