@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio"
@@ -24,6 +25,7 @@ The studio will start a local web server and open in your default browser.
 Examples:
   flash studio
   flash studio --db "postgres://user:pass@localhost:5432/mydb"
+  flash studio --db "mongodb://localhost:27017/mydb"
   flash studio --port 3000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbURL, _ := cmd.Flags().GetString("db")
@@ -79,6 +81,12 @@ func maskDBURL(url string) string {
 }
 
 func detectProvider(dbURL string) string {
+	// Check for MongoDB first
+	if strings.HasPrefix(dbURL, "mongodb://") || strings.HasPrefix(dbURL, "mongodb+srv://") {
+		return "mongodb"
+	}
+	
+	// Check other databases
 	switch {
 	case len(dbURL) >= 10 && (dbURL[:10] == "postgres://" || dbURL[:10] == "postgresql"):
 		return "postgresql"
@@ -87,9 +95,9 @@ func detectProvider(dbURL string) string {
 	case len(dbURL) >= 9 && dbURL[:9] == "sqlite://":
 		return "sqlite"
 	default:
-		if contains := func(s, substr string) bool {
-			return len(s) >= len(substr) && s[:len(substr)] == substr
-		}; contains(dbURL, "postgres") {
+		if strings.Contains(dbURL, "mongodb") {
+			return "mongodb"
+		} else if strings.Contains(dbURL, "postgres") {
 			return "postgresql"
 		}
 		return "postgresql"

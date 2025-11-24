@@ -26,13 +26,20 @@ func NewService(adapter database.DatabaseAdapter) *Service {
 func (s *Service) ensureCorrectSchema() error {
 	cfg, err := config.Load()
 	if err != nil {
-		return err
+		// No config file, skip (e.g., when using --db flag)
+		return nil
+	}
+	
+	// Skip for MongoDB
+	if cfg.Database.Provider == "mongodb" || cfg.Database.Provider == "mongo" {
+		return nil
 	}
 	
 	branchMgr := branch.NewMetadataManager(cfg.MigrationsPath)
 	store, err := branchMgr.Load()
 	if err != nil {
-		return err
+		// No branch metadata, skip
+		return nil
 	}
 	currentBranch := store.GetBranch(store.Current)
 	if currentBranch == nil {
@@ -281,18 +288,17 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 
 	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
 
-	nodes := make([]map[string]any, 0, len(tables))   // Pre-allocate
-	nodeIndex := make(map[string]string, len(tables)) // Pre-allocate
+	nodes := make([]map[string]any, 0, len(tables))
+	nodeIndex := make(map[string]string, len(tables))
 
 	for i, table := range tables {
 		nodeID := fmt.Sprintf("table-%d", i)
 		nodeIndex[table.Name] = nodeID
 
-		columns := make([]map[string]any, 0, len(table.Columns)) // Pre-allocate
-		columnMap := make(map[string]bool, len(table.Columns))   // Pre-allocate
+		columns := make([]map[string]any, 0, len(table.Columns))
+		columnMap := make(map[string]bool, len(table.Columns))
 
 		for _, col := range table.Columns {
-			// Only add column if not already present
 			if !columnMap[col.Name] {
 				columnMap[col.Name] = true
 				columns = append(columns, map[string]any{
@@ -325,14 +331,13 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 
 	estimatedEdges := len(tables) * 2
 	edges := make([]map[string]any, 0, estimatedEdges)
-	edgeMap := make(map[string]bool, estimatedEdges) // Pre-allocate
+	edgeMap := make(map[string]bool, estimatedEdges)
 
 	for _, table := range tables {
 		sourceID := nodeIndex[table.Name]
 		for _, col := range table.Columns {
 			if col.ForeignKeyTable != "" {
 				if targetID, ok := nodeIndex[col.ForeignKeyTable]; ok {
-					// Create unique edge ID to prevent duplicates
 					edgeID := fmt.Sprintf("%s-%s-%s", sourceID, targetID, col.Name)
 
 					if !edgeMap[edgeID] {
@@ -372,11 +377,46 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	}, nil
 }
 
-// ExecuteSQL executes a raw SQL query
+// ExecuteSQL executes a raw SQL query or MongoDB query
 func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 	s.ensureCorrectSchema()
 	query = strings.TrimSpace(query)
 
+	// Check if it's a MongoDB query
+	if strings.Contains(query, ".find(") || strings.Contains(query, ".count(") || strings.HasPrefix(query, "db.") {
+		// Try to execute as MongoDB query
+		type MongoQueryExecutor interface {
+			ExecuteMongoQuery(ctx context.Context, query string) ([]map[string]interface{}, error)
+		}
+		
+		if mongoAdapter, ok := s.adapter.(MongoQueryExecutor); ok {
+			results, err := mongoAdapter.ExecuteMongoQuery(s.ctx, query)
+			if err != nil {
+				return nil, fmt.Errorf("MongoDB query failed: %w", err)
+			}
+			
+			// Extract columns from first result
+			var columns []ColumnInfo
+			if len(results) > 0 {
+				for key := range results[0] {
+					columns = append(columns, ColumnInfo{
+						Name: key,
+						Type: "mixed",
+					})
+				}
+			}
+			
+			return &TableData{
+				Columns: columns,
+				Rows:    results,
+				Total:   len(results),
+				Page:    1,
+				Limit:   len(results),
+			}, nil
+		}
+	}
+
+	// SQL query handling
 	queryUpper := strings.ToUpper(query)
 	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
 		strings.HasPrefix(queryUpper, "SHOW") ||
@@ -410,7 +450,6 @@ func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 			return nil, fmt.Errorf("query execution failed: %w", err)
 		}
 
-		// Return success message
 		return &TableData{
 			Columns: []ColumnInfo{},
 			Rows:    []map[string]any{},
