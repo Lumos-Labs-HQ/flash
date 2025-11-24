@@ -2,183 +2,103 @@ package mongodb
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-// API Handlers
-
-// handleGetDatabases lists all databases
+// Database Handlers
 func (s *Server) handleGetDatabases(c *fiber.Ctx) error {
 	databases, err := s.service.GetDatabases()
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    databases,
-	})
+	return common.JSON(c, databases)
 }
 
-// handleSelectDatabase switches to a different database
 func (s *Server) handleSelectDatabase(c *fiber.Ctx) error {
 	dbName := c.Params("name")
 	if dbName == "" {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "database name is required",
-		})
+		return common.JSONError(c, 400, "database name is required")
 	}
 
 	if err := s.service.SwitchDatabase(dbName); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Database switched successfully",
-	})
+	return common.JSONMessage(c, "Database switched successfully")
 }
 
-// handleDropDatabase drops a database
 func (s *Server) handleDropDatabase(c *fiber.Ctx) error {
 	dbName := c.Params("name")
 	if dbName == "" {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "database name is required",
-		})
+		return common.JSONError(c, 400, "database name is required")
 	}
 
 	if err := s.service.DropDatabase(dbName); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Database dropped successfully",
-	})
+	return common.JSONMessage(c, "Database dropped successfully")
 }
 
-// handleCreateDatabase creates a new database
 func (s *Server) handleCreateDatabase(c *fiber.Ctx) error {
 	var req struct {
 		Name string `json:"name"`
 	}
-
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "invalid request body",
-		})
+		return common.JSONError(c, 400, "invalid request body")
 	}
-
 	if req.Name == "" {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "database name is required",
-		})
+		return common.JSONError(c, 400, "database name is required")
 	}
 
 	if err := s.service.CreateDatabase(req.Name); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Database created successfully",
-	})
+	return common.JSONMessage(c, "Database created successfully")
 }
 
+// Collection Handlers
 func (s *Server) handleGetCollections(c *fiber.Ctx) error {
-	// Check if database parameter is provided
 	dbName := c.Query("database")
 	if dbName == "" {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "database parameter is required",
-		})
+		return common.JSONError(c, 400, "database parameter is required")
 	}
 
 	collections, err := s.service.GetCollections(dbName)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    collections,
-	})
+	return common.JSON(c, collections)
 }
 
 func (s *Server) handleGetCollectionData(c *fiber.Ctx) error {
-	// Check if database parameter is provided
 	dbName := c.Query("database")
-	fmt.Printf("[DEBUG Handler] Received database param: '%s' (len=%d)\n", dbName, len(dbName))
-	if dbName != "" {
-		// Switch to the requested database
-		fmt.Printf("[DEBUG Handler] Calling SwitchDatabase with: '%s'\n", dbName)
-		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   err.Error(),
-			})
-		}
+	if dbName == "" {
+		return common.JSONError(c, 400, "database parameter is required")
+	}
+
+	if err := s.service.SwitchDatabase(dbName); err != nil {
+		return common.JSONError(c, 500, err.Error())
 	}
 
 	name := c.Params("name")
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "50"))
 
-	if dbName == "" {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "database parameter is required",
-		})
-	}
-
 	result, err := s.service.GetDocuments(dbName, name, page, limit)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    result,
-	})
+	return common.JSON(c, result)
 }
 
 func (s *Server) handleCreateCollection(c *fiber.Ctx) error {
 	dbName := c.Query("database")
-
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
@@ -186,25 +106,14 @@ func (s *Server) handleCreateCollection(c *fiber.Ctx) error {
 		Name    string                 `json:"name"`
 		Options map[string]interface{} `json:"options"`
 	}
-
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
 	if err := s.service.CreateCollection(req.Name, req.Options); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Collection created successfully",
-	})
+	return common.JSONMessage(c, "Collection created successfully")
 }
 
 func (s *Server) handleDropCollection(c *fiber.Ctx) error {
@@ -213,33 +122,21 @@ func (s *Server) handleDropCollection(c *fiber.Ctx) error {
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
 	if err := s.service.DropCollection(name); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Collection dropped successfully",
-	})
+	return common.JSONMessage(c, "Collection dropped successfully")
 }
 
+// Document Handlers
 func (s *Server) handleGetDocuments(c *fiber.Ctx) error {
 	dbName := c.Query("database")
 	if dbName == "" {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "database parameter is required",
-		})
+		return common.JSONError(c, 400, "database parameter is required")
 	}
 
 	name := c.Params("name")
@@ -250,25 +147,15 @@ func (s *Server) handleGetDocuments(c *fiber.Ctx) error {
 	var filter bson.M
 	if filterStr != "" {
 		if err := json.Unmarshal([]byte(filterStr), &filter); err != nil {
-			return c.Status(400).JSON(fiber.Map{
-				"success": false,
-				"error":   "Invalid filter JSON: " + err.Error(),
-			})
+			return common.JSONError(c, 400, "Invalid filter JSON: "+err.Error())
 		}
 	}
 
 	result, err := s.service.GetDocumentsWithFilter(dbName, name, page, limit, filter)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    result,
-	})
+	return common.JSON(c, result)
 }
 
 func (s *Server) handleInsertDocument(c *fiber.Ctx) error {
@@ -277,69 +164,43 @@ func (s *Server) handleInsertDocument(c *fiber.Ctx) error {
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
 	var document map[string]interface{}
 	if err := c.BodyParser(&document); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
 	id, err := s.service.InsertDocument(name, document)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
 
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Document inserted successfully",
-		"id":      id,
-	})
+	return common.JSONFiberMap(c, fiber.Map{"success": true, "message": "Document inserted successfully", "id": id})
 }
+
 func (s *Server) handleUpdateDocument(c *fiber.Ctx) error {
 	name := c.Params("name")
+	id := c.Params("id")
 	dbName := c.Query("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
-	id := c.Params("id")
-
 	var document map[string]interface{}
 	if err := c.BodyParser(&document); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
 	if err := s.service.UpdateDocument(name, id, document); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Document updated successfully",
-	})
+	return common.JSONMessage(c, "Document updated successfully")
 }
 
 func (s *Server) handleDeleteDocument(c *fiber.Ctx) error {
@@ -349,24 +210,14 @@ func (s *Server) handleDeleteDocument(c *fiber.Ctx) error {
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
 	if err := s.service.DeleteDocument(name, id); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Document deleted successfully",
-	})
+	return common.JSONMessage(c, "Document deleted successfully")
 }
 
 func (s *Server) handleBulkDeleteDocuments(c *fiber.Ctx) error {
@@ -375,50 +226,32 @@ func (s *Server) handleBulkDeleteDocuments(c *fiber.Ctx) error {
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
 	var req struct {
 		IDs []string `json:"ids"`
 	}
-
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
 	if err := s.service.BulkDeleteDocuments(name, req.IDs); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Documents deleted successfully",
-	})
+	return common.JSONMessage(c, "Documents deleted successfully")
 }
 
+// Aggregation Handler
 func (s *Server) handleAggregate(c *fiber.Ctx) error {
 	name := c.Params("name")
 
-	// Parse as JSON first to handle dynamic structure
 	var rawPipeline []interface{}
 	if err := c.BodyParser(&rawPipeline); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
-	// Convert to []bson.M
 	pipeline := make([]bson.M, len(rawPipeline))
 	for i, stage := range rawPipeline {
 		if stageMap, ok := stage.(map[string]interface{}); ok {
@@ -428,44 +261,27 @@ func (s *Server) handleAggregate(c *fiber.Ctx) error {
 
 	result, err := s.service.Aggregate(name, pipeline)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    result,
-	})
+	return common.JSON(c, result)
 }
 
+// Index Handlers
 func (s *Server) handleGetIndexes(c *fiber.Ctx) error {
 	name := c.Params("name")
 	dbName := c.Query("database")
 
-	// Switch database if provided
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return c.Status(500).JSON(fiber.Map{
-				"success": false,
-				"error":   "Failed to switch database: " + err.Error(),
-			})
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
 		}
 	}
 
 	indexes, err := s.service.GetIndexes(name)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    indexes,
-	})
+	return common.JSON(c, indexes)
 }
 
 func (s *Server) handleCreateIndex(c *fiber.Ctx) error {
@@ -475,25 +291,14 @@ func (s *Server) handleCreateIndex(c *fiber.Ctx) error {
 		Keys   map[string]interface{} `json:"keys"`
 		Unique bool                   `json:"unique"`
 	}
-
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
 	if err := s.service.CreateIndex(name, req.Keys, req.Unique); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Index created successfully",
-	})
+	return common.JSONMessage(c, "Index created successfully")
 }
 
 func (s *Server) handleDropIndex(c *fiber.Ctx) error {
@@ -501,18 +306,12 @@ func (s *Server) handleDropIndex(c *fiber.Ctx) error {
 	indexName := c.Params("indexName")
 
 	if err := s.service.DropIndex(name, indexName); err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"message": "Index dropped successfully",
-	})
+	return common.JSONMessage(c, "Index dropped successfully")
 }
 
+// Query Handler
 func (s *Server) handleQuery(c *fiber.Ctx) error {
 	name := c.Params("name")
 
@@ -520,21 +319,13 @@ func (s *Server) handleQuery(c *fiber.Ctx) error {
 		Filter string `json:"filter"`
 		Limit  int    `json:"limit"`
 	}
-
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid request",
-		})
+		return common.JSONError(c, 400, "Invalid request")
 	}
 
-	// Parse filter as BSON
 	var filter bson.M
 	if err := json.Unmarshal([]byte(req.Filter), &filter); err != nil {
-		return c.Status(400).JSON(fiber.Map{
-			"success": false,
-			"error":   "Invalid filter format",
-		})
+		return common.JSONError(c, 400, "Invalid filter format")
 	}
 
 	if req.Limit == 0 {
@@ -543,31 +334,18 @@ func (s *Server) handleQuery(c *fiber.Ctx) error {
 
 	result, err := s.service.Query(name, filter, req.Limit)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    result,
-	})
+	return common.JSON(c, result)
 }
 
+// Stats Handlers
 func (s *Server) handleGetStats(c *fiber.Ctx) error {
 	stats, err := s.service.GetStats()
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    stats,
-	})
+	return common.JSON(c, stats)
 }
 
 func (s *Server) handleGetCollectionStats(c *fiber.Ctx) error {
@@ -575,14 +353,7 @@ func (s *Server) handleGetCollectionStats(c *fiber.Ctx) error {
 
 	stats, err := s.service.GetCollectionStats(name)
 	if err != nil {
-		return c.Status(500).JSON(fiber.Map{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return common.JSONError(c, 500, err.Error())
 	}
-
-	return c.JSON(fiber.Map{
-		"success": true,
-		"data":    stats,
-	})
+	return common.JSON(c, stats)
 }

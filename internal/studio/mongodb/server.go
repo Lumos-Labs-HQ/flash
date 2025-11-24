@@ -4,13 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"net"
 	"net/http"
-	"os/exec"
-	"runtime"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
@@ -37,9 +35,7 @@ func NewServer(cfg *config.Config, port int) *Server {
 
 	engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
 
-	app := fiber.New(fiber.Config{
-		Views: engine,
-	})
+	app := fiber.New(fiber.Config{Views: engine})
 
 	server := &Server{
 		app:           app,
@@ -53,7 +49,6 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	// Serve static files
 	staticFS, _ := fs.Sub(StaticFS, "static")
 	s.app.Use("/static", filesystem.New(filesystem.Config{
 		Root: http.FS(staticFS),
@@ -104,56 +99,20 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	port := s.findAvailablePort(s.port)
+	port := common.FindAvailablePort(s.port)
 	if port != s.port {
 		fmt.Printf("⚠️  Port %d is in use, using port %d instead\n", s.port, port)
 		s.port = port
 	}
 
 	url := fmt.Sprintf("http://localhost:%d", s.port)
-
 	fmt.Printf("🚀 FlashORM MongoDB Studio starting on %s\n", url)
 
 	if openBrowser {
-		go s.openBrowser(url)
+		go common.OpenBrowser(url)
 	}
 
 	return s.app.Listen(fmt.Sprintf(":%d", s.port))
-}
-
-func (s *Server) findAvailablePort(startPort int) int {
-	port := startPort
-	maxAttempts := 10
-
-	for i := 0; i < maxAttempts; i++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-		if err == nil {
-			ln.Close()
-			return port
-		}
-		port++
-	}
-
-	return startPort
-}
-
-func (s *Server) openBrowser(url string) error {
-	var cmd string
-	var args []string
-
-	switch runtime.GOOS {
-	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", url}
-	case "darwin":
-		cmd = "open"
-		args = []string{url}
-	default:
-		cmd = "xdg-open"
-		args = []string{url}
-	}
-
-	return exec.Command(cmd, args...).Start()
 }
 
 // UI Handlers
@@ -165,19 +124,13 @@ func (s *Server) handleIndex(c *fiber.Ctx) error {
 }
 
 func (s *Server) handleCollections(c *fiber.Ctx) error {
-	return c.Render("templates/collections", fiber.Map{
-		"Title": "Collections - FlashORM MongoDB Studio",
-	})
+	return c.Render("templates/collections", fiber.Map{"Title": "Collections - FlashORM MongoDB Studio"})
 }
 
 func (s *Server) handleAggregation(c *fiber.Ctx) error {
-	return c.Render("templates/aggregation", fiber.Map{
-		"Title": "Aggregation - FlashORM MongoDB Studio",
-	})
+	return c.Render("templates/aggregation", fiber.Map{"Title": "Aggregation - FlashORM MongoDB Studio"})
 }
 
 func (s *Server) handleIndexes(c *fiber.Ctx) error {
-	return c.Render("templates/indexes", fiber.Map{
-		"Title": "Indexes - FlashORM MongoDB Studio",
-	})
+	return c.Render("templates/indexes", fiber.Map{"Title": "Indexes - FlashORM MongoDB Studio"})
 }
