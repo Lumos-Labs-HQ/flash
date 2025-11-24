@@ -70,7 +70,9 @@ func (s *Server) setupRoutes() {
 
 	// Databases
 	api.Get("/databases", s.handleGetDatabases)
+	api.Post("/databases", s.handleCreateDatabase)
 	api.Post("/databases/:name/select", s.handleSelectDatabase)
+	api.Delete("/databases/:name", s.handleDropDatabase)
 
 	// Collections
 	api.Get("/collections", s.handleGetCollections)
@@ -121,7 +123,7 @@ func (s *Server) Start(openBrowser bool) error {
 
 func (s *Server) findAvailablePort(startPort int) int {
 	port := startPort
-	maxAttempts := 10 
+	maxAttempts := 10
 
 	for i := 0; i < maxAttempts; i++ {
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))

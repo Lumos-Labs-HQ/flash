@@ -639,12 +639,29 @@ func (a *Adapter) SwitchDatabase(dbName string) error {
 	return nil
 }
 
+// DropDatabase drops a database
+func (a *Adapter) DropDatabase(ctx context.Context, dbName string) error {
+	fmt.Printf("[DEBUG DropDatabase] Dropping database: '%s'\n", dbName)
+	return a.client.Database(dbName).Drop(ctx)
+}
+
+// CreateDatabase creates a new database by creating an initial collection
+func (a *Adapter) CreateDatabase(ctx context.Context, dbName string) error {
+	fmt.Printf("[DEBUG CreateDatabase] Creating database: '%s'\n", dbName)
+	db := a.client.Database(dbName)
+	err := db.CreateCollection(ctx, "_init")
+	if err != nil {
+		return fmt.Errorf("failed to create database: %w", err)
+	}
+	return nil
+}
+
 func parseObjectID(id string) (interface{}, error) {
 	// Try to parse as MongoDB ObjectID
 	if len(id) == 24 {
 		oid, err := primitive.ObjectIDFromHex(id)
 		if err != nil {
-			return id, nil // Fallback to string if parsing fails
+			return id, nil 
 		}
 		return oid, nil
 	}

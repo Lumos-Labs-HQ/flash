@@ -1,5 +1,12 @@
-let currentDatabase = '', currentCollection = '', databases = [], collections = [], documents = [], selected = new Set(), page = 1, pageSize = 20, total = 0, viewMode = 'json';
-let dbConnectionString = extractHostnameFromURL(window.DB_CONNECTION_URL || 'mongodb://localhost');
+// Helper functions - must be at top
+function $(sel) { return document.querySelector(sel) }
+function $$(sel) { return document.querySelectorAll(sel) }
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
 function extractHostnameFromURL(url) {
     try {
@@ -10,6 +17,10 @@ function extractHostnameFromURL(url) {
     }
 }
 
+// State variables
+let currentDatabase = '', currentCollection = '', currentFilter = '', databases = [], collections = [], documents = [], selected = new Set(), page = 1, pageSize = 20, total = 0, viewMode = 'json';
+let dbConnectionString = extractHostnameFromURL(window.DB_CONNECTION_URL || 'mongodb://localhost');
+
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
@@ -19,28 +30,71 @@ async function init() {
 
 function setupListeners() {
     const refreshBtn = $('#refresh-docs-btn');
-    if (refreshBtn) refreshBtn.onclick = () => loadDocs();
-    $('#back-btn').onclick = () => { currentDatabase = ''; currentCollection = ''; showDatabasesPanel() };
+    if (refreshBtn) refreshBtn.onclick = () => {
+        // Refresh keeps current filter - don't reset anything
+        loadDocs();
+    };
+    const backBtn = $('#back-btn');
+    if (backBtn) backBtn.onclick = () => { currentDatabase = ''; currentCollection = ''; showDatabasesPanel() };
     const selectAllBtn = $('#select-all-btn');
     if (selectAllBtn) selectAllBtn.onclick = toggleSelectAll;
-    $('#filter-btn').onclick = () => openModal('filter-modal');
-    $('#insert-btn').onclick = () => { $('#doc-id').value = ''; $('#doc-json').value = '{}'; openModal('doc-modal') };
+    const filterBtn = $('#filter-btn');
+    if (filterBtn) filterBtn.onclick = () => { loadFilterSchema(); openModal('filter-modal'); };
+    const insertBtn = $('#insert-btn');
+    if (insertBtn) insertBtn.onclick = () => { $('#doc-id').value = ''; $('#doc-json').value = '{}'; openModal('doc-modal') };
     const deleteBtn = $('#delete-btn');
     if (deleteBtn) deleteBtn.onclick = bulkDelete;
-    $('#save-btn').onclick = saveDoc;
+    const saveBtn = $('#save-btn');
+    if (saveBtn) saveBtn.onclick = saveDoc;
     const prevBtn = $('#prev-page');
     const nextBtn = $('#next-page');
     if (prevBtn) prevBtn.onclick = () => goToPage(page - 1);
     if (nextBtn) nextBtn.onclick = () => goToPage(page + 1);
-    $('#page-size').onchange = (e) => { pageSize = +e.target.value; page = 1; loadDocs() };
-    $('#view-mode').onchange = (e) => { viewMode = e.target.value; renderDocs() };
-    $$('.close-modal').forEach(el => el.onclick = () => closeModals());
-    $$('.modal-back').forEach(el => el.onclick = () => closeModals());
-    $('#filter-form').onsubmit = (e) => { e.preventDefault(); loadDocs($('#filter-query').value.trim()); closeModals() };
+    const pageSizeEl = $('#page-size');
+    if (pageSizeEl) pageSizeEl.onchange = (e) => { pageSize = +e.target.value; page = 1; loadDocs() };
+    const viewModeEl = $('#view-mode');
+    if (viewModeEl) viewModeEl.onchange = (e) => { viewMode = e.target.value; renderDocs() };
+
+    // Text search - search entire collection via MongoDB
+    const textSearch = $('#text-search');
+    if (textSearch) {
+        textSearch.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const query = e.target.value.trim();
+                if (query) {
+                    // Search entire collection using MongoDB regex
+                    const searchFilter = JSON.stringify({
+                        $or: Object.keys(documents.length > 0 ? documents[0] : {}).map(key => ({
+                            [key]: { $regex: query, $options: 'i' }
+                        }))
+                    });
+                    page = 1;
+                    loadDocs(searchFilter);
+                } else {
+                    // Clear search
+                    loadDocs(currentFilter);
+                }
+            }
+        };
+    }
+
+    // Modal close buttons
+    $$('.modal-close').forEach(el => el.onclick = () => closeModals());
+    $$('.modal-backdrop').forEach(el => el.onclick = () => closeModals());
+
+    // Refresh collections button
+    const refreshCollBtn = $('#refresh-collections-btn');
+    if (refreshCollBtn) refreshCollBtn.onclick = () => loadCollections();
+
+    // Forms
+    const filterForm = $('#filter-form');
+    if (filterForm) filterForm.onsubmit = (e) => { e.preventDefault(); applyFilter(); closeModals() };
     const collForm = $('#collection-form');
     if (collForm) collForm.onsubmit = (e) => { e.preventDefault(); createCollection($('#collection-name').value.trim()) };
     const addCollBtn = $('#add-collection-btn');
     if (addCollBtn) addCollBtn.onclick = () => openModal('collection-modal');
+    const dbForm = $('#database-form');
+    if (dbForm) dbForm.onsubmit = (e) => { e.preventDefault(); createDatabase($('#database-name').value.trim()) };
 
     // Tab switching
     $$('.tab').forEach(tab => tab.onclick = function () {
@@ -67,9 +121,35 @@ function setupListeners() {
     // Index creation
     $('#create-index-btn').onclick = () => openModal('index-modal');
     $('#index-form').onsubmit = (e) => { e.preventDefault(); createIndex() };
-    
+
     // Aggregation
     initAggregation();
+}
+
+async function loadFilterSchema() {
+    if (!currentCollection) return;
+    try {
+        const params = new URLSearchParams({ database: currentDatabase, page: 1, limit: 50 });
+        const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
+        const data = await res.json();
+        const docs = data.success && data.data ? data.data.documents : [];
+
+        if (docs.length > 0) {
+            const fields = new Set();
+            docs.forEach(doc => Object.keys(doc).forEach(k => fields.add(k)));
+            const fieldList = Array.from(fields).sort();
+
+            const container = $('#filter-schema-fields');
+            if (container) {
+                container.innerHTML = '<small style="color: var(--text-tertiary); display: block; margin-bottom: 6px;">Click field to add to filter:</small>' +
+                    '<div class="field-chips">' +
+                    fieldList.map(f => `<button type="button" class="chip" onclick="addFieldToFilter('${f}')">${f}</button>`).join('') +
+                    '</div>';
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load schema:', err);
+    }
 }
 
 function hideAllViews() {
@@ -94,43 +174,6 @@ async function loadDatabases() {
     }
 }
 
-function renderDatabases() {
-    const list = $('#databases-list');
-    if (!databases.length) {
-        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">No databases</div>';
-        return;
-    }
-    list.innerHTML = databases.map(db => `
-    <div class="database-item" onclick="selectDatabase('${db.name}')">
-      <div class="item-name">
-        <svg width="16" height="16" fill="currentColor"><path d="M8 0C3.6 0 0 1.1 0 2.5v11C0 14.9 3.6 16 8 16s8-1.1 8-2.5v-11C16 1.1 12.4 0 8 0z"/></svg>
-        ${db.name}
-      </div>
-      <span class="item-count">${formatSize(db.sizeOnDisk || 0)}</span>
-    </div>
-  `).join('');
-}
-
-async function selectDatabase(name) {
-    currentDatabase = name;
-    $('#breadcrumb').textContent = `${dbConnectionString} > ${name}`;
-    showCollectionsPanel();
-
-    // Call API to switch database on backend
-    try {
-        const res = await fetch(`/api/databases/${name}/select`, { method: 'POST' });
-        const data = await res.json();
-        if (!data.success) {
-            showError('Failed to switch database: ' + (data.error || 'Unknown error'));
-            return;
-        }
-        console.log('Switched to database:', name);
-        await loadCollections();
-    } catch (err) {
-        showError('Failed to switch database: ' + err.message);
-    }
-}
-
 function showDatabasesPanel() {
     $('#databases-panel').style.display = 'flex';
     $('#collections-panel').style.display = 'none';
@@ -146,6 +189,18 @@ function showCollectionsPanel() {
     $('#databases-panel').style.display = 'none';
     $('#collections-panel').style.display = 'flex';
     $('#db-title').textContent = currentDatabase;
+}
+
+async function selectDatabase(name) {
+    currentDatabase = name;
+    currentCollection = '';
+    await loadCollections();
+    showCollectionsPanel();
+    $('#breadcrumb').textContent = `${dbConnectionString} > ${name}`;
+    $('#empty-title').textContent = 'Select a Collection';
+    $('#empty-text').textContent = 'Choose a collection to view documents';
+    $('#empty-state').style.display = 'flex';
+    hideAllViews();
 }
 
 async function loadCollections() {
@@ -166,27 +221,14 @@ async function loadCollections() {
     }
 }
 
-function renderCollections() {
-    const list = $('#collections-list');
-    if (!collections.length) {
-        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">No collections</div>';
-        return;
-    }
-    list.innerHTML = collections.map(col => `
-    <div class="collection-item ${col.name === currentCollection ? 'active' : ''}" onclick="selectCollection('${escapeHtml(col.name)}')">
-      <div class="item-name">
-        <svg width="14" height="14" fill="currentColor"><path d="M2 3h10v2H2zm0 4h10v2H2zm0 4h10v2H2z"/></svg>
-        ${escapeHtml(col.name)}
-      </div>
-      <span class="item-count">${col.document_count || col.count || 0}</span>
-    </div>
-  `).join('');
-}
-
 async function selectCollection(name) {
     currentCollection = name;
+    currentFilter = ''; // Clear filter when changing collections
     page = 1;
     selected.clear();
+    // Clear text search
+    const textSearch = $('#text-search');
+    if (textSearch) textSearch.value = '';
     $$('.collection-item').forEach(el => el.classList.remove('active'));
     event.currentTarget.classList.add('active');
     $('#breadcrumb').textContent = `${dbConnectionString} > ${currentDatabase} > ${name}`;
@@ -198,13 +240,15 @@ async function selectCollection(name) {
     await loadDocs();
 }
 
-async function loadDocs(filter = '') {
+async function loadDocs(filter) {
     if (!currentCollection) return;
+    // Use provided filter, or fall back to currentFilter if not provided
+    const actualFilter = filter !== undefined ? filter : currentFilter;
     try {
         const params = new URLSearchParams({ page: page, limit: pageSize });
-        if (filter) params.append('filter', filter);
+        if (actualFilter) params.append('filter', actualFilter);
         if (currentDatabase) params.append('database', currentDatabase);
-        console.log('Fetching documents with params:', { page, pageSize, database: currentDatabase, collection: currentCollection });
+        console.log('Fetching documents with params:', { page, pageSize, database: currentDatabase, collection: currentCollection, filter: actualFilter });
         const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
         const data = await res.json();
         console.log('Raw API response:', JSON.stringify(data, null, 2));
@@ -229,6 +273,59 @@ async function loadDocs(filter = '') {
     }
 }
 
+function applyFilter() {
+    const filterQuery = $('#filter-query').value.trim();
+    currentFilter = filterQuery;
+    page = 1;
+    // Clear text search when applying MongoDB filter
+    const textSearch = $('#text-search');
+    if (textSearch) textSearch.value = '';
+    loadDocs(currentFilter);
+}
+
+function filterDisplayedDocuments(query) {
+    if (!query) {
+        // Show all documents
+        $$('.json-card').forEach(card => card.style.display = '');
+        $$('.data-table tbody tr').forEach(row => row.style.display = '');
+        return;
+    }
+    // Filter visible documents by text content
+    $$('.json-card').forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(query) ? '' : 'none';
+    });
+    $$('.data-table tbody tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(query) ? '' : 'none';
+    });
+}
+
+function setFilterExample(example) {
+    $('#filter-query').value = example;
+}
+
+function addFieldToFilter(fieldName) {
+    const textarea = $('#filter-query');
+    const current = textarea.value.trim();
+    let newValue;
+
+    if (!current || current === '{}') {
+        newValue = `{"${fieldName}": "value"}`;
+    } else {
+        try {
+            const obj = JSON.parse(current);
+            obj[fieldName] = "value";
+            newValue = JSON.stringify(obj, null, 2);
+        } catch (e) {
+            newValue = current;
+        }
+    }
+
+    textarea.value = newValue;
+    textarea.focus();
+}
+
 function renderDocs() {
     const empty = $('#empty-state');
     const toolbar = $('#toolbar');
@@ -241,7 +338,15 @@ function renderDocs() {
         tableView.style.display = 'none';
         jsonView.style.display = 'none';
         $('#empty-title').textContent = 'No Documents';
-        $('#empty-text').textContent = 'This collection is empty';
+        $('#empty-text').innerHTML = 'This collection is empty<br><button class="btn btn-primary" style="margin-top: 16px;" id="empty-add-btn"><ion-icon name="add-outline"></ion-icon> Add Document</button>';
+        const emptyAddBtn = $('#empty-add-btn');
+        if (emptyAddBtn) {
+            emptyAddBtn.onclick = () => {
+                $('#doc-id').value = '';
+                $('#doc-json').value = '{}';
+                openModal('doc-modal');
+            };
+        }
         return;
     }
 
@@ -439,9 +544,18 @@ async function saveDoc() {
 
     try {
         const doc = JSON.parse(json);
-        const url = id ? `/api/collections/${currentCollection}/documents/${id}` : `/api/collections/${currentCollection}/documents`;
-        const res = await fetch(url, { method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc) });
-        if (!res.ok) throw new Error(await res.text());
+        const params = new URLSearchParams();
+        if (currentDatabase) params.append('database', currentDatabase);
+        const url = id
+            ? `/api/collections/${currentCollection}/documents/${id}?${params}`
+            : `/api/collections/${currentCollection}/documents?${params}`;
+        const res = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(doc)
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Save failed');
         showSuccess(id ? 'Document updated' : 'Document inserted');
         closeModals();
         loadDocs();
@@ -453,7 +567,8 @@ async function saveDoc() {
 async function deleteDoc(id) {
     if (!confirm('Delete this document?')) return;
     try {
-        const res = await fetch(`/api/collections/${currentCollection}/documents/${id}`, { method: 'DELETE' });
+        const params = new URLSearchParams({ database: currentDatabase });
+        const res = await fetch(`/api/collections/${currentCollection}/documents/${id}?${params}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(await res.text());
         showSuccess('Document deleted');
         loadDocs();
@@ -466,7 +581,12 @@ async function bulkDelete() {
     if (!selected.size || !confirm(`Delete ${selected.size} document(s)?`)) return;
     try {
         const ids = Array.from(selected);
-        const res = await fetch(`/api/collections/${currentCollection}/documents/bulk-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+        const params = new URLSearchParams({ database: currentDatabase });
+        const res = await fetch(`/api/collections/${currentCollection}/documents/bulk-delete?${params}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
         if (!res.ok) throw new Error(await res.text());
         showSuccess(`${selected.size} document(s) deleted`);
         selected.clear();
@@ -479,7 +599,12 @@ async function bulkDelete() {
 async function createCollection(name) {
     if (!name) return;
     try {
-        const res = await fetch('/api/collections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        const params = new URLSearchParams({ database: currentDatabase });
+        const res = await fetch(`/api/collections?${params}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
         if (!res.ok) throw new Error(await res.text());
         showSuccess('Collection created');
         closeModals();
@@ -488,6 +613,32 @@ async function createCollection(name) {
         selectCollection(name);
     } catch (err) {
         showError('Failed to create: ' + err.message);
+    }
+}
+
+function showCreateDatabaseModal() {
+    openModal('database-modal');
+    $('#database-name').value = '';
+    $('#database-name').focus();
+}
+
+async function createDatabase(name) {
+    if (!name) return;
+    try {
+        const res = await fetch('/api/databases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Failed to create database');
+        showSuccess(`Database "${name}" created successfully`);
+        closeModals();
+        $('#database-name').value = '';
+        await loadDatabases();
+        selectDatabase(name);
+    } catch (err) {
+        showError('Failed to create database: ' + err.message);
     }
 }
 
@@ -516,7 +667,7 @@ async function loadSchema() {
         const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
         const data = await res.json();
         const docs = data.success && data.data ? data.data.documents : [];
-        
+
         const schema = inferSchema(docs);
         renderSchema(schema);
     } catch (err) {
@@ -527,7 +678,7 @@ async function loadSchema() {
 function inferSchema(docs) {
     const fields = {};
     const totalDocs = docs.length;
-    
+
     docs.forEach(doc => {
         Object.entries(doc).forEach(([key, value]) => {
             if (!fields[key]) {
@@ -540,7 +691,7 @@ function inferSchema(docs) {
             }
         });
     });
-    
+
     return Object.entries(fields).map(([name, info]) => ({
         name,
         type: Array.from(info.types).join(' | '),
@@ -615,9 +766,9 @@ function renderIndexes(indexes) {
 async function createIndex() {
     const keysStr = $('#index-keys').value.trim();
     const unique = $('#index-unique').checked;
-    
+
     if (!keysStr) return showError('Keys are required');
-    
+
     try {
         const keys = JSON.parse(keysStr);
         const res = await fetch(`/api/collections/${currentCollection}/indexes`, {
@@ -625,9 +776,9 @@ async function createIndex() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keys, unique })
         });
-        
+
         if (!res.ok) throw new Error(await res.text());
-        
+
         showSuccess('Index created');
         closeModals();
         $('#index-keys').value = '';
@@ -640,14 +791,14 @@ async function createIndex() {
 
 async function dropIndex(name) {
     if (!confirm(`Drop index "${name}"?`)) return;
-    
+
     try {
         const res = await fetch(`/api/collections/${currentCollection}/indexes/${name}`, {
             method: 'DELETE'
         });
-        
+
         if (!res.ok) throw new Error(await res.text());
-        
+
         showSuccess('Index dropped');
         loadIndexes();
     } catch (err) {
@@ -663,12 +814,27 @@ function closeModals() {
     $$('.modal').forEach(m => m.classList.remove('active'));
 }
 
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <ion-icon name="${type === 'success' ? 'checkmark-circle' : type === 'error' ? 'alert-circle' : 'information-circle'}"></ion-icon>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 function showSuccess(msg) {
-    alert(msg);
+    showToast(msg, 'success');
 }
 
 function showError(msg) {
-    alert('Error: ' + msg);
+    showToast(msg, 'error');
 }
 
 function formatSize(bytes) {
@@ -677,13 +843,6 @@ function formatSize(bytes) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 
 // Aggregation functionality
 let pipelineStages = [];
@@ -706,21 +865,21 @@ function addPipelineStage() {
 
 function renderPipeline() {
     const container = $('#pipeline-stages');
-    
+
     if (pipelineStages.length === 0) {
         container.innerHTML = '<div class="empty-pipeline"><p>No stages added. Click "Add Stage" to begin.</p></div>';
         return;
     }
-    
+
     container.innerHTML = pipelineStages.map((stage, index) => `
         <div class="pipeline-stage" data-stage-id="${stage.id}">
             <div class="stage-header">
                 <div class="stage-title">
                     <span class="stage-number">${index + 1}</span>
                     <select class="stage-select" onchange="updateStageOperator(${stage.id}, this.value)">
-                        ${getStageOperators().map(op => 
-                            `<option value="${op}" ${stage.operator === op ? 'selected' : ''}>${op}</option>`
-                        ).join('')}
+                        ${getStageOperators().map(op =>
+        `<option value="${op}" ${stage.operator === op ? 'selected' : ''}>${op}</option>`
+    ).join('')}
                     </select>
                 </div>
                 <div class="stage-actions">
@@ -785,7 +944,7 @@ function removeStage(stageId) {
 function moveStage(index, direction) {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= pipelineStages.length) return;
-    
+
     [pipelineStages[index], pipelineStages[newIndex]] = [pipelineStages[newIndex], pipelineStages[index]];
     renderPipeline();
 }
@@ -795,7 +954,7 @@ async function runAggregation() {
         showError('Add at least one stage to run the pipeline');
         return;
     }
-    
+
     try {
         const pipeline = pipelineStages.map(stage => {
             let value;
@@ -807,34 +966,34 @@ async function runAggregation() {
             }
             return { [stage.operator]: value };
         });
-        
+
         console.log('Running pipeline:', pipeline);
-        
+
         const res = await fetch(`/api/collections/${currentCollection}/aggregate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(pipeline)
         });
-        
+
         const data = await res.json();
-        
+
         if (!data.success) {
             showError(data.error || 'Aggregation failed');
             return;
         }
-        
+
         const results = data.data || [];
         $('#results-count').textContent = `${results.length} document${results.length !== 1 ? 's' : ''}`;
-        
+
         const output = $('#aggregation-output');
         if (results.length === 0) {
             output.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);padding:20px;">No results</div>';
         } else {
-            output.innerHTML = results.map(doc => 
+            output.innerHTML = results.map(doc =>
                 `<div class="json-card"><div class="json-card-body">${renderJSONTree(doc, 0)}</div></div>`
             ).join('');
         }
-        
+
         showSuccess('Aggregation completed');
     } catch (err) {
         console.error('Aggregation error:', err);
@@ -849,5 +1008,153 @@ function loadAggregation() {
     $('#results-count').textContent = '';
 }
 
-function $(sel) { return document.querySelector(sel) }
-function $$(sel) { return document.querySelectorAll(sel) }
+// Context menu and database/collection rendering
+
+function renderDatabases() {
+    const list = $('#databases-list');
+    if (!databases.length) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">No databases</div>';
+        return;
+    }
+    list.innerHTML = databases.map(db => {
+        const safeName = escapeHtml(db.name);
+        const dataName = db.name.toLowerCase();
+        const jsonName = JSON.stringify(db.name);
+        return `
+    <div class="database-item" onclick='selectDatabase(${jsonName})' oncontextmenu='showDbContextMenu(event, ${jsonName})' data-name="${dataName}">
+      <div class="item-name">
+        <ion-icon name="server-outline"></ion-icon>
+        ${safeName}
+      </div>
+      <span class="item-count">${formatSize(db.sizeOnDisk || 0)}</span>
+    </div>`;
+    }).join('');
+}
+
+function renderCollections() {
+    const list = $('#collections-list');
+    if (!collections.length) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">No collections</div>';
+        return;
+    }
+    list.innerHTML = collections.map(col => {
+        const safeName = escapeHtml(col.name);
+        const dataName = col.name.toLowerCase();
+        const isActive = col.name === currentCollection;
+        const jsonName = JSON.stringify(col.name);
+        return `
+    <div class="collection-item ${isActive ? 'active' : ''}" onclick='selectCollection(${jsonName})' oncontextmenu='showCollContextMenu(event, ${jsonName})' data-name="${dataName}">
+      <div class="item-name">
+        <ion-icon name="folder-outline"></ion-icon>
+        ${safeName}
+      </div>
+      <span class="item-count">${col.document_count || col.count || 0}</span>
+    </div>`;
+    }).join('');
+}
+
+function filterDatabases(query) {
+    const items = document.querySelectorAll('.database-item');
+    const lowerQuery = query.toLowerCase();
+    items.forEach(item => {
+        const name = item.dataset.name || '';
+        item.style.display = name.includes(lowerQuery) ? '' : 'none';
+    });
+}
+
+function filterCollections(query) {
+    const items = document.querySelectorAll('.collection-item');
+    const lowerQuery = query.toLowerCase();
+    items.forEach(item => {
+        const name = item.dataset.name || '';
+        item.style.display = name.includes(lowerQuery) ? '' : 'none';
+    });
+}
+
+function showDbContextMenu(e, dbName) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
+    const jsonName = JSON.stringify(dbName);
+    menu.innerHTML = `
+        <div class="context-item danger" onclick='event.stopPropagation(); deleteDatabase(${jsonName})'>
+            <ion-icon name="trash-outline"></ion-icon> Delete Database
+        </div>
+    `;
+    document.body.appendChild(menu);
+    setTimeout(() => menu.classList.add('show'), 10);
+    setTimeout(() => document.addEventListener('click', closeContextMenu, { once: true }), 100);
+}
+
+function showCollContextMenu(e, collName) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
+    const jsonName = JSON.stringify(collName);
+    menu.innerHTML = `
+        <div class="context-item danger" onclick='event.stopPropagation(); deleteCollection(${jsonName})'>
+            <ion-icon name="trash-outline"></ion-icon> Delete Collection
+        </div>
+    `;
+    document.body.appendChild(menu);
+    setTimeout(() => menu.classList.add('show'), 10);
+    setTimeout(() => document.addEventListener('click', closeContextMenu, { once: true }), 100);
+}
+
+function closeContextMenu() {
+    $$('.context-menu').forEach(m => m.remove());
+}
+
+async function deleteDatabase(dbName) {
+    closeContextMenu();
+    if (!confirm(`Delete database "${dbName}"? This cannot be undone!`)) return;
+
+    try {
+        const response = await fetch(`/api/databases/${encodeURIComponent(dbName)}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showSuccess(`Database "${dbName}" deleted successfully`);
+            await loadDatabases();
+            // If the deleted database was the current one, clear current selections
+            if (currentDatabase === dbName) {
+                currentDatabase = null;
+                currentCollection = null;
+                $$('#collections-list').innerHTML = '<div class="empty-state">Select a database</div>';
+                $$('#main-content').innerHTML = '<div class="empty-state">Select a database and collection</div>';
+            }
+        } else {
+            showError(data.error || 'Failed to delete database');
+        }
+    } catch (error) {
+        console.error('Delete database error:', error);
+        showError('Failed to delete database: ' + error.message);
+    }
+}
+
+async function deleteCollection(collName) {
+    closeContextMenu();
+    if (!confirm(`Delete collection "${collName}"? This cannot be undone!`)) return;
+    try {
+        const params = new URLSearchParams();
+        if (currentDatabase) params.append('database', currentDatabase);
+        const res = await fetch(`/api/collections/${encodeURIComponent(collName)}?${params}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Delete failed');
+        showSuccess('Collection deleted');
+        await loadCollections();
+    } catch (err) {
+        showError('Failed to delete: ' + err.message);
+    }
+}

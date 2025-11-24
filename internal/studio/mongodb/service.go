@@ -68,6 +68,32 @@ func (s *Service) SwitchDatabase(dbName string) error {
 	return mongoAdapter.SwitchDatabase(dbName)
 }
 
+// DropDatabase drops a database
+func (s *Service) DropDatabase(dbName string) error {
+	mongoAdapter, ok := s.adapter.(interface {
+		DropDatabase(context.Context, string) error
+	})
+
+	if !ok {
+		return fmt.Errorf("adapter does not support DropDatabase")
+	}
+
+	return mongoAdapter.DropDatabase(s.ctx, dbName)
+}
+
+// CreateDatabase creates a new database by creating an initial collection
+func (s *Service) CreateDatabase(dbName string) error {
+	mongoAdapter, ok := s.adapter.(interface {
+		CreateDatabase(context.Context, string) error
+	})
+
+	if !ok {
+		return fmt.Errorf("adapter does not support CreateDatabase")
+	}
+
+	return mongoAdapter.CreateDatabase(s.ctx, dbName)
+}
+
 // GetDatabases lists all databases
 func (s *Service) GetDatabases() ([]DatabaseInfo, error) {
 	mongoAdapter, ok := s.adapter.(interface {
@@ -157,6 +183,10 @@ func (s *Service) GetCollections(database string) ([]CollectionInfo, error) {
 
 // GetDocuments returns documents from a collection with pagination
 func (s *Service) GetDocuments(database, collection string, page, limit int) (*DocumentResult, error) {
+	return s.GetDocumentsWithFilter(database, collection, page, limit, bson.M{})
+}
+
+func (s *Service) GetDocumentsWithFilter(database, collection string, page, limit int, filter bson.M) (*DocumentResult, error) {
 	type MongoDocumentReader interface {
 		FindDocumentsInDB(ctx context.Context, database, collection string, filter bson.M, skip, limit int64) ([]map[string]interface{}, error)
 		CountDocumentsInDB(ctx context.Context, database, collection string, filter bson.M) (int64, error)
@@ -167,14 +197,18 @@ func (s *Service) GetDocuments(database, collection string, page, limit int) (*D
 		return nil, fmt.Errorf("adapter does not support MongoDB operations")
 	}
 
-	fmt.Printf("[DEBUG GetDocuments] Database: %s, Collection: %s, Page: %d, Limit: %d\n", database, collection, page, limit)
+	if filter == nil {
+		filter = bson.M{}
+	}
+
+	fmt.Printf("[DEBUG GetDocuments] Database: %s, Collection: %s, Page: %d, Limit: %d, Filter: %v\n", database, collection, page, limit, filter)
 	skip := int64((page - 1) * limit)
-	documents, err := mongoAdapter.FindDocumentsInDB(s.ctx, database, collection, bson.M{}, skip, int64(limit))
+	documents, err := mongoAdapter.FindDocumentsInDB(s.ctx, database, collection, filter, skip, int64(limit))
 	if err != nil {
 		return nil, err
 	}
 
-	totalCount, err := mongoAdapter.CountDocumentsInDB(s.ctx, database, collection, bson.M{})
+	totalCount, err := mongoAdapter.CountDocumentsInDB(s.ctx, database, collection, filter)
 	if err != nil {
 		return nil, err
 	}
