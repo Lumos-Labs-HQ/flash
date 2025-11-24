@@ -7,6 +7,48 @@ BINARY_WINDOWS=$(BINARY_NAME).exe
 BUILD_DIR=build
 LDFLAGS=-s -w -extldflags "-static"
 
+# ============================================
+# Development & Production Builds
+# ============================================
+
+# Development build - all features included, no plugins needed
+.PHONY: dev
+dev:
+	@echo "🔧 Building DEVELOPMENT version (all features included)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build -tags="dev,plugins" -o $(BUILD_DIR)/flash-dev .
+	@echo "✅ Development build complete: $(BUILD_DIR)/flash-dev"
+	@echo "   Usage: ./$(BUILD_DIR)/flash-dev <command>"
+	@echo "   All commands available without plugins"
+
+# Production build - minimal core only
+.PHONY: prod
+prod:
+	@echo "📦 Building PRODUCTION version (core only)..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o $(BUILD_DIR)/flash .
+	@echo "✅ Production build complete: $(BUILD_DIR)/flash"
+	@echo "   Usage: ./$(BUILD_DIR)/flash add-plugin core"
+	@echo "   Requires plugins for full functionality"
+
+# Install dev version locally
+.PHONY: install-dev
+install-dev: dev
+	@echo "Installing development version to $(GOPATH)/bin..."
+	cp $(BUILD_DIR)/flash-dev $(GOPATH)/bin/flash
+	@echo "✅ Installed: flash (dev mode)"
+
+# Install prod version locally
+.PHONY: install-prod
+install-prod: prod
+	@echo "Installing production version to $(GOPATH)/bin..."
+	cp $(BUILD_DIR)/flash $(GOPATH)/bin/flash
+	@echo "✅ Installed: flash (prod mode)"
+
+# ============================================
+# Cross-Platform Builds
+# ============================================
+
 # Default target now builds for all platforms
 .PHONY: all
 all: clean build-all

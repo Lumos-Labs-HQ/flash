@@ -10,6 +10,7 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio"
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/mongodb"
 	"github.com/spf13/cobra"
 )
 
@@ -59,8 +60,15 @@ Examples:
 			}
 		}
 
-		server := studio.NewServer(cfg, port)
-		return server.Start(browser)
+		if cfg.Database.Provider == "mongodb" || cfg.Database.Provider == "mongo" {
+			fmt.Println("🍃 Starting MongoDB Studio...")
+			mongoServer := mongodb.NewServer(cfg, port)
+			return mongoServer.Start(browser)
+		} else {
+			fmt.Println("🗄️  Starting SQL Studio...")
+			server := studio.NewServer(cfg, port)
+			return server.Start(browser)
+		}
 	},
 }
 
@@ -85,7 +93,7 @@ func detectProvider(dbURL string) string {
 	if strings.HasPrefix(dbURL, "mongodb://") || strings.HasPrefix(dbURL, "mongodb+srv://") {
 		return "mongodb"
 	}
-	
+
 	// Check other databases
 	switch {
 	case len(dbURL) >= 10 && (dbURL[:10] == "postgres://" || dbURL[:10] == "postgresql"):
