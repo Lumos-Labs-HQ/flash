@@ -22,19 +22,12 @@ func NewService(adapter database.DatabaseAdapter) *Service {
 	}
 }
 
-
 func (s *Service) ensureCorrectSchema() error {
 	cfg, err := config.Load()
 	if err != nil {
-		// No config file, skip (e.g., when using --db flag)
 		return nil
 	}
-	
-	// Skip for MongoDB
-	if cfg.Database.Provider == "mongodb" || cfg.Database.Provider == "mongo" {
-		return nil
-	}
-	
+
 	branchMgr := branch.NewMetadataManager(cfg.MigrationsPath)
 	store, err := branchMgr.Load()
 	if err != nil {
@@ -45,12 +38,13 @@ func (s *Service) ensureCorrectSchema() error {
 	if currentBranch == nil {
 		return nil
 	}
-	
-	if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
+
+	switch cfg.Database.Provider {
+	case "postgresql", "postgres":
 		query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
-	} else if cfg.Database.Provider == "mysql" || cfg.Database.Provider == "sqlite" || cfg.Database.Provider == "sqlite3" {
+	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
 		}
@@ -58,7 +52,7 @@ func (s *Service) ensureCorrectSchema() error {
 			return switcher.SwitchDatabase(s.ctx, currentBranch.Schema)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -377,46 +371,11 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	}, nil
 }
 
-// ExecuteSQL executes a raw SQL query or MongoDB query
+// ExecuteSQL executes a raw SQL query
 func (s *Service) ExecuteSQL(query string) (*TableData, error) {
 	s.ensureCorrectSchema()
 	query = strings.TrimSpace(query)
 
-	// Check if it's a MongoDB query
-	if strings.Contains(query, ".find(") || strings.Contains(query, ".count(") || strings.HasPrefix(query, "db.") {
-		// Try to execute as MongoDB query
-		type MongoQueryExecutor interface {
-			ExecuteMongoQuery(ctx context.Context, query string) ([]map[string]interface{}, error)
-		}
-		
-		if mongoAdapter, ok := s.adapter.(MongoQueryExecutor); ok {
-			results, err := mongoAdapter.ExecuteMongoQuery(s.ctx, query)
-			if err != nil {
-				return nil, fmt.Errorf("MongoDB query failed: %w", err)
-			}
-			
-			// Extract columns from first result
-			var columns []ColumnInfo
-			if len(results) > 0 {
-				for key := range results[0] {
-					columns = append(columns, ColumnInfo{
-						Name: key,
-						Type: "mixed",
-					})
-				}
-			}
-			
-			return &TableData{
-				Columns: columns,
-				Rows:    results,
-				Total:   len(results),
-				Page:    1,
-				Limit:   len(results),
-			}, nil
-		}
-	}
-
-	// SQL query handling
 	queryUpper := strings.ToUpper(query)
 	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
 		strings.HasPrefix(queryUpper, "SHOW") ||
@@ -553,12 +512,13 @@ func (s *Service) SwitchBranch(branchName string) error {
 		return err
 	}
 
-	if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
+	switch cfg.Database.Provider {
+	case "postgresql", "postgres":
 		query := fmt.Sprintf("SET search_path TO %s, public", branchSchema)
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to set search_path: %w", err)
 		}
-	} else if cfg.Database.Provider == "mysql" || cfg.Database.Provider == "sqlite" || cfg.Database.Provider == "sqlite3" {
+	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
 		}

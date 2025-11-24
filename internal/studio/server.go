@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"os/exec"
 	"runtime"
 	"strconv"
 
+	"github.com/Lumos-Labs-HQ/flash/internal/branch"
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
-	"github.com/Lumos-Labs-HQ/flash/internal/branch"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/template/html/v2"
@@ -100,6 +101,12 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
+	port := s.findAvailablePort(s.port)
+	if port != s.port {
+		fmt.Printf("⚠️  Port %d is in use, using port %d instead\n", s.port, port)
+		s.port = port
+	}
+
 	url := fmt.Sprintf("http://localhost:%d", s.port)
 
 	fmt.Printf("🚀 FlashORM Studio starting on %s\n", url)
@@ -111,7 +118,23 @@ func (s *Server) Start(openBrowser bool) error {
 	return s.app.Listen(fmt.Sprintf(":%d", s.port))
 }
 
-func (s *Server) openBrowser(url string) {
+func (s *Server) findAvailablePort(startPort int) int {
+	port := startPort
+	maxAttempts := 10 
+
+	for i := 0; i < maxAttempts; i++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err == nil {
+			ln.Close()
+			return port
+		}
+		port++
+	}
+
+	return startPort
+}
+
+func (s *Server) openBrowser(url string) error {
 	var cmd string
 	var args []string
 
@@ -127,7 +150,7 @@ func (s *Server) openBrowser(url string) {
 		args = []string{url}
 	}
 
-	exec.Command(cmd, args...).Start()
+	return exec.Command(cmd, args...).Start()
 }
 
 // Handlers

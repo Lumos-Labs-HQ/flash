@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/png" href="/static/image/logo.png" />
+    <link rel="stylesheet" href="/static/css/mongodb.css" />
+    <script
+      type="module"
+      src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"
+    ></script>
+    <script
+      nomodule
+      src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"
+    ></script>
+    <script>
+      window.DB_CONNECTION_URL = "{{.ConnectionURL}}";
+    </script>
+  </head>
+  <body>
+    <nav class="top-nav">
+      <div class="nav-left">
+        <img src="/static/image/logo.png" alt="Logo" class="nav-logo" />
+        <span class="nav-title">MongoDB Studio</span>
+      </div>
+      <div class="nav-breadcrumb" id="breadcrumb">Select database</div>
+    </nav>
+    <div class="main-container">
+      <div class="sidebar">
+        <div class="databases-panel" id="databases-panel">
+          <div class="panel-header"><h4>DATABASES</h4></div>
+          <div class="databases-list" id="databases-list">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+        <div
+          class="collections-panel"
+          id="collections-panel"
+          style="display: none"
+        >
+          <div class="panel-header">
+            <button class="icon-btn" id="back-btn" title="Back">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <path
+                  d="M7.78 12.53a.75.75 0 01-1.06 0L2.47 8.28a.75.75 0 010-1.06l4.25-4.25a.75.75 0 011.06 1.06L4.81 7h7.44a.75.75 0 010 1.5H4.81l2.97 2.97a.75.75 0 010 1.06z"
+                />
+              </svg>
+            </button>
+            <h4
+              id="db-title"
+              style="
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+              "
+            ></h4>
+            <button class="icon-btn" id="add-collection-btn" title="Create">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <path
+                  d="M8 2a.75.75 0 01.75.75v4.5h4.5a.75.75 0 010 1.5h-4.5v4.5a.75.75 0 01-1.5 0v-4.5h-4.5a.75.75 0 010-1.5h4.5v-4.5A.75.75 0 018 2z"
+                />
+              </svg>
+            </button>
+          </div>
+          <div class="collections-list" id="collections-list">
+            <div class="loading"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="content">
+        <div id="main-view" class="view active">
+          <div class="tabs-bar" id="tabs-bar" style="display: none">
+            <button class="tab active" data-tab="documents">
+              <ion-icon name="document-text"></ion-icon>Documents
+            </button>
+            <button class="tab" data-tab="schema">
+              <ion-icon name="list"></ion-icon>Schema
+            </button>
+            <button class="tab" data-tab="indexes">
+              <ion-icon name="layers"></ion-icon>Indexes
+            </button>
+          </div>
+          <div class="toolbar" id="toolbar" style="display: none">
+            <div class="toolbar-left">
+              <button class="tool-btn" id="select-all-btn" title="Select All">
+                <ion-icon name="checkbox-outline"></ion-icon>
+              </button>
+              <span id="selection-info" class="info-text"></span>
+              <button
+                class="tool-btn danger"
+                id="delete-btn"
+                style="display: none"
+                title="Delete"
+              >
+                <ion-icon name="trash-outline"></ion-icon>
+              </button>
+            </div>
+            <div class="toolbar-right">
+              <button class="tool-btn" id="filter-btn" title="Filter">
+                <ion-icon name="filter-outline"></ion-icon>
+              </button>
+              <select class="mini-select" id="page-size">
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <div class="pager">
+                <button class="tool-btn" id="prev-page" title="Previous">
+                  <ion-icon name="chevron-back-outline"></ion-icon>
+                </button>
+                <span id="page-info" class="info-text">1/1</span>
+                <button class="tool-btn" id="next-page" title="Next">
+                  <ion-icon name="chevron-forward-outline"></ion-icon>
+                </button>
+              </div>
+              <select class="mini-select" id="view-mode">
+                <option value="json">JSON</option>
+                <option value="table">Table</option>
+              </select>
+              <button class="tool-btn" id="refresh-docs-btn" title="Refresh">
+                <ion-icon name="refresh-outline"></ion-icon>
+              </button>
+              <button class="tool-btn primary" id="insert-btn" title="Insert">
+                <ion-icon name="add-outline"></ion-icon>
+              </button>
+            </div>
+          </div>
+          <div id="table-view" class="table-wrapper" style="display: none">
+            <table class="data-table" id="docs-table">
+              <thead>
+                <tr>
+                  <th width="40"><input type="checkbox" /></th>
+                  <th>_id</th>
+                  <th width="100">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div
+            id="json-view"
+            class="json-container"
+            style="display: none"
+          ></div>
+          <div class="empty-state" id="empty-state">
+            <svg
+              width="80"
+              height="80"
+              viewBox="0 0 80 80"
+              fill="currentColor"
+              opacity="0.2"
+            >
+              <path
+                d="M40 0C18 0 0 10 0 24v32c0 14 18 24 40 24s40-10 40-24V24C80 10 62 0 40 0z"
+              />
+            </svg>
+            <h3 id="empty-title">Select a Database</h3>
+            <p id="empty-text">Choose a database to begin</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="doc-modal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 id="modal-title">Document</h3>
+          <button class="modal-close">
+            <svg width="20" height="20" fill="currentColor">
+              <path
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="doc-id" /><textarea
+            class="code-editor"
+            id="doc-json"
+            placeholder="{}"
+          ></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn modal-close">Cancel</button
+          ><button class="btn btn-primary" id="save-btn">Save</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal" id="filter-modal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog modal-sm">
+        <div class="modal-header">
+          <h3>Filter</h3>
+          <button class="modal-close">
+            <svg width="20" height="20" fill="currentColor">
+              <path
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="filter-form">
+          <div class="modal-body">
+            <textarea
+              class="code-editor"
+              id="filter-query"
+              rows="6"
+              placeholder='{"field": "value"}'
+            ></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn modal-close">Cancel</button
+            ><button type="submit" class="btn btn-primary">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="modal" id="collection-modal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog modal-sm">
+        <div class="modal-header">
+          <h3>Create Collection</h3>
+          <button class="modal-close">
+            <svg width="20" height="20" fill="currentColor">
+              <path
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="collection-form">
+          <div class="modal-body">
+            <input
+              type="text"
+              class="form-input"
+              id="collection-name"
+              placeholder="collection_name"
+              required
+            />
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn modal-close">Cancel</button
+            ><button type="submit" class="btn btn-primary">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script src="/static/js/mongodb.js"></script>
+  </body>
+</html>
