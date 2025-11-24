@@ -63,7 +63,6 @@ Examples:
 }
 
 func init() {
-	// Command is registered by plugin executors, not the base CLI
 	studioCmd.Flags().IntP("port", "p", 5555, "Port to run studio on")
 	studioCmd.Flags().BoolP("browser", "b", true, "Open browser automatically")
 	studioCmd.Flags().String("db", "", "Database URL (overrides config/env)")

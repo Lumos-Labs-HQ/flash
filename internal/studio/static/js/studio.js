@@ -17,13 +17,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Setup
 function setupEventListeners() {
-    document.getElementById('save-btn').addEventListener('click', saveChanges);
-    document.getElementById('add-btn').addEventListener('click', showAddRowDialog);
-    document.getElementById('refresh-btn').addEventListener('click', refreshData);
-    document.getElementById('delete-selected-btn').addEventListener('click', deleteSelected);
-    document.getElementById('prev-btn').addEventListener('click', () => changePage(-1));
-    document.getElementById('next-btn').addEventListener('click', () => changePage(1));
-    document.getElementById('search-tables').addEventListener('input', debounce(filterTables, 200));
+    const saveBtn = document.getElementById('save-btn');
+    const addBtn = document.getElementById('add-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const searchTables = document.getElementById('search-tables');
+    
+    if (saveBtn) saveBtn.addEventListener('click', saveChanges);
+    if (addBtn) addBtn.addEventListener('click', showAddRowDialog);
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
+    if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', deleteSelected);
+    if (prevBtn) prevBtn.addEventListener('click', () => changePage(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => changePage(1));
+    if (searchTables) searchTables.addEventListener('input', debounce(filterTables, 200));
     document.addEventListener('keydown', handleKeyDown);
 }
 
@@ -640,6 +648,12 @@ function deleteRow(rowId) {
 
 // Refresh
 function refreshData() {
+    if (!state.currentTable) {
+        // If no table is selected, just reload the tables list
+        loadTables();
+        return;
+    }
+    
     state.changes.clear();
     document.getElementById('save-btn').style.display = 'none';
     loadTableData();
