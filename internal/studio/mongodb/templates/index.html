@@ -91,6 +91,9 @@
             <button class="tab" data-tab="indexes">
               <ion-icon name="layers"></ion-icon>Indexes
             </button>
+            <button class="tab" data-tab="aggregation">
+              <ion-icon name="git-network-outline"></ion-icon>Aggregation
+            </button>
           </div>
           <div class="toolbar" id="toolbar" style="display: none">
             <div class="toolbar-left">
@@ -154,6 +157,69 @@
             class="json-container"
             style="display: none"
           ></div>
+          <div id="schema-view" class="schema-container" style="display: none">
+            <div class="schema-info">
+              <h4>Collection Schema</h4>
+              <p class="text-muted">Inferred from sample documents</p>
+            </div>
+            <table class="data-table" id="schema-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Type</th>
+                  <th>Nullable</th>
+                  <th>Frequency</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="indexes-view" class="indexes-container" style="display: none">
+            <div class="indexes-toolbar">
+              <h4>Indexes</h4>
+              <button class="btn btn-primary btn-sm" id="create-index-btn">
+                <ion-icon name="add-outline"></ion-icon> Create Index
+              </button>
+            </div>
+            <table class="data-table" id="indexes-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Keys</th>
+                  <th>Unique</th>
+                  <th width="100">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="aggregation-view" class="aggregation-container" style="display: none">
+            <div class="aggregation-builder">
+              <div class="pipeline-header">
+                <h4>Aggregation Pipeline</h4>
+                <div class="pipeline-actions">
+                  <button class="btn btn-sm" id="add-stage-btn">
+                    <ion-icon name="add-outline"></ion-icon> Add Stage
+                  </button>
+                  <button class="btn btn-primary btn-sm" id="run-pipeline-btn">
+                    <ion-icon name="play-outline"></ion-icon> Run
+                  </button>
+                </div>
+              </div>
+              <div class="pipeline-stages" id="pipeline-stages">
+                <div class="empty-pipeline">
+                  <p>No stages added. Click "Add Stage" to begin.</p>
+                </div>
+              </div>
+            </div>
+            <div class="aggregation-results">
+              <div class="results-header">
+                <h4>Results</h4>
+                <span id="results-count" class="text-muted"></span>
+              </div>
+              <div id="aggregation-output" class="json-container"></div>
+            </div>
+          </div>
           <div class="empty-state" id="empty-state">
             <svg
               width="80"
@@ -257,6 +323,40 @@
         </form>
       </div>
     </div>
-    <script src="/static/js/mongodb.js"></script>
+    <div class="modal" id="index-modal">
+      <div class="modal-backdrop"></div>
+      <div class="modal-dialog modal-sm">
+        <div class="modal-header">
+          <h3>Create Index</h3>
+          <button class="modal-close">
+            <svg width="20" height="20" fill="currentColor">
+              <path
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              />
+            </svg>
+          </button>
+        </div>
+        <form id="index-form">
+          <div class="modal-body">
+            <textarea
+              class="code-editor"
+              id="index-keys"
+              rows="4"
+              placeholder='{"field": 1}'
+              required
+            ></textarea>
+            <label style="display: flex; align-items: center; margin-top: 12px;">
+              <input type="checkbox" id="index-unique" style="margin-right: 8px;" />
+              Unique Index
+            </label>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn modal-close">Cancel</button>
+            <button type="submit" class="btn btn-primary">Create</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <script src="/static/js/mongodb.js"></script>    <script src="/static/js/mongodb.js"></script>
   </body>
 </html>

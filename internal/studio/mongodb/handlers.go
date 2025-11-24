@@ -314,6 +314,17 @@ func (s *Server) handleAggregate(c *fiber.Ctx) error {
 
 func (s *Server) handleGetIndexes(c *fiber.Ctx) error {
 	name := c.Params("name")
+	dbName := c.Query("database")
+
+	// Switch database if provided
+	if dbName != "" {
+		if err := s.service.SwitchDatabase(dbName); err != nil {
+			return c.Status(500).JSON(fiber.Map{
+				"success": false,
+				"error":   "Failed to switch database: " + err.Error(),
+			})
+		}
+	}
 
 	indexes, err := s.service.GetIndexes(name)
 	if err != nil {

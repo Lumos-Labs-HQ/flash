@@ -37,27 +37,48 @@ function setupListeners() {
     $$('.close-modal').forEach(el => el.onclick = () => closeModals());
     $$('.modal-back').forEach(el => el.onclick = () => closeModals());
     $('#filter-form').onsubmit = (e) => { e.preventDefault(); loadDocs($('#filter-query').value.trim()); closeModals() };
-    const collForm = $('#coll-form');
-    if (collForm) collForm.onsubmit = (e) => { e.preventDefault(); createCollection($('#coll-name').value.trim()) };
-    const addCollBtn = $('#add-coll-btn');
-    if (addCollBtn) addCollBtn.onclick = () => openModal('coll-modal');
+    const collForm = $('#collection-form');
+    if (collForm) collForm.onsubmit = (e) => { e.preventDefault(); createCollection($('#collection-name').value.trim()) };
+    const addCollBtn = $('#add-collection-btn');
+    if (addCollBtn) addCollBtn.onclick = () => openModal('collection-modal');
 
     // Tab switching
     $$('.tab').forEach(tab => tab.onclick = function () {
         $$('.tab').forEach(t => t.classList.remove('active'));
         this.classList.add('active');
         const tabName = this.dataset.tab;
+        hideAllViews();
         if (tabName === 'documents') {
             $('#toolbar').style.display = 'flex';
             $('#table-view').style.display = viewMode === 'table' ? 'block' : 'none';
             $('#json-view').style.display = viewMode === 'json' ? 'block' : 'none';
-        } else {
-            $('#toolbar').style.display = 'none';
-            $('#table-view').style.display = 'none';
-            $('#json-view').style.display = 'none';
-            showInfo(`${tabName.charAt(0).toUpperCase() + tabName.slice(1)} view coming soon`);
+        } else if (tabName === 'schema') {
+            $('#schema-view').style.display = 'block';
+            loadSchema();
+        } else if (tabName === 'indexes') {
+            $('#indexes-view').style.display = 'block';
+            loadIndexes();
+        } else if (tabName === 'aggregation') {
+            $('#aggregation-view').style.display = 'block';
+            loadAggregation();
         }
     });
+
+    // Index creation
+    $('#create-index-btn').onclick = () => openModal('index-modal');
+    $('#index-form').onsubmit = (e) => { e.preventDefault(); createIndex() };
+    
+    // Aggregation
+    initAggregation();
+}
+
+function hideAllViews() {
+    $('#toolbar').style.display = 'none';
+    $('#table-view').style.display = 'none';
+    $('#json-view').style.display = 'none';
+    $('#schema-view').style.display = 'none';
+    $('#indexes-view').style.display = 'none';
+    $('#aggregation-view').style.display = 'none';
 }
 
 async function loadDatabases() {
@@ -117,10 +138,8 @@ function showDatabasesPanel() {
     $('#empty-title').textContent = 'Select a Database';
     $('#empty-text').textContent = 'Choose a database to begin';
     $('#empty-state').style.display = 'flex';
-    $('#toolbar').style.display = 'none';
+    hideAllViews();
     $('#tabs-bar').style.display = 'none';
-    $('#table-view').style.display = 'none';
-    $('#json-view').style.display = 'none';
 }
 
 function showCollectionsPanel() {
@@ -364,22 +383,6 @@ function renderJSONTree(obj, depth) {
     return html;
 }
 
-function getJSONType(val) {
-    if (val === null) return 'json-null';
-    const t = typeof val;
-    if (t === 'string') return 'json-string';
-    if (t === 'number') return 'json-number';
-    if (t === 'boolean') return 'json-boolean';
-    return 'json-object';
-}
-
-function formatJSON(val) {
-    if (val === null) return 'null';
-    if (typeof val === 'string') return `"${escapeHtml(val)}"`;
-    if (typeof val === 'object') return Array.isArray(val) ? `[${val.length} items]` : 'Object';
-    return String(val);
-}
-
 function formatValue(val) {
     if (val === null) return '<span style="color:var(--text-tertiary)">null</span>';
     if (typeof val === 'boolean') return `<span style="color:var(--orange)">${val}</span>`;
@@ -387,14 +390,6 @@ function formatValue(val) {
     if (typeof val === 'string') return escapeHtml(val.length > 50 ? val.substring(0, 50) + '...' : val);
     if (typeof val === 'object') return `<span style="color:var(--text-tertiary)">${Array.isArray(val) ? `Array(${val.length})` : 'Object'}</span>`;
     return escapeHtml(String(val));
-}
-
-function updateBulkActions() {
-    const count = selected.size;
-    const selInfo = $('#sel-info');
-    const delBtn = $('#del-btn');
-    if (selInfo) selInfo.textContent = count ? `${count} selected` : '';
-    if (delBtn) delBtn.style.display = count ? 'inline-flex' : 'none';
 }
 
 function toggleSelectAll(e) {
@@ -419,8 +414,13 @@ function toggleRow(e) {
 
 function updateBulkActions() {
     const count = selected.size;
-    $('#selection-info').textContent = count ? `${count} selected` : '';
-    $('#delete-btn').disabled = !count;
+    const selInfo = $('#selection-info');
+    const delBtn = $('#delete-btn');
+    if (selInfo) selInfo.textContent = count ? `${count} selected` : '';
+    if (delBtn) {
+        delBtn.style.display = count ? 'inline-flex' : 'none';
+        delBtn.disabled = !count;
+    }
 }
 
 async function editDoc(id) {
@@ -508,6 +508,153 @@ function updatePagination() {
     if (nextBtn) nextBtn.disabled = page >= max;
 }
 
+// Schema functionality
+async function loadSchema() {
+    if (!currentCollection) return;
+    try {
+        const params = new URLSearchParams({ database: currentDatabase, page: 1, limit: 100 });
+        const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
+        const data = await res.json();
+        const docs = data.success && data.data ? data.data.documents : [];
+        
+        const schema = inferSchema(docs);
+        renderSchema(schema);
+    } catch (err) {
+        showError('Failed to load schema: ' + err.message);
+    }
+}
+
+function inferSchema(docs) {
+    const fields = {};
+    const totalDocs = docs.length;
+    
+    docs.forEach(doc => {
+        Object.entries(doc).forEach(([key, value]) => {
+            if (!fields[key]) {
+                fields[key] = { types: new Set(), count: 0, nullable: false };
+            }
+            fields[key].count++;
+            fields[key].types.add(getType(value));
+            if (value === null || value === undefined) {
+                fields[key].nullable = true;
+            }
+        });
+    });
+    
+    return Object.entries(fields).map(([name, info]) => ({
+        name,
+        type: Array.from(info.types).join(' | '),
+        nullable: info.nullable || info.count < totalDocs,
+        frequency: totalDocs > 0 ? Math.round((info.count / totalDocs) * 100) : 0
+    }));
+}
+
+function getType(value) {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'array';
+    if (value instanceof Date) return 'date';
+    if (typeof value === 'object') return 'object';
+    return typeof value;
+}
+
+function renderSchema(schema) {
+    const tbody = $('#schema-table tbody');
+    if (!schema.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary)">No schema data</td></tr>';
+        return;
+    }
+    tbody.innerHTML = schema.map(field => `
+        <tr>
+            <td><strong>${escapeHtml(field.name)}</strong></td>
+            <td><code>${escapeHtml(field.type)}</code></td>
+            <td>${field.nullable ? 'Yes' : 'No'}</td>
+            <td>${field.frequency}%</td>
+        </tr>
+    `).join('');
+}
+
+// Indexes functionality
+async function loadIndexes() {
+    if (!currentCollection) return;
+    try {
+        console.log('Loading indexes for:', currentDatabase, currentCollection);
+        const params = new URLSearchParams();
+        if (currentDatabase) params.append('database', currentDatabase);
+        const res = await fetch(`/api/collections/${currentCollection}/indexes?${params}`);
+        const data = await res.json();
+        console.log('Indexes response:', data);
+        const indexes = data.success ? data.data : [];
+        console.log('Parsed indexes:', indexes);
+        renderIndexes(indexes);
+    } catch (err) {
+        console.error('Indexes load error:', err);
+        showError('Failed to load indexes: ' + err.message);
+    }
+}
+
+function renderIndexes(indexes) {
+    const tbody = $('#indexes-table tbody');
+    if (!indexes.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary)">No indexes</td></tr>';
+        return;
+    }
+    tbody.innerHTML = indexes.map(idx => `
+        <tr>
+            <td><strong>${escapeHtml(idx.name)}</strong></td>
+            <td><code>${JSON.stringify(idx.keys)}</code></td>
+            <td>${idx.unique ? 'Yes' : 'No'}</td>
+            <td class="row-actions">
+                ${idx.name !== '_id_' ? `<button class="action-btn delete" onclick="dropIndex('${escapeHtml(idx.name)}')" title="Drop">
+                    <svg width="14" height="14" fill="currentColor"><path d="M5 1h4v1H5zm-2 2h8v10H3zm2 1v8h1V4zm2 0v8h1V4zm2 0v8h1V4z"/></svg>
+                </button>` : '<span style="color:var(--text-tertiary)">Default</span>'}
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function createIndex() {
+    const keysStr = $('#index-keys').value.trim();
+    const unique = $('#index-unique').checked;
+    
+    if (!keysStr) return showError('Keys are required');
+    
+    try {
+        const keys = JSON.parse(keysStr);
+        const res = await fetch(`/api/collections/${currentCollection}/indexes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keys, unique })
+        });
+        
+        if (!res.ok) throw new Error(await res.text());
+        
+        showSuccess('Index created');
+        closeModals();
+        $('#index-keys').value = '';
+        $('#index-unique').checked = false;
+        loadIndexes();
+    } catch (err) {
+        showError('Failed to create index: ' + err.message);
+    }
+}
+
+async function dropIndex(name) {
+    if (!confirm(`Drop index "${name}"?`)) return;
+    
+    try {
+        const res = await fetch(`/api/collections/${currentCollection}/indexes/${name}`, {
+            method: 'DELETE'
+        });
+        
+        if (!res.ok) throw new Error(await res.text());
+        
+        showSuccess('Index dropped');
+        loadIndexes();
+    } catch (err) {
+        showError('Failed to drop index: ' + err.message);
+    }
+}
+
 function openModal(id) {
     $('#' + id).classList.add('active');
 }
@@ -535,6 +682,171 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+
+// Aggregation functionality
+let pipelineStages = [];
+
+function initAggregation() {
+    $('#add-stage-btn').onclick = addPipelineStage;
+    $('#run-pipeline-btn').onclick = runAggregation;
+}
+
+function addPipelineStage() {
+    const stageId = Date.now();
+    const stage = {
+        id: stageId,
+        operator: '$match',
+        code: '{}'
+    };
+    pipelineStages.push(stage);
+    renderPipeline();
+}
+
+function renderPipeline() {
+    const container = $('#pipeline-stages');
+    
+    if (pipelineStages.length === 0) {
+        container.innerHTML = '<div class="empty-pipeline"><p>No stages added. Click "Add Stage" to begin.</p></div>';
+        return;
+    }
+    
+    container.innerHTML = pipelineStages.map((stage, index) => `
+        <div class="pipeline-stage" data-stage-id="${stage.id}">
+            <div class="stage-header">
+                <div class="stage-title">
+                    <span class="stage-number">${index + 1}</span>
+                    <select class="stage-select" onchange="updateStageOperator(${stage.id}, this.value)">
+                        ${getStageOperators().map(op => 
+                            `<option value="${op}" ${stage.operator === op ? 'selected' : ''}>${op}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="stage-actions">
+                    <button class="action-btn" onclick="moveStage(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Move Up">
+                        <ion-icon name="arrow-up-outline"></ion-icon>
+                    </button>
+                    <button class="action-btn" onclick="moveStage(${index}, 1)" ${index === pipelineStages.length - 1 ? 'disabled' : ''} title="Move Down">
+                        <ion-icon name="arrow-down-outline"></ion-icon>
+                    </button>
+                    <button class="action-btn delete" onclick="removeStage(${stage.id})" title="Remove">
+                        <ion-icon name="trash-outline"></ion-icon>
+                    </button>
+                </div>
+            </div>
+            <div class="stage-body">
+                <textarea onchange="updateStageCode(${stage.id}, this.value)" placeholder='${getPlaceholder(stage.operator)}'>${escapeHtml(stage.code)}</textarea>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getStageOperators() {
+    return ['$match', '$project', '$group', '$sort', '$limit', '$skip', '$unwind', '$lookup', '$addFields', '$count', '$sample'];
+}
+
+function getPlaceholder(operator) {
+    const placeholders = {
+        '$match': '{"field": "value"}',
+        '$project': '{"field": 1}',
+        '$group': '{"_id": "$field", "count": {"$sum": 1}}',
+        '$sort': '{"field": 1}',
+        '$limit': '10',
+        '$skip': '0',
+        '$unwind': '"$arrayField"',
+        '$lookup': '{"from": "collection", "localField": "field", "foreignField": "field", "as": "result"}',
+        '$addFields': '{"newField": "$existingField"}',
+        '$count': '"total"',
+        '$sample': '{"size": 10}'
+    };
+    return placeholders[operator] || '{}';
+}
+
+function updateStageOperator(stageId, operator) {
+    const stage = pipelineStages.find(s => s.id === stageId);
+    if (stage) {
+        stage.operator = operator;
+        stage.code = getPlaceholder(operator);
+        renderPipeline();
+    }
+}
+
+function updateStageCode(stageId, code) {
+    const stage = pipelineStages.find(s => s.id === stageId);
+    if (stage) stage.code = code;
+}
+
+function removeStage(stageId) {
+    pipelineStages = pipelineStages.filter(s => s.id !== stageId);
+    renderPipeline();
+}
+
+function moveStage(index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= pipelineStages.length) return;
+    
+    [pipelineStages[index], pipelineStages[newIndex]] = [pipelineStages[newIndex], pipelineStages[index]];
+    renderPipeline();
+}
+
+async function runAggregation() {
+    if (!currentCollection || pipelineStages.length === 0) {
+        showError('Add at least one stage to run the pipeline');
+        return;
+    }
+    
+    try {
+        const pipeline = pipelineStages.map(stage => {
+            let value;
+            try {
+                value = JSON.parse(stage.code);
+            } catch (e) {
+                // Handle non-JSON values like strings for $unwind, $count
+                value = stage.code.trim().startsWith('"') ? JSON.parse(stage.code) : stage.code;
+            }
+            return { [stage.operator]: value };
+        });
+        
+        console.log('Running pipeline:', pipeline);
+        
+        const res = await fetch(`/api/collections/${currentCollection}/aggregate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pipeline)
+        });
+        
+        const data = await res.json();
+        
+        if (!data.success) {
+            showError(data.error || 'Aggregation failed');
+            return;
+        }
+        
+        const results = data.data || [];
+        $('#results-count').textContent = `${results.length} document${results.length !== 1 ? 's' : ''}`;
+        
+        const output = $('#aggregation-output');
+        if (results.length === 0) {
+            output.innerHTML = '<div style="text-align:center;color:var(--text-tertiary);padding:20px;">No results</div>';
+        } else {
+            output.innerHTML = results.map(doc => 
+                `<div class="json-card"><div class="json-card-body">${renderJSONTree(doc, 0)}</div></div>`
+            ).join('');
+        }
+        
+        showSuccess('Aggregation completed');
+    } catch (err) {
+        console.error('Aggregation error:', err);
+        showError('Failed to run aggregation: ' + err.message);
+    }
+}
+
+function loadAggregation() {
+    pipelineStages = [];
+    renderPipeline();
+    $('#aggregation-output').innerHTML = '';
+    $('#results-count').textContent = '';
 }
 
 function $(sel) { return document.querySelector(sel) }
