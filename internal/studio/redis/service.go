@@ -38,6 +38,8 @@ type ServerInfo struct {
 	Uptime           int64  `json:"uptime"`
 	ConnectedClients int64  `json:"connected_clients"`
 	UsedMemory       string `json:"used_memory"`
+	PeakMemory       string `json:"peak_memory"`
+	MaxMemory        string `json:"max_memory"`
 	TotalKeys        int64  `json:"total_keys"`
 	CurrentDB        int    `json:"current_db"`
 }
@@ -86,16 +88,47 @@ func (s *Service) GetInfo() (*ServerInfo, error) {
 		} else if strings.HasPrefix(line, "used_memory_human:") {
 			serverInfo.UsedMemory = strings.TrimPrefix(line, "used_memory_human:")
 			serverInfo.UsedMemory = strings.TrimSpace(serverInfo.UsedMemory)
+		} else if strings.HasPrefix(line, "used_memory_peak_human:") {
+			serverInfo.PeakMemory = strings.TrimPrefix(line, "used_memory_peak_human:")
+			serverInfo.PeakMemory = strings.TrimSpace(serverInfo.PeakMemory)
 		}
 	}
 
-	// Get total keys count
 	dbSize, err := s.client.DBSize(s.ctx).Result()
 	if err == nil {
 		serverInfo.TotalKeys = dbSize
 	}
 
+	maxmemory, err := s.client.ConfigGet(s.ctx, "maxmemory").Result()
+	if err == nil && len(maxmemory) > 0 {
+		if maxMemVal, ok := maxmemory["maxmemory"]; ok {
+			maxMemBytes, _ := strconv.ParseInt(maxMemVal, 10, 64)
+			if maxMemBytes == 0 {
+				serverInfo.MaxMemory = "Unlimited"
+			} else {
+				serverInfo.MaxMemory = formatBytes(maxMemBytes)
+			}
+		}
+	}
+	if serverInfo.MaxMemory == "" {
+		serverInfo.MaxMemory = "Unlimited"
+	}
+
 	return serverInfo, nil
+}
+
+// formatBytes converts bytes to human readable format
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%dB", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f%cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 // GetDBSize returns the number of keys in current database
@@ -354,10 +387,10 @@ func (s *Service) GetTTL(key string) (int64, error) {
 		return -1, err
 	}
 	if ttl == -1 {
-		return -1, nil 
+		return -1, nil
 	}
 	if ttl == -2 {
-		return -2, nil 
+		return -2, nil
 	}
 	return int64(ttl.Seconds()), nil
 }

@@ -462,7 +462,9 @@ const RedisStudio = {
                 '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.version || 'N/A') + '</div><div class="stat-label">Version</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.mode || 'standalone') + '</div><div class="stat-label">Mode</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + (d.connected_clients || 0) + '</div><div class="stat-label">Clients</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.used_memory || 'N/A') + '</div><div class="stat-label">Memory</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.used_memory || 'N/A') + '</div><div class="stat-label">Used Memory</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.peak_memory || 'N/A') + '</div><div class="stat-label">Peak Memory</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.max_memory || 'N/A') + '</div><div class="stat-label">Max Memory</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + (d.total_keys || 0) + '</div><div class="stat-label">Keys</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + this.formatUptime(d.uptime) + '</div><div class="stat-label">Uptime</div></div>' +
                 '</div><div class="stats-info"><h4>OS</h4><p>' + this.escapeHtml(d.os || 'N/A') + '</p></div></div>';
