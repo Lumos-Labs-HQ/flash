@@ -2,15 +2,11 @@ package mongodb
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -196,92 +192,6 @@ func (a *Adapter) GetAllTableRowCounts(ctx context.Context, tableNames []string)
 	return result, nil
 }
 
-func inferBSONType(value interface{}) string {
-	switch value.(type) {
-	case string:
-		return "string"
-	case int, int32, int64:
-		return "int"
-	case float32, float64:
-		return "double"
-	case bool:
-		return "bool"
-	case bson.M, map[string]interface{}:
-		return "object"
-	case bson.A, []interface{}:
-		return "array"
-	case time.Time:
-		return "date"
-	case nil:
-		return "null"
-	default:
-		return fmt.Sprintf("%T", value)
-	}
-}
-
-func convertBSONValue(v interface{}) interface{} {
-	switch val := v.(type) {
-	case bson.M:
-		result := make(map[string]interface{})
-		for k, v := range val {
-			result[k] = convertBSONValue(v)
-		}
-		return result
-	case bson.A:
-		result := make([]interface{}, len(val))
-		for i, v := range val {
-			result[i] = convertBSONValue(v)
-		}
-		return result
-	case bson.D:
-		result := make(map[string]interface{})
-		for _, elem := range val {
-			result[elem.Key] = convertBSONValue(elem.Value)
-		}
-		return result
-	default:
-		return v
-	}
-}
-
-// Stub implementations for DatabaseAdapter interface
-func (a *Adapter) CreateMigrationsTable(ctx context.Context) error             { return nil }
-func (a *Adapter) EnsureMigrationTableCompatibility(ctx context.Context) error { return nil }
-func (a *Adapter) CleanupBrokenMigrationRecords(ctx context.Context) error     { return nil }
-func (a *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) { return nil, nil }
-func (a *Adapter) RecordMigration(ctx context.Context, migrationID, name, checksum string) error { return nil }
-func (a *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error { return nil }
-func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error { return nil }
-func (a *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error) { return nil, nil }
-func (a *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error) { return nil, nil }
-func (a *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error)   { return nil, nil }
-func (a *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) { return nil, nil }
-func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) { return nil, nil }
-func (a *Adapter) CheckTableExists(ctx context.Context, tableName string) (bool, error) { return false, nil }
-func (a *Adapter) CheckColumnExists(ctx context.Context, tableName, columnName string) (bool, error) { return false, nil }
-func (a *Adapter) CheckNotNullConstraint(ctx context.Context, tableName, columnName string) (bool, error) { return false, nil }
-func (a *Adapter) CheckForeignKeyConstraint(ctx context.Context, tableName, constraintName string) (bool, error) { return false, nil }
-func (a *Adapter) CheckUniqueConstraint(ctx context.Context, tableName, constraintName string) (bool, error) { return false, nil }
-func (a *Adapter) DropTable(ctx context.Context, tableName string) error                   { return nil }
-func (a *Adapter) DropEnum(ctx context.Context, enumName string) error                     { return nil }
-func (a *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string                   { return "" }
-func (a *Adapter) GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string { return "" }
-func (a *Adapter) GenerateDropColumnSQL(tableName, columnName string) string               { return "" }
-func (a *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string                      { return "" }
-func (a *Adapter) GenerateDropIndexSQL(indexName string) string                            { return "" }
-func (a *Adapter) MapColumnType(dbType string) string                                      { return "string" }
-func (a *Adapter) FormatColumnType(column types.SchemaColumn) string                       { return column.Type }
-func (a *Adapter) CreateBranchSchema(ctx context.Context, branchName string) error         { return nil }
-func (a *Adapter) DropBranchSchema(ctx context.Context, branchName string) error           { return nil }
-func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetSchema string) error { return nil }
-func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchSchema string) ([]types.SchemaTable, error) { return nil, nil }
-func (a *Adapter) SetActiveSchema(ctx context.Context, schemaName string) error { return nil }
-func (a *Adapter) GetTableNamesInSchema(ctx context.Context, schemaName string) ([]string, error) { return nil, nil }
-func (a *Adapter) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) { return nil, nil }
-func (a *Adapter) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row { return nil }
-func (a *Adapter) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) { return nil, nil }
-func (a *Adapter) Begin(ctx context.Context) (*sql.Tx, error) { return nil, nil }
-
 // ExecuteMongoQuery executes a MongoDB query string
 func (a *Adapter) ExecuteMongoQuery(ctx context.Context, query string) ([]map[string]interface{}, error) {
 	query = strings.TrimSpace(query)
@@ -339,22 +249,6 @@ func (a *Adapter) ExecuteMongoQuery(ctx context.Context, query string) ([]map[st
 
 	return nil, fmt.Errorf("unsupported operation. Supported: find({}), count()")
 }
-
-func extractBetween(str, start, end string) string {
-	startIdx := strings.Index(str, start)
-	if startIdx == -1 {
-		return ""
-	}
-	startIdx += len(start)
-
-	endIdx := strings.LastIndex(str, end)
-	if endIdx == -1 || endIdx <= startIdx {
-		return ""
-	}
-
-	return strings.TrimSpace(str[startIdx:endIdx])
-}
-
 
 // ListCollections returns all collection names
 func (a *Adapter) ListCollections(ctx context.Context) ([]string, error) {
@@ -598,15 +492,4 @@ func (a *Adapter) CreateDatabase(ctx context.Context, dbName string) error {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 	return nil
-}
-
-func parseObjectID(id string) (interface{}, error) {
-	if len(id) == 24 {
-		oid, err := primitive.ObjectIDFromHex(id)
-		if err != nil {
-			return id, nil 
-		}
-		return oid, nil
-	}
-	return id, nil
 }
