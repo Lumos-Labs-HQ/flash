@@ -11,6 +11,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/mongodb"
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/redis"
 	"github.com/spf13/cobra"
 )
 
@@ -27,11 +28,19 @@ Examples:
   flash studio
   flash studio --db "postgres://user:pass@localhost:5432/mydb"
   flash studio --db "mongodb://localhost:27017/mydb"
+  flash studio --redis "redis://localhost:6379"
   flash studio --port 3000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbURL, _ := cmd.Flags().GetString("db")
+		redisURL, _ := cmd.Flags().GetString("redis")
 		port, _ := cmd.Flags().GetInt("port")
 		browser, _ := cmd.Flags().GetBool("browser")
+
+		if redisURL != "" {
+			fmt.Printf("🔴 Starting Redis Studio: %s\n", maskDBURL(redisURL))
+			redisServer := redis.NewServer(redisURL, port)
+			return redisServer.Start(browser)
+		}
 
 		var cfg *config.Config
 		var err error
@@ -66,7 +75,7 @@ Examples:
 			return mongoServer.Start(browser)
 		} else {
 			fmt.Println("🗄️  Starting SQL Studio...")
-			server := studio.NewServer(cfg, port)
+			server := studio.New(cfg, port)
 			return server.Start(browser)
 		}
 	},
@@ -76,6 +85,7 @@ func init() {
 	studioCmd.Flags().IntP("port", "p", 5555, "Port to run studio on")
 	studioCmd.Flags().BoolP("browser", "b", true, "Open browser automatically")
 	studioCmd.Flags().String("db", "", "Database URL (overrides config/env)")
+	studioCmd.Flags().String("redis", "", "Redis URL for Redis Studio (e.g., redis://localhost:6379)")
 }
 
 func maskDBURL(url string) string {

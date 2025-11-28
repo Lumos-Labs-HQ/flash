@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/redis.css">
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-left">
+            <svg class="nav-logo" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#DC382D"/>
+                <path d="M2 17l10 5 10-5" stroke="#DC382D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 12l10 5 10-5" stroke="#DC382D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="nav-title">Redis Studio</span>
+            <span class="nav-breadcrumb">{{.Host}}</span>
+        </div>
+        <div class="nav-center">
+            <div class="db-selector-wrapper" title="Redis supports 16 databases (0-15). Each database is isolated - keys in db0 are separate from db1, etc.">
+                <label>Database:</label>
+                <select class="db-selector" id="dbSelect">
+                    {{range $i := .Databases}}
+                    <option value="{{$i}}" {{if eq $i 0}}selected{{end}}>db{{$i}}</option>
+                    {{end}}
+                </select>
+            </div>
+        </div>
+        <div class="nav-right">
+            <button class="btn btn-sm btn-primary" onclick="RedisStudio.showNewKeyModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                New Key
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="RedisStudio.flushDatabase()" title="Delete ALL keys in current database">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+                Purge DB
+            </button>
+            <button class="icon-btn" onclick="RedisStudio.loadKeys()" title="Refresh keys">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 4v6h-6M1 20v-6h6"/>
+                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="panel-header">
+                <h4>Keys</h4>
+                <span id="keysCount" style="font-size: 11px; color: var(--text-tertiary);">0 keys</span>
+            </div>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search keys (e.g. user:*)">
+            </div>
+            <div class="keys-list" id="keysList">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="content">
+            <!-- Tabs -->
+            <div class="tabs-bar">
+                <button class="tab active" data-tab="browser">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        <line x1="9" y1="3" x2="9" y2="21"/>
+                    </svg>
+                    Browser
+                </button>
+                <button class="tab" data-tab="cli">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 17 10 11 4 5"/>
+                        <line x1="12" y1="19" x2="20" y2="19"/>
+                    </svg>
+                    CLI
+                </button>
+                <button class="tab" data-tab="stats">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+                    </svg>
+                    Stats
+                </button>
+            </div>
+
+            <!-- Browser Tab -->
+            <div class="tab-content" id="browserTab">
+                <div class="key-detail" id="keyDetail">
+                    <div class="empty-state">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <h3>Select a key</h3>
+                        <p>Choose a key from the list to view its value</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CLI Tab - Real Terminal Style -->
+            <div class="tab-content" id="cliTab" style="display: none;">
+                <div class="terminal" id="terminal" onclick="RedisStudio.focusTerminal()">
+                    <div class="terminal-scroll" id="terminalScroll"></div>
+                </div>
+            </div>
+
+            <!-- Stats Tab -->
+            <div class="tab-content" id="statsTab" style="display: none;">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Key Modal -->
+    <div class="modal" id="newKeyModal">
+        <div class="modal-backdrop" onclick="RedisStudio.closeModal('newKeyModal')"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>New Key</h3>
+                <button class="icon-btn" onclick="RedisStudio.closeModal('newKeyModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Key Name</label>
+                    <input type="text" id="newKeyName" class="form-input" placeholder="e.g., user:1000">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <select id="newKeyType" class="form-select">
+                        <option value="string">String</option>
+                        <option value="list">List</option>
+                        <option value="set">Set</option>
+                        <option value="zset">Sorted Set</option>
+                        <option value="hash">Hash</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Value</label>
+                    <textarea id="newKeyValue" class="form-textarea" placeholder="Enter value..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">TTL (seconds)</label>
+                    <input type="number" id="newKeyTTL" class="form-input" placeholder="-1 for no expiry" value="-1">
+                    <span style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px; display: block;">Set -1 or 0 for no expiration</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="RedisStudio.closeModal('newKeyModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="RedisStudio.createNewKey()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/js/redis.js"></script>
+</body>
+</html>
