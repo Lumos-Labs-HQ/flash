@@ -51,7 +51,7 @@ jobs:
 
     - name: Build project
       run: |
-        go build -o flash .
+        go build -tags="dev,plugins" -o flash .
         chmod +x flash
 
     - name: Verify binary exists and works
@@ -70,5 +70,5 @@ jobs:
         cd test/integration
         pwd
         file ../../flash
-        go test -v -timeout 30m
+        go test -tags="dev,plugins" -v -timeout 30m
 
