@@ -135,7 +135,6 @@ func (s *Service) GetDatabases() ([]DatabaseInfo, error) {
 
 // GetCollections returns all collections in the database
 func (s *Service) GetCollections(database string) ([]CollectionInfo, error) {
-	fmt.Printf("[DEBUG] GetCollections service called for database: %s\n", database)
 	type MongoCollectionOps interface {
 		ListCollectionsInDB(ctx context.Context, database string) ([]string, error)
 		CountDocumentsInDB(ctx context.Context, database, collection string, filter bson.M) (int64, error)
@@ -148,17 +147,13 @@ func (s *Service) GetCollections(database string) ([]CollectionInfo, error) {
 
 	collections, err := mongoAdapter.ListCollectionsInDB(s.ctx, database)
 	if err != nil {
-		fmt.Printf("[DEBUG] GetCollections error: %v\n", err)
 		return nil, err
 	}
-	fmt.Printf("[DEBUG] GetCollections found %d collections\n", len(collections))
 
 	result := make([]CollectionInfo, 0, len(collections))
 	for _, coll := range collections {
-		// Get document count directly
 		count, err := mongoAdapter.CountDocumentsInDB(s.ctx, database, coll, bson.M{})
 		if err != nil {
-			// If we can't get count, just add the collection with zero
 			result = append(result, CollectionInfo{
 				Name:          coll,
 				DocumentCount: 0,
@@ -201,7 +196,6 @@ func (s *Service) GetDocumentsWithFilter(database, collection string, page, limi
 		filter = bson.M{}
 	}
 
-	fmt.Printf("[DEBUG GetDocuments] Database: %s, Collection: %s, Page: %d, Limit: %d, Filter: %v\n", database, collection, page, limit, filter)
 	skip := int64((page - 1) * limit)
 	documents, err := mongoAdapter.FindDocumentsInDB(s.ctx, database, collection, filter, skip, int64(limit))
 	if err != nil {
@@ -232,7 +226,6 @@ func (s *Service) InsertDocument(collection string, document map[string]interfac
 		return "", fmt.Errorf("adapter does not support MongoDB operations")
 	}
 
-	// Ensure proper types for MongoDB
 	s.processDocumentTypes(document)
 
 	return mongoAdapter.InsertDocument(s.ctx, collection, document)
@@ -249,7 +242,6 @@ func (s *Service) UpdateDocument(collection, id string, document map[string]inte
 		return fmt.Errorf("adapter does not support MongoDB operations")
 	}
 
-	// Ensure proper types for MongoDB
 	s.processDocumentTypes(document)
 
 	return mongoAdapter.UpdateDocument(s.ctx, collection, id, bson.M{"$set": document})

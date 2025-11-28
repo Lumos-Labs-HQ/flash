@@ -1,4 +1,3 @@
-// Helper functions - must be at top
 function $(sel) { return document.querySelector(sel) }
 function $$(sel) { return document.querySelectorAll(sel) }
 
@@ -31,7 +30,6 @@ async function init() {
 function setupListeners() {
     const refreshBtn = $('#refresh-docs-btn');
     if (refreshBtn) refreshBtn.onclick = () => {
-        // Refresh keeps current filter - don't reset anything
         loadDocs();
     };
     const backBtn = $('#back-btn');
@@ -62,7 +60,6 @@ function setupListeners() {
             if (e.key === 'Enter') {
                 const query = e.target.value.trim();
                 if (query) {
-                    // Search entire collection using MongoDB regex
                     const searchFilter = JSON.stringify({
                         $or: Object.keys(documents.length > 0 ? documents[0] : {}).map(key => ({
                             [key]: { $regex: query, $options: 'i' }
@@ -71,14 +68,12 @@ function setupListeners() {
                     page = 1;
                     loadDocs(searchFilter);
                 } else {
-                    // Clear search
                     loadDocs(currentFilter);
                 }
             }
         };
     }
 
-    // Modal close buttons
     $$('.modal-close').forEach(el => el.onclick = () => closeModals());
     $$('.modal-backdrop').forEach(el => el.onclick = () => closeModals());
 
@@ -96,7 +91,6 @@ function setupListeners() {
     const dbForm = $('#database-form');
     if (dbForm) dbForm.onsubmit = (e) => { e.preventDefault(); createDatabase($('#database-name').value.trim()) };
 
-    // Tab switching
     $$('.tab').forEach(tab => tab.onclick = function () {
         $$('.tab').forEach(t => t.classList.remove('active'));
         this.classList.add('active');
@@ -118,11 +112,9 @@ function setupListeners() {
         }
     });
 
-    // Index creation
     $('#create-index-btn').onclick = () => openModal('index-modal');
     $('#index-form').onsubmit = (e) => { e.preventDefault(); createIndex() };
 
-    // Aggregation
     initAggregation();
 }
 
@@ -161,7 +153,22 @@ function hideAllViews() {
     $('#aggregation-view').style.display = 'none';
 }
 
+function showLoading(container) {
+    if (typeof container === 'string') container = $(container);
+    if (container) {
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    }
+}
+
+function showContentLoading() {
+    const jsonView = $('#json-view');
+    const tableBody = $('#docs-table tbody');
+    if (jsonView) jsonView.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    if (tableBody) tableBody.innerHTML = '<tr><td colspan="100%" style="text-align:center;padding:40px;"><div class="loading"><div class="spinner"></div></div></td></tr>';
+}
+
 async function loadDatabases() {
+    showLoading('#databases-list');
     try {
         const res = await fetch('/api/databases');
         const data = await res.json();
@@ -171,6 +178,7 @@ async function loadDatabases() {
     } catch (err) {
         console.error('Database load error:', err);
         showError('Failed to load databases: ' + err.message);
+        $('#databases-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">Failed to load</div>';
     }
 }
 
@@ -194,8 +202,8 @@ function showCollectionsPanel() {
 async function selectDatabase(name) {
     currentDatabase = name;
     currentCollection = '';
-    await loadCollections();
     showCollectionsPanel();
+    await loadCollections();
     $('#breadcrumb').textContent = `${dbConnectionString} > ${name}`;
     $('#empty-title').textContent = 'Select a Collection';
     $('#empty-text').textContent = 'Choose a collection to view documents';
@@ -209,6 +217,7 @@ async function loadCollections() {
         renderCollections();
         return;
     }
+    showLoading('#collections-list');
     try {
         const res = await fetch('/api/collections?database=' + encodeURIComponent(currentDatabase));
         const data = await res.json();
@@ -218,15 +227,15 @@ async function loadCollections() {
     } catch (err) {
         console.error('Collections load error:', err);
         showError('Failed to load collections: ' + err.message);
+        $('#collections-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-tertiary)">Failed to load</div>';
     }
 }
 
 async function selectCollection(name) {
     currentCollection = name;
-    currentFilter = ''; // Clear filter when changing collections
+    currentFilter = ''; 
     page = 1;
     selected.clear();
-    // Clear text search
     const textSearch = $('#text-search');
     if (textSearch) textSearch.value = '';
     $$('.collection-item').forEach(el => el.classList.remove('active'));
@@ -234,7 +243,6 @@ async function selectCollection(name) {
     $('#breadcrumb').textContent = `${dbConnectionString} > ${currentDatabase} > ${name}`;
     $('#tabs-bar').style.display = 'flex';
     $('#toolbar').style.display = 'flex';
-    // Ensure documents tab is active
     $$('.tab').forEach(t => t.classList.remove('active'));
     $$('.tab[data-tab="documents"]')[0].classList.add('active');
     await loadDocs();
@@ -242,8 +250,19 @@ async function selectCollection(name) {
 
 async function loadDocs(filter) {
     if (!currentCollection) return;
-    // Use provided filter, or fall back to currentFilter if not provided
     const actualFilter = filter !== undefined ? filter : currentFilter;
+    
+    showContentLoading();
+    $('#empty-state').style.display = 'none';
+    $('#toolbar').style.display = 'flex';
+    if (viewMode === 'table') {
+        $('#table-view').style.display = 'block';
+        $('#json-view').style.display = 'none';
+    } else {
+        $('#table-view').style.display = 'none';
+        $('#json-view').style.display = 'block';
+    }
+    
     try {
         const params = new URLSearchParams({ page: page, limit: pageSize });
         if (actualFilter) params.append('filter', actualFilter);
@@ -253,7 +272,6 @@ async function loadDocs(filter) {
         const data = await res.json();
         console.log('Raw API response:', JSON.stringify(data, null, 2));
 
-        // Handle nested response structure
         let result = data;
         if (data.success && data.data) {
             result = data.data;
@@ -270,6 +288,7 @@ async function loadDocs(filter) {
     } catch (err) {
         console.error('Documents load error:', err);
         showError('Failed to load documents: ' + err.message);
+        $('#json-view').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-tertiary)">Failed to load documents</div>';
     }
 }
 
@@ -277,7 +296,6 @@ function applyFilter() {
     const filterQuery = $('#filter-query').value.trim();
     currentFilter = filterQuery;
     page = 1;
-    // Clear text search when applying MongoDB filter
     const textSearch = $('#text-search');
     if (textSearch) textSearch.value = '';
     loadDocs(currentFilter);
@@ -285,12 +303,10 @@ function applyFilter() {
 
 function filterDisplayedDocuments(query) {
     if (!query) {
-        // Show all documents
         $$('.json-card').forEach(card => card.style.display = '');
         $$('.data-table tbody tr').forEach(row => row.style.display = '');
         return;
     }
-    // Filter visible documents by text content
     $$('.json-card').forEach(card => {
         const text = card.textContent.toLowerCase();
         card.style.display = text.includes(query) ? '' : 'none';
@@ -398,13 +414,14 @@ function renderJSONView() {
         const sel = selected.has(id);
         return `<div class="json-card ${sel ? 'selected' : ''}">
       <div class="json-card-header">
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:6px;">
           <input type="checkbox" class="row-check" data-id="${id}" ${sel ? 'checked' : ''}>
           <span class="json-card-id">${id}</span>
         </div>
         <div class="json-card-actions">
-          <button class="action-btn edit" onclick="editDoc('${id}')"><svg width="14" height="14" fill="currentColor"><path d="M11 1l3 3L4 14H1v-3z"/></svg></button>
-          <button class="action-btn delete" onclick="deleteDoc('${id}')"><svg width="14" height="14" fill="currentColor"><path d="M5 1h4v1H5zm-2 2h8v10H3zm2 1v8h1V4zm2 0v8h1V4zm2 0v8h1V4z"/></svg></button>
+          <button class="copy-btn" onclick="copyDocToClipboard(this, '${id}')" title="Copy as JSON"><svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg></button>
+          <button class="action-btn edit" onclick="editDoc('${id}')" title="Edit"><svg width="14" height="14" fill="currentColor"><path d="M11 1l3 3L4 14H1v-3z"/></svg></button>
+          <button class="action-btn delete" onclick="deleteDoc('${id}')" title="Delete"><svg width="14" height="14" fill="currentColor"><path d="M5 1h4v1H5zm-2 2h8v10H3zm2 1v8h1V4zm2 0v8h1V4zm2 0v8h1V4z"/></svg></button>
         </div>
       </div>
       <div class="json-card-body">
@@ -415,24 +432,32 @@ function renderJSONView() {
 
     $$('.row-check').forEach(cb => cb.onchange = toggleRow);
     updateBulkActions();
+    
+    // Setup toggle buttons - json-expand starts hidden via CSS
     $$('.json-toggle').forEach(btn => {
-        // Start collapsed - hide all children by default
-        const line = btn.parentElement;
-        const children = line.querySelector('.json-expand');
-        if (children) {
-            children.style.display = 'none';
-        }
-
         btn.onclick = function (e) {
             e.stopPropagation();
-            const line = this.parentElement;
-            const children = line.querySelector('.json-expand');
-            if (children) {
-                const isExpanded = children.style.display !== 'none';
-                children.style.display = isExpanded ? 'none' : 'block';
+            const expandEl = this.parentElement.nextElementSibling;
+            if (expandEl && expandEl.classList.contains('json-expand')) {
+                const isExpanded = expandEl.style.display === 'block';
+                expandEl.style.display = isExpanded ? 'none' : 'block';
                 this.textContent = isExpanded ? '▶' : '▼';
             }
         };
+    });
+}
+
+function copyDocToClipboard(btn, id) {
+    const doc = documents.find(d => (d._id || d.id) === id);
+    if (!doc) return;
+    
+    const jsonStr = JSON.stringify(doc, null, 2);
+    navigator.clipboard.writeText(jsonStr).then(() => {
+        btn.classList.add('copied');
+        showSuccess('Copied to clipboard');
+        setTimeout(() => btn.classList.remove('copied'), 2000);
+    }).catch(err => {
+        showError('Failed to copy: ' + err.message);
     });
 }
 
@@ -448,42 +473,39 @@ function renderJSONTree(obj, depth) {
     const entries = isArray ? obj.map((v, i) => [i, v]) : Object.entries(obj);
 
     if (!entries.length) {
-        return isArray ? '<span class="json-brackets">[ ]</span>' : '<span class="json-brackets">{ }</span>';
+        return isArray ? '<span class="json-empty">[ ]</span>' : '<span class="json-empty">{ }</span>';
     }
 
-    const indent = depth * 20;
-    let html = `<div class="json-object" style="margin-left:${indent}px">`;
-    html += `<span class="json-brackets">${isArray ? '[' : '{'}</span>`;
+    let html = `<div class="json-tree-container">`;
 
     entries.forEach(([key, val], idx) => {
         const hasChildren = (val !== null && typeof val === 'object' && (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0));
-        const isLast = idx === entries.length - 1;
 
         html += `<div class="json-tree-line">`;
 
         if (hasChildren) {
             html += `<button class="json-toggle">▶</button>`;
-        } else {
-            html += `<span style="width:12px;display:inline-block"></span>`;
-        }
-
-        if (!isArray) {
-            html += `<span class="json-key">"${escapeHtml(String(key))}"</span><span class="json-colon">: </span>`;
-        }
-
-        if (hasChildren) {
+            if (!isArray) {
+                html += `<span class="json-key">${escapeHtml(String(key))}</span><span class="json-colon">:</span>`;
+            } else {
+                html += `<span class="json-key">[${key}]</span><span class="json-colon">:</span>`;
+            }
             const preview = Array.isArray(val) ? `Array(${val.length})` : `Object(${Object.keys(val).length})`;
             html += `<span class="json-preview">${preview}</span>`;
+            html += `</div>`;
             html += `<div class="json-expand">${renderJSONTree(val, depth + 1)}</div>`;
         } else {
+            html += `<span class="json-spacer"></span>`;
+            if (!isArray) {
+                html += `<span class="json-key">${escapeHtml(String(key))}</span><span class="json-colon">:</span>`;
+            } else {
+                html += `<span class="json-key">[${key}]</span><span class="json-colon">:</span>`;
+            }
             html += renderJSONTree(val, depth + 1);
+            html += `</div>`;
         }
-
-        if (!isLast) html += `<span class="json-comma">,</span>`;
-        html += `</div>`;
     });
 
-    html += `<span class="json-brackets">${isArray ? ']' : '}'}</span>`;
     html += `</div>`;
     return html;
 }
@@ -662,6 +684,8 @@ function updatePagination() {
 // Schema functionality
 async function loadSchema() {
     if (!currentCollection) return;
+    const tbody = $('#schema-table tbody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;"><div class="loading"><div class="spinner"></div></div></td></tr>';
     try {
         const params = new URLSearchParams({ database: currentDatabase, page: 1, limit: 100 });
         const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
@@ -672,6 +696,7 @@ async function loadSchema() {
         renderSchema(schema);
     } catch (err) {
         showError('Failed to load schema: ' + err.message);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary)">Failed to load schema</td></tr>';
     }
 }
 
@@ -727,6 +752,8 @@ function renderSchema(schema) {
 // Indexes functionality
 async function loadIndexes() {
     if (!currentCollection) return;
+    const tbody = $('#indexes-table tbody');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;"><div class="loading"><div class="spinner"></div></div></td></tr>';
     try {
         console.log('Loading indexes for:', currentDatabase, currentCollection);
         const params = new URLSearchParams();
@@ -844,7 +871,6 @@ function formatSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-// Aggregation functionality
 let pipelineStages = [];
 
 function initAggregation() {
@@ -1008,7 +1034,6 @@ function loadAggregation() {
     $('#results-count').textContent = '';
 }
 
-// Context menu and database/collection rendering
 
 function renderDatabases() {
     const list = $('#databases-list');

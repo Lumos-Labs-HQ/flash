@@ -39,11 +39,6 @@ func (a *Adapter) Connect(ctx context.Context, url string) error {
 	a.client = client
 	dbName := a.extractDBName(url, clientOpts)
 
-	// List all databases to help debug
-	dbs, _ := client.ListDatabaseNames(ctx, bson.M{})
-	fmt.Printf("[DEBUG] Available databases: %v\n", dbs)
-	fmt.Printf("[DEBUG] Using database: %s\n", dbName)
-
 	a.database = client.Database(dbName)
 	a.dbName = dbName
 
@@ -51,13 +46,10 @@ func (a *Adapter) Connect(ctx context.Context, url string) error {
 }
 
 func (a *Adapter) extractDBName(url string, opts *options.ClientOptions) string {
-	// Parse URL to get database name from path FIRST
 	if len(url) > 0 {
-		// Look for database name after last /
 		parts := strings.Split(url, "/")
 		if len(parts) > 3 {
 			dbPart := parts[len(parts)-1]
-			// Remove query parameters if any
 			if idx := strings.Index(dbPart, "?"); idx > 0 {
 				dbPart = dbPart[:idx]
 			}
@@ -67,7 +59,6 @@ func (a *Adapter) extractDBName(url string, opts *options.ClientOptions) string 
 		}
 	}
 
-	// Fallback to auth source
 	if opts != nil && opts.Auth != nil && opts.Auth.AuthSource != "" && opts.Auth.AuthSource != "admin" {
 		return opts.Auth.AuthSource
 	}
@@ -103,7 +94,6 @@ func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	fmt.Printf("[DEBUG] MongoDB: Found %d collections (filtered: %d)\n", len(names), len(filtered))
 	return filtered, nil
 }
 
@@ -258,42 +248,20 @@ func convertBSONValue(v interface{}) interface{} {
 func (a *Adapter) CreateMigrationsTable(ctx context.Context) error             { return nil }
 func (a *Adapter) EnsureMigrationTableCompatibility(ctx context.Context) error { return nil }
 func (a *Adapter) CleanupBrokenMigrationRecords(ctx context.Context) error     { return nil }
-func (a *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
-	return nil, nil
-}
-func (a *Adapter) RecordMigration(ctx context.Context, migrationID, name, checksum string) error {
-	return nil
-}
+func (a *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) { return nil, nil }
+func (a *Adapter) RecordMigration(ctx context.Context, migrationID, name, checksum string) error { return nil }
 func (a *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error { return nil }
-func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
-	return nil
-}
-func (a *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error) {
-	return nil, nil
-}
+func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error { return nil }
+func (a *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error) { return nil, nil }
 func (a *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error) { return nil, nil }
 func (a *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error)   { return nil, nil }
-func (a *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
-	return nil, nil
-}
-func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
-	return nil, nil
-}
-func (a *Adapter) CheckTableExists(ctx context.Context, tableName string) (bool, error) {
-	return false, nil
-}
-func (a *Adapter) CheckColumnExists(ctx context.Context, tableName, columnName string) (bool, error) {
-	return false, nil
-}
-func (a *Adapter) CheckNotNullConstraint(ctx context.Context, tableName, columnName string) (bool, error) {
-	return false, nil
-}
-func (a *Adapter) CheckForeignKeyConstraint(ctx context.Context, tableName, constraintName string) (bool, error) {
-	return false, nil
-}
-func (a *Adapter) CheckUniqueConstraint(ctx context.Context, tableName, constraintName string) (bool, error) {
-	return false, nil
-}
+func (a *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) { return nil, nil }
+func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) { return nil, nil }
+func (a *Adapter) CheckTableExists(ctx context.Context, tableName string) (bool, error) { return false, nil }
+func (a *Adapter) CheckColumnExists(ctx context.Context, tableName, columnName string) (bool, error) { return false, nil }
+func (a *Adapter) CheckNotNullConstraint(ctx context.Context, tableName, columnName string) (bool, error) { return false, nil }
+func (a *Adapter) CheckForeignKeyConstraint(ctx context.Context, tableName, constraintName string) (bool, error) { return false, nil }
+func (a *Adapter) CheckUniqueConstraint(ctx context.Context, tableName, constraintName string) (bool, error) { return false, nil }
 func (a *Adapter) DropTable(ctx context.Context, tableName string) error                   { return nil }
 func (a *Adapter) DropEnum(ctx context.Context, enumName string) error                     { return nil }
 func (a *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string                   { return "" }
@@ -305,25 +273,13 @@ func (a *Adapter) MapColumnType(dbType string) string                           
 func (a *Adapter) FormatColumnType(column types.SchemaColumn) string                       { return column.Type }
 func (a *Adapter) CreateBranchSchema(ctx context.Context, branchName string) error         { return nil }
 func (a *Adapter) DropBranchSchema(ctx context.Context, branchName string) error           { return nil }
-func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetSchema string) error {
-	return nil
-}
-func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchSchema string) ([]types.SchemaTable, error) {
-	return nil, nil
-}
+func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetSchema string) error { return nil }
+func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchSchema string) ([]types.SchemaTable, error) { return nil, nil }
 func (a *Adapter) SetActiveSchema(ctx context.Context, schemaName string) error { return nil }
-func (a *Adapter) GetTableNamesInSchema(ctx context.Context, schemaName string) ([]string, error) {
-	return nil, nil
-}
-func (a *Adapter) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	return nil, nil
-}
-func (a *Adapter) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row {
-	return nil
-}
-func (a *Adapter) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	return nil, nil
-}
+func (a *Adapter) GetTableNamesInSchema(ctx context.Context, schemaName string) ([]string, error) { return nil, nil }
+func (a *Adapter) Query(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) { return nil, nil }
+func (a *Adapter) QueryRow(ctx context.Context, query string, args ...interface{}) *sql.Row { return nil }
+func (a *Adapter) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) { return nil, nil }
 func (a *Adapter) Begin(ctx context.Context) (*sql.Tx, error) { return nil, nil }
 
 // ExecuteMongoQuery executes a MongoDB query string
@@ -399,7 +355,6 @@ func extractBetween(str, start, end string) string {
 	return strings.TrimSpace(str[startIdx:endIdx])
 }
 
-// MongoDB Studio Methods
 
 // ListCollections returns all collection names
 func (a *Adapter) ListCollections(ctx context.Context) ([]string, error) {
@@ -407,11 +362,9 @@ func (a *Adapter) ListCollections(ctx context.Context) ([]string, error) {
 }
 
 func (a *Adapter) ListCollectionsInDB(ctx context.Context, database string) ([]string, error) {
-	fmt.Printf("[DEBUG] ListCollectionsInDB called for database: %s\n", database)
 	db := a.client.Database(database)
 	names, err := db.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
-		fmt.Printf("[DEBUG] ListCollections error: %v\n", err)
 		return nil, err
 	}
 
@@ -421,7 +374,6 @@ func (a *Adapter) ListCollectionsInDB(ctx context.Context, database string) ([]s
 			filtered = append(filtered, name)
 		}
 	}
-	fmt.Printf("[DEBUG] Found %d collections: %v\n", len(filtered), filtered)
 	return filtered, nil
 }
 
@@ -447,7 +399,6 @@ func (a *Adapter) FindDocuments(ctx context.Context, collection string, filter b
 
 // FindDocumentsInDB finds documents in a specific database and collection with pagination
 func (a *Adapter) FindDocumentsInDB(ctx context.Context, database, collection string, filter bson.M, skip, limit int64) ([]map[string]interface{}, error) {
-	fmt.Printf("[DEBUG FindDocumentsInDB] Database: %s, Collection: %s, Skip: %d, Limit: %d\n", database, collection, skip, limit)
 	db := a.client.Database(database)
 	coll := db.Collection(collection)
 	opts := options.Find().SetSkip(skip).SetLimit(limit)
@@ -480,11 +431,9 @@ func (a *Adapter) CountDocuments(ctx context.Context, collection string, filter 
 
 // CountDocumentsInDB counts documents in a specific database and collection
 func (a *Adapter) CountDocumentsInDB(ctx context.Context, database, collection string, filter bson.M) (int64, error) {
-	fmt.Printf("[DEBUG CountDocumentsInDB] Database: %s, Collection: %s\n", database, collection)
 	db := a.client.Database(database)
 	coll := db.Collection(collection)
 	count, err := coll.CountDocuments(ctx, filter)
-	fmt.Printf("[DEBUG CountDocumentsInDB] Result: %d documents, Error: %v\n", count, err)
 	return count, err
 }
 
@@ -631,23 +580,18 @@ func (a *Adapter) ListDatabases(ctx context.Context) ([]map[string]interface{}, 
 
 // SwitchDatabase switches to a different database
 func (a *Adapter) SwitchDatabase(dbName string) error {
-	fmt.Printf("[DEBUG SwitchDatabase BEFORE] a.dbName was: '%s' (len=%d)\n", a.dbName, len(a.dbName))
-	fmt.Printf("[DEBUG SwitchDatabase] Switching to database: '%s' (len=%d)\n", dbName, len(dbName))
 	a.database = a.client.Database(dbName)
 	a.dbName = dbName
-	fmt.Printf("[DEBUG SwitchDatabase AFTER] a.dbName is now: '%s' (len=%d)\n", a.dbName, len(a.dbName))
 	return nil
 }
 
 // DropDatabase drops a database
 func (a *Adapter) DropDatabase(ctx context.Context, dbName string) error {
-	fmt.Printf("[DEBUG DropDatabase] Dropping database: '%s'\n", dbName)
 	return a.client.Database(dbName).Drop(ctx)
 }
 
 // CreateDatabase creates a new database by creating an initial collection
 func (a *Adapter) CreateDatabase(ctx context.Context, dbName string) error {
-	fmt.Printf("[DEBUG CreateDatabase] Creating database: '%s'\n", dbName)
 	db := a.client.Database(dbName)
 	err := db.CreateCollection(ctx, "_init")
 	if err != nil {
@@ -657,7 +601,6 @@ func (a *Adapter) CreateDatabase(ctx context.Context, dbName string) error {
 }
 
 func parseObjectID(id string) (interface{}, error) {
-	// Try to parse as MongoDB ObjectID
 	if len(id) == 24 {
 		oid, err := primitive.ObjectIDFromHex(id)
 		if err != nil {
