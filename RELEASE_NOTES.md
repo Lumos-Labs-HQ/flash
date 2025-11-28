@@ -1,112 +1,136 @@
-# FlashORM v2.1.11 Release Notes
+# FlashORM v2.2.0 Release Notes
 
-## 🎉 New Features
+## 🎉 What's New
 
-### 🐍 Python Async/Sync Code Generation
+### 🔌 Plugin Architecture
 
-**Flexible Python Generation:**
-- ✅ **Async Mode (Default)** - Generate async/await Python code for high-performance applications
-- ✅ **Sync Mode** - Generate synchronous Python code for simpler applications or legacy codebases
-- ✅ **Driver-Agnostic MySQL** - MySQL code now works with ANY Python MySQL driver (pymysql, aiomysql, mysql-connector-python, etc.)
-- ✅ **No Library Dependencies** - Generated code adapts to your chosen driver automatically
+FlashORM now uses a modular plugin system for a lightweight, customizable experience:
 
-**Configuration:**
-```json
-{
-  "gen": {
-    "python": {
-      "enabled": true,
-      "async": false  // true = async (default), false = sync
-    }
-  }
-}
+- **Base CLI** (~5-10 MB) - Minimal footprint with plugin management
+- **Core Plugin** - Complete ORM features (migrations, codegen, export)
+- **Studio Plugin** - Visual database editors (SQL, MongoDB, Redis)
+- **All Plugin** - Everything bundled together
+
+```bash
+# Install base CLI
+npm install -g flashorm
+
+# Add plugins as needed
+flash add-plug core      # ORM features only
+flash add-plug studio    # Visual editors only
+flash add-plug all       # Everything
+
+# Manage plugins
+flash plugins            # List installed
+flash plugins --online   # Check available
+flash rm-plug studio     # Remove plugin
 ```
 
-**Async Example (async: true):**
-```python
-import asyncio
-import aiomysql
-from flash_gen.database import new
+---
 
-async def main():
-    pool = await aiomysql.create_pool(
-        host='localhost',
-        user='root',
-        password='password',
-        db='mydb'
-    )
-    db = new(pool)
-    
-    # Async operations with await
-    user = await db.create_user('Alice', 'alice@example.com')
-    users = await db.get_all_users()
-    count = await db.get_user_count()  # Single-column queries return values directly
-    
-    pool.close()
-    await pool.wait_closed()
+### 🍃 MongoDB Studio
 
-asyncio.run(main())
+A beautiful, modern interface for MongoDB database management - similar to MongoDB Compass but in your browser!
+
+**Launch MongoDB Studio:**
+```bash
+flash studio --db "mongodb://localhost:27017/mydb"
+# or
+flash studio --db "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
 ```
 
-**Sync Example (async: false):**
-```python
-import pymysql
-from flash_gen.database import new
+**Features:**
+- 📋 **Collection Browser** - View all collections with document counts
+- 📄 **Document Viewer** - Browse documents with syntax-highlighted JSON
+- ✏️ **Inline Editing** - Edit documents directly with JSON validation
+- ➕ **Create Documents** - Add new documents with JSON editor
+- 🗑️ **Delete Documents** - Remove documents with confirmation
+- 🔍 **Search & Filter** - Query documents using MongoDB syntax
+- 📊 **Database Stats** - View connection info and statistics
+- 📋 **Copy as JSON** - One-click copy of any document
 
-def main():
-    conn = pymysql.connect(
-        host='localhost',
-        user='root',
-        password='password',
-        db='mydb'
-    )
-    db = new(conn)
-    
-    # Synchronous operations - no await needed
-    user = db.create_user('Alice', 'alice@example.com')
-    users = db.get_all_users()
-    count = db.get_user_count()
-    
-    conn.close()
+---
 
-main()
+### 🔴 Redis Studio
+
+A powerful Redis management interface inspired by Upstash Redis Studio with a real CLI terminal!
+
+**Launch Redis Studio:**
+```bash
+flash studio --redis "redis://localhost:6379"
+# or with password
+flash studio --redis "redis://:password@localhost:6379"
 ```
 
-**Driver Compatibility:**
-```python
-# Works with aiomysql (async)
-import aiomysql
-pool = await aiomysql.create_pool(...)
-db = new(pool)
+**Features:**
 
-# Works with PyMySQL (sync)
-import pymysql
-conn = pymysql.connect(...)
-db = new(conn)
+#### 🗂️ Key Browser
+- View all keys with type indicators (STRING, LIST, SET, HASH, ZSET)
+- Search keys with pattern matching (e.g., `user:*`)
+- TTL display and management
+- Create new keys of any type
+- Delete keys with confirmation
 
-# Works with mysql-connector-python (sync)
-import mysql.connector
-conn = mysql.connector.connect(...)
-db = new(conn)
-
-# Works with any driver that supports cursor() and execute()
+#### 💻 Real CLI Terminal
+Full Redis CLI experience with inline input/output:
+```
+redis> SET mykey "hello"
+OK
+redis> GET mykey
+"hello"
+redis> KEYS *
+1) "mykey"
+redis> MEMORY STATS
+peak.allocated: 1048576
+total.allocated: 524288
+...
+redis> HSET user:1 name "John" age 30
+(integer) 2
+redis> HGETALL user:1
+1) "name"
+2) "John"
+3) "age"
+4) "30"
 ```
 
-**Key Improvements:**
-- 🔧 **Flexible** - Switch between async/sync without regenerating your SQL queries
-- 🎯 **Smart Type Detection** - Single-column queries return primitives, multi-column returns typed dataclasses
-- 📦 **Universal MySQL Support** - Works with any MySQL driver's cursor interface
+- ⬆️⬇️ Command history navigation
+- All Redis commands supported
+- Color-coded output (OK in green, errors in red)
+- `clear` or `Ctrl+L` to clear terminal
+
+#### 📊 Statistics Dashboard
+- Memory usage and peak allocation
+- Connected clients count
+- Total keys across all databases
+- Server uptime
+- Redis version info
+
+#### 🗄️ Database Selector
+- Switch between db0-db15 (Redis's 16 isolated databases)
+- Each database is completely isolated
+
+#### 🧹 Purge Database
+- One-click purge button to clear all keys in current database
+- Confirmation dialog to prevent accidents
+
+---
+
+### 📊 SQL Studio Improvements
+
+The SQL Studio has been enhanced with:
+- Better dark theme with improved contrast
+- Faster table loading with batch queries
+- Enhanced inline editing experience
+- Improved schema visualization
+
+---
 
 ## 📦 Installation
 
-### NPM
+### NPM (Recommended)
 ```bash
 npm install -g flashorm
-```
-
-### Go
-```bash
-go install github.com/Lumos-Labs-HQ/flash
+flash add-plug all   # Install all features
 ```
 
 ### Python
@@ -114,19 +138,45 @@ go install github.com/Lumos-Labs-HQ/flash
 pip install flashorm
 ```
 
-### Download
-Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/flash/releases/tag/v2.1.0)
-Download from [NPM](https://www.npmjs.com/package/flashorm)
-Download from [PYPI](https://pypi.org/project/flashorm/2.1.0/)
+### Go
+```bash
+go install github.com/Lumos-Labs-HQ/flash@latest
+```
+
+### Direct Download
+Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/flash/releases)
+
+---
+
+## 🚀 Quick Start
+
+### SQL Databases (PostgreSQL, MySQL, SQLite)
+```bash
+flash init --postgresql
+flash migrate "create users table"
+flash apply
+flash studio   # Visual editor
+```
+
+### MongoDB
+```bash
+flash studio --db "mongodb://localhost:27017/mydb"
+```
+
+### Redis
+```bash
+flash studio --redis "redis://localhost:6379"
+```
+
+---
 
 ## 📚 Documentation
 
-- [Main Documentation](https://github.com/Lumos-Labs-HQ/flash)
-- [Go Examples](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/go)
-- [TypeScript Examples](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/ts)
-- [Python Examples](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/python)
-- [Studio Guide](https://github.com/Lumos-Labs-HQ/flash#-studio-visual-database-editor)
-- [Technology Stack](https://github.com/Lumos-Labs-HQ/flash/blob/main/docs/TECHNOLOGY_STACK.md)
+- [Plugin System Guide](docs/PLUGIN_SYSTEM.md)
+- [Technology Stack](docs/TECHNOLOGY_STACK.md)
+- [Contributing Guide](docs/CONTRIBUTING.md)
+
+---
 
 ## 💬 Feedback
 

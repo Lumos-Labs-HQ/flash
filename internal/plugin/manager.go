@@ -375,10 +375,12 @@ func (m *Manager) downloadFile(url, filepath string) error {
 	}
 	defer out.Close()
 
-	// Show progress
+	// Show progress with animation
 	totalSize := resp.ContentLength
 	downloaded := int64(0)
 	buffer := make([]byte, 32*1024) // 32KB buffer
+	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	spinnerIdx := 0
 
 	for {
 		n, err := resp.Body.Read(buffer)
@@ -391,7 +393,20 @@ func (m *Manager) downloadFile(url, filepath string) error {
 
 			if totalSize > 0 {
 				percentage := float64(downloaded) / float64(totalSize) * 100
-				fmt.Printf("\r📊 Progress: %.1f%% (%d/%d bytes)", percentage, downloaded, totalSize)
+				barWidth := 40
+				filledWidth := int(percentage * float64(barWidth) / 100)
+				bar := strings.Repeat("█", filledWidth) + strings.Repeat("░", barWidth-filledWidth)
+
+				downloadedMB := float64(downloaded) / (1024 * 1024)
+				totalMB := float64(totalSize) / (1024 * 1024)
+
+				fmt.Printf("\r%s %s %.1f%% (%.1f/%.1f MB)",
+					color.CyanString(spinner[spinnerIdx]),
+					bar,
+					percentage,
+					downloadedMB,
+					totalMB)
+				spinnerIdx = (spinnerIdx + 1) % len(spinner)
 			}
 		}
 		if err == io.EOF {

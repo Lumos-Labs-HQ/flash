@@ -1,4 +1,4 @@
-package studio
+package sql
 
 import "embed"
 

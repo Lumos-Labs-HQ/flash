@@ -6,9 +6,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio"
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/mongodb"
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/redis"
 	"github.com/spf13/cobra"
 )
 
@@ -24,11 +27,20 @@ The studio will start a local web server and open in your default browser.
 Examples:
   flash studio
   flash studio --db "postgres://user:pass@localhost:5432/mydb"
+  flash studio --db "mongodb://localhost:27017/mydb"
+  flash studio --redis "redis://localhost:6379"
   flash studio --port 3000`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dbURL, _ := cmd.Flags().GetString("db")
+		redisURL, _ := cmd.Flags().GetString("redis")
 		port, _ := cmd.Flags().GetInt("port")
 		browser, _ := cmd.Flags().GetBool("browser")
+
+		if redisURL != "" {
+			fmt.Printf("🔴 Starting Redis Studio: %s\n", maskDBURL(redisURL))
+			redisServer := redis.NewServer(redisURL, port)
+			return redisServer.Start(browser)
+		}
 
 		var cfg *config.Config
 		var err error
@@ -57,16 +69,23 @@ Examples:
 			}
 		}
 
-		server := studio.NewServer(cfg, port)
-		return server.Start(browser)
+		if cfg.Database.Provider == "mongodb" || cfg.Database.Provider == "mongo" {
+			fmt.Println("🍃 Starting MongoDB Studio...")
+			mongoServer := mongodb.NewServer(cfg, port)
+			return mongoServer.Start(browser)
+		} else {
+			fmt.Println("🗄️  Starting SQL Studio...")
+			server := studio.New(cfg, port)
+			return server.Start(browser)
+		}
 	},
 }
 
 func init() {
-	// Command is registered by plugin executors, not the base CLI
 	studioCmd.Flags().IntP("port", "p", 5555, "Port to run studio on")
 	studioCmd.Flags().BoolP("browser", "b", true, "Open browser automatically")
 	studioCmd.Flags().String("db", "", "Database URL (overrides config/env)")
+	studioCmd.Flags().String("redis", "", "Redis URL for Redis Studio (e.g., redis://localhost:6379)")
 }
 
 func maskDBURL(url string) string {
@@ -80,6 +99,12 @@ func maskDBURL(url string) string {
 }
 
 func detectProvider(dbURL string) string {
+	// Check for MongoDB first
+	if strings.HasPrefix(dbURL, "mongodb://") || strings.HasPrefix(dbURL, "mongodb+srv://") {
+		return "mongodb"
+	}
+
+	// Check other databases
 	switch {
 	case len(dbURL) >= 10 && (dbURL[:10] == "postgres://" || dbURL[:10] == "postgresql"):
 		return "postgresql"
@@ -88,9 +113,9 @@ func detectProvider(dbURL string) string {
 	case len(dbURL) >= 9 && dbURL[:9] == "sqlite://":
 		return "sqlite"
 	default:
-		if contains := func(s, substr string) bool {
-			return len(s) >= len(substr) && s[:len(substr)] == substr
-		}; contains(dbURL, "postgres") {
+		if strings.Contains(dbURL, "mongodb") {
+			return "mongodb"
+		} else if strings.Contains(dbURL, "postgres") {
 			return "postgresql"
 		}
 		return "postgresql"

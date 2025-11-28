@@ -219,6 +219,13 @@ async function loadBranches() {
         const selector = document.getElementById('branch-selector');
         selector.innerHTML = '';
         
+        if (data.branches.length === 1) {
+            selector.style.display = 'none';
+            return;
+        }
+        
+        selector.style.display = 'inline-block';
+        
         data.branches.forEach(branch => {
             const option = document.createElement('option');
             option.value = branch.name;

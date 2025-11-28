@@ -39,9 +39,9 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 		branchSchema: currentBranch.Schema,
 	}
 
-	// Set search_path for PostgreSQL or USE for MySQL to use branch schema
 	ctx := context.Background()
-	if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
+	switch cfg.Database.Provider {
+	case "postgresql", "postgres":
 		if currentBranch.Schema != "public" && currentBranch.Schema != "" {
 			query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
 			if _, err := migrator.adapter.ExecuteQuery(ctx, query); err != nil {
@@ -50,9 +50,8 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 				fmt.Printf("🔧 Using schema: %s\n", currentBranch.Schema)
 			}
 		}
-	} else if cfg.Database.Provider == "mysql" || cfg.Database.Provider == "sqlite" || cfg.Database.Provider == "sqlite3" {
-		// For MySQL and SQLite, switch database by reconnecting
-		if currentBranch.Schema != "" {
+	case "mysql":
+		if currentBranch.Schema != "" && currentBranch.Schema != "public" {
 			type DatabaseSwitcher interface {
 				SwitchDatabase(ctx context.Context, dbName string) error
 			}
@@ -60,11 +59,20 @@ func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
 				if err := switcher.SwitchDatabase(ctx, currentBranch.Schema); err != nil {
 					fmt.Printf("Warning: Could not switch to database %s: %v\n", currentBranch.Schema, err)
 				} else {
-					if cfg.Database.Provider == "mysql" {
-						fmt.Printf("🔧 Using database: %s\n", currentBranch.Schema)
-					} else {
-						fmt.Printf("🔧 Using file: %s\n", currentBranch.Schema)
-					}
+					fmt.Printf("🔧 Using database: %s\n", currentBranch.Schema)
+				}
+			}
+		}
+	case "sqlite", "sqlite3":
+		if currentBranch.Schema != "" && currentBranch.Schema != "public" {
+			type DatabaseSwitcher interface {
+				SwitchDatabase(ctx context.Context, dbName string) error
+			}
+			if switcher, ok := migrator.adapter.(DatabaseSwitcher); ok {
+				if err := switcher.SwitchDatabase(ctx, currentBranch.Schema); err != nil {
+					fmt.Printf("Warning: Could not switch to file %s: %v\n", currentBranch.Schema, err)
+				} else {
+					fmt.Printf("🔧 Using file: %s\n", currentBranch.Schema)
 				}
 			}
 		}

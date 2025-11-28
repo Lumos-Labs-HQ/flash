@@ -292,10 +292,11 @@ Migrations: 3 total, 2 applied, 1 pending
 
 ## 📊 Studio (Visual Database Editor)
 
-FlashORM Studio provides a powerful visual interface for database management:
+FlashORM Studio provides powerful visual interfaces for database management:
 
-### Features
+### SQL Studio (PostgreSQL, MySQL, SQLite)
 
+**Features:**
 - 📋 **Visual Schema Designer**: View and edit database schema with interactive diagrams
 - ➕ **Add Tables**: Create new tables with columns, constraints, and relationships
 - ✏️ **Edit Tables**: Modify existing table structures, add/remove columns
@@ -304,27 +305,73 @@ FlashORM Studio provides a powerful visual interface for database management:
 - 🔄 **Auto-Migration Creation**: Automatically generates migration files from schema changes
 - 🎨 **Enhanced UI**: Improved visibility with better contrast and larger interactive elements
 
-### Usage
-
-**Start Studio with config file** (auto-detects database):
+**Usage:**
 
 ```bash
+# Start Studio with config file (auto-detects database)
 flash studio
-```
 
-**Start Studio with direct database connection**:
+# Start Studio with direct database connection
+flash studio --db "postgresql://user:pass@localhost:5432/mydb"
 
-```bash
-flash studio --db "postgresql://jack:secret123@localhost:5432/mydb"
-```
-
-**Custom port**:
-
-```bash
+# Custom port
 flash studio --port 3000
 ```
 
-Open http://localhost:5555 by default (or your specified port).
+### 🍃 MongoDB Studio
+
+A beautiful, modern interface for MongoDB - similar to MongoDB Compass!
+
+**Usage:**
+```bash
+flash studio --db "mongodb://localhost:27017/mydb"
+# or with MongoDB Atlas
+flash studio --db "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
+```
+
+**Features:**
+- 📋 **Collection Browser** - View all collections with document counts
+- 📄 **Document Viewer** - Browse documents with syntax-highlighted JSON
+- ✏️ **Inline Editing** - Edit documents directly with JSON validation
+- ➕ **Create Documents** - Add new documents with JSON editor
+- 🗑️ **Delete Documents** - Remove documents with confirmation
+- 🔍 **Search & Filter** - Query documents using MongoDB filter syntax
+- 📊 **Database Stats** - View connection info and statistics
+- 📋 **Copy as JSON** - One-click copy of any document
+
+### 🔴 Redis Studio
+
+A powerful Redis management interface with a real CLI terminal - inspired by Upstash!
+
+**Usage:**
+```bash
+flash studio --redis "redis://localhost:6379"
+# or with password
+flash studio --redis "redis://:password@localhost:6379"
+```
+
+**Features:**
+- 🗂️ **Key Browser** - View keys with type indicators (STRING, LIST, SET, HASH, ZSET)
+- 🔍 **Pattern Search** - Search keys with wildcards (e.g., `user:*`)
+- ➕ **Create Keys** - Add new keys of any Redis type
+- ⏰ **TTL Management** - View and set key expiration
+- 💻 **Real CLI Terminal** - Full Redis CLI with command history (↑↓ arrows)
+- 📊 **Statistics** - Memory usage, connected clients, server info
+- 🗄️ **Database Selector** - Switch between db0-db15
+- 🧹 **Purge Database** - Clear all keys with one click
+
+**CLI Examples:**
+```
+redis> SET mykey "hello"
+OK
+redis> GET mykey
+"hello"
+redis> HSET user:1 name "John" age 30
+(integer) 2
+redis> MEMORY STATS
+peak.allocated: 1048576
+...
+```
 
 ### Studio Workflow
 
