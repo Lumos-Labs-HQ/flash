@@ -61,6 +61,10 @@ jobs:
         file ./flash
         ./flash --version
 
+    - name: Grant MySQL privileges for testing
+      run: |
+        mysql -h 127.0.0.1 -u root -prootpass -e "GRANT ALL PRIVILEGES ON *.* TO 'testuser'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+
     - name: Run integration tests
       env:
         CI: true
