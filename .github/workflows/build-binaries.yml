@@ -37,6 +37,13 @@ jobs:
         echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
 
+    - name: Download dependencies
+      run: |
+        go mod tidy
+        cd plugins/core && go mod tidy && cd ../..
+        cd plugins/studio && go mod tidy && cd ../..
+        cd plugins/all && go mod tidy && cd ../..
+
     - name: Build base CLI binaries
       run: |
         mkdir -p release
