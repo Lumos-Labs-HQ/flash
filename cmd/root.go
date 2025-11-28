@@ -16,7 +16,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "2.2.0-beta5"
+	Version = "2.2.0"
 )
 
 func showBanner() {

@@ -10,12 +10,15 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.32
+	github.com/redis/go-redis/v9 v9.17.1
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	go.mongodb.org/mongo-driver v1.13.1
 )
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect

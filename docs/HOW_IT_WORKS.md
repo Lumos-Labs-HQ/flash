@@ -1188,7 +1188,11 @@ jobs:
 
 ### Overview
 
-Flash Studio is a web-based database management interface built with Go Fiber and vanilla JavaScript, providing three main interfaces for database interaction.
+Flash Studio provides web-based database management interfaces built with Go Fiber and vanilla JavaScript. It supports three database types:
+
+1. **SQL Studio** - PostgreSQL, MySQL, SQLite
+2. **MongoDB Studio** - MongoDB and MongoDB Atlas
+3. **Redis Studio** - Redis with full CLI support
 
 ### Server Architecture
 
@@ -1222,9 +1226,11 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 ```
 
-### Studio Components
+---
 
-#### 1. Data Browser (`/`)
+## SQL Studio Components
+
+### 1. Data Browser (`/`)
 
 **Purpose**: Interactive table browser for viewing and editing data
 
@@ -1268,7 +1274,7 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 - Pagination for large datasets
 - Transaction-based saves
 
-#### 2. SQL Editor (`/sql`)
+### 2. SQL Editor (`/sql`)
 
 **Purpose**: Professional SQL editor with live query execution
 
@@ -1312,7 +1318,7 @@ func (s *Service) ExecuteSQL(query string) (*SQLResult, error) {
 - Transaction handling for DML queries
 - Error messages with context
 
-#### 3. Schema Visualization (`/schema`)
+### 3. Schema Visualization (`/schema`)
 
 **Purpose**: Visual database diagram with relationships
 
@@ -1322,89 +1328,380 @@ func (s *Service) ExecuteSQL(query string) (*SQLResult, error) {
 3. **Render Diagram**: Draw tables and foreign key arrows
 4. **Interactive**: Hover effects and relationship highlighting
 
-**Schema Fetching:**
+---
+
+## MongoDB Studio Architecture
+
+### Overview
+
+MongoDB Studio provides a visual interface for MongoDB databases, supporting both local MongoDB and MongoDB Atlas connections.
+
+**Location**: `internal/studio/mongodb/`
+
+### Components
+
+```
+internal/studio/mongodb/
+├── embed.go          # Embedded file system
+├── server.go         # Fiber HTTP server and routes
+├── service.go        # MongoDB operations
+├── handlers.go       # API request handlers
+├── templates/
+│   └── index.html    # Main template
+└── static/
+    ├── css/
+    │   └── mongodb.css
+    └── js/
+        └── mongodb.js
+```
+
+### Server Architecture
+
+**MongoDB Connection:**
 ```go
-func (s *Service) GetSchema() (*SchemaInfo, error) {
-    tables, _ := s.adapter.GetCurrentSchema(s.ctx)
+func NewServer(connectionString string, port int) (*Server, error) {
+    // Parse connection string
+    clientOptions := options.Client().ApplyURI(connectionString)
     
-    var result []TableSchema
-    for _, table := range tables {
-        columns, _ := s.adapter.GetTableColumns(s.ctx, table.Name)
-        
-        result = append(result, TableSchema{
-            Name:    table.Name,
-            Columns: columns,
-        })
-    }
+    // Connect to MongoDB
+    client, err := mongo.Connect(ctx, clientOptions)
     
-    return &SchemaInfo{Tables: result}, nil
+    // Extract database name from URI
+    dbName := extractDatabaseName(connectionString)
+    
+    return &Server{
+        client:   client,
+        database: client.Database(dbName),
+        port:     port,
+    }, nil
 }
 ```
 
-**Auto-Layout Algorithm:**
-```javascript
-function layoutTables(tables) {
-    const cols = Math.ceil(Math.sqrt(tables.length));
-    const spacing = { x: 300, y: 400 };
-    
-    tables.forEach((table, i) => {
-        table.x = (i % cols) * spacing.x + 50;
-        table.y = Math.floor(i / cols) * spacing.y + 50;
-    });
-}
-```
-
-### Studio API Endpoints
-
-**REST API Structure:**
+### API Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/tables` | GET | List all tables with row counts |
-| `/api/tables/:name` | GET | Get table data with pagination |
-| `/api/tables/:name/save` | POST | Save batch changes |
-| `/api/tables/:name/add` | POST | Add new row |
-| `/api/tables/:name/delete` | POST | Delete multiple rows |
-| `/api/sql` | POST | Execute SQL query |
-| `/api/schema` | GET | Get database schema |
+| `/api/collections` | GET | List all collections with document counts |
+| `/api/collection?name=xxx` | GET | Get documents from collection |
+| `/api/document?collection=xxx&id=xxx` | GET | Get single document |
+| `/api/document` | POST | Create new document |
+| `/api/document` | PUT | Update document |
+| `/api/document?collection=xxx&id=xxx` | DELETE | Delete document |
+| `/api/stats` | GET | Get database statistics |
 
-**Response Format:**
-```json
-{
-    "columns": [
-        {"name": "id", "type": "INTEGER", "primaryKey": true}
-    ],
-    "rows": [
-        {"id": 1, "name": "Alice"}
-    ],
-    "total": 100,
-    "page": 1,
-    "limit": 50
+### Key Features
+
+**1. Collection Browser**
+```go
+func (s *Service) GetCollections() ([]CollectionInfo, error) {
+    names, _ := s.database.ListCollectionNames(s.ctx, bson.M{})
+    
+    var collections []CollectionInfo
+    for _, name := range names {
+        count, _ := s.database.Collection(name).CountDocuments(s.ctx, bson.M{})
+        collections = append(collections, CollectionInfo{
+            Name:  name,
+            Count: count,
+        })
+    }
+    return collections, nil
 }
 ```
 
-### Embedded File System
+**2. Document Viewer with JSON Formatting**
+- Syntax-highlighted JSON display
+- Collapsible nested objects
+- Copy-as-JSON functionality
+- ObjectID formatting
 
-**Implementation:**
+**3. Inline Document Editing**
 ```go
-//go:embed static/*
-var StaticFS embed.FS
-
-//go:embed templates/*
-var TemplatesFS embed.FS
-
-// Serve static files
-staticFS, _ := fs.Sub(StaticFS, "static")
-app.Use("/static", filesystem.New(filesystem.Config{
-    Root: http.FS(staticFS),
-}))
+func (s *Service) UpdateDocument(collection, id string, update bson.M) error {
+    objectID, _ := primitive.ObjectIDFromHex(id)
+    
+    _, err := s.database.Collection(collection).UpdateOne(
+        s.ctx,
+        bson.M{"_id": objectID},
+        bson.M{"$set": update},
+    )
+    return err
+}
 ```
 
-**Benefits:**
-- Single binary distribution
-- No external file dependencies
-- Fast file serving
-- Cross-platform compatibility
+**4. Query Filtering**
+```go
+func (s *Service) GetDocuments(collection string, filter bson.M, limit int) ([]bson.M, error) {
+    cursor, _ := s.database.Collection(collection).Find(
+        s.ctx,
+        filter,
+        options.Find().SetLimit(int64(limit)),
+    )
+    
+    var documents []bson.M
+    cursor.All(s.ctx, &documents)
+    return documents, nil
+}
+```
+
+### Frontend Architecture
+
+**Document Display:**
+- Clean JSON formatting without brackets/commas for readability
+- Key-value pair display with type indicators
+- Expandable nested objects and arrays
+- One-click copy as formatted JSON
+
+---
+
+## Redis Studio Architecture
+
+### Overview
+
+Redis Studio provides a complete Redis management interface with a real CLI terminal experience.
+
+**Location**: `internal/studio/redis/`
+
+### Components
+
+```
+internal/studio/redis/
+├── embed.go          # Embedded file system
+├── server.go         # Fiber HTTP server and routes
+├── service.go        # Redis operations and CLI execution
+├── handlers.go       # API request handlers
+├── templates/
+│   └── index.html    # Main template with inline terminal
+└── static/
+    ├── css/
+    │   └── redis.css
+    └── js/
+        └── redis.js
+```
+
+### Server Architecture
+
+**Redis Connection:**
+```go
+func NewServer(connectionString string, port int) (*Server, error) {
+    // Parse Redis URL
+    opt, err := redis.ParseURL(connectionString)
+    
+    // Create Redis client
+    client := redis.NewClient(opt)
+    
+    // Test connection
+    _, err = client.Ping(ctx).Result()
+    
+    return &Server{
+        client: client,
+        port:   port,
+    }, nil
+}
+```
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/keys` | GET | List all keys with types |
+| `/api/key?key=xxx` | GET | Get key value and metadata |
+| `/api/key` | POST | Create/update key |
+| `/api/key?key=xxx` | DELETE | Delete key |
+| `/api/cli` | POST | Execute CLI command |
+| `/api/stats` | GET | Get server statistics |
+| `/api/flush` | POST | Flush current database |
+| `/api/db/:num` | POST | Switch database |
+
+### Key Features
+
+**1. Key Browser with Type Detection**
+```go
+func (s *Service) GetKeys(pattern string) ([]KeyInfo, error) {
+    keys, _ := s.client.Keys(s.ctx, pattern).Result()
+    
+    var keyInfos []KeyInfo
+    for _, key := range keys {
+        keyType, _ := s.client.Type(s.ctx, key).Result()
+        ttl, _ := s.client.TTL(s.ctx, key).Result()
+        
+        keyInfos = append(keyInfos, KeyInfo{
+            Key:  key,
+            Type: keyType,
+            TTL:  ttl,
+        })
+    }
+    return keyInfos, nil
+}
+```
+
+**2. Multi-Type Value Retrieval**
+```go
+func (s *Service) GetKeyValue(key string) (*KeyValue, error) {
+    keyType, _ := s.client.Type(s.ctx, key).Result()
+    
+    var value interface{}
+    switch keyType {
+    case "string":
+        value, _ = s.client.Get(s.ctx, key).Result()
+    case "list":
+        value, _ = s.client.LRange(s.ctx, key, 0, -1).Result()
+    case "set":
+        value, _ = s.client.SMembers(s.ctx, key).Result()
+    case "zset":
+        value, _ = s.client.ZRangeWithScores(s.ctx, key, 0, -1).Result()
+    case "hash":
+        value, _ = s.client.HGetAll(s.ctx, key).Result()
+    }
+    
+    return &KeyValue{Key: key, Type: keyType, Value: value}, nil
+}
+```
+
+**3. Real CLI Terminal**
+
+The CLI executes any Redis command directly:
+
+```go
+func (s *Service) ExecuteCLI(command string) *CLIResult {
+    start := time.Now()
+    result := &CLIResult{Command: command}
+    
+    // Parse command into parts
+    parts := parseCommand(command)
+    
+    // Execute command using Do()
+    args := make([]interface{}, len(parts))
+    for i, p := range parts { args[i] = p }
+    
+    res, err := s.client.Do(s.ctx, args...).Result()
+    if err != nil {
+        result.Error = err.Error()
+    } else {
+        result.Result = formatResult(res)
+    }
+    
+    result.Duration = time.Since(start).String()
+    return result
+}
+
+func formatResult(result interface{}) interface{} {
+    switch v := result.(type) {
+    case []interface{}:
+        formatted := make([]interface{}, len(v))
+        for i, item := range v {
+            formatted[i] = formatResult(item)
+        }
+        return formatted
+    case []byte:
+        return string(v)
+    case map[interface{}]interface{}:
+        formatted := make(map[string]interface{})
+        for key, val := range v {
+            formatted[fmt.Sprintf("%v", key)] = formatResult(val)
+        }
+        return formatted
+    default:
+        return fmt.Sprintf("%v", v)
+    }
+}
+```
+
+**4. Database Selection**
+```go
+func (s *Service) SelectDB(db int) error {
+    // Create new client with selected database
+    opt := s.client.Options()
+    opt.DB = db
+    
+    newClient := redis.NewClient(opt)
+    s.client = newClient
+    return nil
+}
+```
+
+**5. Purge Database**
+```go
+func (s *Service) FlushDB() error {
+    return s.client.FlushDB(s.ctx).Err()
+}
+```
+
+### Frontend Architecture
+
+**Inline Terminal Implementation:**
+```javascript
+class RedisTerminal {
+    constructor() {
+        this.history = [];
+        this.historyIndex = -1;
+    }
+    
+    createInputLine() {
+        const line = document.createElement('div');
+        line.className = 'terminal-line';
+        line.innerHTML = `
+            <span class="terminal-prompt">redis&gt;</span>
+            <span class="terminal-input" contenteditable="true"></span>
+        `;
+        return line;
+    }
+    
+    async executeCommand(command) {
+        // Add to history
+        this.history.push(command);
+        
+        // Send to server
+        const response = await fetch('/api/cli', {
+            method: 'POST',
+            body: JSON.stringify({ command })
+        });
+        
+        const result = await response.json();
+        this.displayResult(result);
+    }
+    
+    displayResult(result) {
+        if (result.error) {
+            this.addLine(`(error) ${result.error}`, 'error');
+        } else {
+            this.formatRedisOutput(result.result);
+        }
+    }
+}
+```
+
+**Terminal Styling:**
+```css
+.terminal {
+    background: #0d0d0d;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 16px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.terminal-prompt {
+    color: #10b981;
+    margin-right: 8px;
+}
+
+.terminal-input {
+    color: #fff;
+    outline: none;
+    caret-color: #10b981;
+}
+
+.terminal-output {
+    color: #d4d4d4;
+    white-space: pre-wrap;
+}
+
+.terminal-error {
+    color: #ef4444;
+}
+```
+
+---
 
 ## Raw SQL Execution System
 
