@@ -9,6 +9,35 @@ const state = {
     foreignKeys: new Map() 
 };
 
+// Simple notification function (fallback if index.js showNotification not loaded yet)
+function showNotification(message, type = 'info') {
+    // Check if a notification function exists in index.js
+    if (window._showNotificationImpl) {
+        window._showNotificationImpl(message, type);
+        return;
+    }
+    
+    // Remove existing notifications
+    document.querySelectorAll('.toast-notification').forEach(n => n.remove());
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+        <span class="toast-message">${message}</span>
+    `;
+    document.body.appendChild(toast);
+    
+    // Animate in
+    requestAnimationFrame(() => toast.classList.add('show'));
+    
+    // Auto remove
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadTables();
@@ -397,7 +426,7 @@ async function deleteSelected() {
     );
 }
 
-// Format value
+// Format value with proper type detection
 function formatValue(value, fk = null) {
     if (value === null || value === undefined) {
         return '<span class="value-null">NULL</span>';
@@ -409,12 +438,62 @@ function formatValue(value, fk = null) {
         return `<span class="value-number">${value}</span>`;
     }
     if (typeof value === 'object') {
-        return `<span class="value-string">${JSON.stringify(value)}</span>`;
+        // Handle Date objects
+        if (value instanceof Date) {
+            return `<span class="value-date">${value.toISOString()}</span>`;
+        }
+        // Handle arrays and objects (JSON)
+        try {
+            const jsonStr = JSON.stringify(value);
+            const escapedJson = escapeHtmlValue(jsonStr);
+            return `<span class="value-json" title="${escapedJson}">${escapedJson}</span>`;
+        } catch {
+            return `<span class="value-object">[Object]</span>`;
+        }
     }
+    
+    // String value - detect type
+    const strValue = String(value);
+    
+    // UUID detection (standard 8-4-4-4-12 format)
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strValue)) {
+        return `<span class="value-uuid" title="${strValue}">${escapeHtmlValue(strValue)}</span>`;
+    }
+    
+    // Datetime detection
+    if (/^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}:\d{2}/.test(strValue)) {
+        return `<span class="value-date">${escapeHtmlValue(strValue)}</span>`;
+    }
+    
+    // Email detection
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(strValue)) {
+        return `<span class="value-email">${escapeHtmlValue(strValue)}</span>`;
+    }
+    
+    // URL detection
+    if (/^https?:\/\//.test(strValue)) {
+        return `<a href="${escapeHtmlValue(strValue)}" target="_blank" class="value-url">${escapeHtmlValue(strValue)}</a>`;
+    }
+    
+    // Foreign key
     if (fk) {
-        return `<span class="value-fk">${value}</span>`;
+        return `<span class="value-fk">${escapeHtmlValue(strValue)}</span>`;
     }
-    return `<span class="value-string">${value}</span>`;
+    
+    // Long text truncation
+    if (strValue.length > 100) {
+        const truncated = strValue.substring(0, 100) + '...';
+        return `<span class="value-string value-truncated" title="${escapeHtmlValue(strValue)}">${escapeHtmlValue(truncated)}</span>`;
+    }
+    
+    return `<span class="value-string">${escapeHtmlValue(strValue)}</span>`;
+}
+
+// HTML escape utility for values
+function escapeHtmlValue(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Keyboard handler for collapsing/expanding sidebar
@@ -646,18 +725,52 @@ function deleteRow(rowId) {
     });
 }
 
-// Refresh
+// Refresh - clears filters and reloads fresh data
 function refreshData() {
     if (!state.currentTable) {
         // If no table is selected, just reload the tables list
         loadTables();
+        showNotification('Tables list refreshed', 'success');
         return;
     }
     
+    // Clear changes
     state.changes.clear();
     document.getElementById('save-btn').style.display = 'none';
+    
+    // Clear dirty cells
+    document.querySelectorAll('.cell-dirty').forEach(c => c.classList.remove('cell-dirty'));
+    
+    // Clear filter UI without reloading (we'll reload after)
+    const filterRows = document.getElementById('filter-rows');
+    if (filterRows) {
+        filterRows.innerHTML = '';
+    }
+    
+    // Clear filters array (defined in index.js)
+    if (typeof filters !== 'undefined') {
+        filters.length = 0; // Clear the array in-place
+    }
+    
+    // Update filter badge
+    if (typeof updateFilterCount === 'function') {
+        updateFilterCount();
+    }
+    
+    // Close filter panel if open
+    const filterPanel = document.getElementById('filter-panel');
+    if (filterPanel && filterPanel.classList.contains('show')) {
+        filterPanel.classList.remove('show');
+        const filterBtn = document.getElementById('filter-btn');
+        if (filterBtn) filterBtn.classList.remove('active');
+    }
+    
+    // Reload data and tables
     loadTableData();
     loadTables();
+    
+    // Show feedback
+    showNotification('Data refreshed', 'success');
 }
 
 // Pagination

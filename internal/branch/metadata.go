@@ -23,15 +23,20 @@ type BranchStore struct {
 
 type MetadataManager struct {
 	filePath string
+	flashDir string
 }
 
 func NewMetadataManager(migrationsPath string) *MetadataManager {
 	flashDir := filepath.Join(migrationsPath, ".flash")
-	os.MkdirAll(flashDir, 0755)
-	
+
 	return &MetadataManager{
 		filePath: filepath.Join(flashDir, "branches.json"),
+		flashDir: flashDir,
 	}
+}
+
+func (m *MetadataManager) EnsureDirectories() error {
+	return os.MkdirAll(m.flashDir, 0755)
 }
 
 func (m *MetadataManager) Load() (*BranchStore, error) {
@@ -53,6 +58,10 @@ func (m *MetadataManager) Load() (*BranchStore, error) {
 }
 
 func (m *MetadataManager) Save(store *BranchStore) error {
+	if err := m.EnsureDirectories(); err != nil {
+		return fmt.Errorf("failed to create directories: %w", err)
+	}
+
 	data, err := json.MarshalIndent(store, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal branches: %w", err)

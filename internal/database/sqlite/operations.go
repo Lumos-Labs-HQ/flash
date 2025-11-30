@@ -18,7 +18,7 @@ func (s *Adapter) tableExists(tableName string) (bool, error) {
 }
 
 func (s *Adapter) columnExists(tableName, columnName string) (bool, error) {
-	rows, err := s.db.QueryContext(context.Background(), fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	rows, err := s.db.QueryContext(context.Background(), fmt.Sprintf("PRAGMA table_info(\"%s\")", tableName))
 	if err != nil {
 		return false, err
 	}
@@ -47,7 +47,7 @@ func (s *Adapter) CheckColumnExists(ctx context.Context, tableName, columnName s
 }
 
 func (s *Adapter) CheckNotNullConstraint(ctx context.Context, tableName, columnName string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(\"%s\")", tableName))
 	if err != nil {
 		return false, err
 	}
@@ -68,7 +68,7 @@ func (s *Adapter) CheckNotNullConstraint(ctx context.Context, tableName, columnN
 }
 
 func (s *Adapter) CheckForeignKeyConstraint(ctx context.Context, tableName, constraintName string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list(\"%s\")", tableName))
 	if err != nil {
 		return false, err
 	}
@@ -87,7 +87,7 @@ func (s *Adapter) CheckForeignKeyConstraint(ctx context.Context, tableName, cons
 }
 
 func (s *Adapter) CheckUniqueConstraint(ctx context.Context, tableName, constraintName string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(%s)", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(\"%s\")", tableName))
 	if err != nil {
 		return false, err
 	}
@@ -108,7 +108,7 @@ func (s *Adapter) CheckUniqueConstraint(ctx context.Context, tableName, constrai
 }
 
 func (s *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT * FROM \"%s\"", tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (s *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[str
 
 func (s *Adapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
 	var count int
-	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tableName)
+	query := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", tableName)
 	err := s.db.QueryRowContext(ctx, query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count rows in table %s: %w", tableName, err)
@@ -157,7 +157,7 @@ func (s *Adapter) GetAllTableRowCounts(ctx context.Context, tableNames []string)
 
 	var queryParts []string
 	for _, tableName := range tableNames {
-		queryParts = append(queryParts, fmt.Sprintf("SELECT '%s' as table_name, COUNT(*) as row_count FROM `%s`", tableName, tableName))
+		queryParts = append(queryParts, fmt.Sprintf("SELECT '%s' as table_name, COUNT(*) as row_count FROM \"%s\"", tableName, tableName))
 	}
 
 	query := strings.Join(queryParts, " UNION ALL ")
@@ -181,7 +181,7 @@ func (s *Adapter) GetAllTableRowCounts(ctx context.Context, tableNames []string)
 }
 
 func (s *Adapter) DropTable(ctx context.Context, tableName string) error {
-	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", tableName))
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\"", tableName))
 	return err
 }
 
@@ -195,7 +195,7 @@ func (s *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 
 	for _, column := range table.Columns {
 		if column.ForeignKeyTable != "" && column.ForeignKeyColumn != "" {
-			fk := fmt.Sprintf("  FOREIGN KEY (`%s`) REFERENCES `%s`(`%s`)",
+			fk := fmt.Sprintf("  FOREIGN KEY (\"%s\") REFERENCES \"%s\"(\"%s\")",
 				column.Name, column.ForeignKeyTable, column.ForeignKeyColumn)
 			if column.OnDeleteAction != "" {
 				fk += fmt.Sprintf(" ON DELETE %s", column.OnDeleteAction)
@@ -204,14 +204,14 @@ func (s *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 		}
 	}
 
-	lines = append(lines, fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s` (", table.Name))
+	lines = append(lines, fmt.Sprintf("CREATE TABLE IF NOT EXISTS \"%s\" (", table.Name))
 
 	for i, column := range table.Columns {
 		comma := ","
 		if i == len(table.Columns)-1 && len(foreignKeys) == 0 {
 			comma = ""
 		}
-		lines = append(lines, fmt.Sprintf("  `%s` %s%s", column.Name, s.FormatColumnType(column), comma))
+		lines = append(lines, fmt.Sprintf("  \"%s\" %s%s", column.Name, s.FormatColumnType(column), comma))
 	}
 
 	for i, fk := range foreignKeys {
@@ -227,7 +227,7 @@ func (s *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 }
 
 func (s *Adapter) GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string {
-	return fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s;",
+	return fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s;",
 		tableName, column.Name, s.FormatColumnType(column))
 }
 
@@ -240,12 +240,12 @@ func (s *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	if index.Unique {
 		unique = "UNIQUE "
 	}
-	columns := "`" + strings.Join(index.Columns, "`, `") + "`"
-	return fmt.Sprintf("CREATE %sINDEX `%s` ON `%s` (%s);", unique, index.Name, index.Table, columns)
+	columns := "\"" + strings.Join(index.Columns, "\", \"") + "\""
+	return fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s);", unique, index.Name, index.Table, columns)
 }
 
 func (s *Adapter) GenerateDropIndexSQL(indexName string) string {
-	return fmt.Sprintf("DROP INDEX IF EXISTS `%s`;", indexName)
+	return fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", indexName)
 }
 
 func (s *Adapter) FormatColumnType(column types.SchemaColumn) string {

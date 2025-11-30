@@ -76,7 +76,7 @@ func (s *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 }
 
 func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(\"%s\")", tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 		columns = append(columns, column)
 	}
 
-	fkRows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName))
+	fkRows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list(\"%s\")", tableName))
 	if err == nil {
 		defer fkRows.Close()
 
@@ -137,7 +137,7 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 }
 
 func (s *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(%s)", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(\"%s\")", tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (s *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 
 	var tables []types.SchemaTable
 	for _, tableName := range tableNames {
-		columnQuery := fmt.Sprintf("PRAGMA table_info(%s)", tableName)
+		columnQuery := fmt.Sprintf("PRAGMA table_info(\"%s\")", tableName)
 		columnRows, err := s.db.QueryContext(ctx, columnQuery)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query columns for table %s: %w", tableName, err)
@@ -236,7 +236,7 @@ func (s *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		}
 		columnRows.Close()
 
-		fkQuery := fmt.Sprintf("PRAGMA foreign_key_list(%s)", tableName)
+		fkQuery := fmt.Sprintf("PRAGMA foreign_key_list(\"%s\")", tableName)
 		fkRows, err := s.db.QueryContext(ctx, fkQuery)
 		if err != nil {
 			return nil, fmt.Errorf("failed to query foreign keys for table %s: %w", tableName, err)
@@ -273,7 +273,7 @@ func (s *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 }
 
 func (s *Adapter) isColumnUnique(ctx context.Context, tableName, columnName string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(%s)", tableName))
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_list(\"%s\")", tableName))
 	if err != nil {
 		return false, err
 	}
@@ -299,7 +299,7 @@ func (s *Adapter) isColumnUnique(ctx context.Context, tableName, columnName stri
 }
 
 func (s *Adapter) getIndexColumns(ctx context.Context, indexName string) []string {
-	colRows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_info(%s)", indexName))
+	colRows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA index_info(\"%s\")", indexName))
 	if err != nil {
 		return nil
 	}

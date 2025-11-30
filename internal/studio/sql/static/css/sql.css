@@ -98,6 +98,13 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
 .editor-actions {
     display: flex;
     gap: 8px;
+    align-items: center;
+}
+
+.editor-hint {
+    font-size: 11px;
+    color: #666;
+    margin-right: 8px;
 }
 
 .btn {
@@ -205,6 +212,21 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
     opacity: 0.3;
 }
 
+.empty-hint {
+    font-size: 12px;
+    color: #555;
+    margin-top: 8px;
+}
+
+.empty-hint kbd {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
 .error-message {
     background: #3a1f1f;
     border: 1px solid #5a2f2f;
@@ -218,11 +240,172 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
 .success-message {
     background: #1f3a2f;
     border: 1px solid #2f5a3f;
-    border-radius: 6px;
-    padding: 16px;
+    border-radius: 8px;
+    padding: 24px;
     color: #10b981;
-    font-size: 13px;
+    font-size: 14px;
     margin: 16px;
+    text-align: center;
+}
+
+.success-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.success-text {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.success-details {
+    font-size: 12px;
+    color: #059669;
+}
+
+.error-message {
+    background: #3a1f1f;
+    border: 1px solid #5a2f2f;
+    border-radius: 8px;
+    padding: 24px;
+    color: #ef4444;
+    font-size: 14px;
+    margin: 16px;
+    text-align: center;
+}
+
+.error-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.error-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.error-text {
+    font-size: 13px;
+    color: #fca5a5;
+    margin-bottom: 8px;
+    word-break: break-word;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.error-hint {
+    font-size: 11px;
+    color: #888;
+}
+
+/* Cell type styling */
+.cell-null {
+    color: #666;
+    font-style: italic;
+}
+
+.cell-bool {
+    color: #c792ea;
+    font-weight: 500;
+}
+
+.cell-number {
+    color: #f78c6c;
+}
+
+.cell-uuid {
+    color: #82aaff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+.cell-date {
+    color: #c3e88d;
+}
+
+.cell-email {
+    color: #89ddff;
+}
+
+.cell-url {
+    color: #4a9eff;
+    text-decoration: underline;
+}
+
+.cell-url:hover {
+    color: #7bb8ff;
+}
+
+.cell-json {
+    color: #ffcb6b;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.cell-text {
+    color: #e0e0e0;
+}
+
+.cell-truncated {
+    cursor: pointer;
+}
+
+.cell-object {
+    color: #888;
+    font-style: italic;
+}
+
+/* Row numbers */
+.row-num {
+    color: #555 !important;
+    font-size: 11px;
+    text-align: center !important;
+    min-width: 40px !important;
+    max-width: 60px !important;
+    background: #1a1a1a !important;
+    user-select: none;
+}
+
+/* Toast notification */
+.sql-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #2a2a2a;
+    color: #e0e0e0;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 10000;
+    border: 1px solid #3a3a3a;
+}
+
+.sql-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Spinner */
+.spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid #3a3a3a;
+    border-top-color: #4a9eff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 12px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 .resize-handle {
@@ -244,4 +427,96 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
     .navbar-links { display: none; }
     .editor-actions { flex-direction: column; gap: 4px; }
     .btn { padding: 4px 12px; font-size: 11px; }
+    .editor-hint { display: none; }
+}
+
+/* CodeMirror hint autocomplete styling */
+.CodeMirror-hints {
+    background: #1e1e1e !important;
+    border: 1px solid #3a3a3a !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+    padding: 4px 0 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    font-size: 13px !important;
+    max-height: 300px !important;
+    overflow-y: auto !important;
+}
+
+.CodeMirror-hint {
+    padding: 6px 12px !important;
+    color: #e0e0e0 !important;
+    cursor: pointer !important;
+}
+
+.CodeMirror-hint:hover,
+.CodeMirror-hint-active {
+    background: #2d4a6e !important;
+    color: #fff !important;
+}
+
+/* CodeMirror dialog (search) styling */
+.CodeMirror-dialog {
+    background: #1e1e1e !important;
+    border-bottom: 1px solid #3a3a3a !important;
+    padding: 8px 12px !important;
+}
+
+.CodeMirror-dialog input {
+    background: #2a2a2a !important;
+    border: 1px solid #3a3a3a !important;
+    color: #e0e0e0 !important;
+    padding: 4px 8px !important;
+    border-radius: 4px !important;
+    outline: none !important;
+}
+
+.CodeMirror-dialog input:focus {
+    border-color: #4a9eff !important;
+}
+
+.CodeMirror-dialog-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+.CodeMirror-search-hint {
+    color: #888;
+    font-size: 12px;
+}
+
+/* CodeMirror cursor and selection */
+.CodeMirror-cursor {
+    border-left-color: #4a9eff !important;
+}
+
+.CodeMirror-selected {
+    background: #2d4a6e !important;
+}
+
+.CodeMirror-focused .CodeMirror-selected {
+    background: #2d4a6e !important;
+}
+
+/* CodeMirror matching brackets */
+.CodeMirror-matchingbracket {
+    color: #ffcb6b !important;
+    background: #3a3a3a !important;
+    font-weight: bold !important;
+}
+
+/* CodeMirror gutter and line numbers */
+.CodeMirror-gutters {
+    background: #1a1a1a !important;
+    border-right: 1px solid #2d2d2d !important;
+}
+
+.CodeMirror-linenumber {
+    color: #555 !important;
+}
+
+.CodeMirror-activeline-background {
+    background: #222 !important;
 }

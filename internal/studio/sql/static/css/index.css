@@ -381,6 +381,28 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
 .value-fk { color: #4a9eff; text-decoration: underline; cursor: pointer; }
 .value-fk:hover { opacity: 0.8; }
 
+/* Additional value type styles */
+.value-uuid { 
+    color: #82aaff; 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 12px;
+}
+.value-date { color: #c3e88d; }
+.value-email { color: #89ddff; }
+.value-url { 
+    color: #4a9eff; 
+    text-decoration: underline; 
+}
+.value-url:hover { color: #7bb8ff; }
+.value-json { 
+    color: #ffcb6b; 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 11px;
+    cursor: pointer;
+}
+.value-object { color: #888; font-style: italic; }
+.value-truncated { cursor: pointer; }
+
 .custom-modal {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -606,4 +628,67 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
 .badge-purple {
     background: #3a2a5a;
     color: #a78bfa;
+}
+
+/* Notification toast */
+.notification-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    z-index: 10000;
+    min-width: 280px;
+}
+
+.notification-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.notification-icon {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.notification-message {
+    font-size: 13px;
+    color: #e0e0e0;
+}
+
+.notification-success {
+    border-left: 4px solid #10b981;
+}
+.notification-success .notification-icon {
+    color: #10b981;
+}
+
+.notification-error {
+    border-left: 4px solid #ef4444;
+}
+.notification-error .notification-icon {
+    color: #ef4444;
+}
+
+.notification-warning {
+    border-left: 4px solid #f59e0b;
+}
+.notification-warning .notification-icon {
+    color: #f59e0b;
+}
+
+.notification-info {
+    border-left: 4px solid #4a9eff;
+}
+.notification-info .notification-icon {
+    color: #4a9eff;
 }

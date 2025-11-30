@@ -26,6 +26,16 @@ func (s *Service) ensureCorrectSchema() error {
 		return nil
 	}
 
+	// Skip branch management if using direct DB URL (--db flag)
+	if s.cfg.Database.URLEnv == "STUDIO_DB_URL" {
+		return nil
+	}
+
+	// Skip if migrations path is not set or is default empty
+	if s.cfg.MigrationsPath == "" || s.cfg.MigrationsPath == "db/migrations" {
+		return nil
+	}
+
 	branchMgr := branch.NewMetadataManager(s.cfg.MigrationsPath)
 	store, err := branchMgr.Load()
 	if err != nil {
@@ -351,11 +361,18 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 	query = strings.TrimSpace(query)
 
 	queryUpper := strings.ToUpper(query)
+
+	// Detect query type more comprehensively
 	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
 		strings.HasPrefix(queryUpper, "SHOW") ||
 		strings.HasPrefix(queryUpper, "DESCRIBE") ||
 		strings.HasPrefix(queryUpper, "EXPLAIN") ||
-		strings.HasPrefix(queryUpper, "WITH")
+		strings.HasPrefix(queryUpper, "WITH") ||
+		strings.HasPrefix(queryUpper, "TABLE") ||
+		strings.HasPrefix(queryUpper, "VALUES")
+
+	// Handle SET statements - they may or may not return data depending on database
+	isSetStatement := strings.HasPrefix(queryUpper, "SET")
 
 	if isSelectQuery {
 		result, err := s.adapter.ExecuteQuery(s.ctx, query)
@@ -377,6 +394,23 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 		}, nil
 	}
 
+	if isSetStatement {
+		result, err := s.adapter.ExecuteQuery(s.ctx, query)
+		if err == nil && result != nil {
+			columns := make([]common.ColumnInfo, len(result.Columns))
+			for i, col := range result.Columns {
+				columns[i] = common.ColumnInfo{Name: col, Type: "TEXT"}
+			}
+			return &common.TableData{
+				Columns: columns,
+				Rows:    result.Rows,
+				Total:   len(result.Rows),
+				Page:    1,
+				Limit:   len(result.Rows),
+			}, nil
+		}
+	}
+
 	if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
 		return nil, fmt.Errorf("query execution failed: %w", err)
 	}
@@ -391,35 +425,66 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 }
 
 func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
-	var setClauses []string
-	i := 1
-	for col := range data {
-		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", common.QuoteIdentifier(col), i))
-		i++
+	s.ensureCorrectSchema()
+
+	schema, err := s.adapter.GetTableColumns(s.ctx, table)
+	if err != nil {
+		return err
 	}
 
-	sql := fmt.Sprintf("UPDATE %s SET %s WHERE id = $%d",
-		common.QuoteIdentifier(table), strings.Join(setClauses, ", "), i)
+	pkColumn := "id"
+	for _, col := range schema {
+		if col.IsPrimary {
+			pkColumn = col.Name
+			break
+		}
+	}
 
-	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
-	return err
+	var setClauses []string
+	for col, val := range data {
+		if val == nil {
+			setClauses = append(setClauses, fmt.Sprintf("%s = NULL", common.QuoteIdentifier(col)))
+		} else {
+			strVal := fmt.Sprintf("%v", val)
+			escapedVal := strings.ReplaceAll(strVal, "'", "''")
+			setClauses = append(setClauses, fmt.Sprintf("%s = '%s'", common.QuoteIdentifier(col), escapedVal))
+		}
+	}
+
+	idStr := fmt.Sprintf("%v", id)
+	escapedId := strings.ReplaceAll(idStr, "'", "''")
+
+	query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = '%s'",
+		common.QuoteIdentifier(table), strings.Join(setClauses, ", "),
+		common.QuoteIdentifier(pkColumn), escapedId)
+
+	return s.adapter.ExecuteMigration(s.ctx, query)
 }
 
 func (s *Service) InsertRow(table string, data map[string]interface{}) error {
-	var columns []string
-	var placeholders []string
-	i := 1
-	for col := range data {
-		columns = append(columns, common.QuoteIdentifier(col))
-		placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-		i++
+	s.ensureCorrectSchema()
+
+	if len(data) == 0 {
+		return fmt.Errorf("no data provided")
 	}
 
-	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		common.QuoteIdentifier(table), strings.Join(columns, ", "), strings.Join(placeholders, ", "))
+	var columns []string
+	var values []string
+	for col, val := range data {
+		columns = append(columns, common.QuoteIdentifier(col))
+		if val == nil {
+			values = append(values, "NULL")
+		} else {
+			strVal := fmt.Sprintf("%v", val)
+			escapedVal := strings.ReplaceAll(strVal, "'", "''")
+			values = append(values, fmt.Sprintf("'%s'", escapedVal))
+		}
+	}
 
-	_, err := s.adapter.ExecuteQuery(s.ctx, sql)
-	return err
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+		common.QuoteIdentifier(table), strings.Join(columns, ", "), strings.Join(values, ", "))
+
+	return s.adapter.ExecuteMigration(s.ctx, query)
 }
 
 func (s *Service) GetBranches() ([]map[string]interface{}, string, error) {
