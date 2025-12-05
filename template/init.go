@@ -103,7 +103,7 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
 
 	configParts := []string{
 		`  "version": "2"`,
-		`  "schema_path": "db/schema/schema.sql"`,
+		`  "schema_dir": "db/schema"`,
 		`  "queries": "db/queries/"`,
 		`  "migrations_path": "db/migrations"`,
 		`  "export_path": "db/export"`,

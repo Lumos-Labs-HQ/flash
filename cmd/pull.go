@@ -14,20 +14,23 @@ import (
 
 var pullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Pull database schema to update local schema file",
+	Short: "Pull database schema to update local schema files",
 	Long: `
-Pull the current database schema and update the local schema file.
-This command introspects the current database and generates a schema.sql file
-that reflects the current state of the database. This is useful for:
-- Synchronizing your local schema with the database after manual changes
-- Creating an initial schema file from an existing database
-- Keeping your schema file up-to-date with the current database state
+Pull the current database schema and update the local schema files.
+This command introspects the current database and intelligently updates your schema.
+
+Smart behavior:
+- If no schema files exist: creates single schema.sql with everything
+- If schema files exist: compares and updates only changed parts in-place  
+- New tables: creates new .sql file for that table
+- Changed columns: updates only those lines in existing files
 
 The command will:
 1. Connect to the database
-2. Introspect all tables, columns, and constraints
-3. Generate a comprehensive schema.sql file
-4. Optionally create a backup of the existing schema file`,
+2. Introspect all tables, columns, indexes, and constraints
+3. Compare with existing schema files
+4. Update only what changed, create new files for new tables
+5. Optionally create a backup before making changes`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -65,6 +68,6 @@ The command will:
 
 func init() {
 	// Command is registered by plugin executors, not the base CLI
-	pullCmd.Flags().BoolP("backup", "b", false, "Create backup of existing schema file before overwriting")
-	pullCmd.Flags().StringP("output", "o", "", "Custom output file path (overrides config schema_path)")
+	pullCmd.Flags().BoolP("backup", "b", false, "Create backup of existing schema files before overwriting")
+	pullCmd.Flags().StringP("output", "o", "", "Custom output path for schema directory")
 }

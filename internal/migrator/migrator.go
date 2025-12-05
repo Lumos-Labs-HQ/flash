@@ -20,6 +20,7 @@ type Migrator struct {
 	schemaManager *schema.SchemaManager
 	migrationsDir string
 	schemaPath    string
+	provider      string // Database provider: sqlite, postgresql, mysql
 	force         bool
 	fileUtils     *utils.FileUtils
 	inputUtils    *utils.InputUtils
@@ -42,7 +43,8 @@ func NewMigrator(cfg *config.Config) (*Migrator, error) {
 		adapter:       adapter,
 		schemaManager: schema.NewSchemaManager(adapter),
 		migrationsDir: cfg.MigrationsPath,
-		schemaPath:    cfg.SchemaPath,
+		schemaPath:    cfg.GetSchemaDir(), // Use schema directory instead of single file
+		provider:      cfg.Database.Provider,
 		force:         false,
 		fileUtils:     &utils.FileUtils{},
 		inputUtils:    &utils.InputUtils{},
@@ -119,16 +121,25 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	return nil
 }
 
-// generateSQLFromDiff creates SQL from schema differences - simplified
+// generateSQLFromDiff creates SQL from schema differences with both UP and DOWN
 func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) string {
 	var upStatements []string
+	var downStatements []string
+
+	dropTableSQL := func(tableName string) string {
+		switch m.provider {
+		case "sqlite", "sqlite3":
+			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
+		default:
+			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\" CASCADE;", tableName)
+		}
+	}
 
 	for _, enum := range diff.NewEnums {
 		values := make([]string, len(enum.Values))
 		for i, v := range enum.Values {
 			values[i] = fmt.Sprintf("'%s'", v)
 		}
-		// Use DO block to check if ENUM exists before creating
 		enumSQL := fmt.Sprintf(`DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '%s') THEN
@@ -136,42 +147,74 @@ BEGIN
     END IF;
 END $$;`, enum.Name, enum.Name, strings.Join(values, ", "))
 		upStatements = append(upStatements, enumSQL)
+		// DOWN: Drop enum
+		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enum.Name)}, downStatements...)
 	}
 
-	// Generate UP migration only
+	// UP: Create new tables and their indexes
 	for _, table := range diff.NewTables {
 		sql := m.adapter.GenerateCreateTableSQL(table)
 		if sql != "" {
 			upStatements = append(upStatements, sql)
 		}
+
+		for _, index := range table.Indexes {
+			if strings.HasPrefix(index.Name, "sqlite_") {
+				continue
+			}
+			indexSQL := m.adapter.GenerateAddIndexSQL(index)
+			if indexSQL != "" {
+				upStatements = append(upStatements, indexSQL)
+			}
+		}
+
+		downStatements = append([]string{dropTableSQL(table.Name)}, downStatements...)
+		for _, index := range table.Indexes {
+			if strings.HasPrefix(index.Name, "sqlite_") {
+				continue
+			}
+			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
+		}
 	}
 
+	// UP: Modify existing tables
 	for _, tableDiff := range diff.ModifiedTables {
 		// Add new columns
 		for _, column := range tableDiff.NewColumns {
 			sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
 			if sql != "" {
 				upStatements = append(upStatements, sql)
+				// DOWN: Drop the added column
+				downStatements = append([]string{m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)}, downStatements...)
 			}
 		}
 
-		for _, columnName := range tableDiff.DroppedColumns {
-			sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, columnName)
+		// Drop columns
+		for _, column := range tableDiff.DroppedColumns {
+			sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)
 			if sql != "" {
 				upStatements = append(upStatements, sql)
+				// DOWN: Re-add the dropped column with its original definition
+				downStatements = append([]string{m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)}, downStatements...)
 			}
 		}
 	}
 
+	// UP: Drop tables
 	for _, tableName := range diff.DroppedTables {
-		upStatements = append(upStatements, fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName))
+		upStatements = append(upStatements, dropTableSQL(tableName))
+		// DOWN: We can't restore dropped tables, add a comment
+		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped table: %s (data lost)", tableName)}, downStatements...)
 	}
 
+	// UP: Drop enums
 	for _, enumName := range diff.DroppedEnums {
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
+		// DOWN: We can't fully restore dropped enums
+		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
 	}
 
-	return m.formatMigrationFile(name, upStatements)
+	return m.formatMigrationFileWithDown(name, upStatements, downStatements)
 }
 
 func (m *Migrator) generateEmptyMigrationTemplate(name string) string {
@@ -184,6 +227,10 @@ func (m *Migrator) generateEmptyMigrationTemplate(name string) string {
 }
 
 func (m *Migrator) formatMigrationFile(name string, upStatements []string) string {
+	return m.formatMigrationFileWithDown(name, upStatements, nil)
+}
+
+func (m *Migrator) formatMigrationFileWithDown(name string, upStatements []string, downStatements []string) string {
 	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
 
 	var builder strings.Builder
@@ -191,6 +238,8 @@ func (m *Migrator) formatMigrationFile(name string, upStatements []string) strin
 	builder.WriteString(fmt.Sprintf("-- Migration: %s\n", name))
 	builder.WriteString(fmt.Sprintf("-- Created: %s\n\n", timestamp))
 
+	// UP section
+	builder.WriteString("-- +migrate Up\n")
 	if len(upStatements) > 0 {
 		for _, stmt := range upStatements {
 			builder.WriteString(stmt)
@@ -201,6 +250,20 @@ func (m *Migrator) formatMigrationFile(name string, upStatements []string) strin
 		}
 	} else {
 		builder.WriteString("-- No migration statements\n")
+	}
+
+	// DOWN section
+	builder.WriteString("\n-- +migrate Down\n")
+	if len(downStatements) > 0 {
+		for _, stmt := range downStatements {
+			builder.WriteString(stmt)
+			if !strings.HasSuffix(strings.TrimSpace(stmt), ";") && !strings.HasPrefix(strings.TrimSpace(stmt), "--") {
+				builder.WriteString(";")
+			}
+			builder.WriteString("\n")
+		}
+	} else {
+		builder.WriteString("-- Add rollback statements here\n")
 	}
 
 	return builder.String()

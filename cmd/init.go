@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/template"
 	"github.com/spf13/cobra"
@@ -83,8 +84,18 @@ func initializeProject(dbType template.DatabaseType) error {
 		"flash.config.json": tmpl.GetFlashORMConfig(),
 	}
 
-	if _, err := os.Stat("db/schema/schema.sql"); os.IsNotExist(err) {
-		files["db/schema/schema.sql"] = tmpl.GetSchema()
+	// Check if any .sql files exist in db/schema directory
+	schemaExists := false
+	if entries, err := os.ReadDir("db/schema"); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+				schemaExists = true
+				break
+			}
+		}
+	}
+	if !schemaExists {
+		files["db/schema/users.sql"] = tmpl.GetSchema()
 	}
 
 	if _, err := os.Stat("db/queries/users.sql"); os.IsNotExist(err) {
@@ -137,8 +148,8 @@ func initializeProject(dbType template.DatabaseType) error {
 		fmt.Println("ℹ️  Using existing DATABASE_URL from environment")
 	}
 
-	if _, err := os.Stat("db/schema/schema.sql"); err == nil {
-		fmt.Println("ℹ️  Skipped db/schema/schema.sql (already exists)")
+	if schemaExists {
+		fmt.Println("ℹ️  Skipped schema files (db/schema already has .sql files)")
 	}
 
 	if _, err := os.Stat("db/queries/users.sql"); err == nil {

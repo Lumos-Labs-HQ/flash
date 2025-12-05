@@ -133,11 +133,51 @@ func (s *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[str
 
 		row := make(map[string]interface{})
 		for i, col := range columns {
-			row[col] = values[i]
+			row[col] = formatValue(values[i])
 		}
 		result = append(result, row)
 	}
 	return result, nil
+}
+
+// formatValue converts database values to display-friendly formats
+func formatValue(val interface{}) interface{} {
+	if val == nil {
+		return nil
+	}
+
+	if bytes, ok := val.([]byte); ok {
+		if len(bytes) == 16 {
+			return formatUUID(bytes)
+		}
+		str := string(bytes)
+		isPrintable := true
+		for _, r := range str {
+			if r < 32 && r != '\n' && r != '\r' && r != '\t' {
+				isPrintable = false
+				break
+			}
+		}
+		if isPrintable {
+			return str
+		}
+		return fmt.Sprintf("0x%x", bytes)
+	}
+
+	return val
+}
+
+// formatUUID converts a 16-byte slice to UUID string format
+func formatUUID(bytes []byte) string {
+	if len(bytes) != 16 {
+		return fmt.Sprintf("%v", bytes)
+	}
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		bytes[0:4],
+		bytes[4:6],
+		bytes[6:8],
+		bytes[8:10],
+		bytes[10:16])
 }
 
 func (s *Adapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
@@ -231,8 +271,9 @@ func (s *Adapter) GenerateAddColumnSQL(tableName string, column types.SchemaColu
 		tableName, column.Name, s.FormatColumnType(column))
 }
 
+// GenerateDropColumnSQL generates SQL to drop a column in SQLite
 func (s *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
-	return fmt.Sprintf("-- SQLite doesn't support DROP COLUMN. Manual steps required for %s.%s", tableName, columnName)
+	return fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN \"%s\";", tableName, columnName)
 }
 
 func (s *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {

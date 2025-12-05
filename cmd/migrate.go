@@ -87,7 +87,8 @@ Examples:
 				return err
 			}
 		} else {
-			if err := m.GenerateMigration(ctx, migrationName, cfg.SchemaPath); err != nil {
+			// Pass empty string to use the migrator's configured schema directory
+			if err := m.GenerateMigration(ctx, migrationName, ""); err != nil {
 				return err
 			}
 		}

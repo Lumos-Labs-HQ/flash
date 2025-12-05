@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
 	Version        string   `json:"version" mapstructure:"version"`
-	SchemaPath     string   `json:"schema_path" mapstructure:"schema_path"`
+	SchemaPath     string   `json:"schema_path" mapstructure:"schema_path"` // Deprecated: use SchemaDir instead
+	SchemaDir      string   `json:"schema_dir" mapstructure:"schema_dir"`   // New: folder containing .sql schema files
 	Queries        string   `json:"queries" mapstructure:"queries"`
 	MigrationsPath string   `json:"migrations_path" mapstructure:"migrations_path"`
 	ExportPath     string   `json:"export_path" mapstructure:"export_path"`
@@ -24,9 +26,9 @@ type Database struct {
 }
 
 type Gen struct {
-	Go GoGen `json:"go,omitempty" mapstructure:"go"`
-	JS JSGen `json:"js,omitempty" mapstructure:"js"`
-    Python PythonGen `json:"python,omitempty" mapstructure:"python"`
+	Go     GoGen     `json:"go,omitempty" mapstructure:"go"`
+	JS     JSGen     `json:"js,omitempty" mapstructure:"js"`
+	Python PythonGen `json:"python,omitempty" mapstructure:"python"`
 }
 
 type GoGen struct {
@@ -40,7 +42,7 @@ type JSGen struct {
 type PythonGen struct {
 	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
 	Out     string `json:"out,omitempty" mapstructure:"out"`
-	Async   bool   `json:"async,omitempty" mapstructure:"async"`  // true = async (default), false = sync
+	Async   bool   `json:"async,omitempty" mapstructure:"async"` // true = async (default), false = sync
 }
 
 func Load() (*Config, error) {
@@ -54,8 +56,23 @@ func Load() (*Config, error) {
 	if cfg.Version == "" {
 		cfg.Version = "2"
 	}
+	// Support both old schema_path and new schema_dir
+	if cfg.SchemaDir == "" {
+		if cfg.SchemaPath != "" {
+			// Legacy: if schema_path is a file, use its directory
+			// If it looks like a directory (no .sql extension), use it directly
+			if strings.HasSuffix(cfg.SchemaPath, ".sql") {
+				cfg.SchemaDir = filepath.Dir(cfg.SchemaPath)
+			} else {
+				cfg.SchemaDir = cfg.SchemaPath
+			}
+		} else {
+			cfg.SchemaDir = "db/schema"
+		}
+	}
+	// Keep SchemaPath for backward compatibility
 	if cfg.SchemaPath == "" {
-		cfg.SchemaPath = "db/schema/schema.sql"
+		cfg.SchemaPath = filepath.Join(cfg.SchemaDir, "schema.sql")
 	}
 	if cfg.Queries == "" {
 		cfg.Queries = "db/queries/"
@@ -96,7 +113,7 @@ func (c *Config) GetDatabaseURL() (string, error) {
 func (c *Config) EnsureDirectories() error {
 	dirs := []string{
 		c.MigrationsPath,
-		filepath.Dir(c.SchemaPath),
+		c.GetSchemaDir(),
 	}
 
 	for _, dir := range dirs {
@@ -149,7 +166,37 @@ func (c *Config) GetSqlcEngine() string {
 }
 
 func (c *Config) GetSchemaDir() string {
+	if c.SchemaDir != "" {
+		return c.SchemaDir
+	}
 	return filepath.Dir(c.SchemaPath)
+}
+
+// GetSchemaFiles returns all .sql files in the schema directory
+func (c *Config) GetSchemaFiles() ([]string, error) {
+	schemaDir := c.GetSchemaDir()
+
+	entries, err := os.ReadDir(schemaDir)
+	if err != nil {
+		// If directory doesn't exist, check if schema_path is a file
+		if os.IsNotExist(err) && c.SchemaPath != "" {
+			if _, err := os.Stat(c.SchemaPath); err == nil {
+				return []string{c.SchemaPath}, nil
+			}
+		}
+		return nil, fmt.Errorf("failed to read schema directory %s: %w", schemaDir, err)
+	}
+
+	var files []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+			files = append(files, filepath.Join(schemaDir, entry.Name()))
+		}
+	}
+
+	// Sort files for consistent ordering
+	// Files are typically named like: 001_users.sql, 002_posts.sql or users.sql, posts.sql
+	return files, nil
 }
 
 func (c *Config) IsNodeProject() bool {

@@ -48,7 +48,7 @@ type SchemaDiff struct {
 type TableDiff struct {
 	Name            string
 	NewColumns      []SchemaColumn
-	DroppedColumns  []string
+	DroppedColumns  []SchemaColumn // Changed from []string to preserve column info for DOWN migration
 	ModifiedColumns []ColumnDiff
 }
 
@@ -79,7 +79,17 @@ type Migration struct {
 }
 
 type MigrationSQL struct {
-	Up string
+	Up   string
+	Down string
+}
+
+type MigrationFile struct {
+	ID       string
+	Name     string
+	Up       string
+	Down     string
+	Checksum string
+	FilePath string
 }
 
 type BackupData struct {

@@ -187,7 +187,7 @@ func (s *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 }
 
 func (s *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
-	tableQuery := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_flash_%'`
+	tableQuery := `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_flash_%' AND name NOT LIKE 'sqlite_%'`
 	rows, err := s.db.QueryContext(ctx, tableQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %w", err)

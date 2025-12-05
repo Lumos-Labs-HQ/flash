@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -49,12 +51,12 @@ func (s *Service) Close() {
 	}
 }
 
+// PullSchema intelligently pulls database schema
+// - If no schema files exist: creates single schema.sql with everything
+// - If schema files exist: compares and updates only changed parts in-place
+// - New tables: creates new .sql file for that table
+// - Changed columns: updates only those lines in existing files
 func (s *Service) PullSchema(ctx context.Context, opts Options) error {
-	schemaPath := s.config.SchemaPath
-	if opts.OutputPath != "" {
-		schemaPath = opts.OutputPath
-	}
-
 	fmt.Println("🔍 Introspecting database schema...")
 
 	dbTables, err := s.adapter.PullCompleteSchema(ctx)
@@ -62,7 +64,6 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to pull database schema: %w", err)
 	}
 
-	// pull enums 
 	dbEnums, err := s.adapter.GetCurrentEnums(ctx)
 	if err != nil {
 		dbEnums = []types.SchemaEnum{}
@@ -73,77 +74,261 @@ func (s *Service) PullSchema(ctx context.Context, opts Options) error {
 		return nil
 	}
 
-	var existingSQL string
-	if content, err := os.ReadFile(schemaPath); err == nil {
-		existingSQL = string(content)
+	// Get schema directory
+	schemaDir := s.config.GetSchemaDir()
+	if opts.OutputPath != "" {
+		schemaDir = opts.OutputPath
 	}
 
-	hasChanges, updatedSQL := s.comparator.CompareWithDatabase(existingSQL, dbTables)
-
-	if len(dbEnums) > 0 {
-		enumSQL := s.generateEnumSQL(dbEnums)
-		if enumSQL != "" {
-			updatedSQL = s.removeExistingEnums(updatedSQL)
-			updatedSQL = enumSQL + "\n\n" + updatedSQL
-			hasChanges = true
-		}
+	// Check if any schema files exist
+	existingFiles, err := s.getExistingSchemaFiles(schemaDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check existing schema files: %w", err)
 	}
 
-	if !hasChanges {
-		fmt.Println("✅ Schema is up to date - no structural changes detected")
-		return nil
-	}
-
-	if opts.Backup && existingSQL != "" {
-		if err := s.createBackup(schemaPath); err != nil {
+	// Create backup if requested
+	if opts.Backup && len(existingFiles) > 0 {
+		if err := s.createDirBackup(schemaDir); err != nil {
 			fmt.Printf("⚠️  Warning: Failed to create backup: %v\n", err)
 		} else {
-			fmt.Println("💾 Created backup of existing schema")
+			fmt.Println("💾 Created backup of existing schema files")
 		}
 	}
 
-	if err := os.WriteFile(schemaPath, []byte(updatedSQL), 0644); err != nil {
+	// Ensure schema directory exists
+	if err := os.MkdirAll(schemaDir, 0755); err != nil {
+		return fmt.Errorf("failed to create schema directory: %w", err)
+	}
+
+	// Get indexes from database
+	dbIndexes, err := s.getTableIndexes(ctx, dbTables)
+	if err != nil {
+		fmt.Printf("⚠️  Warning: Could not fetch indexes: %v\n", err)
+		dbIndexes = make(map[string][]types.SchemaIndex)
+	}
+
+	// If no files exist, create single schema.sql
+	if len(existingFiles) == 0 {
+		return s.createSingleSchemaFile(schemaDir, dbTables, dbEnums, dbIndexes)
+	}
+
+	existingTables, existingEnums := s.parseExistingSchemaFiles(existingFiles)
+
+	return s.smartUpdateSchema(schemaDir, existingFiles, existingTables, existingEnums, dbTables, dbEnums, dbIndexes)
+}
+
+// getExistingSchemaFiles returns all .sql files in the schema directory
+func (s *Service) getExistingSchemaFiles(schemaDir string) (map[string]string, error) {
+	entries, err := os.ReadDir(schemaDir)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make(map[string]string)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+			filePath := filepath.Join(schemaDir, entry.Name())
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				continue
+			}
+			files[entry.Name()] = string(content)
+		}
+	}
+	return files, nil
+}
+
+// parseExistingSchemaFiles extracts table names from existing schema files
+func (s *Service) parseExistingSchemaFiles(files map[string]string) (map[string]string, []string) {
+	tables := make(map[string]string) // tableName -> fileName
+	var enums []string
+
+	createTableRegex := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'\x60]?(\w+)["'\x60]?`)
+	createEnumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+["'\x60]?(\w+)["'\x60]?\s+AS\s+ENUM`)
+
+	for fileName, content := range files {
+		// Find tables in this file
+		matches := createTableRegex.FindAllStringSubmatch(content, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				tables[match[1]] = fileName
+			}
+		}
+
+		// Find enums
+		enumMatches := createEnumRegex.FindAllStringSubmatch(content, -1)
+		for _, match := range enumMatches {
+			if len(match) > 1 {
+				enums = append(enums, match[1])
+			}
+		}
+	}
+
+	return tables, enums
+}
+
+// createSingleSchemaFile creates a single schema.sql with all tables
+func (s *Service) createSingleSchemaFile(schemaDir string, dbTables []types.SchemaTable, dbEnums []types.SchemaEnum, dbIndexes map[string][]types.SchemaIndex) error {
+	var sb strings.Builder
+
+	sb.WriteString("-- Schema auto-generated by flash pull\n")
+	sb.WriteString("-- Generated from database introspection\n\n")
+
+	// Write enums first
+	if len(dbEnums) > 0 {
+		sb.WriteString("-- Enums\n")
+		sb.WriteString(s.generateEnumSQL(dbEnums))
+		sb.WriteString("\n\n")
+	}
+
+	// Sort tables by name
+	sort.Slice(dbTables, func(i, j int) bool {
+		return dbTables[i].Name < dbTables[j].Name
+	})
+
+	// Write all tables
+	for _, table := range dbTables {
+		if strings.HasPrefix(table.Name, "_flash_") {
+			continue
+		}
+		sb.WriteString(s.generateTableSQL(table, dbIndexes[table.Name]))
+		sb.WriteString("\n")
+	}
+
+	schemaPath := filepath.Join(schemaDir, "schema.sql")
+	if err := os.WriteFile(schemaPath, []byte(sb.String()), 0644); err != nil {
 		return fmt.Errorf("failed to write schema file: %w", err)
 	}
 
-	fmt.Printf("✅ Schema updated: %s\n", schemaPath)
+	fmt.Printf("✅ Created %s with %d tables", schemaPath, len(dbTables))
 	if len(dbEnums) > 0 {
-		fmt.Printf("📊 Processed %d enums and %d tables\n", len(dbEnums), len(dbTables))
-	} else {
-		fmt.Printf("📊 Processed %d tables\n", len(dbTables))
+		fmt.Printf(" and %d enums", len(dbEnums))
 	}
-	fmt.Println("🎯 Only actual structural differences were updated")
+	fmt.Println()
 
 	return nil
 }
 
-func (s *Service) createBackup(schemaPath string) error {
-	content, err := os.ReadFile(schemaPath)
-	if err != nil {
-		return err
-	}
+// smartUpdateSchema compares and updates only changed parts
+func (s *Service) smartUpdateSchema(schemaDir string, existingFiles map[string]string, existingTables map[string]string, existingEnums []string, dbTables []types.SchemaTable, dbEnums []types.SchemaEnum, dbIndexes map[string][]types.SchemaIndex) error {
+	updatedFiles := 0
+	newFiles := 0
+	commentedFiles := 0
 
-	backupPath := schemaPath + ".backup"
-	return os.WriteFile(backupPath, content, 0644)
-}
-
-func (s *Service) generateEnumSQL(enums []types.SchemaEnum) string {
-	if len(enums) == 0 {
-		return ""
-	}
-
-	var parts []string
-	for _, enum := range enums {
-		values := make([]string, len(enum.Values))
-		for i, v := range enum.Values {
-			values[i] = fmt.Sprintf("'%s'", v)
+	// Create a map of db tables for quick lookup
+	dbTableMap := make(map[string]types.SchemaTable)
+	for _, table := range dbTables {
+		if !strings.HasPrefix(table.Name, "_flash_") {
+			dbTableMap[table.Name] = table
 		}
-		parts = append(parts, fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", enum.Name, strings.Join(values, ", ")))
 	}
-	return strings.Join(parts, "\n")
-}
 
-func (s *Service) removeExistingEnums(sql string) string {
-	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+\w+\s+AS\s+ENUM\s*\([^)]+\)\s*;[\s\n]*`)
-	return enumRegex.ReplaceAllString(sql, "")
+	// Track which files need updating
+	fileUpdates := make(map[string]string)
+
+	// Track tables that exist in files but NOT in the database (dropped tables)
+	droppedTables := make(map[string]string) // tableName -> fileName
+
+	// Process each existing file
+	for fileName, content := range existingFiles {
+		updatedContent := content
+		fileChanged := false
+
+		// Find all tables in this file and update them
+		for tableName, tableFileName := range existingTables {
+			if tableFileName != fileName {
+				continue
+			}
+
+			if dbTable, exists := dbTableMap[tableName]; exists {
+				// Table exists in DB - check if it needs updating
+				newTableSQL := s.generateTableSQLClean(dbTable, dbIndexes[tableName])
+				existingTableSQL := s.extractTableSQL(content, tableName)
+
+				if existingTableSQL != "" && !s.compareTableSQL(existingTableSQL, newTableSQL) {
+					// Table changed - replace it in the file
+					updatedContent = s.replaceTableInContent(updatedContent, tableName, newTableSQL)
+					fileChanged = true
+					fmt.Printf("  📝 Updated table %s in %s\n", tableName, fileName)
+				}
+
+				// Mark as processed
+				delete(dbTableMap, tableName)
+			} else {
+				// Table exists in file but NOT in database - mark for commenting out
+				droppedTables[tableName] = fileName
+			}
+		}
+
+		if fileChanged {
+			fileUpdates[fileName] = updatedContent
+			updatedFiles++
+		}
+	}
+
+	// Comment out files for dropped tables
+	for tableName, fileName := range droppedTables {
+		content := existingFiles[fileName]
+
+		// Check if the file is already commented out
+		if s.isFileCommentedOut(content) {
+			continue
+		}
+
+		// Comment out the entire file content
+		commentedContent := s.commentOutFile(content, tableName)
+
+		filePath := filepath.Join(schemaDir, fileName)
+		if err := os.WriteFile(filePath, []byte(commentedContent), 0644); err != nil {
+			return fmt.Errorf("failed to comment out file %s: %w", fileName, err)
+		}
+
+		fmt.Printf("  🗑️  Commented out %s (table '%s' no longer exists in database)\n", fileName, tableName)
+		commentedFiles++
+	}
+
+	// Write updated files
+	for fileName, content := range fileUpdates {
+		filePath := filepath.Join(schemaDir, fileName)
+		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write updated file %s: %w", fileName, err)
+		}
+	}
+
+	// Create new files for remaining (new) tables
+	for tableName, table := range dbTableMap {
+		tableSQL := s.generateTableSQL(table, dbIndexes[tableName])
+		fileName := fmt.Sprintf("%s.sql", tableName)
+		filePath := filepath.Join(schemaDir, fileName)
+
+		if err := os.WriteFile(filePath, []byte(tableSQL), 0644); err != nil {
+			return fmt.Errorf("failed to write new table file %s: %w", fileName, err)
+		}
+
+		fmt.Printf("  ✨ Created new file %s for table %s\n", fileName, tableName)
+		newFiles++
+	}
+
+	// Handle enums - update or create _enums.sql if needed
+	if len(dbEnums) > 0 {
+		enumSQL := s.generateEnumSQL(dbEnums)
+		enumPath := filepath.Join(schemaDir, "_enums.sql")
+
+		existingEnumContent, _ := os.ReadFile(enumPath)
+		if string(existingEnumContent) != enumSQL {
+			if err := os.WriteFile(enumPath, []byte(enumSQL), 0644); err != nil {
+				return fmt.Errorf("failed to write enum file: %w", err)
+			}
+			fmt.Printf("  📝 Updated _enums.sql (%d enums)\n", len(dbEnums))
+			updatedFiles++
+		}
+	}
+
+	if updatedFiles > 0 || newFiles > 0 || commentedFiles > 0 {
+		fmt.Printf("✅ Schema sync complete: %d files updated, %d new files created, %d files commented out\n", updatedFiles, newFiles, commentedFiles)
+	} else {
+		fmt.Println("✅ Schema is up to date - no changes detected")
+	}
+
+	return nil
 }
