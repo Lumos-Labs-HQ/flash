@@ -170,7 +170,7 @@ func testInit(t *testing.T, testDir string, db Database) {
 		t.Fatalf("Init failed for %s: %v\nOutput: %s", db.Name, err, output)
 	}
 
-	files := []string{"flash.config.json", "db/schema/schema.sql", "db/queries"}
+	files := []string{"flash.config.json", "db/schema/users.sql", "db/queries"}
 	for _, file := range files {
 		path := filepath.Join(testDir, file)
 		if _, err := os.Stat(path); os.IsNotExist(err) {

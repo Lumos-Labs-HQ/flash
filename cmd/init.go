@@ -102,15 +102,20 @@ func initializeProject(dbType template.DatabaseType) error {
 		files["db/queries/users.sql"] = tmpl.GetQueries()
 	}
 
-	if os.Getenv("DATABASE_URL") == "" {
-		files[".env"] = tmpl.GetEnvTemplate()
-	}
-
 	for filePath, content := range files {
 		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to create file %s: %w", filePath, err)
 		}
 	}
+
+	// Handle .env file separately to preserve existing variables
+	envCreated := false
+	if err := handleEnvFile(tmpl.GetEnvTemplate()); err != nil {
+		return fmt.Errorf("failed to handle .env file: %w", err)
+	} else {
+		envCreated = true
+	}
+	_ = envCreated
 
 	projectType := "Go"
 	if isNodeProject {
@@ -163,4 +168,31 @@ func initializeProject(dbType template.DatabaseType) error {
 	fmt.Printf("   flash gen                      # Generate code\n")
 
 	return nil
+}
+
+func handleEnvFile(defaultEnvContent string) error {
+	envPath := ".env"
+
+	// Check if .env file exists
+	existingContent, err := os.ReadFile(envPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.WriteFile(envPath, []byte(defaultEnvContent), 0644)
+		}
+		return err
+	}
+
+	existingStr := string(existingContent)
+	if strings.Contains(existingStr, "DATABASE_URL") {
+		return nil
+	}
+
+	// Append DATABASE_URL to existing .env
+	if len(existingStr) > 0 && !strings.HasSuffix(existingStr, "\n") {
+		existingStr += "\n"
+	}
+
+	existingStr += "\n# Added by FlashORM\n" + defaultEnvContent
+
+	return os.WriteFile(envPath, []byte(existingStr), 0644)
 }
