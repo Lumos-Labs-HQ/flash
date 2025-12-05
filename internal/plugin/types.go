@@ -18,6 +18,7 @@ type PluginInfo struct {
 type AvailablePlugin struct {
 	Name        string   `json:"name"`
 	Version     string   `json:"version"`
+	CommitID    string   `json:"commit_id,omitempty"`
 	Description string   `json:"description"`
 	Commands    []string `json:"commands"`
 	Size        int64    `json:"size,omitempty"`

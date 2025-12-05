@@ -279,9 +279,10 @@ func (m *Manager) FetchAvailablePlugins() ([]AvailablePlugin, error) {
 	}
 
 	var releases []struct {
-		TagName    string `json:"tag_name"`
-		Prerelease bool   `json:"prerelease"`
-		Assets     []struct {
+		TagName         string `json:"tag_name"`
+		Prerelease      bool   `json:"prerelease"`
+		TargetCommitish string `json:"target_commitish"`
+		Assets          []struct {
 			Name string `json:"name"`
 			Size int64  `json:"size"`
 		} `json:"assets"`
@@ -297,6 +298,10 @@ func (m *Manager) FetchAvailablePlugins() ([]AvailablePlugin, error) {
 
 	release := releases[0]
 	version := strings.TrimPrefix(release.TagName, "v")
+	commitID := release.TargetCommitish
+	if len(commitID) > 7 {
+		commitID = commitID[:7] // Short commit ID
+	}
 
 	platform := runtime.GOOS
 	arch := runtime.GOARCH
@@ -342,6 +347,7 @@ func (m *Manager) FetchAvailablePlugins() ([]AvailablePlugin, error) {
 			availablePlugins = append(availablePlugins, AvailablePlugin{
 				Name:        name,
 				Version:     version,
+				CommitID:    commitID,
 				Description: GetPluginDescription(name),
 				Commands:    GetPluginCommands(name),
 				Size:        size,

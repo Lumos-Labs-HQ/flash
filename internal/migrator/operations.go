@@ -349,25 +349,30 @@ func (m *Migrator) Status(ctx context.Context) error {
 		fmt.Println("⚠️  Warning: No migration files found, but database has applied migrations.")
 		fmt.Println("   This usually means migration files were deleted.")
 		fmt.Println("\nApplied migrations in database:")
+		fmt.Printf("%-16s  %-30s  %-10s  %s\n", "ID", "NAME", "STATUS", "APPLIED AT")
+		fmt.Printf("%-16s  %-30s  %-10s  %s\n", "──────────────", "──────────────────────────────", "──────────", "───────────────────")
 		for id, t := range applied {
+			migrationID, migrationName := splitMigrationID(id)
 			timestamp := ""
 			if t != nil {
-				timestamp = fmt.Sprintf(" (applied: %s)", t.Format("2006-01-02 15:04:05"))
+				timestamp = t.Format("2006-01-02 15:04:05")
 			}
-			fmt.Printf("%-50s Applied%s\n", id, timestamp)
+			fmt.Printf("%-16s  %-30s  %-10s  %s\n", migrationID, migrationName, "Applied", timestamp)
 		}
 		return nil
 	}
 
-	fmt.Println("Migration Details:")
+	fmt.Printf("%-16s  %-30s  %-10s  %s\n", "ID", "NAME", "STATUS", "APPLIED AT")
+	fmt.Printf("%-16s  %-30s  %-10s  %s\n", "──────────────", "──────────────────────────────", "──────────", "───────────────────")
 	for _, migration := range migrations {
+		migrationID, migrationName := splitMigrationID(migration.ID)
 		status := "Pending"
-		timestamp := ""
+		timestamp := "-"
 		if t, exists := applied[migration.ID]; exists && t != nil {
 			status = "Applied"
-			timestamp = fmt.Sprintf(" (applied: %s)", t.Format("2006-01-02 15:04:05"))
+			timestamp = t.Format("2006-01-02 15:04:05")
 		}
-		fmt.Printf("%-50s %s%s\n", migration.ID, status, timestamp)
+		fmt.Printf("%-16s  %-30s  %-10s  %s\n", migrationID, migrationName, status, timestamp)
 	}
 
 	// Check for orphaned migrations in database
@@ -390,6 +395,28 @@ func (m *Migrator) Status(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// splitMigrationID splits a migration ID like "20251204234836_add_phone_column" into ID and name
+func splitMigrationID(fullID string) (string, string) {
+	// Migration IDs are typically formatted as: YYYYMMDDHHMMSS_name
+	if len(fullID) < 15 {
+		return fullID, ""
+	}
+
+	// Find the first underscore after the timestamp
+	for i := 14; i < len(fullID); i++ {
+		if fullID[i] == '_' {
+			return fullID[:i], fullID[i+1:]
+		}
+	}
+
+	// If no underscore found, try to split at position 14 (timestamp length)
+	if len(fullID) > 14 && fullID[14] == '_' {
+		return fullID[:14], fullID[15:]
+	}
+
+	return fullID, ""
 }
 
 // Down rolls back the last migration or to a specific migration ID

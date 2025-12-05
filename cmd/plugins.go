@@ -122,29 +122,45 @@ func showOnlinePlugins(manager *plugin.Manager) error {
 	color.Green("📦 Available Plugins (%d)", len(availablePlugins))
 	fmt.Println()
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSTATUS\tVERSION (Latest)\tDESCRIPTION")
-	fmt.Fprintln(w, "----\t------\t----------------\t-----------")
+	// Print header
+	fmt.Printf("%-10s  %-10s  %-10s  %-15s  %s\n", "NAME", "VERSION", "COMMIT", "STATUS", "DESCRIPTION")
+	fmt.Printf("%-10s  %-10s  %-10s  %-15s  %s\n", "──────────", "──────────", "──────────", "───────────────", "─────────────────────────────────────────────────────────")
+
+	cyan := color.New(color.FgCyan)
+	green := color.New(color.FgGreen)
+	magenta := color.New(color.FgMagenta)
+	red := color.New(color.FgRed)
+	yellow := color.New(color.FgYellow)
 
 	for _, ap := range availablePlugins {
-		status := color.RedString("Not Installed")
+		statusText := "Not Installed"
+		statusColor := red
 		if manager.IsPluginInstalled(ap.Name) {
 			localInfo, _ := manager.GetPluginInfo(ap.Name)
 			if localInfo.Version == ap.Version {
-				status = color.GreenString("✓ Installed")
+				statusText = "✓ Installed"
+				statusColor = green
 			} else {
-				status = color.YellowString("⚠ Update Available")
+				statusText = "⚠ Update"
+				statusColor = yellow
 			}
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			color.CyanString(ap.Name),
-			status,
-			ap.Version,
-			ap.Description,
-		)
+		commitDisplay := ap.CommitID
+		if commitDisplay == "" {
+			commitDisplay = "-"
+		}
+
+		cyan.Printf("%-10s", ap.Name)
+		fmt.Print("  ")
+		green.Printf("%-10s", ap.Version)
+		fmt.Print("  ")
+		magenta.Printf("%-10s", commitDisplay)
+		fmt.Print("  ")
+		statusColor.Printf("%-15s", statusText)
+		fmt.Print("  ")
+		fmt.Println(ap.Description)
 	}
-	w.Flush()
 
 	fmt.Println()
 	color.White("📝 Plugin Details:")
@@ -152,7 +168,10 @@ func showOnlinePlugins(manager *plugin.Manager) error {
 		fmt.Printf("\n  %s\n", color.CyanString(ap.Name))
 		fmt.Printf("    Description: %s\n", ap.Description)
 		fmt.Printf("    Commands: %s\n", color.GreenString(fmt.Sprintf("%d commands", len(ap.Commands))))
-		fmt.Printf("    Latest Version: %s\n", ap.Version)
+		fmt.Printf("    Version: %s\n", color.GreenString(ap.Version))
+		if ap.CommitID != "" {
+			fmt.Printf("    Commit: %s\n", color.MagentaString(ap.CommitID))
+		}
 
 		if manager.IsPluginInstalled(ap.Name) {
 			localInfo, _ := manager.GetPluginInfo(ap.Name)
