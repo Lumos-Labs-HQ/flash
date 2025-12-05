@@ -16,7 +16,13 @@
   <a href="https://pypi.org/project/flashorm/">
     <img src="https://img.shields.io/pypi/v/flashorm?color=green&label=python" alt="PyPI version">
   </a>
+</p>
 
+<p align="center">
+  <a href="docs/USAGE_GO.md">📗 Go Guide</a> •
+  <a href="docs/USAGE_TYPESCRIPT.md">📘 TypeScript Guide</a> •
+  <a href="docs/USAGE_PYTHON.md">📙 Python Guide</a> •
+  <a href="RELEASE_NOTES.md">📋 Release Notes</a>
 </p>
 
 ![image](.github/flash-orm.png)
@@ -134,12 +140,13 @@ flash status
 | `flash init`            | Initialize project with database-specific templates |
 | `flash migrate <name>`  | Create a new migration file                         |
 | `flash apply`           | Apply pending migrations with transaction safety    |
+| `flash down`            | Rollback the last applied migration                 |
 | `flash status`          | Show migration status                               |
 | `flash pull`            | Extract schema from existing database               |
-| `flash studio`          | flash studio                                        |
+| `flash studio`          | Launch visual database editor                       |
 | `flash export [format]` | Export database (JSON, CSV, SQLite)                 |
 | `flash reset`           | Reset database (⚠️ destructive)                     |
-| `flash gen`             | Generate SQLC types                                 |
+| `flash gen`             | Generate type-safe code                             |
 | `flash raw <sql>`       | Execute raw SQL                                     |
 
 ### Global Flags
@@ -177,7 +184,7 @@ FlashORM uses `flash.config.json` for configuration:
 ```json
 {
   "version": "2",
-  "schema_path": "db/schema/schema.sql",
+  "schema_dir": "db/schema",
   "queries": "db/queries/",
   "migrations_path": "db/migrations",
   "export_path": "db/export",
@@ -186,12 +193,25 @@ FlashORM uses `flash.config.json` for configuration:
     "url_env": "DATABASE_URL"
   },
   "gen": {
-    "js": {
-      "enabled": true
-    }
+    "go": { "enabled": true },
+    "js": { "enabled": true },
+    "python": { "enabled": true }
   }
 }
 ```
+
+### Schema Folder Support
+
+Organize schemas in separate files for better maintainability:
+
+```
+db/schema/
+├── users.sql
+├── posts.sql
+└── comments.sql
+```
+
+Set `schema_dir` in config to enable this feature.
 
 ## 📁 Project Structure
 
@@ -253,14 +273,19 @@ If a migration fails, the transaction is automatically rolled back:
 flash migrate "add user roles"
 ```
 
-Creates a timestamped SQL file:
+Creates a timestamped SQL file with Up and Down sections:
 
 ```sql
 -- Migration: add_user_roles
 -- Created: 2025-10-21T13:29:02Z
 
+-- +migrate Up
 ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user';
 CREATE INDEX idx_users_role ON users(role);
+
+-- +migrate Down
+DROP INDEX idx_users_role;
+ALTER TABLE users DROP COLUMN role;
 ```
 
 ### 2. Apply Migrations
@@ -289,6 +314,14 @@ Migrations: 3 total, 2 applied, 1 pending
 │ 20251021_add_user_roles         │ Pending │ -                   │
 └─────────────────────────────────┴─────────┴─────────────────────┘
 ```
+
+### 4. Rollback Migration
+
+```bash
+flash down
+```
+
+Rolls back the last applied migration using the `-- +migrate Down` section.
 
 ## 📊 Studio (Visual Database Editor)
 
@@ -488,6 +521,15 @@ flash reset --force
 flash pull
 ```
 
+### Smart Pull Feature
+
+When you run `flash pull`, FlashORM intelligently manages your schema files:
+- **New tables**: Creates new `.sql` files in your schema directory
+- **Modified tables**: Updates existing schema files
+- **Dropped tables**: Comments out the schema file (preserves history)
+
+This ensures your schema files always reflect the actual database state while maintaining version control history.
+
 ### Raw SQL Execution
 
 ```bash
@@ -550,6 +592,15 @@ make build-all
 - Test migration safety features
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
+
+## 📚 Documentation
+
+- [Go Usage Guide](docs/USAGE_GO.md) - Complete guide for Go developers
+- [TypeScript Usage Guide](docs/USAGE_TYPESCRIPT.md) - Complete guide for JS/TS developers
+- [Python Usage Guide](docs/USAGE_PYTHON.md) - Complete guide for Python developers
+- [How It Works](docs/HOW_IT_WORKS.md) - Technical deep dive
+- [Technology Stack](docs/TECHNOLOGY_STACK.md) - Libraries and tools used
+- [Contributing](docs/CONTRIBUTING.md) - How to contribute
 
 ## 📄 License
 
