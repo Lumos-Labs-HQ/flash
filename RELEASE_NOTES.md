@@ -1,15 +1,21 @@
 # FlashORM Release Notes
 
-## Version 2.2.2 - Latest Release
+## Version 2.2.21 - Latest Release
 
 ### 🐛 Bug Fixes
 
-#### .env File Preservation
-- Fixed issue where `flash init` would overwrite existing `.env` files
-- Now preserves all existing environment variables
-- If `.env` exists with `DATABASE_URL`, file is left unchanged
-- If `.env` exists without `DATABASE_URL`, appends it with a comment
-- Only creates new `.env` if no file exists
+#### Go Code Generator
+- Fixed unnecessary imports in generated `models.go`
+- `database/sql` is now only imported when nullable types are used
+- `time` package is now only imported when timestamp/date fields exist
+
+#### JavaScript Code Generator
+- Removed redundant `.d.ts` files (`users.d.ts`, `database.d.ts`)
+- Now only generates `index.d.ts` for TypeScript type definitions
+
+#### Schema Parser
+- Fixed folder-based schema parsing to properly use `schema_dir` config
+- Query validator now works correctly with split schema files
 
 ### 📦 Installation
 

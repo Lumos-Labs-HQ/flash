@@ -37,35 +37,41 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 		Enums:  []*Enum{},
 	}
 
+	schemaDir := p.Config.SchemaDir
+	if !filepath.IsAbs(schemaDir) {
+		cwd, _ := os.Getwd()
+		schemaDir = filepath.Join(cwd, schemaDir)
+	}
+
+	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
+		files, err := filepath.Glob(filepath.Join(schemaDir, "*.sql"))
+		if err == nil && len(files) > 0 {
+			for _, file := range files {
+				content, err := os.ReadFile(file)
+				if err != nil {
+					continue
+				}
+
+				if err := utils.ValidateSchemaSyntax(string(content), file); err != nil {
+					return nil, err
+				}
+
+				tables := p.parseCreateTables(string(content))
+				schema.Tables = append(schema.Tables, tables...)
+				enums := p.parseCreateEnums(string(content))
+				schema.Enums = append(schema.Enums, enums...)
+			}
+			return schema, nil
+		}
+	}
+
 	schemaPath := p.Config.SchemaPath
 	if !filepath.IsAbs(schemaPath) {
 		cwd, _ := os.Getwd()
 		schemaPath = filepath.Join(cwd, schemaPath)
 	}
 
-	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
-		schemaDir := filepath.Dir(schemaPath)
-		files, err := filepath.Glob(filepath.Join(schemaDir, "*.sql"))
-		if err != nil || len(files) == 0 {
-			return schema, nil
-		}
-
-		for _, file := range files {
-			content, err := os.ReadFile(file)
-			if err != nil {
-				continue
-			}
-
-			if err := utils.ValidateSchemaSyntax(string(content), file); err != nil {
-				return nil, err
-			}
-
-			tables := p.parseCreateTables(string(content))
-			schema.Tables = append(schema.Tables, tables...)
-			enums := p.parseCreateEnums(string(content))
-			schema.Enums = append(schema.Enums, enums...)
-		}
-	} else {
+	if _, err := os.Stat(schemaPath); err == nil {
 		content, err := os.ReadFile(schemaPath)
 		if err != nil {
 			return schema, nil
