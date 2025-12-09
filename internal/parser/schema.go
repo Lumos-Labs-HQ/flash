@@ -124,18 +124,49 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 				continue
 			}
 
-			parts := strings.Fields(line)
-			if len(parts) < 2 {
+			// Extract column name and type properly, handling types with parentheses
+			var colName, colType string
+
+			// Find first space to get column name
+			spaceIdx := strings.IndexAny(line, " \t")
+			if spaceIdx == -1 || spaceIdx+1 >= len(line) {
 				continue
 			}
 
+			colName = line[:spaceIdx]
+			rest := strings.TrimSpace(line[spaceIdx+1:])
+
+			// Extract type (handle parentheses for types like DECIMAL(10, 2))
+			parenDepth := 0
+			typeEnd := 0
+			for i, ch := range rest {
+				if ch == '(' {
+					parenDepth++
+				} else if ch == ')' {
+					parenDepth--
+					if parenDepth == 0 {
+						typeEnd = i + 1
+						break
+					}
+				} else if parenDepth == 0 && (ch == ' ' || ch == '\t') {
+					typeEnd = i
+					break
+				}
+			}
+
+			if typeEnd == 0 {
+				typeEnd = len(rest)
+			}
+
+			colType = rest[:typeEnd]
+
 			isNullable := !strings.Contains(lineUpper, "NOT NULL") &&
 				!strings.Contains(lineUpper, "PRIMARY KEY") &&
-				!strings.Contains(strings.ToUpper(parts[1]), "SERIAL")
+				!strings.Contains(strings.ToUpper(colType), "SERIAL")
 
 			table.Columns = append(table.Columns, &Column{
-				Name:     parts[0],
-				Type:     parts[1],
+				Name:     colName,
+				Type:     colType,
 				Nullable: isNullable,
 			})
 		}

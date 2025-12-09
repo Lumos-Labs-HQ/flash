@@ -263,27 +263,62 @@ func (sm *SchemaManager) isTableConstraint(def string) bool {
 }
 
 func (sm *SchemaManager) parseColumnDefinition(colDef string) (types.SchemaColumn, error) {
-	parts := strings.Fields(colDef)
-	if len(parts) < 2 {
+	colDef = strings.TrimSpace(colDef)
+
+	// Extract column name (first token)
+	spaceIdx := strings.IndexAny(colDef, " \t")
+	if spaceIdx == -1 {
 		return types.SchemaColumn{}, fmt.Errorf("invalid column definition: %s", colDef)
 	}
 
+	colName := strings.Trim(colDef[:spaceIdx], `"`)
+	rest := strings.TrimSpace(colDef[spaceIdx+1:])
+
+	if rest == "" {
+		return types.SchemaColumn{}, fmt.Errorf("invalid column definition (no type): %s", colDef)
+	}
+
 	column := types.SchemaColumn{
-		Name:     strings.Trim(parts[0], `"`),
+		Name:     colName,
 		Nullable: true,
 	}
 
-	// Handle multi-word types like "TIMESTAMP WITH TIME ZONE"
-	if len(parts) > 4 && strings.ToUpper(parts[1]) == "TIMESTAMP" && strings.ToUpper(parts[2]) == "WITH" && strings.ToUpper(parts[3]) == "TIME" && strings.ToUpper(parts[4]) == "ZONE" {
+	// Extract type - handle parentheses for types like DECIMAL(10, 2)
+	restUpper := strings.ToUpper(rest)
+
+	// Handle multi-word types first
+	if strings.HasPrefix(restUpper, "TIMESTAMP WITH TIME ZONE") {
 		column.Type = "TIMESTAMP WITH TIME ZONE"
-	} else if len(parts) > 4 && strings.ToUpper(parts[1]) == "TIMESTAMP" && strings.ToUpper(parts[2]) == "WITHOUT" && strings.ToUpper(parts[3]) == "TIME" && strings.ToUpper(parts[4]) == "ZONE" {
+	} else if strings.HasPrefix(restUpper, "TIMESTAMP WITHOUT TIME ZONE") {
 		column.Type = "TIMESTAMP WITHOUT TIME ZONE"
-	} else if len(parts) > 2 && strings.ToUpper(parts[1]) == "DOUBLE" && strings.ToUpper(parts[2]) == "PRECISION" {
+	} else if strings.HasPrefix(restUpper, "DOUBLE PRECISION") {
 		column.Type = "DOUBLE PRECISION"
-	} else if len(parts) > 2 && strings.ToUpper(parts[1]) == "CHARACTER" && strings.ToUpper(parts[2]) == "VARYING" {
+	} else if strings.HasPrefix(restUpper, "CHARACTER VARYING") {
 		column.Type = "CHARACTER VARYING"
 	} else {
-		column.Type = parts[1]
+		// Extract type including parentheses content
+		parenDepth := 0
+		typeEnd := 0
+		for i, ch := range rest {
+			if ch == '(' {
+				parenDepth++
+			} else if ch == ')' {
+				parenDepth--
+				if parenDepth == 0 {
+					typeEnd = i + 1
+					break
+				}
+			} else if parenDepth == 0 && (ch == ' ' || ch == '\t') {
+				typeEnd = i
+				break
+			}
+		}
+
+		if typeEnd == 0 {
+			typeEnd = len(rest)
+		}
+
+		column.Type = rest[:typeEnd]
 	}
 
 	sm.parseColumnConstraints(&column, colDef)
