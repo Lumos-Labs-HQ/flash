@@ -521,6 +521,13 @@ flash reset --force
 flash pull
 ```
 
+### Documentation
+```bash
+cd docs
+npm install
+npm run docs:dev
+```
+
 ### Smart Pull Feature
 
 When you run `flash pull`, FlashORM intelligently manages your schema files:
