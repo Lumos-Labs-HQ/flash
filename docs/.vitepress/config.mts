@@ -85,7 +85,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/SpreadSheets600/flash-orm/edit/documentation/docs/:path',
+      pattern: 'https://github.com/Lumos-Labs-HQ/flash-orm/edit/documentation/docs/:path',
       text: 'Edit this page on GitHub'
     },
 
