@@ -10,12 +10,17 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Getting Started', link: '/getting-started' },
-      { text: 'Guides', link: '/guides/go' },
-      { text: 'Concepts', link: '/concepts/schema' },
-      { text: 'Studio', link: '/concepts/studio' },
-      { text: 'Reference', link: '/reference/cli' },
-      { text: 'Advanced', link: '/advanced/how-it-works' }
+      {
+        text: 'Docs',
+        items: [
+          { text: 'Getting Started', link: '/getting-started' },
+          { text: 'Guides', link: '/guides/go' },
+          { text: 'Concepts', link: '/concepts/schema' },
+          { text: 'Reference', link: '/reference/cli' },
+          { text: 'Advanced', link: '/advanced/how-it-works' }
+        ]
+      },
+      { text: 'Studio', link: '/concepts/studio' }
     ],
 
     sidebar: {
@@ -73,6 +78,10 @@ export default defineConfig({
     footer: {
       message: 'Released under the MIT License.',
       copyright: 'Copyright © 2024 Lumos Labs HQ'
+    },
+
+    search: {
+      provider: 'local'
     },
 
     editLink: {
