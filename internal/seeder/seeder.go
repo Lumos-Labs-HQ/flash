@@ -358,14 +358,31 @@ func (s *Seeder) truncateTables(ctx context.Context, order []string) error {
 		switch s.config.Database.Provider {
 		case "postgresql", "postgres":
 			query = fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", tableName)
+			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
+				color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
+			}
 		case "mysql":
 			query = fmt.Sprintf("TRUNCATE TABLE %s", tableName)
+			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
+				color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
+			}
+		case "sqlite", "sqlite3":
+			// Delete all rows
+			query = fmt.Sprintf("DELETE FROM %s", tableName)
+			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
+				color.Yellow("  ⚠️  Failed to delete from %s: %v", tableName, err)
+				continue
+			}
+			// Reset autoincrement counter
+			resetQuery := fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name='%s'", tableName)
+			if _, err := s.adapter.ExecuteQuery(ctx, resetQuery); err != nil {
+				// Ignore error if sqlite_sequence doesn't exist
+			}
 		default:
 			query = fmt.Sprintf("DELETE FROM %s", tableName)
-		}
-
-		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
-			color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
+			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
+				color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
+			}
 		}
 	}
 
