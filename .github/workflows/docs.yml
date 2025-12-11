@@ -41,7 +41,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: false # Disabled cache since package.json is in docs/ and no lock file in root
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Install dependencies
