@@ -723,5 +723,5 @@ Ensure TypeScript includes generated files:
 
 - [FlashORM GitHub](https://github.com/Lumos-Labs-HQ/flash)
 - [npm Package](https://www.npmjs.com/package/flashorm)
-- [Release Notes](../RELEASE_NOTES.md)
-- [Contributing Guide](CONTRIBUTING.md)
+- [Release Notes](/releases.md)
+- [Contributing Guide](/contributing)

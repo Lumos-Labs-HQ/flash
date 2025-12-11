@@ -907,5 +907,5 @@ async def main():
 
 - [FlashORM GitHub](https://github.com/Lumos-Labs-HQ/flash)
 - [PyPI Package](https://pypi.org/project/flashorm/)
-- [Release Notes](../RELEASE_NOTES.md)
-- [Contributing Guide](CONTRIBUTING.md)
+- [Release Notes](/releases.md)
+- [Contributing Guide](/contributing)
