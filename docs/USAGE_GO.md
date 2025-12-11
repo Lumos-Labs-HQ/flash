@@ -563,6 +563,6 @@ flash apply
 ## Resources
 
 - [FlashORM GitHub](https://github.com/Lumos-Labs-HQ/flash)
-- [Release Notes](../RELEASE_NOTES.md)
-- [Contributing Guide](CONTRIBUTING.md)
+- [Release Notes](/releases.md)
+- [Contributing Guide](/contributing)
 - [Plugin System](PLUGIN_SYSTEM.md)
