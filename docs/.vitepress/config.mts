@@ -1,29 +1,25 @@
 import { defineConfig } from 'vitepress'
 
-// https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: "Flash ORM",
   description: "A powerful, database-agnostic ORM built in Go",
-  base: '/flash/', // Updated for the correct repo name
+  base: '/flash/',
+  vite: {
+    plugins: [],
+  },
   themeConfig: {
-    // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Guides', link: '/guides/getting-started' },
-      { text: 'Reference', link: '/reference/commands' },
-      { text: 'Advanced', link: '/advanced/architecture' }
+      { text: 'Getting Started', link: '/getting-started' },
+      { text: 'Guides', link: '/guides/go' },
+      { text: 'Concepts', link: '/concepts/schema' },
+      { text: 'Studio', link: '/concepts/studio' },
+      { text: 'Reference', link: '/reference/cli' },
+      { text: 'Advanced', link: '/advanced/how-it-works' }
     ],
 
     sidebar: {
       '/guides/': [
-        {
-          text: 'Getting Started',
-          items: [
-            { text: 'Installation', link: '/guides/installation' },
-            { text: 'Quick Start', link: '/guides/quick-start' },
-            { text: 'Configuration', link: '/guides/configuration' }
-          ]
-        },
         {
           text: 'Language Guides',
           items: [
@@ -31,13 +27,18 @@ export default defineConfig({
             { text: 'TypeScript/JavaScript', link: '/guides/typescript' },
             { text: 'Python', link: '/guides/python' }
           ]
-        },
+        }
+      ],
+      '/concepts/': [
         {
-          text: 'Database Support',
+          text: 'Core Concepts',
           items: [
-            { text: 'PostgreSQL', link: '/guides/postgresql' },
-            { text: 'MySQL', link: '/guides/mysql' },
-            { text: 'SQLite', link: '/guides/sqlite' }
+            { text: 'Schema Definition', link: '/concepts/schema' },
+            { text: 'Migrations', link: '/concepts/migrations' },
+            { text: 'Code Generation', link: '/concepts/code-generation' },
+            { text: 'FlashORM Studio', link: '/concepts/studio' },
+            { text: 'Data Export', link: '/concepts/export' },
+            { text: 'Branching', link: '/concepts/branching' }
           ]
         }
       ],
@@ -45,17 +46,10 @@ export default defineConfig({
         {
           text: 'CLI Reference',
           items: [
-            { text: 'Commands', link: '/reference/commands' },
-            { text: 'Flags', link: '/reference/flags' },
-            { text: 'Configuration', link: '/reference/configuration' }
-          ]
-        },
-        {
-          text: 'API Reference',
-          items: [
-            { text: 'Go API', link: '/reference/go-api' },
-            { text: 'TypeScript API', link: '/reference/typescript-api' },
-            { text: 'Python API', link: '/reference/python-api' }
+            { text: 'CLI Commands', link: '/reference/cli' },
+            { text: 'Configuration', link: '/reference/configuration' },
+            { text: 'Schema Syntax', link: '/reference/schema' },
+            { text: 'Query API', link: '/reference/query-api' }
           ]
         }
       ],
@@ -63,10 +57,10 @@ export default defineConfig({
         {
           text: 'Advanced Topics',
           items: [
-            { text: 'Architecture', link: '/advanced/architecture' },
-            { text: 'Migration System', link: '/advanced/migrations' },
-            { text: 'Code Generation', link: '/advanced/code-generation' },
-            { text: 'Plugins', link: '/advanced/plugins' }
+            { text: 'How It Works', link: '/advanced/how-it-works' },
+            { text: 'Plugin System', link: '/advanced/plugins' },
+            { text: 'Technology Stack', link: '/advanced/technology-stack' },
+            { text: 'Performance', link: '/advanced/performance' }
           ]
         }
       ]
@@ -81,8 +75,23 @@ export default defineConfig({
       copyright: 'Copyright © 2024 Lumos Labs HQ'
     },
 
-    search: {
-      provider: 'local'
-    }
+    editLink: {
+      pattern: 'https://github.com/SpreadSheets600/flash-orm/edit/documentation/docs/:path',
+      text: 'Edit this page on GitHub'
+    },
+
+    lastUpdated: {
+      text: 'Last updated',
+      formatOptions: {
+        dateStyle: 'full',
+        timeStyle: 'medium'
+      }
+    },
+
+    returnToTopLabel: 'Return to top',
+    sidebarMenuLabel: 'Menu',
+    darkModeSwitchLabel: 'Appearance',
+    darkModeSwitchTitle: 'Switch to dark mode',
+    lightModeSwitchTitle: 'Switch to light mode'
   }
 })
