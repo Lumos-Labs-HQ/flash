@@ -55,16 +55,34 @@ flash init --mysql
 flash init --sqlite
 ```
 
-### 2. Configure Database Connection
+### 2. Project Structure
 
-Create a `.env` file in your project root:
+The `flash init` command creates the following structure:
+
+```
+your-project/
+├── flash.config.json    # Configuration file
+├── db/
+│   ├── schema/          # SQL schema files
+│   │   └── schema.sql   # Your database schema
+│   ├── queries/         # SQL query files
+│   │   └── users.sql    # Your database queries
+│   ├── migrations/      # Generated migrations
+│   └── export/          # Export directory
+├── flash_gen/           # Generated code (after flash gen)
+└── .env                 # Environment variables
+```
+
+### 3. Configure Database
+
+Edit the `.env` file with your database connection:
 
 ```env
 # PostgreSQL
-DATABASE_URL=postgres://user:password@localhost:5432/mydb
+DATABASE_URL=postgres://user:password@localhost:5432/yourdb
 
 # MySQL
-DATABASE_URL=mysql://user:password@localhost:3306/mydb
+DATABASE_URL=user:password@tcp(localhost:3306)/yourdb
 
 # SQLite
 DATABASE_URL=sqlite://./data.db
