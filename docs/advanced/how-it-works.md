@@ -27,20 +27,22 @@ This document explains the internal architecture, core components, and workflow 
 
 Flash ORM follows a layered architecture with clear separation of concerns:
 
-```
-┌─────────────────────────────────────────┐
-│              CLI Layer (cmd/)           │
-│         Cobra Commands & Flags          │
-├─────────────────────────────────────────┤
-│           Business Logic Layer          │
-│   Migrator, Schema Manager, Export      │
-├─────────────────────────────────────────┤
-│          Database Adapter Layer         │
-│    PostgreSQL, MySQL, SQLite Adapters   │
-├─────────────────────────────────────────┤
-│            Database Layer               │
-│       Actual Database Connections       │
-└─────────────────────────────────────────┘
+```mermaid
+graph TB
+    A[CLI Layer<br/>cmd/] --> B[Business Logic Layer<br/>internal/]
+    B --> C[Database Adapter Layer<br/>internal/database/]
+    C --> D[Database Layer<br/>PostgreSQL/MySQL/SQLite/MongoDB]
+
+    A --> E[Plugin System<br/>internal/plugin/]
+    B --> F[Code Generators<br/>internal/*gen/]
+    B --> G[Studio<br/>internal/studio/]
+
+    H[Configuration<br/>internal/config/] --> A
+    H --> B
+
+    I[Schema Management<br/>internal/schema/] --> B
+    J[Migrator<br/>internal/migrator/] --> B
+    K[Export System<br/>internal/export/] --> B
 ```
 
 ### Key Design Principles
@@ -525,5 +527,117 @@ logger.WithFields(logrus.Fields{
     "status": "success",
 }).Info("Migration completed")
 ```
+
+## Codebase Structure
+
+Flash ORM's codebase is organized into the following packages:
+
+### `cmd/`
+CLI commands and entry points:
+- `root.go` - Main CLI setup and banner
+- `init.go` - Project initialization
+- `migrate.go` - Migration creation
+- `gen.go` - Code generation
+- `apply.go` - Migration application
+- `studio.go` - Web studio launcher
+- `plugins.go` - Plugin management
+
+### `internal/backup/`
+Database backup functionality:
+- `backup.go` - Backup creation and restoration
+
+### `internal/branch/`
+Schema branching system:
+- `manager.go` - Branch operations
+- `diff.go` - Schema differences
+- `metadata.go` - Branch metadata
+
+### `internal/config/`
+Configuration management:
+- `config.go` - Configuration loading and validation
+
+### `internal/database/`
+Database adapters and factory:
+- `adapter.go` - Common database interface
+- `factory.go` - Database adapter factory
+- `common/` - Shared database utilities
+- `mongodb/`, `mysql/`, `postgres/`, `sqlite/` - Database-specific implementations
+
+### `internal/export/`
+Data export system:
+- `export.go` - Export functionality
+
+### `internal/gogen/`, `internal/jsgen/`, `internal/pygen/`
+Code generators:
+- `generator.go` - Language-specific code generation
+
+### `internal/migrator/`
+Migration system:
+- `migrator.go` - Core migration logic
+- `operations.go` - Migration operations
+- `branch_aware.go` - Branch-aware migrations
+
+### `internal/parser/`
+SQL parsing:
+- `schema.go` - Schema parsing
+- `query.go` - Query parsing
+- `types.go` - Type definitions
+- `inferrer.go` - Schema inference
+
+### `internal/plugin/`
+Plugin system:
+- `manager.go` - Plugin loading and execution
+- `registry.go` - Plugin registry
+- `types.go` - Plugin interfaces
+
+### `internal/pull/`
+Schema introspection:
+- `pull.go` - Schema pulling from databases
+- `generator.go` - Schema generation
+- `helpers.go` - Helper functions
+- `backup.go` - Backup during pull
+
+### `internal/schema/`
+Schema management:
+- `schema.go` - Schema operations
+- `compare.go` - Schema comparison
+- `parser.go` - Schema parsing
+- `sqlcompare.go` - SQL-based comparison
+
+### `internal/studio/`
+Web studio:
+- `studio.go` - Main studio server
+- `common/` - Shared studio components
+- `mongodb/`, `redis/`, `sql/` - Database-specific studio implementations
+
+### `internal/types/`
+Core type definitions:
+- `types.go` - Schema and migration types
+
+### `internal/utils/`
+Utilities:
+- `naming.go` - Naming conventions
+- `raw_run.go` - Raw SQL execution
+- `sql.go` - SQL utilities
+- `utils.go` - General utilities
+- `validation.go` - Input validation
+
+### `internal/`
+- `main.go` - CLI entry point
+
+### `template/`
+Project templates:
+- `init.go` - Template generation
+
+### `example/`
+Usage examples:
+- `go/`, `python/`, `ts/` - Language-specific examples
+
+### `test/`
+Testing infrastructure:
+- `integration/` - Integration tests
+
+### `npm/`, `python/`
+Distribution packages for different platforms.
 
 This architecture ensures Flash ORM is robust, performant, and maintainable while providing a consistent experience across different databases and programming languages.
