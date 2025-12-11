@@ -10,8 +10,8 @@ Welcome to Flash ORM! This guide will help you get up and running in minutes.
 ## Prerequisites
 
 - **Go 1.24.2+** (for Go projects)
-- **Node.js 14+** (for TypeScript/JavaScript projects)
-- **Python 3.7+** (for Python projects)
+- **Node.js 22+** (for TypeScript/JavaScript projects)
+- **Python 3.9+** (for Python projects)
 - Database: PostgreSQL, MySQL, SQLite, or MongoDB
 
 ## Installation
