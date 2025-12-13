@@ -1168,3 +1168,77 @@ svg text {
 .column-builder-fields {
     font-size: 12px;
 }
+
+/* Canvas Container */
+#root {
+    margin-left: 60px;
+    margin-top: 48px;
+    width: calc(100% - 60px);
+    height: calc(100vh - 48px);
+    position: relative;
+    overflow: hidden;
+}
+
+#root canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: default;
+}
+
+/* Loading State */
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 16px;
+    border: 3px solid #333;
+    border-top-color: #4a9eff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Stats */
+.stats {
+    color: #888;
+    font-size: 13px;
+    margin-right: 12px;
+}
+
+/* Buttons */
+.btn {
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    color: #e0e0e0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    margin-left: 8px;
+}
+
+.btn:hover {
+    background: #333;
+    border-color: #4a9eff;
+}
+
+.btn .iconify {
+    font-size: 16px;
+}

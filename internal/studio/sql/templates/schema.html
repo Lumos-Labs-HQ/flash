@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Schema Visualization</title>
     <link rel="icon" type="image/png" href="/static/image/logo.png">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xyflow/react@12.8.4/dist/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/index.css">
     <link rel="stylesheet" href="/static/css/schema.css">
     <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
@@ -35,13 +34,22 @@
         <h1>Database Schema</h1>
         <div class="topbar-right">
             <span id="stats" class="stats">Loading...</span>
+            <button class="btn" onclick="schemaCanvas?.zoomIn()" title="Zoom In">
+                <span class="iconify" data-icon="mdi:magnify-plus"></span>
+            </button>
+            <button class="btn" onclick="schemaCanvas?.zoomOut()" title="Zoom Out">
+                <span class="iconify" data-icon="mdi:magnify-minus"></span>
+            </button>
+            <button class="btn" onclick="schemaCanvas?.resetView()" title="Fit to Screen">
+                <span class="iconify" data-icon="mdi:fit-to-screen"></span>
+            </button>
             <button class="btn" onclick="window.location.reload()">
                 <span class="iconify" data-icon="mdi:refresh"></span> Refresh
             </button>
         </div>
     </div>
     
-    <div id="root">
+    <div id="root" style="width: 100%; height: calc(100vh - 60px); position: relative;">
         <div class="loading">
             <div class="spinner"></div>
             <div>Loading schema...</div>
@@ -62,18 +70,7 @@
         </div>
     </div>
 
-    <script type="importmap">
-    {
-        "imports": {
-            "react": "https://esm.sh/react@18.2.0",
-            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-            "@xyflow/react": "https://esm.sh/@xyflow/react@12.8.4?deps=react@18.2.0,react-dom@18.2.0",
-            "dagre": "https://esm.sh/dagre@0.8.5"
-        }
-    }
-    </script>
-
-    <script type="module" src="/static/js/schema.js"></script>
+    <script src="/static/js/schema-canvas.js"></script>
     <script src="/static/js/modal.js"></script>
     <script src="/static/js/schema-panel.js"></script>
 </body>
