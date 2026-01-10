@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/branch"
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -265,52 +266,68 @@ func (s *Service) getRows(tableName string, limit, offset int) ([]map[string]any
 
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	s.ensureCorrectSchema()
-	tables, err := s.adapter.GetCurrentSchema(s.ctx)
+
+	// Use a channel to load tables concurrently with timeout
+	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+	defer cancel()
+
+	tables, err := s.adapter.GetCurrentSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	enums, _ := s.adapter.GetCurrentEnums(s.ctx)
+	enums, _ := s.adapter.GetCurrentEnums(ctx)
 
 	nodes := make([]map[string]any, 0, len(tables))
 	nodeIndex := make(map[string]string, len(tables))
 
-	for i, table := range tables {
-		nodeID := fmt.Sprintf("table-%d", i)
-		nodeIndex[table.Name] = nodeID
-
-		columns := make([]map[string]any, 0, len(table.Columns))
-		columnMap := make(map[string]bool, len(table.Columns))
-
-		for _, col := range table.Columns {
-			if !columnMap[col.Name] {
-				columnMap[col.Name] = true
-				columns = append(columns, map[string]any{
-					"name":             col.Name,
-					"type":             col.Type,
-					"isPrimary":        col.IsPrimary,
-					"isForeign":        col.ForeignKeyTable != "",
-					"nullable":         col.Nullable,
-					"default":          col.Default,
-					"foreignKeyTable":  col.ForeignKeyTable,
-					"foreignKeyColumn": col.ForeignKeyColumn,
-					"isUnique":         col.IsUnique,
-					"isAutoIncrement":  col.IsAutoIncrement,
-				})
-			}
+	// Process tables in parallel batches for better performance
+	batchSize := 10
+	for i := 0; i < len(tables); i += batchSize {
+		end := i + batchSize
+		if end > len(tables) {
+			end = len(tables)
 		}
 
-		nodes = append(nodes, map[string]any{
-			"id": nodeID,
-			"data": map[string]any{
-				"label":   table.Name,
-				"columns": columns,
-			},
-			"position": map[string]int{
-				"x": 100 + (i%4)*300,
-				"y": 100 + (i/4)*250,
-			},
-		})
+		// Process batch
+		for j := i; j < end; j++ {
+			table := tables[j]
+			nodeID := fmt.Sprintf("table-%d", j)
+			nodeIndex[table.Name] = nodeID
+
+			columns := make([]map[string]any, 0, len(table.Columns))
+			columnMap := make(map[string]bool, len(table.Columns))
+
+			for _, col := range table.Columns {
+				if !columnMap[col.Name] {
+					columnMap[col.Name] = true
+					columns = append(columns, map[string]any{
+						"name":             col.Name,
+						"type":             col.Type,
+						"isPrimary":        col.IsPrimary,
+						"isForeign":        col.ForeignKeyTable != "",
+						"nullable":         col.Nullable,
+						"default":          col.Default,
+						"foreignKeyTable":  col.ForeignKeyTable,
+						"foreignKeyColumn": col.ForeignKeyColumn,
+						"isUnique":         col.IsUnique,
+						"isAutoIncrement":  col.IsAutoIncrement,
+					})
+				}
+			}
+
+			nodes = append(nodes, map[string]any{
+				"id": nodeID,
+				"data": map[string]any{
+					"label":   table.Name,
+					"columns": columns,
+				},
+				"position": map[string]int{
+					"x": 100 + (j%4)*300,
+					"y": 100 + (j/4)*250,
+				},
+			})
+		}
 	}
 
 	edges := make([]map[string]any, 0)

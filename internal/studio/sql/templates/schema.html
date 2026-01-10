@@ -32,6 +32,9 @@
     
     <div class="topbar">
         <h1>Database Schema</h1>
+        <div class="topbar-center">
+            <input type="text" id="table-search" placeholder="Search tables..." style="padding: 6px 12px; border-radius: 6px; border: 1px solid #3a3a3a; background: #1a1a1a; color: #e0e0e0; width: 300px; font-size: 13px;">
+        </div>
         <div class="topbar-right">
             <span id="stats" class="stats">Loading...</span>
             <button class="btn" onclick="schemaCanvas?.zoomIn()" title="Zoom In">
@@ -49,11 +52,18 @@
         </div>
     </div>
     
-    <div id="root" style="width: 100%; height: calc(100vh - 60px); position: relative;">
+    <div id="root" style="width: 100%; height: calc(100vh - 48px); position: relative; overflow: hidden;">
         <div class="loading">
             <div class="spinner"></div>
             <div>Loading schema...</div>
         </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" style="display: none; position: fixed; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; padding: 4px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+        <div class="context-item" onclick="schemaCanvas?.organizeLayout('grid')">Grid Layout</div>
+        <div class="context-item" onclick="schemaCanvas?.organizeLayout('circular')">Circular Layout</div>
+        <div class="context-item" onclick="schemaCanvas?.organizeLayout('force')">Force-Directed Layout</div>
     </div>
 
     <!-- Edit Panel -->
