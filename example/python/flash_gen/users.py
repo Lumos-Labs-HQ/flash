@@ -11,17 +11,14 @@ class GetuserRow:
     name: str
     email: str
     created_at: datetime
-    updated_at: datetime
 
     @classmethod
     def _make_fast(cls, record):
-        """Optimized factory: 2-3x faster than **dict(record)"""
         return cls(
             record['id'],
             record['name'],
             record['email'],
-            record['created_at'],
-            record['updated_at']
+            record['created_at']
         )
 
 @dataclass
@@ -30,17 +27,14 @@ class CreateuserRow:
     name: str
     email: str
     created_at: datetime
-    updated_at: datetime
 
     @classmethod
     def _make_fast(cls, record):
-        """Optimized factory: 2-3x faster than **dict(record)"""
         return cls(
             record['id'],
             record['name'],
             record['email'],
-            record['created_at'],
-            record['updated_at']
+            record['created_at']
         )
 
 @dataclass
@@ -49,17 +43,14 @@ class ListusersRow:
     name: str
     email: str
     created_at: datetime
-    updated_at: datetime
 
     @classmethod
     def _make_fast(cls, record):
-        """Optimized factory: 2-3x faster than **dict(record)"""
         return cls(
             record['id'],
             record['name'],
             record['email'],
-            record['created_at'],
-            record['updated_at']
+            record['created_at']
         )
 
 @dataclass
@@ -68,17 +59,14 @@ class UpdateuserRow:
     name: str
     email: str
     created_at: datetime
-    updated_at: datetime
 
     @classmethod
     def _make_fast(cls, record):
-        """Optimized factory: 2-3x faster than **dict(record)"""
         return cls(
             record['id'],
             record['name'],
             record['email'],
-            record['created_at'],
-            record['updated_at']
+            record['created_at']
         )
 
 class Queries:
@@ -87,27 +75,42 @@ class Queries:
         self._stmts = {}
 
     async def get_user(self, id: int) -> Optional[GetuserRow]:
-        stmt = """SELECT id, name, email, created_at, updated_at FROM users WHERE id = $1 LIMIT 1;"""
+        _key = 'get_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, created_at FROM users WHERE id = $1 LIMIT 1;"""
+        stmt = self._stmts[_key]
         result = await self.db.fetch(stmt, id)
         return GetuserRow._make_fast(result[0]) if result else None
 
     async def create_user(self, name: str, email: str) -> Optional[CreateuserRow]:
-        stmt = """INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at, updated_at;"""
+        _key = 'create_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at;"""
+        stmt = self._stmts[_key]
         result = await self.db.fetch(stmt, name, email)
         return CreateuserRow._make_fast(result[0]) if result else None
 
     async def list_users(self, ) -> List[ListusersRow]:
-        stmt = """SELECT id, name, email, created_at, updated_at FROM users ORDER BY created_at DESC;"""
+        _key = 'list_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, created_at FROM users ORDER BY created_at DESC;"""
+        stmt = self._stmts[_key]
         result = await self.db.fetch(stmt)
         return [ListusersRow._make_fast(row) for row in result]
 
     async def update_user(self, id: int, name: str, email: str) -> Optional[UpdateuserRow]:
-        stmt = """UPDATE users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, created_at, updated_at;"""
+        _key = 'update_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET name = $2, email = $3 WHERE id = $1 RETURNING id, name, email, created_at;"""
+        stmt = self._stmts[_key]
         result = await self.db.fetch(stmt, id, name, email)
         return UpdateuserRow._make_fast(result[0]) if result else None
 
     async def delete_user(self, id: int) -> int:
-        stmt = """DELETE FROM users WHERE id = $1;"""
+        _key = 'delete_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """DELETE FROM users WHERE id = $1;"""
+        stmt = self._stmts[_key]
         await self.db.execute(stmt, id)
         return 1
 
