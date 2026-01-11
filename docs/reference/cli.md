@@ -158,6 +158,28 @@ Show current migration and branch status.
 flash status
 ```
 
+### `flash seed`
+
+Seed database with realistic fake data for development and testing.
+
+```bash
+flash seed [flags]
+```
+
+**Flags:**
+- `--count, -c`: Number of rows to generate per table (default: 10)
+- `--table, -t`: Specific table to seed
+- `--truncate`: Truncate tables before seeding
+- `--force, -f`: Skip confirmation
+
+**Examples:**
+```bash
+flash seed
+flash seed --count 100
+flash seed --table users --count 50
+flash seed --truncate --force
+```
+
 ### `flash reset`
 
 Reset database to clean state (drops all tables).

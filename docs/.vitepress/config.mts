@@ -16,11 +16,13 @@ export default defineConfig({
           { text: 'Getting Started', link: '/getting-started' },
           { text: 'Guides', link: '/guides/go' },
           { text: 'Concepts', link: '/concepts/schema' },
+          { text: 'Databases', link: '/databases/postgresql' },
           { text: 'Reference', link: '/reference/cli' },
           { text: 'Advanced', link: '/advanced/how-it-works' }
         ]
       },
-      { text: 'Studio', link: '/concepts/studio' }
+      { text: 'SQL Studio', link: '/concepts/studio' },
+      { text: 'Redis Studio', link: '/concepts/redis-studio' }
     ],
 
     sidebar: {
@@ -41,9 +43,22 @@ export default defineConfig({
             { text: 'Schema Definition', link: '/concepts/schema' },
             { text: 'Migrations', link: '/concepts/migrations' },
             { text: 'Code Generation', link: '/concepts/code-generation' },
-            { text: 'FlashORM Studio', link: '/concepts/studio' },
+            { text: 'Database Seeding', link: '/concepts/seeding' },
+            { text: 'SQL Studio', link: '/concepts/studio' },
+            { text: 'Redis Studio', link: '/concepts/redis-studio' },
             { text: 'Data Export', link: '/concepts/export' },
             { text: 'Branching', link: '/concepts/branching' }
+          ]
+        }
+      ],
+      '/databases/': [
+        {
+          text: 'Databases',
+          items: [
+            { text: 'PostgreSQL', link: '/databases/postgresql' },
+            { text: 'MySQL', link: '/databases/mysql' },
+            { text: 'SQLite', link: '/databases/sqlite' },
+            { text: 'MongoDB', link: '/databases/mongodb' }
           ]
         }
       ],
