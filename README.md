@@ -145,6 +145,7 @@ flash status
 | `flash pull`            | Extract schema from existing database               |
 | `flash studio`          | Launch visual database editor                       |
 | `flash export [format]` | Export database (JSON, CSV, SQLite)                 |
+| `flash seed`            | Seed database with realistic fake data              |
 | `flash reset`           | Reset database (⚠️ destructive)                     |
 | `flash gen`             | Generate type-safe code                             |
 | `flash raw <sql>`       | Execute raw SQL                                     |
@@ -496,6 +497,48 @@ type User struct {
 func (q *Queries) GetUser(ctx context.Context, id int32) (User, error) {
     // Generated implementation
 }
+```
+
+## 🌱 Database Seeding
+
+Populate your database with realistic fake data for development and testing:
+
+### Basic Usage
+
+```bash
+# Seed all tables with default count (10 rows each)
+flash seed
+
+# Seed with custom count
+flash seed --count 100
+
+# Seed specific table
+flash seed --table users --count 50
+
+# Truncate tables before seeding
+flash seed --truncate
+```
+
+### Features
+
+- **Smart Data Generation**: Automatically generates realistic data based on column names and types
+  - `email` columns → realistic emails
+  - `name` columns → human names
+  - `phone` columns → phone numbers
+  - `created_at` columns → timestamps
+  - And many more patterns
+- **Foreign Key Support**: Respects relationships, seeds parent tables first
+- **Dependency Graph**: Automatically determines correct insertion order
+- **All Databases**: Works with PostgreSQL, MySQL, and SQLite
+
+### Example Output
+
+```
+🌱 Seeding database...
+  ✅ users: 50 records
+  ✅ posts: 100 records
+  ✅ comments: 200 records
+✨ Seeding complete!
 ```
 
 ## 🛠️ Advanced Usage
