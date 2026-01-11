@@ -23,12 +23,21 @@ func Uncapitalize(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
+// toTitleCase converts a word to title case (first letter uppercase, rest lowercase).
+// This replaces the deprecated strings.Title function.
+func toTitleCase(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
+}
+
 func ToPascalCase(s string) string {
 	words := strings.FieldsFunc(s, func(r rune) bool {
 		return r == '_' || r == '-' || r == ' '
 	})
 	for i, word := range words {
-		words[i] = strings.Title(strings.ToLower(word))
+		words[i] = toTitleCase(word)
 	}
 	return strings.Join(words, "")
 }

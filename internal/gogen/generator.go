@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -14,9 +13,6 @@ import (
 
 type Generator struct {
 	Config       *config.Config
-	insertRegex  *regexp.Regexp
-	updateRegex  *regexp.Regexp
-	deleteRegex  *regexp.Regexp
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
@@ -25,9 +21,6 @@ type Generator struct {
 func New(cfg *config.Config) *Generator {
 	return &Generator{
 		Config:       cfg,
-		insertRegex:  regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`),
-		updateRegex:  regexp.MustCompile(`(?i)UPDATE\s+(\w+)`),
-		deleteRegex:  regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`),
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
 	}
@@ -256,14 +249,18 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
 	hasReturning := strings.Contains(strings.ToUpper(query.SQL), "RETURNING")
 
-	if len(query.Columns) == 0 {
-		if hasReturning {
-		} else {
-			return query.Columns
-		}
-	} else if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
+	// No columns and no RETURNING clause - nothing to expand
+	if len(query.Columns) == 0 && !hasReturning {
 		return query.Columns
-	} else if len(query.Columns) > 1 {
+	}
+
+	// Single non-wildcard column - no expansion needed
+	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
+		return query.Columns
+	}
+
+	// Multiple columns - check if any is a wildcard
+	if len(query.Columns) > 1 {
 		hasWildcard := false
 		for _, col := range query.Columns {
 			if col.Name == "*" {
@@ -276,7 +273,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		}
 	}
 
-	tableName := g.extractTableName(query.SQL)
+	tableName := utils.ExtractTableName(query.SQL)
 	if tableName == "" {
 		return query.Columns
 	}
@@ -306,35 +303,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	return expanded
 }
 
-func (g *Generator) extractTableName(sql string) string {
-	sqlUpper := strings.ToUpper(sql)
 
-	if strings.Contains(sqlUpper, "INSERT INTO") {
-		re := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-		matches := re.FindStringSubmatch(sql)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	if strings.Contains(sqlUpper, "FROM") {
-		re := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-		matches := re.FindStringSubmatch(sql)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	if strings.Contains(sqlUpper, "UPDATE") {
-		re := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-		matches := re.FindStringSubmatch(sql)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	return ""
-}
 
 func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)
@@ -354,7 +323,7 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	}
 
 	cmd := strings.ToLower(query.Cmd)
-	isModifying := g.isModifyingQuery(query.SQL)
+	isModifying := utils.IsModifyingQuery(query.SQL)
 
 	code.WriteString(fmt.Sprintf("func (q *Queries) %s(", methodName))
 
@@ -617,12 +586,7 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	return nil
 }
 
-func (g *Generator) isModifyingQuery(sql string) bool {
-	sqlUpper := strings.ToUpper(sql)
-	pattern := `\b(INSERT|UPDATE|DELETE)\b`
-	matched, _ := regexp.MatchString(pattern, sqlUpper)
-	return matched
-}
+
 
 func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	sqlTypeLower := strings.ToLower(sqlType)

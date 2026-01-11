@@ -3,6 +3,46 @@ let currentResults = null;
 let queryHistory = [];
 let historyIndex = -1;
 
+// Storage key for SQL editor state
+const SQL_STORAGE_KEY = 'flashorm_sql_editor_state';
+
+// Save SQL editor state
+function saveSqlState() {
+    const state = {
+        content: editor ? editor.getValue() : '',
+        queryHistory: queryHistory,
+        historyIndex: historyIndex
+    };
+    try {
+        sessionStorage.setItem(SQL_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+        console.warn('Failed to save SQL state:', e);
+    }
+}
+
+// Restore SQL editor state
+function restoreSqlState() {
+    try {
+        const saved = sessionStorage.getItem(SQL_STORAGE_KEY);
+        if (saved) {
+            const state = JSON.parse(saved);
+            if (state.content && editor) {
+                editor.setValue(state.content);
+            }
+            if (state.queryHistory) {
+                queryHistory = state.queryHistory;
+            }
+            if (typeof state.historyIndex === 'number') {
+                historyIndex = state.historyIndex;
+            }
+            return true;
+        }
+    } catch (e) {
+        console.warn('Failed to restore SQL state:', e);
+    }
+    return false;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     editor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
         mode: 'text/x-sql',
@@ -27,7 +67,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    editor.setValue('-- Welcome to SQL Editor\n-- Press Ctrl+Enter (or Cmd+Enter on Mac) to run query\n-- Press F5 to run query\n-- Press Ctrl+/ to toggle comment\n-- Press Ctrl+Up/Down to navigate history\n\nSELECT * FROM users LIMIT 10;');
+    // Try to restore previous state, otherwise use default content
+    if (!restoreSqlState()) {
+        editor.setValue('-- Welcome to SQL Editor\\n-- Press Ctrl+Enter (or Cmd+Enter on Mac) to run query\\n-- Press F5 to run query\\n-- Press Ctrl+/ to toggle comment\\n-- Press Ctrl+Up/Down to navigate history\\n\\nSELECT * FROM users LIMIT 10;');
+    }
+
+    // Save state on every change (debounced)
+    let saveTimeout;
+    editor.on('change', () => {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(saveSqlState, 500);
+    });
+
+    // Save state before page unload
+    window.addEventListener('beforeunload', saveSqlState);
+
+    // Also save state when clicking any navigation link
+    document.querySelectorAll('a[href]').forEach(link => {
+        link.addEventListener('click', saveSqlState);
+    });
+
     setupResize();
     loadTableHints();
 });

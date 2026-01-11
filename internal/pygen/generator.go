@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -607,7 +606,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		return query.Columns
 	}
 
-	tableName := g.extractTableName(query.SQL)
+	tableName := utils.ExtractTableName(query.SQL)
 	if tableName == "" {
 		return query.Columns
 	}
@@ -637,25 +636,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	return expanded
 }
 
-func (g *Generator) extractTableName(sql string) string {
 
-	insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-	if matches := insertRegex.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
-	}
-
-	fromRegex := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-	if matches := fromRegex.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
-	}
-
-	updateRegex := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-	if matches := updateRegex.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
-	}
-
-	return ""
-}
 
 func (g *Generator) getReturnType(query *parser.Query) string {
 	hasColumns := len(query.Columns) > 0
@@ -691,21 +672,42 @@ func (g *Generator) generateBatchMethod(w *strings.Builder, query *parser.Query)
 	sql := g.convertSQL(query.SQL)
 	sql = strings.ReplaceAll(sql, "\"", "\\\"")
 
-	w.WriteString(fmt.Sprintf("    async def %s(self, records: List[tuple]) -> int:\n", methodName))
+	isAsync := g.Config.Gen.Python.Async
+	
+	if isAsync {
+		w.WriteString(fmt.Sprintf("    async def %s(self, records: List[tuple]) -> int:\n", methodName))
+	} else {
+		w.WriteString(fmt.Sprintf("    def %s(self, records: List[tuple]) -> int:\n", methodName))
+	}
 	w.WriteString(fmt.Sprintf("        \"\"\"Batch insert for %s. Each record should be a tuple of parameters.\"\"\"\n", query.Name))
 	w.WriteString(fmt.Sprintf("        stmt = \"\"\"%s\"\"\"\n", sql))
 
 	provider := g.Config.Database.Provider
 	switch provider {
 	case "sqlite", "sqlite3":
-		w.WriteString("        async with self.db.execute_many(stmt, records) as cursor:\n")
-		w.WriteString("            return cursor.rowcount\n")
+		if isAsync {
+			w.WriteString("        async with self.db.execute_many(stmt, records) as cursor:\n")
+			w.WriteString("            return cursor.rowcount\n")
+		} else {
+			w.WriteString("        cursor = self.db.executemany(stmt, records)\n")
+			w.WriteString("        return cursor.rowcount\n")
+		}
 	case "mysql":
-		w.WriteString("        async with self.db.cursor() as cursor:\n")
-		w.WriteString("            await cursor.executemany(stmt, records)\n")
-		w.WriteString("            return cursor.rowcount\n")
+		if isAsync {
+			w.WriteString("        async with self.db.cursor() as cursor:\n")
+			w.WriteString("            await cursor.executemany(stmt, records)\n")
+			w.WriteString("            return cursor.rowcount\n")
+		} else {
+			w.WriteString("        with self.db.cursor() as cursor:\n")
+			w.WriteString("            cursor.executemany(stmt, records)\n")
+			w.WriteString("            return cursor.rowcount\n")
+		}
 	default: // PostgreSQL
-		w.WriteString("        await self.db.executemany(stmt, records)\n")
+		if isAsync {
+			w.WriteString("        await self.db.executemany(stmt, records)\n")
+		} else {
+			w.WriteString("        self.db.executemany(stmt, records)\n")
+		}
 		w.WriteString("        return len(records)\n")
 	}
 

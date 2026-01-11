@@ -1,18 +1,88 @@
 // Redis Studio JavaScript
+const REDIS_STORAGE_KEY = 'flashorm_redis_studio_state';
+
 const RedisStudio = {
     currentDb: 0,
     currentKey: null,
+    currentKeyTTL: -1,  // Store current key's TTL for preservation
+    currentKeyType: 'string',  // Store current key's type
     keys: [],
     commandHistory: [],
     historyIndex: -1,
     currentTab: 'browser',
     terminalInput: null,
 
+    // Save state to sessionStorage
+    saveState() {
+        const state = {
+            currentDb: this.currentDb,
+            currentKey: this.currentKey,
+            currentTab: this.currentTab,
+            commandHistory: this.commandHistory
+        };
+        try {
+            sessionStorage.setItem(REDIS_STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+            console.warn('Failed to save Redis state:', e);
+        }
+    },
+
+    // Restore state from sessionStorage
+    restoreState() {
+        try {
+            const saved = sessionStorage.getItem(REDIS_STORAGE_KEY);
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (typeof state.currentDb === 'number') {
+                    this.currentDb = state.currentDb;
+                    const dbSelect = document.getElementById('dbSelect');
+                    if (dbSelect) dbSelect.value = state.currentDb;
+                }
+                if (state.commandHistory) {
+                    this.commandHistory = state.commandHistory;
+                }
+                if (state.currentTab) {
+                    this.currentTab = state.currentTab;
+                }
+                return state;
+            }
+        } catch (e) {
+            console.warn('Failed to restore Redis state:', e);
+        }
+        return null;
+    },
+
     init() {
         this.bindEvents();
-        this.loadKeys();
+
+        // Restore previous state
+        const savedState = this.restoreState();
+
+        // If we have a saved database, select it first
+        if (savedState && savedState.currentDb !== 0) {
+            this.selectDatabase(savedState.currentDb, false);  // false = don't save again
+        }
+
+        this.loadKeys().then(() => {
+            // If we had a selected key, restore it after keys load
+            if (savedState && savedState.currentKey) {
+                this.selectKey(savedState.currentKey);
+            }
+        });
+
+        // Switch to saved tab
+        if (savedState && savedState.currentTab) {
+            this.switchTab(savedState.currentTab);
+        }
+
         this.loadServerInfo();
         this.initTerminal();
+
+        // Save state on navigation
+        window.addEventListener('beforeunload', () => this.saveState());
+        document.querySelectorAll('a[href]').forEach(link => {
+            link.addEventListener('click', () => this.saveState());
+        });
     },
 
     bindEvents() {
@@ -269,7 +339,12 @@ const RedisStudio = {
             const response = await fetch('/api/key?key=' + encodeURIComponent(key));
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
+            // Store key metadata for later use (e.g., preserving TTL on save)
+            this.currentKeyTTL = json.data.ttl || -1;
+            this.currentKeyType = json.data.type || 'string';
             this.renderKeyDetail(json.data);
+            // Save state after key selection
+            this.saveState();
         } catch (error) {
             container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
         }
@@ -334,14 +409,23 @@ const RedisStudio = {
         if (!editor) return;
 
         try {
+            // Include TTL in the request to preserve it
+            const ttl = this.currentKeyTTL > 0 ? this.currentKeyTTL : 0;
+
             const response = await fetch('/api/key?key=' + encodeURIComponent(this.currentKey), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value: editor.value, type: 'string' })
+                body: JSON.stringify({
+                    value: editor.value,
+                    type: this.currentKeyType || 'string',
+                    ttl: ttl  // Preserve existing TTL
+                })
             });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Saved', 'success');
+            this.showToast('Value saved', 'success');
+            // Refresh the key to get updated metadata
+            this.selectKey(this.currentKey);
         } catch (error) {
             this.showToast(error.message, 'error');
         }
@@ -358,12 +442,20 @@ const RedisStudio = {
 
     promptTTL() {
         if (!this.currentKey) return;
-        const ttl = prompt('Enter TTL in seconds (-1 to remove):');
+        const currentTTL = this.currentKeyTTL > 0 ? this.currentKeyTTL : -1;
+        const ttl = prompt(`Enter TTL in seconds (current: ${currentTTL === -1 ? 'no expiry' : currentTTL + 's'}). Use -1 to remove expiry:`);
         if (ttl === null) return;
         const n = parseInt(ttl);
-        if (isNaN(n)) { this.showToast('Invalid TTL', 'error'); return; }
-        const cmd = n === -1 ? 'PERSIST ' + this.currentKey : 'EXPIRE ' + this.currentKey + ' ' + n;
-        this.runCommand(cmd).then(() => this.selectKey(this.currentKey));
+        if (isNaN(n)) { this.showToast('Invalid TTL value', 'error'); return; }
+        const cmd = n <= 0 ? 'PERSIST ' + this.currentKey : 'EXPIRE ' + this.currentKey + ' ' + n;
+        this.runCommand(cmd).then(() => {
+            // Update stored TTL
+            this.currentKeyTTL = n <= 0 ? -1 : n;
+            // Refresh both key detail and keys list to update TTL badges
+            this.selectKey(this.currentKey);
+            this.loadKeys();  // Refresh sidebar badges
+            this.showToast(n <= 0 ? 'TTL removed' : `TTL set to ${n}s`, 'success');
+        });
     },
 
     deleteCurrentKey() {
@@ -399,7 +491,7 @@ const RedisStudio = {
     },
 
     // ===== DATABASE & PURGE =====
-    async selectDatabase(db) {
+    async selectDatabase(db, shouldSave = true) {
         try {
             const response = await fetch('/api/databases/' + db, { method: 'POST' });
             const json = await response.json();
@@ -411,6 +503,8 @@ const RedisStudio = {
             // Reinit terminal with new DB
             this.initTerminal();
             this.showToast('Switched to db' + db, 'info');
+            // Save state after database change
+            if (shouldSave) this.saveState();
         } catch (error) {
             this.showToast(error.message, 'error');
         }
@@ -443,6 +537,9 @@ const RedisStudio = {
 
         if (tab === 'cli') setTimeout(() => this.focusTerminal(), 50);
         if (tab === 'stats') this.loadServerInfo();
+
+        // Save state after tab change
+        this.saveState();
     },
 
     // ===== SERVER INFO =====

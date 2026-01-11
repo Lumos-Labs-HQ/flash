@@ -103,9 +103,15 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*common.Table
 		return nil, err
 	}
 
-	columns := make([]common.ColumnInfo, len(schema))
-	for i, col := range schema {
-		columns[i] = common.ColumnInfo{
+	// Deduplicate columns (some adapters may return duplicates)
+	seen := make(map[string]bool)
+	columns := make([]common.ColumnInfo, 0, len(schema))
+	for _, col := range schema {
+		if seen[col.Name] {
+			continue // Skip duplicate column
+		}
+		seen[col.Name] = true
+		columns = append(columns, common.ColumnInfo{
 			Name:             col.Name,
 			Type:             col.Type,
 			Nullable:         col.Nullable,
@@ -114,7 +120,7 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*common.Table
 			AutoIncrement:    col.IsAutoIncrement,
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
-		}
+		})
 	}
 
 	offset := (page - 1) * limit
@@ -239,29 +245,45 @@ func (s *Service) DeleteRow(tableName, rowID string) error {
 }
 
 func (s *Service) getRowCount(tableName string) (int, error) {
-	data, err := s.adapter.GetTableData(s.ctx, tableName)
-	if err != nil {
-		return 0, err
-	}
-	return len(data), nil
+	// Use efficient COUNT query instead of fetching all data
+	return s.adapter.GetTableRowCount(s.ctx, tableName)
 }
 
 func (s *Service) getRows(tableName string, limit, offset int) ([]map[string]any, error) {
-	data, err := s.adapter.GetTableData(s.ctx, tableName)
+	// Try to use paginated query first
+	type PaginatedFetcher interface {
+		GetTableDataPaginated(ctx context.Context, tableName string, limit, offset int) ([]map[string]any, error)
+	}
+	
+	if fetcher, ok := s.adapter.(PaginatedFetcher); ok {
+		return fetcher.GetTableDataPaginated(s.ctx, tableName, limit, offset)
+	}
+	
+	// Fallback: Use a raw query with LIMIT/OFFSET
+	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", 
+		common.QuoteIdentifier(tableName), limit, offset)
+	
+	result, err := s.adapter.ExecuteQuery(s.ctx, query)
 	if err != nil {
-		return nil, err
+		// Final fallback: fetch all and slice (inefficient but works)
+		data, err := s.adapter.GetTableData(s.ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		
+		start := offset
+		end := offset + limit
+		if start > len(data) {
+			return []map[string]any{}, nil
+		}
+		if end > len(data) {
+			end = len(data)
+		}
+		
+		return data[start:end], nil
 	}
-
-	start := offset
-	end := offset + limit
-	if start > len(data) {
-		return []map[string]any{}, nil
-	}
-	if end > len(data) {
-		end = len(data)
-	}
-
-	return data[start:end], nil
+	
+	return result.Rows, nil
 }
 
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {

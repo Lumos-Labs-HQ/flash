@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,9 +40,13 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 
 	schemaDir := p.Config.SchemaDir
 	if !filepath.IsAbs(schemaDir) {
-		cwd, _ := os.Getwd()
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current working directory: %w", err)
+		}
 		schemaDir = filepath.Join(cwd, schemaDir)
 	}
+
 
 	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
 		files, err := filepath.Glob(filepath.Join(schemaDir, "*.sql"))
@@ -67,7 +72,10 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 
 	schemaPath := p.Config.SchemaPath
 	if !filepath.IsAbs(schemaPath) {
-		cwd, _ := os.Getwd()
+		cwd, err := os.Getwd()
+		if err != nil {
+			return schema, fmt.Errorf("failed to get current working directory: %w", err)
+		}
 		schemaPath = filepath.Join(cwd, schemaPath)
 	}
 

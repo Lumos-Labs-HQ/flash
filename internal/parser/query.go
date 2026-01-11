@@ -47,7 +47,10 @@ func NewQueryParser(cfg *config.Config) *QueryParser {
 func (p *QueryParser) Parse(schema *Schema) ([]*Query, error) {
 	queriesPath := p.Config.Queries
 	if !filepath.IsAbs(queriesPath) {
-		cwd, _ := os.Getwd()
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current working directory: %w", err)
+		}
 		queriesPath = filepath.Join(cwd, queriesPath)
 	}
 
