@@ -593,7 +593,6 @@ func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query)
 	w.WriteString("\n")
 	w.WriteString("    @classmethod\n")
 	w.WriteString("    def _make_fast(cls, record):\n")
-	w.WriteString("        \"\"\"Optimized factory: 2-3x faster than **dict(record)\"\"\"\n")
 	w.WriteString("        return cls(\n")
 	for i, col := range columns {
 		colName := utils.ToSnakeCase(col.Name)

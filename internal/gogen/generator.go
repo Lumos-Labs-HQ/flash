@@ -373,7 +373,6 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	stmtKey := fmt.Sprintf("%s_stmt", methodName)
 
 	if isHotQuery {
-		code.WriteString("\t// OPTIMIZED: Use prepared statement cache for hot query\n")
 		code.WriteString(fmt.Sprintf("\tstmt := q.stmts[\"%s\"]\n", stmtKey))
 		code.WriteString("\tif stmt == nil {\n")
 		code.WriteString("\t\tvar err error\n")
@@ -510,9 +509,9 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 			code.WriteString("\tdefer rows.Close()\n\n")
 
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\titems := make([]%sRow, 0, 8) // Pre-allocate for typical result size\n", methodName))
+				code.WriteString(fmt.Sprintf("\titems := make([]%sRow, 0, 8) \n", methodName))
 			} else {
-				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) // Pre-allocate for typical result size\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
+				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) \n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 			}
 
 			code.WriteString("\tfor rows.Next() {\n")
