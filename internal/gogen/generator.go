@@ -510,9 +510,9 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 			code.WriteString("\tdefer rows.Close()\n\n")
 
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\tvar items []%sRow\n", methodName))
+				code.WriteString(fmt.Sprintf("\titems := make([]%sRow, 0, 8) // Pre-allocate for typical result size\n", methodName))
 			} else {
-				code.WriteString(fmt.Sprintf("\tvar items []%s\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
+				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) // Pre-allocate for typical result size\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 			}
 
 			code.WriteString("\tfor rows.Next() {\n")

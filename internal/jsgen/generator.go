@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -14,9 +13,6 @@ import (
 
 type Generator struct {
 	Config       *config.Config
-	insertRegex  *regexp.Regexp
-	updateRegex  *regexp.Regexp
-	deleteRegex  *regexp.Regexp
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
@@ -25,9 +21,6 @@ type Generator struct {
 func New(cfg *config.Config) *Generator {
 	return &Generator{
 		Config:       cfg,
-		insertRegex:  regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`),
-		updateRegex:  regexp.MustCompile(`(?i)UPDATE\s+(\w+)`),
-		deleteRegex:  regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`),
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
 	}
@@ -315,16 +308,10 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 		return "Object"
 	}
 
-	if match := g.insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		return utils.Capitalize(match[1])
-	}
-
-	if match := g.updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		return utils.Capitalize(match[1])
-	}
-
-	if match := g.deleteRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		return utils.Capitalize(match[1])
+	// Use shared utility to extract table name
+	tableName := utils.ExtractTableName(query.SQL)
+	if tableName != "" {
+		return utils.Capitalize(tableName)
 	}
 
 	return "Object"

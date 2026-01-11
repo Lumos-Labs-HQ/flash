@@ -143,7 +143,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	paramTypes := make([]string, len(query.Params))
 	for i, param := range query.Params {
 		paramName := param.Name
-		if paramName == "" {
+		if paramName == ""  {
 			paramName = fmt.Sprintf("p%d", i+1)
 		}
 		paramNames[i] = paramName
@@ -160,7 +160,12 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 		w.WriteString(fmt.Sprintf("    def %s(self, %s) -> %s:\n",
 			methodName, strings.Join(paramTypes, ", "), returnType))
 	}
-	w.WriteString(fmt.Sprintf("        stmt = \"\"\"%s\"\"\"\n", sql))
+	
+	// Use statement caching for better performance
+	w.WriteString(fmt.Sprintf("        _key = '%s'\n", methodName))
+	w.WriteString("        if _key not in self._stmts:\n")
+	w.WriteString(fmt.Sprintf("            self._stmts[_key] = \"\"\"%s\"\"\"\n", sql))
+	w.WriteString("        stmt = self._stmts[_key]\n")
 
 	provider := g.Config.Database.Provider
 	switch provider {
@@ -218,21 +223,26 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 	if hasColumns {
 		if query.Cmd == ":one" {
 			if isSingleNonWildcard {
+				// Direct column access - fastest path
 				w.WriteString(fmt.Sprintf("        return result[0]['%s'] if result else None\n", query.Columns[0].Name))
 			} else if needsResultClass {
 				className := utils.ToPascalCase(query.Name) + "Row"
+				// asyncpg Records support key access directly - use _make_fast
 				w.WriteString(fmt.Sprintf("        return %s._make_fast(result[0]) if result else None\n", className))
 			} else {
-				w.WriteString("        return dict(result[0]) if result else None\n")
+				// Direct Record access for asyncpg (faster than dict())
+				w.WriteString("        return result[0] if result else None\n")
 			}
 		} else {
 			if isSingleNonWildcard {
+				// Direct column access in list comprehension
 				w.WriteString(fmt.Sprintf("        return [row['%s'] for row in result]\n", query.Columns[0].Name))
 			} else if needsResultClass {
 				className := utils.ToPascalCase(query.Name) + "Row"
 				w.WriteString(fmt.Sprintf("        return [%s._make_fast(row) for row in result]\n", className))
 			} else {
-				w.WriteString("        return [dict(row) for row in result]\n")
+				// Return Records directly (asyncpg Records are dict-like)
+				w.WriteString("        return list(result)\n")
 			}
 		}
 	} else {
