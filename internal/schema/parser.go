@@ -10,10 +10,7 @@ import (
 
 // SQL Parsing helpers
 func (sm *SchemaManager) cleanSQL(sql string) string {
-	commentRegex := regexp.MustCompile(`--.*|/\*[\s\S]*?\*/`)
 	sql = commentRegex.ReplaceAllString(sql, "")
-
-	whitespaceRegex := regexp.MustCompile(`\s+`)
 	return strings.TrimSpace(whitespaceRegex.ReplaceAllString(sql, " "))
 }
 
@@ -30,17 +27,14 @@ func (sm *SchemaManager) splitStatements(sql string) []string {
 }
 
 func (sm *SchemaManager) isCreateTableStatement(stmt string) bool {
-	matched, _ := regexp.MatchString(`(?i)^\s*CREATE\s+TABLE`, stmt)
-	return matched
+	return createTableStmtRegex.MatchString(stmt)
 }
 
 func (sm *SchemaManager) isCreateIndexStatement(stmt string) bool {
-	matched, _ := regexp.MatchString(`(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX`, stmt)
-	return matched
+	return createIndexStmtRegex.MatchString(stmt)
 }
 
 func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaIndex, error) {
-	indexRegex := regexp.MustCompile(`(?i)CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?(\w+)"?|(\w+))\s+ON\s+(?:"?(\w+)"?|(\w+))\s*\(\s*([^)]+)\s*\)`)
 	matches := indexRegex.FindStringSubmatch(stmt)
 
 	if len(matches) < 7 {
@@ -69,7 +63,7 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 		// Clean up column name (remove quotes, ASC/DESC, etc.)
 		col = strings.TrimSpace(col)
 		col = strings.Trim(col, `"'`)
-		col = regexp.MustCompile(`(?i)\s+(ASC|DESC)$`).ReplaceAllString(col, "")
+		col = indexOrderRegex.ReplaceAllString(col, "")
 		col = strings.TrimSpace(col)
 		if col != "" {
 			columns = append(columns, col)
@@ -85,13 +79,11 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 }
 
 func (sm *SchemaManager) isCreateTypeStatement(stmt string) bool {
-	matched, _ := regexp.MatchString(`(?i)^\s*CREATE\s+TYPE\s+\w+\s+AS\s+ENUM`, stmt)
-	return matched
+	return createTypeStmtRegex.MatchString(stmt)
 }
 
 func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum, error) {
 	// Match: CREATE TYPE enum_name AS ENUM ('value1', 'value2', ...)
-	enumRegex := regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(?:"?(\w+)"?|(\w+))\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 	matches := enumRegex.FindStringSubmatch(stmt)
 
 	if len(matches) < 4 {
@@ -106,8 +98,7 @@ func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum
 
 	// Extract values
 	valuesStr := matches[3]
-	valueRegex := regexp.MustCompile(`'([^']+)'`)
-	valueMatches := valueRegex.FindAllStringSubmatch(valuesStr, -1)
+	valueMatches := enumValueRegex.FindAllStringSubmatch(valuesStr, -1)
 
 	values := make([]string, 0, len(valueMatches))
 	for _, match := range valueMatches {
@@ -123,7 +114,6 @@ func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum
 }
 
 func (sm *SchemaManager) parseCreateTableStatement(stmt string) (types.SchemaTable, error) {
-	tableRegex := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?(\w+)"?|(\w+)|\x60(\w+)\x60)\s*\(`)
 	matches := tableRegex.FindStringSubmatch(stmt)
 	if len(matches) < 2 {
 		return types.SchemaTable{}, fmt.Errorf("could not extract table name from: %s", stmt)

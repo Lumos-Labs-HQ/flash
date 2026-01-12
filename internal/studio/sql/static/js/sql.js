@@ -178,12 +178,12 @@ async function runQuery() {
         const elapsed = Date.now() - startTime;
 
         // Debug logging - check console for data structure
-        console.log('[SQL Debug] Response:', {
-            success: data.success,
-            columns: data.data?.columns,
-            rowCount: data.data?.rows?.length,
-            firstRow: data.data?.rows?.[0]
-        });
+        // console.log('[SQL Debug] Response:', {
+        //     success: data.success,
+        //     columns: data.data?.columns,
+        //     rowCount: data.data?.rows?.length,
+        //     firstRow: data.data?.rows?.[0]
+        // });
 
         if (data.success) {
             currentResults = data.data;

@@ -296,11 +296,11 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	}
 
 	// DEBUG: Print what was parsed
-	fmt.Printf("DEBUG: Parsed %d tables from schema file\n", len(targetTables))
-	fmt.Printf("DEBUG: Parsed %d standalone indexes from schema file\n", len(targetIndexes))
-	for _, idx := range targetIndexes {
-		fmt.Printf("  - Index: %s on table %s, columns: %v\n", idx.Name, idx.Table, idx.Columns)
-	}
+	// fmt.Printf("DEBUG: Parsed %d tables from schema file\n", len(targetTables))
+	// fmt.Printf("DEBUG: Parsed %d standalone indexes from schema file\n", len(targetIndexes))
+	// for _, idx := range targetIndexes {
+	// 	fmt.Printf("  - Index: %s on table %s, columns: %v\n", idx.Name, idx.Table, idx.Columns)
+	// }
 
 	// Get current enums from database
 	currentEnums, err := sm.adapter.GetCurrentEnums(ctx)
@@ -312,10 +312,10 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	diff := sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums, targetIndexes)
 	
 	// DEBUG: Print diff results
-	fmt.Printf("DEBUG: Diff has %d new indexes\n", len(diff.NewIndexes))
-	for _, idx := range diff.NewIndexes {
-		fmt.Printf("  - New index: %s\n", idx.Name)
-	}
+	// fmt.Printf("DEBUG: Diff has %d new indexes\n", len(diff.NewIndexes))
+	// for _, idx := range diff.NewIndexes {
+	// 	fmt.Printf("  - New index: %s\n", idx.Name)
+	// }
 	
 	return diff, nil
 }

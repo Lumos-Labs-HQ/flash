@@ -50,7 +50,7 @@ func (m *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, er
 func (m *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error) {
 	query := `
 		SELECT DISTINCT
-			CONCAT(table_name, '_', column_name) as enum_name,
+			CONCAT(table_name, '$', column_name) as enum_name,
 			column_type
 		FROM information_schema.columns
 		WHERE table_schema = DATABASE()
@@ -221,14 +221,30 @@ func (m *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 		args[i] = name
 	}
 
+	// These cannot be dropped independently and cause errors like PostgreSQL had
 	query := fmt.Sprintf(`
-		SELECT table_name, index_name, column_name, non_unique, seq_in_index
-		FROM information_schema.statistics
-		WHERE table_name IN (%s) AND table_schema = DATABASE() AND index_name != 'PRIMARY'
-		ORDER BY table_name, index_name, seq_in_index
-	`, strings.Join(placeholders, ","))
+		SELECT s.table_name, s.index_name, s.column_name, s.non_unique, s.seq_in_index
+		FROM information_schema.statistics s
+		WHERE s.table_name IN (%s) 
+		  AND s.table_schema = DATABASE() 
+		  AND s.index_name != 'PRIMARY'
+		  AND s.index_name NOT IN (
+		      -- Exclude indexes created by UNIQUE constraints
+		      SELECT DISTINCT constraint_name 
+		      FROM information_schema.table_constraints 
+		      WHERE constraint_type = 'UNIQUE' 
+		        AND table_schema = DATABASE()
+		        AND table_name IN (%s)
+		  )
+		ORDER BY s.table_name, s.index_name, s.seq_in_index
+	`, strings.Join(placeholders, ","), strings.Join(placeholders, ","))
 
-	rows, err := m.db.QueryContext(ctx, query, args...)
+	// Double the args since we use tableNames twice in the query
+	allArgs := make([]interface{}, len(args)*2)
+	copy(allArgs, args)
+	copy(allArgs[len(args):], args)
+
+	rows, err := m.db.QueryContext(ctx, query, allArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -269,111 +285,6 @@ func (m *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 	return result, nil
 }
 
-func (m *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
-	rows, err := m.db.QueryContext(ctx, `
-		SELECT 
-			c.column_name, c.data_type, c.is_nullable, c.column_default,
-			c.character_maximum_length, c.numeric_precision, c.numeric_scale, c.column_type,
-			CASE WHEN c.column_key = 'PRI' THEN 1 ELSE 0 END as is_primary_key,
-			CASE WHEN c.column_key = 'UNI' THEN 1 ELSE 0 END as is_unique,
-			c.extra,
-			k.REFERENCED_TABLE_NAME,
-			k.REFERENCED_COLUMN_NAME,
-			r.DELETE_RULE
-		FROM information_schema.columns c
-		LEFT JOIN information_schema.key_column_usage k
-			ON c.table_schema = k.table_schema
-			AND c.table_name = k.table_name
-			AND c.column_name = k.column_name
-			AND k.referenced_table_name IS NOT NULL
-		LEFT JOIN information_schema.referential_constraints r
-			ON k.constraint_name = r.constraint_name
-			AND k.table_schema = r.constraint_schema
-		WHERE c.table_name = ? AND c.table_schema = DATABASE()
-		ORDER BY c.ordinal_position
-	`, tableName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var columns []types.SchemaColumn
-	for rows.Next() {
-		var column types.SchemaColumn
-		var dataType, isNullable, columnType, extra string
-		var columnDefault, referencedTable, referencedColumn, onDeleteAction sql.NullString
-		var charMaxLength, numericPrecision, numericScale sql.NullInt64
-		var isPrimary, isUnique int
-
-		err := rows.Scan(&column.Name, &dataType, &isNullable, &columnDefault,
-			&charMaxLength, &numericPrecision, &numericScale, &columnType,
-			&isPrimary, &isUnique, &extra, &referencedTable, &referencedColumn, &onDeleteAction)
-		if err != nil {
-			return nil, err
-		}
-
-		column.Type = m.formatMySQLType(dataType, columnType, charMaxLength, numericPrecision, numericScale)
-		column.Nullable = isNullable == "YES"
-		column.IsPrimary = isPrimary == 1
-		column.IsUnique = isUnique == 1
-		column.IsAutoIncrement = strings.Contains(strings.ToLower(extra), "auto_increment")
-		if columnDefault.Valid {
-			column.Default = m.formatMySQLDefault(columnDefault.String, column.Type)
-		}
-
-		if referencedTable.Valid && referencedColumn.Valid {
-			column.ForeignKeyTable = referencedTable.String
-			column.ForeignKeyColumn = referencedColumn.String
-			if onDeleteAction.Valid {
-				column.OnDeleteAction = onDeleteAction.String
-			}
-		}
-
-		columns = append(columns, column)
-	}
-	return columns, nil
-}
-
-func (m *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
-	rows, err := m.db.QueryContext(ctx, `
-		SELECT index_name, column_name, non_unique
-		FROM information_schema.statistics
-		WHERE table_name = ? AND table_schema = DATABASE() AND index_name != 'PRIMARY'
-		ORDER BY index_name, seq_in_index
-	`, tableName)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	indexMap := make(map[string]*types.SchemaIndex)
-	for rows.Next() {
-		var indexName, columnName string
-		var nonUnique int
-
-		if err := rows.Scan(&indexName, &columnName, &nonUnique); err != nil {
-			return nil, err
-		}
-
-		if idx, exists := indexMap[indexName]; exists {
-			idx.Columns = append(idx.Columns, columnName)
-		} else {
-			indexMap[indexName] = &types.SchemaIndex{
-				Name:    indexName,
-				Table:   tableName,
-				Columns: []string{columnName},
-				Unique:  nonUnique == 0,
-			}
-		}
-	}
-
-	var indexes []types.SchemaIndex
-	for _, idx := range indexMap {
-		indexes = append(indexes, *idx)
-	}
-	return indexes, nil
-}
-
 func (m *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	rows, err := m.db.QueryContext(ctx, `
 		SELECT table_name FROM information_schema.tables 
@@ -396,6 +307,25 @@ func (m *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	return tables, nil
 }
 
+// GetTableColumns - Compatibility stub, delegates to batch version
+func (m *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
+	allColumns, err := m.GetAllTablesColumns(ctx, []string{tableName})
+	if err != nil {
+		return nil, err
+	}
+	return allColumns[tableName], nil
+}
+
+// GetTableIndexes - Compatibility stub, delegates to batch version
+func (m *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
+	allIndexes, err := m.GetAllTablesIndexes(ctx, []string{tableName})
+	if err != nil {
+		return nil, err
+	}
+	return allIndexes[tableName], nil
+}
+
+// PullCompleteSchema returns complete schema excluding internal tables
 func (m *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	query := `
 	SELECT
