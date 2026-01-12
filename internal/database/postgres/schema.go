@@ -203,10 +203,24 @@ func (p *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 		return make(map[string][]types.SchemaIndex), nil
 	}
 
+	// CRITICAL FIX: Exclude indexes created by constraints (UNIQUE, PRIMARY KEY)
+	// These indexes cannot be dropped independently and should not be managed as standalone indexes
 	query := `
 		SELECT tablename, indexname, indexdef
 		FROM pg_indexes
-		WHERE tablename = ANY($1) AND schemaname = 'public' AND indexname NOT LIKE '%_pkey'
+		WHERE tablename = ANY($1) 
+		  AND schemaname = 'public' 
+		  AND indexname NOT LIKE '%_pkey'
+		  AND indexname NOT IN (
+		      -- Exclude indexes created by UNIQUE constraints
+		      SELECT i.relname
+		      FROM pg_index idx
+		      JOIN pg_class i ON i.oid = idx.indexrelid
+		      JOIN pg_class t ON t.oid = idx.indrelid
+		      WHERE idx.indisunique = true
+		        AND idx.indisprimary = false
+		        AND t.relname = ANY($1)
+		  )
 		ORDER BY tablename, indexname
 	`
 

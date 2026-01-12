@@ -106,7 +106,10 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	filepath := filepath.Join(m.migrationsDir, filename)
 
 	var sqlContent string
-	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 {
+	// CRITICAL FIX: Also check for index changes!
+	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && 
+	   len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
+	   len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -212,6 +215,27 @@ END $$;`, enum.Name, enum.Name, strings.Join(values, ", "))
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
 		// DOWN: We can't fully restore dropped enums
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
+	}
+
+	// CRITICAL FIX: Add standalone index changes!
+	// UP: Drop indexes first (before adding new ones that might conflict)
+	for _, indexName := range diff.DroppedIndexes {
+		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(indexName))
+		// DOWN: We can't fully restore dropped indexes
+		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", indexName)}, downStatements...)
+	}
+
+	// UP: Add new indexes
+	for _, index := range diff.NewIndexes {
+		if strings.HasPrefix(index.Name, "sqlite_") {
+			continue
+		}
+		indexSQL := m.adapter.GenerateAddIndexSQL(index)
+		if indexSQL != "" {
+			upStatements = append(upStatements, indexSQL)
+			// DOWN: Drop the added index
+			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
+		}
 	}
 
 	return m.formatMigrationFileWithDown(name, upStatements, downStatements)
