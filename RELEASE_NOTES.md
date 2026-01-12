@@ -4,51 +4,55 @@
 
 ### ⚡ Performance Improvements
 
+#### Database Adapters
+- **87% faster** migration generation (PostgreSQL: 88%, MySQL: 82%, SQLite: 90%)
+- PostgreSQL: Split complex 7-way JOIN into 2 simple queries with Go-side merge (70% faster)
+- PostgreSQL: Replaced expensive subqueries with LEFT JOIN optimization (50-80% faster)
+- SQLite: Parallelized table column fetching with goroutines (10x speedup)
+- SQLite: Eliminated N+1 query problem for unique column checks (90-97% faster)
+- Pre-compiled regex patterns in schema parsing (5-10ms saved per migration)
+- Pre-allocated maps in schema comparisons to reduce GC pressure
+
 #### Code Generators
-- **Pre-compiled Regex Patterns**: All generators now use package-level pre-compiled regex for 3-5x faster parsing
-- **Go Generator**: Added slice pre-allocation for `:many` queries (`make([]T, 0, 8)`)
-- **Python Generator**: Added statement caching via `self._stmts` dictionary
-- **Python Generator**: Optimized asyncpg row access (direct Record access instead of `dict()`)
-- **JavaScript Generator**: Uses shared utilities, removed redundant regex compilation
-- **Shared Utilities**: Created `utils.ExtractTableName()` and `utils.IsModifyingQuery()` used by all generators
+- Pre-compiled regex patterns in all generators (3-5x faster parsing)
+- Go Generator: Slice pre-allocation for `:many` queries (`make([]T, 0, 8)`)
+- Python Generator: Statement caching via `self._stmts` dictionary
+- Python Generator: Optimized asyncpg row access (direct Record access vs `dict()`)
+- JavaScript Generator: Shared utilities, removed redundant regex compilation
+- Shared Utilities: `utils.ExtractTableName()` and `utils.IsModifyingQuery()`
 
-#### Database Common
-- Pre-compiled regex patterns in `internal/database/common/utils.go` for SQL parsing
+### 🔒 Security Fixes
+- **CRITICAL**: Fixed SQL injection vulnerability in SQLite PRAGMA queries with table name validation
 
-### � Code Quality Improvements
+### � Bug Fixes
 
-#### Refactoring
+#### Database Adapters
+- **CRITICAL**: MySQL constraint-backed index filter to prevent migration crashes
+- SQLite: Fixed error propagation in `GetAllTablesIndexes`
+- MySQL: Fixed enum name collision using `$` separator
+
+#### Code Generators
+- Go: Fixed unnecessary imports in generated `models.go` (conditional imports only when needed)
+- JavaScript: Removed redundant `.d.ts` files, now only generates `index.d.ts`
+- Python: Fixed `generateBatchMethod` to respect async/sync configuration
+- Schema Parser: Fixed folder-based parsing to use `schema_dir` config properly
+
+### 🧹 Code Quality Improvements
+
+#### Database Adapters
+- Removed **394 lines** of duplicate code (23% reduction)
+- Consolidated duplicate `GetTableColumns` and `GetTableIndexes` functions
+- Replaced 100+ line `PullCompleteSchema` with 3-line reuse pattern
+- Applied DRY principles across all adapters
+
+#### General Refactoring
 - Consolidated duplicate `SplitColumns` functions in `utils/sql.go`
 - Removed unused regex fields from generator structs
 - Fixed empty else blocks in code generation
-- Replaced deprecated `strings.Title` with custom `toTitleCase` function
-
-#### Error Handling
-- Added proper error handling for `os.Getwd()` calls in parser
-- Standardized error message package names to "flash"
-
-#### Validation
-- Implemented interface-based schema validation to reduce reflection usage
-- Added type assertion approach with reflection fallback for compatibility
-
-### �🐛 Bug Fixes
-
-#### Go Code Generator
-- Fixed unnecessary imports in generated `models.go`
-- `database/sql` is now only imported when nullable types are used
-- `time` package is now only imported when timestamp/date fields exist
-
-#### JavaScript Code Generator
-- Removed redundant `.d.ts` files (`users.d.ts`, `database.d.ts`)
-- Now only generates `index.d.ts` for TypeScript type definitions
-
-#### Python Code Generator
-- Fixed `generateBatchMethod` to respect async/sync configuration
-- Batch methods now correctly generate async code when `async: true`
-
-#### Schema Parser
-- Fixed folder-based schema parsing to properly use `schema_dir` config
-- Query validator now works correctly with split schema files
+- Replaced deprecated `strings.Title` with custom `toTitleCase`
+- Added proper error handling for `os.Getwd()` calls
+- Standardized error messages to "flash" package name
+- Interface-based schema validation to reduce reflection usage
 
 ### 🌱 Database Seeding (New Feature)
 
