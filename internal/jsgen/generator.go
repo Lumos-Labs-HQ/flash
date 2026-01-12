@@ -389,7 +389,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	w.WriteString("module.exports = { New, Queries };\n")
 
-	path := filepath.Join(g.Config.Gen.JS.Out, "database.js")
+	path := filepath.Join(g.Config.Gen.JS.Out, "index.js")
 	return os.WriteFile(path, []byte(w.String()), 0644)
 }
 
