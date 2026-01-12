@@ -1,12 +1,14 @@
 package gogen
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
@@ -16,6 +18,7 @@ type Generator struct {
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
+	cache        *gencommon.GenerationCache
 }
 
 func New(cfg *config.Config) *Generator {
@@ -23,6 +26,7 @@ func New(cfg *config.Config) *Generator {
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
+		cache:        gencommon.NewGenerationCache(),
 	}
 }
 
@@ -31,30 +35,76 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	// Parse schema
 	schema, err := g.schemaParser.Parse()
 	if err != nil {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
 
+	// Compute current checksums for incremental generation
+	schemaHash, err := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
+	if err != nil {
+		schemaHash = "" // Fallback: regenerate all
+	}
+
+	configHash := g.computeConfigChecksum()
+	
+	// Check if full regeneration is needed
+	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+
+	// Parse queries
 	queries, err := g.queryParser.Parse(schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	if err := g.generateModels(); err != nil {
+	// Generate models (only if schema changed)
+	if fullRegen || g.cache.SchemaChecksum != schemaHash {
+		if err := g.generateModels(); err != nil {
+			return err
+		}
+	}
+
+	// Generate DB interface (only if needed)
+	if fullRegen || g.cache.SchemaChecksum != schemaHash {
+		if err := g.generateDB(); err != nil {
+			return err
+		}
+	}
+
+	// Generate queries with incremental support
+	if err := g.generateQueriesIncremental(queries, fullRegen); err != nil {
 		return err
 	}
 
-	if err := g.generateDB(); err != nil {
-		return err
-	}
-
-	if err := g.generateQueries(queries); err != nil {
-		return err
+	// Update cache
+	g.cache.UpdateSchemaChecksum(schemaHash)
+	g.cache.UpdateConfigChecksum(configHash)
+	g.cache.MarkGeneration()
+	
+	// Save cache to disk
+	if err := g.cache.Save(); err != nil {
+		// Non-fatal: just log and continue
+		fmt.Printf("Warning: failed to save generation cache: %v\n", err)
 	}
 
 	return nil
+}
+
+// computeConfigChecksum computes hash of relevant config fields
+func (g *Generator) computeConfigChecksum() string {
+	// Hash relevant config fields that affect generation
+	configStr := fmt.Sprintf("%s|%s|%s|%v|%v|%v",
+		g.Config.SchemaDir,
+		g.Config.Queries,
+		g.Config.Database.Provider,
+		g.Config.Gen.Go.Enabled,
+		g.Config.Gen.JS.Enabled,
+		g.Config.Gen.Python.Enabled,
+	)
+	hash := sha256.Sum256([]byte(configStr))
+	return fmt.Sprintf("%x", hash)
 }
 
 func (g *Generator) generateModels() error {

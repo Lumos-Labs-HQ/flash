@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
@@ -59,16 +61,77 @@ func (p *QueryParser) Parse(schema *Schema) ([]*Query, error) {
 		return nil, err
 	}
 
-	queries := make([]*Query, 0, len(files)*4)
-	for _, file := range files {
-		fileQueries, err := p.parseQueryFile(file, schema)
-		if err != nil {
-			return nil, err
-		}
-		queries = append(queries, fileQueries...)
+	if len(files) == 0 {
+		return []*Query{}, nil
 	}
 
-	return queries, nil
+	// Use concurrent processing for better performance on large projects
+	return p.parseFilesConcurrently(files, schema)
+}
+
+// parseFilesConcurrently processes query files in parallel using worker pool
+func (p *QueryParser) parseFilesConcurrently(files []string, schema *Schema) ([]*Query, error) {
+	// Create indexed schema for O(1) lookups
+	indexedSchema := NewIndexedSchema(schema)
+	
+	// Determine optimal worker count (don't exceed CPU count or file count)
+	numWorkers := runtime.NumCPU()
+	if numWorkers > len(files) {
+		numWorkers = len(files)
+	}
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	// Channels for work distribution and result collection
+	type parseResult struct {
+		queries []*Query
+		err     error
+		file    string
+	}
+	
+	fileChan := make(chan string, len(files))
+	resultChan := make(chan parseResult, len(files))
+
+	// Launch worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for file := range fileChan {
+				queries, err := p.parseQueryFile(file, indexedSchema.Schema)
+				resultChan <- parseResult{
+					queries: queries,
+					err:     err,
+					file:    file,
+				}
+			}
+		}()
+	}
+
+	// Send files to workers
+	for _, file := range files {
+		fileChan <- file
+	}
+	close(fileChan)
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	allQueries := make([]*Query, 0, len(files)*4)
+	for result := range resultChan {
+		if result.err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", result.file, result.err)
+		}
+		allQueries = append(allQueries, result.queries...)
+	}
+
+	return allQueries, nil
 }
 
 func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query, error) {
@@ -160,6 +223,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
+	// Use indexed lookup for O(1) performance
 	var table *Table
 	for _, t := range schema.Tables {
 		if strings.EqualFold(t.Name, tableName) {
@@ -548,7 +612,7 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 		tableName := matches[1]
 		columnName := matches[2]
 
-		// Look up in schema
+		// Try indexed lookup first
 		for _, table := range schema.Tables {
 			if strings.EqualFold(table.Name, tableName) {
 				for _, col := range table.Columns {

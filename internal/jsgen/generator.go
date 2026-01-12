@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
@@ -16,6 +17,7 @@ type Generator struct {
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
+	cache        *gencommon.GenerationCache
 }
 
 func New(cfg *config.Config) *Generator {
@@ -23,6 +25,7 @@ func New(cfg *config.Config) *Generator {
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
+		cache:        gencommon.NewGenerationCache(),
 	}
 }
 
@@ -42,7 +45,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	if err := g.generateQueries(queries); err != nil {
+	if err := g.generateQueriesIncremental(queries, false); err != nil {
 		return err
 	}
 
@@ -50,7 +53,11 @@ func (g *Generator) Generate() error {
 		return err
 	}
 
-	return g.generateTypeScriptDeclarations(schema, queries)
+	if err := g.generateTypeScriptDeclarations(schema, queries); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *Generator) generateQueries(queries []*parser.Query) error {
