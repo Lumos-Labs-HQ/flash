@@ -19,8 +19,14 @@ flash seed --count 100
 # Seed specific table
 flash seed --table users --count 50
 
+# Seed multiple tables with different counts
+flash seed users:100 posts:500 comments:1000
+
 # Truncate before seeding (fresh start)
 flash seed --truncate
+
+# Skip confirmation prompts
+flash seed --truncate --force
 ```
 
 ## Features
@@ -80,8 +86,21 @@ seeding order:
 ## Command Options
 
 ```bash
-flash seed [flags]
+flash seed [tables...] [flags]
 ```
+
+### Positional Arguments
+
+You can specify tables with custom counts using the `table:count` syntax:
+
+```bash
+# Seed users with 100 rows, posts with 500, comments with 1000
+flash seed users:100 posts:500 comments:1000
+```
+
+This is useful when you need different amounts of data for different tables.
+
+### Flags
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
@@ -89,6 +108,7 @@ flash seed [flags]
 | `--table` | `-t` | Seed specific table only | all |
 | `--truncate` | | Truncate tables before seeding | false |
 | `--force` | `-f` | Skip confirmation prompts | false |
+| `--relations` | | Include foreign key relationships | true |
 
 ## Examples
 
@@ -111,11 +131,34 @@ flash seed --table users --count 100
 flash seed --table posts --truncate --count 200
 ```
 
+### Multiple Tables with Different Counts
+
+```bash
+# Realistic data distribution
+flash seed users:50 posts:200 comments:1000
+
+# E-commerce example
+flash seed categories:10 products:100 orders:500 order_items:2000
+
+# Social media example
+flash seed users:100 posts:500 likes:5000 follows:2000
+```
+
 ### Large Dataset
 
 ```bash
 # Generate large dataset for performance testing
 flash seed --count 1000 --force
+
+# Stress test with specific distributions
+flash seed users:10000 posts:50000 comments:200000 --force
+```
+
+### CI/CD Pipeline
+
+```bash
+# Automated test setup
+flash reset --force && flash apply && flash seed --count 25 --force
 ```
 
 ## Output

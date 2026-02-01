@@ -1,6 +1,67 @@
 # FlashORM Release Notes
 
-## Version 2.2.3 - Latest Release
+## Version 2.3.0 - Latest Release
+
+### 🔴 Redis Studio (New Feature)
+
+A comprehensive web-based Redis management interface with advanced features:
+
+**Key Management**
+- Export/Import keys to/from JSON format
+- Bulk TTL update - set expiration for multiple keys by pattern
+- Database purge with confirmation
+
+**Monitoring & Analysis**
+- **Memory Analysis** - Per-key memory usage, type statistics, memory overview
+- **Slow Log Viewer** - View slow queries with duration, command, and client info
+- **Cluster/Replication Info** - View cluster state, nodes, and replication status
+
+**Advanced Features**
+- **Lua Script Editor** - Write, execute, and load Lua scripts with KEYS/ARGV support
+- **Pub/Sub Management** - Publish messages and view active channels with subscriber counts
+- **Config Viewer/Editor** - View, modify, and rewrite Redis configuration
+- **ACL Management** - View users and ACL security log (Redis 6.0+)
+
+**UI Improvements**
+- Fixed visual gaps in data tables with sticky headers
+- State persistence across browser sessions
+- Responsive design with dark theme
+
+```bash
+# Launch Redis Studio
+flash studio redis --url "redis://localhost:6379"
+```
+
+### 🌱 Database Seeding (New Feature)
+
+Seed your database with realistic fake data:
+
+```bash
+# Seed all tables with default count
+flash seed
+
+# Seed specific table with count
+flash seed --table users --count 100
+
+# Truncate tables before seeding
+flash seed --truncate
+```
+
+**Features:**
+- Automatic fake data generation based on column types
+- Smart relationship handling (foreign keys)
+- Support for all data types: strings, numbers, dates, emails, etc.
+- Dependency graph for correct insertion order
+
+### 🍃 MongoDB Studio Improvements
+
+- **Bulk Delete Documents** - Delete multiple documents at once using `$in` operator
+- **Delete Database** - Drop entire databases with confirmation
+- **Collection Context Menu** - Right-click options for collection management
+- **Improved Collection Selection** - Fixed active state highlighting
+
+---
+
 
 ### ⚡ Performance Improvements
 
@@ -54,26 +115,6 @@
 - Standardized error messages to "flash" package name
 - Interface-based schema validation to reduce reflection usage
 
-### 🌱 Database Seeding (New Feature)
-
-Seed your database with realistic fake data:
-
-```bash
-# Seed all tables with default count
-flash seed
-
-# Seed specific table with count
-flash seed --table users --count 100
-
-# Truncate tables before seeding
-flash seed --truncate
-```
-
-**Features:**
-- Automatic fake data generation based on column types
-- Smart relationship handling (foreign keys)
-- Support for all data types: strings, numbers, dates, emails, etc.
-- Dependency graph for correct insertion order
 
 ### 📦 Installation
 

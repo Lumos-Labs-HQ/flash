@@ -36,6 +36,15 @@ export interface Comments {
   created_at: Date;
 }
 
+export interface GetPostWithCommentsResult {
+  post_id: number;
+  title: string;
+  content: string;
+  author: string;
+  comment_text: string;
+  commenter: string;
+}
+
 export interface GetPostDetailsWithAllRelationsResult {
   id: number;
   title: string;
@@ -80,21 +89,12 @@ export interface GetComplexUserAnalyticsResult {
   engagement_score: string;
 }
 
-export interface GetPostWithCommentsResult {
-  post_id: number;
-  title: string;
-  content: string;
-  author: string;
-  comment_text: string;
-  commenter: string;
-}
-
 export class Queries {
   constructor(db: any);
 
+  createCategory(name: string): Promise<Categories | null>;
   createUser(name: string, email: string, address: string, isadmin: boolean): Promise<number>;
   getUserByEmail(email: string): Promise<Users | null>;
-  createCategory(name: string): Promise<Categories | null>;
   createPost(user_id: number, category_id: number, title: string, content: string): Promise<Posts | null>;
   createComment(post_id: number, user_id: number, content: string): Promise<Comments | null>;
   getPostWithComments(id: number): Promise<GetPostWithCommentsResult[]>;

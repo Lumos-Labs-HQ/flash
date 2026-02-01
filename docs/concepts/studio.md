@@ -7,6 +7,33 @@ description: Visual database management interface
 
 FlashORM Studio is a powerful web-based interface for viewing, editing, and managing your database. Similar to Prisma Studio, it provides an intuitive GUI for database operations without writing SQL.
 
+## Studio Variants
+
+FlashORM provides specialized studio interfaces for different database types:
+
+| Studio | Database Types | ORM Support | Documentation |
+|--------|---------------|-------------|---------------|
+| **SQL Studio** | PostgreSQL, MySQL, SQLite | Full (migrations, code gen, seeding) | This page |
+| **MongoDB Studio** | MongoDB | Visual management only | [MongoDB Studio Guide](/concepts/mongodb-studio) |
+| **Redis Studio** | Redis | Visual management only | [Redis Studio Guide](/concepts/redis-studio) |
+
+::: tip
+**SQL databases** (PostgreSQL, MySQL, SQLite) have full ORM support including migrations, type-safe code generation, and database seeding.
+
+**MongoDB and Redis Studios** are visual management tools for browsing and editing data, but do not include ORM features like migrations or code generation.
+:::
+
+```bash
+# SQL Studio (default) - for PostgreSQL, MySQL, SQLite
+flash studio
+
+# MongoDB Studio - visual management only
+flash studio mongodb --url "mongodb://localhost:27017/mydb"
+
+# Redis Studio - visual management only
+flash studio redis --url "redis://localhost:6379"
+```
+
 ## Table of Contents
 
 - [Overview](#overview)

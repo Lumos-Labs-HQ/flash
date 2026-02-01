@@ -22,6 +22,7 @@ export default defineConfig({
         ]
       },
       { text: 'SQL Studio', link: '/concepts/studio' },
+      { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
       { text: 'Redis Studio', link: '/concepts/redis-studio' }
     ],
 
@@ -45,6 +46,7 @@ export default defineConfig({
             { text: 'Code Generation', link: '/concepts/code-generation' },
             { text: 'Database Seeding', link: '/concepts/seeding' },
             { text: 'SQL Studio', link: '/concepts/studio' },
+            { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
             { text: 'Redis Studio', link: '/concepts/redis-studio' },
             { text: 'Data Export', link: '/concepts/export' },
             { text: 'Branching', link: '/concepts/branching' }
@@ -57,8 +59,7 @@ export default defineConfig({
           items: [
             { text: 'PostgreSQL', link: '/databases/postgresql' },
             { text: 'MySQL', link: '/databases/mysql' },
-            { text: 'SQLite', link: '/databases/sqlite' },
-            { text: 'MongoDB', link: '/databases/mongodb' }
+            { text: 'SQLite', link: '/databases/sqlite' }
           ]
         }
       ],
