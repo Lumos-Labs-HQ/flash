@@ -232,18 +232,28 @@ function showLoadingSkeleton() {
     `;
 }
 
-// Load data
+// Load data with server-side filtering
 async function loadTableData() {
     if (!state.currentTable) return;
 
     try {
-        const res = await fetch(`/api/tables/${state.currentTable}?page=${state.page}&limit=${state.limit}`);
+        // Build URL with filters
+        let url = `/api/tables/${state.currentTable}?page=${state.page}&limit=${state.limit}`;
+
+        // Add filters to request if any exist
+        if (state.filters && state.filters.length > 0) {
+            const filtersJSON = encodeURIComponent(JSON.stringify(state.filters));
+            url += `&filters=${filtersJSON}`;
+        }
+
+        const res = await fetch(url);
         const json = await res.json();
 
         if (json.success) {
             state.data = json.data;
             const rowCount = json.data.rows ? json.data.rows.length : 0;
-            document.getElementById('row-count').textContent = `${rowCount} of ${json.data.total || 0}`;
+            const totalFiltered = json.data.total || 0;
+            document.getElementById('row-count').textContent = `${rowCount} of ${totalFiltered}`;
 
             // Deduplicate columns before setting global
             if (json.data.columns) {

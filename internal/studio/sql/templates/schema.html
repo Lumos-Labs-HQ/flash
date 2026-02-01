@@ -37,6 +37,15 @@
         </div>
         <div class="topbar-right">
             <span id="stats" class="stats">Loading...</span>
+            <select id="layout-selector" class="btn" onchange="schemaCanvas?.organizeLayout(this.value)" title="Change Layout">
+                <option value="" disabled selected>Layout</option>
+                <option value="hierarchical">Hierarchical</option>
+                <option value="grid">Grid</option>
+                <option value="circular">Circular</option>
+                <option value="force">Force-Directed</option>
+                <option value="horizontal">Horizontal</option>
+                <option value="compact">Compact</option>
+            </select>
             <button class="btn" onclick="schemaCanvas?.zoomIn()" title="Zoom In">
                 <span class="iconify" data-icon="mdi:magnify-plus"></span>
             </button>
@@ -52,7 +61,7 @@
         </div>
     </div>
     
-    <div id="root" style="width: 100%; height: calc(100vh - 48px); position: relative; overflow: hidden;">
+    <div id="root">
         <div class="loading">
             <div class="spinner"></div>
             <div>Loading schema...</div>
@@ -61,9 +70,12 @@
 
     <!-- Context Menu -->
     <div id="context-menu" style="display: none; position: fixed; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; padding: 4px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+        <div class="context-item" onclick="schemaCanvas?.organizeLayout('hierarchical')">Hierarchical Layout</div>
         <div class="context-item" onclick="schemaCanvas?.organizeLayout('grid')">Grid Layout</div>
         <div class="context-item" onclick="schemaCanvas?.organizeLayout('circular')">Circular Layout</div>
         <div class="context-item" onclick="schemaCanvas?.organizeLayout('force')">Force-Directed Layout</div>
+        <div class="context-item" onclick="schemaCanvas?.organizeLayout('horizontal')">Horizontal Layout</div>
+        <div class="context-item" onclick="schemaCanvas?.organizeLayout('compact')">Compact Layout</div>
     </div>
 
     <!-- Edit Panel -->

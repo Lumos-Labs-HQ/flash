@@ -8,7 +8,11 @@
     text-rendering: optimizeLegibility;
 }
 
-body {
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
     background: #1a1a1a;
     color: #e0e0e0;
     overflow: hidden;
@@ -150,8 +154,8 @@ body {
     left: 60px;
     right: 0;
     bottom: 0;
-    width: calc(100% - 60px);
-    height: calc(100vh - 48px);
+    margin: 0;
+    padding: 0;
 }
 
 /* Improve SVG text rendering */
@@ -1178,20 +1182,17 @@ svg text {
     font-size: 12px;
 }
 
-/* Canvas Container */
-#root {
-    margin-left: 60px;
-    margin-top: 48px;
-    width: calc(100% - 60px);
-    height: calc(100vh - 48px);
-    position: relative;
-    overflow: hidden;
-}
+/* Canvas Container - styles defined above in #root */
 
 #root canvas {
     display: block;
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0;
+    padding: 0;
     cursor: default;
 }
 
@@ -1227,6 +1228,28 @@ svg text {
     color: #888;
     font-size: 13px;
     margin-right: 12px;
+}
+
+/* Layout Selector Dropdown */
+#layout-selector {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background: #2a2a2a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M2 4l4 4 4-4z'/%3E%3C/svg%3E") no-repeat right 10px center;
+    padding-right: 28px;
+    cursor: pointer;
+    min-width: 120px;
+}
+
+#layout-selector:hover {
+    background-color: #333;
+    border-color: #4a9eff;
+}
+
+#layout-selector option {
+    background: #2a2a2a;
+    color: #e0e0e0;
+    padding: 8px;
 }
 
 /* Buttons */

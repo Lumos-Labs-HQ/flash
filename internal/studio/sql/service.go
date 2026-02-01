@@ -97,6 +97,10 @@ func (s *Service) GetTables() ([]common.TableInfo, error) {
 }
 
 func (s *Service) GetTableData(tableName string, page, limit int) (*common.TableData, error) {
+	return s.GetTableDataFiltered(tableName, page, limit, nil)
+}
+
+func (s *Service) GetTableDataFiltered(tableName string, page, limit int, filters []common.Filter) (*common.TableData, error) {
 	s.ensureCorrectSchema()
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
@@ -106,6 +110,7 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*common.Table
 	// Deduplicate columns (some adapters may return duplicates)
 	seen := make(map[string]bool)
 	columns := make([]common.ColumnInfo, 0, len(schema))
+	columnTypes := make(map[string]string)
 	for _, col := range schema {
 		if seen[col.Name] {
 			continue // Skip duplicate column
@@ -121,15 +126,20 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*common.Table
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
 		})
+		columnTypes[col.Name] = col.Type
 	}
 
 	offset := (page - 1) * limit
-	rows, err := s.getRows(tableName, limit, offset)
+
+	// Build WHERE clause from filters
+	whereClause := s.buildWhereClause(filters, columnTypes)
+
+	rows, err := s.getRowsFiltered(tableName, limit, offset, whereClause)
 	if err != nil {
 		return nil, err
 	}
 
-	total, _ := s.getRowCount(tableName)
+	total, _ := s.getFilteredRowCount(tableName, whereClause)
 
 	return &common.TableData{
 		Columns: columns,
@@ -249,28 +259,169 @@ func (s *Service) getRowCount(tableName string) (int, error) {
 	return s.adapter.GetTableRowCount(s.ctx, tableName)
 }
 
-func (s *Service) getRows(tableName string, limit, offset int) ([]map[string]any, error) {
-	// Try to use paginated query first
-	type PaginatedFetcher interface {
-		GetTableDataPaginated(ctx context.Context, tableName string, limit, offset int) ([]map[string]any, error)
+func (s *Service) getFilteredRowCount(tableName, whereClause string) (int, error) {
+	if whereClause == "" {
+		return s.adapter.GetTableRowCount(s.ctx, tableName)
 	}
-	
-	if fetcher, ok := s.adapter.(PaginatedFetcher); ok {
-		return fetcher.GetTableDataPaginated(s.ctx, tableName, limit, offset)
-	}
-	
-	// Fallback: Use a raw query with LIMIT/OFFSET
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d", 
-		common.QuoteIdentifier(tableName), limit, offset)
-	
+
+	query := fmt.Sprintf("SELECT COUNT(*) as count FROM %s WHERE %s",
+		common.QuoteIdentifier(tableName), whereClause)
+
 	result, err := s.adapter.ExecuteQuery(s.ctx, query)
 	if err != nil {
-		// Final fallback: fetch all and slice (inefficient but works)
+		return 0, err
+	}
+
+	if len(result.Rows) > 0 {
+		if count, ok := result.Rows[0]["count"]; ok {
+			switch v := count.(type) {
+			case int64:
+				return int(v), nil
+			case int:
+				return v, nil
+			case float64:
+				return int(v), nil
+			}
+		}
+	}
+
+	return 0, nil
+}
+
+func (s *Service) buildWhereClause(filters []common.Filter, columnTypes map[string]string) string {
+	if len(filters) == 0 {
+		return ""
+	}
+
+	var conditions []string
+	var currentGroup []string
+
+	for i, filter := range filters {
+		if filter.Column == "" {
+			continue
+		}
+
+		condition := s.buildFilterCondition(filter, columnTypes)
+		if condition == "" {
+			continue
+		}
+
+		if i == 0 || filter.Logic == "where" {
+			currentGroup = append(currentGroup, condition)
+		} else if filter.Logic == "and" {
+			currentGroup = append(currentGroup, condition)
+		} else if filter.Logic == "or" {
+			if len(currentGroup) > 0 {
+				conditions = append(conditions, "("+strings.Join(currentGroup, " AND ")+")")
+				currentGroup = []string{condition}
+			} else {
+				currentGroup = append(currentGroup, condition)
+			}
+		}
+	}
+
+	if len(currentGroup) > 0 {
+		conditions = append(conditions, "("+strings.Join(currentGroup, " AND ")+")")
+	}
+
+	if len(conditions) == 0 {
+		return ""
+	}
+
+	return strings.Join(conditions, " OR ")
+}
+
+func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[string]string) string {
+	col := common.QuoteIdentifier(filter.Column)
+	value := strings.ReplaceAll(filter.Value, "'", "''")
+
+	colType := strings.ToLower(columnTypes[filter.Column])
+	isNumeric := strings.Contains(colType, "int") || strings.Contains(colType, "serial") ||
+		strings.Contains(colType, "decimal") || strings.Contains(colType, "numeric") ||
+		strings.Contains(colType, "float") || strings.Contains(colType, "double") ||
+		strings.Contains(colType, "real") || strings.Contains(colType, "money")
+
+	switch filter.Operator {
+	case "equals":
+		if isNumeric {
+			return fmt.Sprintf("%s = %s", col, value)
+		}
+		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) = LOWER('%s')", col, value)
+	case "not_equals":
+		if isNumeric {
+			return fmt.Sprintf("%s != %s", col, value)
+		}
+		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) != LOWER('%s')", col, value)
+	case "contains":
+		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER('%%%s%%')", col, value)
+	case "not_contains":
+		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) NOT LIKE LOWER('%%%s%%')", col, value)
+	case "starts_with":
+		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER('%s%%')", col, value)
+	case "ends_with":
+		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER('%%%s')", col, value)
+	case "gt":
+		if isNumeric {
+			return fmt.Sprintf("%s > %s", col, value)
+		}
+		return fmt.Sprintf("%s > '%s'", col, value)
+	case "lt":
+		if isNumeric {
+			return fmt.Sprintf("%s < %s", col, value)
+		}
+		return fmt.Sprintf("%s < '%s'", col, value)
+	case "gte":
+		if isNumeric {
+			return fmt.Sprintf("%s >= %s", col, value)
+		}
+		return fmt.Sprintf("%s >= '%s'", col, value)
+	case "lte":
+		if isNumeric {
+			return fmt.Sprintf("%s <= %s", col, value)
+		}
+		return fmt.Sprintf("%s <= '%s'", col, value)
+	case "is_null":
+		return fmt.Sprintf("%s IS NULL", col)
+	case "is_not_null":
+		return fmt.Sprintf("%s IS NOT NULL", col)
+	case "is_empty":
+		return fmt.Sprintf("(%s IS NULL OR CAST(%s AS TEXT) = '')", col, col)
+	case "is_not_empty":
+		return fmt.Sprintf("(%s IS NOT NULL AND CAST(%s AS TEXT) != '')", col, col)
+	default:
+		return ""
+	}
+}
+
+
+func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string) ([]map[string]any, error) {
+	// Build the query with optional WHERE clause
+	var query string
+	if whereClause != "" {
+		query = fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT %d OFFSET %d",
+			common.QuoteIdentifier(tableName), whereClause, limit, offset)
+	} else {
+		// Try to use paginated query first (only when no filter)
+		type PaginatedFetcher interface {
+			GetTableDataPaginated(ctx context.Context, tableName string, limit, offset int) ([]map[string]any, error)
+		}
+
+		if fetcher, ok := s.adapter.(PaginatedFetcher); ok {
+			return fetcher.GetTableDataPaginated(s.ctx, tableName, limit, offset)
+		}
+
+		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d",
+			common.QuoteIdentifier(tableName), limit, offset)
+	}
+
+	result, err := s.adapter.ExecuteQuery(s.ctx, query)
+	if err != nil {
+		// Final fallback: fetch all and filter in memory (inefficient but works)
 		data, err := s.adapter.GetTableData(s.ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		start := offset
 		end := offset + limit
 		if start > len(data) {
@@ -279,10 +430,10 @@ func (s *Service) getRows(tableName string, limit, offset int) ([]map[string]any
 		if end > len(data) {
 			end = len(data)
 		}
-		
+
 		return data[start:end], nil
 	}
-	
+
 	return result.Rows, nil
 }
 
@@ -365,16 +516,19 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 					if !edgeMap[edgeID] {
 						edgeMap[edgeID] = true
 
-						var targetColumn string
-						for _, targetTable := range tables {
-							if targetTable.Name == col.ForeignKeyTable {
-								for _, targetCol := range targetTable.Columns {
-									if targetCol.IsPrimary {
-										targetColumn = targetCol.Name
-										break
+						// Use the actual FK target column if available, otherwise find PK
+						targetColumn := col.ForeignKeyColumn
+						if targetColumn == "" {
+							for _, targetTable := range tables {
+								if targetTable.Name == col.ForeignKeyTable {
+									for _, targetCol := range targetTable.Columns {
+										if targetCol.IsPrimary {
+											targetColumn = targetCol.Name
+											break
+										}
 									}
+									break
 								}
-								break
 							}
 						}
 

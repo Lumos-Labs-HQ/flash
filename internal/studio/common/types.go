@@ -60,3 +60,11 @@ type BranchInfo struct {
 	CreatedAt string `json:"created_at"`
 	IsDefault bool   `json:"is_default"`
 }
+
+// Filter represents a single filter condition for server-side filtering
+type Filter struct {
+	Logic    string `json:"logic"`    // "where", "and", "or"
+	Column   string `json:"column"`   // Column name
+	Operator string `json:"operator"` // "equals", "not_equals", "contains", etc.
+	Value    string `json:"value"`    // Filter value
+}
