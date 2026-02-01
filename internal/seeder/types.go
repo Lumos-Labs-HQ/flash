@@ -2,11 +2,13 @@ package seeder
 
 
 type SeedConfig struct {
-	Count     int            // Default records per table
-	Tables    map[string]int // Per-table counts
-	Relations bool           // Include FK relationships
-	Truncate  bool           // Clear tables before seeding
-	Batch     int            // Batch size for inserts
+	Count         int            // Default records per table
+	Tables        map[string]int // Per-table counts
+	Relations     bool           // Include FK relationships
+	Truncate      bool           // Clear tables before seeding
+	Batch         int            // Batch size for inserts
+	Force         bool           // Skip confirmations and continue on errors
+	NoTransaction bool           // Disable transaction wrapping
 }
 
 type TableInfo struct {

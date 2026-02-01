@@ -43,11 +43,31 @@ Examples:
 			return fmt.Errorf("invalid config: %w", err)
 		}
 
-		// Parse flags
-		count, _ := cmd.Flags().GetInt("count")
-		relations, _ := cmd.Flags().GetBool("relations")
-		truncate, _ := cmd.Flags().GetBool("truncate")
-		batch, _ := cmd.Flags().GetInt("batch")
+		// Parse flags with proper error handling
+		count, err := cmd.Flags().GetInt("count")
+		if err != nil {
+			return fmt.Errorf("invalid count flag: %w", err)
+		}
+		relations, err := cmd.Flags().GetBool("relations")
+		if err != nil {
+			return fmt.Errorf("invalid relations flag: %w", err)
+		}
+		truncate, err := cmd.Flags().GetBool("truncate")
+		if err != nil {
+			return fmt.Errorf("invalid truncate flag: %w", err)
+		}
+		batch, err := cmd.Flags().GetInt("batch")
+		if err != nil {
+			return fmt.Errorf("invalid batch flag: %w", err)
+		}
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			return fmt.Errorf("invalid force flag: %w", err)
+		}
+		noTransaction, err := cmd.Flags().GetBool("no-transaction")
+		if err != nil {
+			return fmt.Errorf("invalid no-transaction flag: %w", err)
+		}
 
 		// Parse table-specific counts
 		tableCounts := make(map[string]int)
@@ -78,11 +98,13 @@ Examples:
 		}
 
 		seedConfig := seeder.SeedConfig{
-			Count:     count,
-			Tables:    tableCounts,
-			Relations: relations,
-			Truncate:  truncate,
-			Batch:     batch,
+			Count:         count,
+			Tables:        tableCounts,
+			Relations:     relations,
+			Truncate:      truncate,
+			Batch:         batch,
+			Force:         force,
+			NoTransaction: noTransaction,
 		}
 
 		ctx := context.Background()
@@ -101,4 +123,6 @@ func init() {
 	seedCmd.Flags().BoolP("relations", "r", false, "Include foreign key relationships")
 	seedCmd.Flags().BoolP("truncate", "t", false, "Truncate tables before seeding")
 	seedCmd.Flags().IntP("batch", "b", 100, "Batch size for inserts")
+	seedCmd.Flags().BoolP("force", "f", false, "Skip confirmations and continue on errors")
+	seedCmd.Flags().Bool("no-transaction", false, "Disable transaction wrapping (each batch commits separately)")
 }

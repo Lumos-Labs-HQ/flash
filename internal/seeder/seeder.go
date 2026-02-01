@@ -13,12 +13,16 @@ import (
 	"github.com/fatih/color"
 )
 
+// validIdentifier validates SQL identifiers (table/column names) to prevent SQL injection
+var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
 type Seeder struct {
 	config      *config.Config
 	adapter     database.DatabaseAdapter
 	generator   *DataGenerator
 	graph       *DependencyGraph
 	insertedIDs map[string][]interface{}
+	seedConfig  SeedConfig
 }
 
 func NewSeeder(cfg *config.Config) (*Seeder, error) {
@@ -33,13 +37,24 @@ func NewSeeder(cfg *config.Config) (*Seeder, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
+	generator, err := NewDataGenerator()
+	if err != nil {
+		adapter.Close()
+		return nil, fmt.Errorf("failed to create data generator: %w", err)
+	}
+
 	return &Seeder{
 		config:      cfg,
 		adapter:     adapter,
-		generator:   NewDataGenerator(),
+		generator:   generator,
 		graph:       NewDependencyGraph(),
 		insertedIDs: make(map[string][]interface{}),
 	}, nil
+}
+
+// isValidIdentifier checks if a string is a valid SQL identifier
+func isValidIdentifier(name string) bool {
+	return validIdentifier.MatchString(name)
 }
 
 func (s *Seeder) Close() error {
@@ -47,6 +62,7 @@ func (s *Seeder) Close() error {
 }
 
 func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
+	s.seedConfig = seedConfig
 	color.Cyan("🌱 Starting database seeding...")
 
 	// Parse schema
@@ -60,6 +76,18 @@ func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
 		return nil
 	}
 
+	// Validate all table and column names
+	for tableName, table := range tables {
+		if !isValidIdentifier(tableName) {
+			return fmt.Errorf("invalid table name: %s", tableName)
+		}
+		for _, col := range table.Columns {
+			if !isValidIdentifier(col.Name) {
+				return fmt.Errorf("invalid column name in table %s: %s", tableName, col.Name)
+			}
+		}
+	}
+
 	// Build dependency graph
 	for _, table := range tables {
 		s.graph.AddTable(table)
@@ -70,18 +98,40 @@ func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
 		return fmt.Errorf("failed to build insertion order: %w", err)
 	}
 
+	// Validate FK references exist when relations are enabled
+	if seedConfig.Relations {
+		if err := s.validateForeignKeys(tables, order); err != nil {
+			return fmt.Errorf("foreign key validation failed: %w", err)
+		}
+	}
+
 	color.Green("📊 Found %d tables", len(tables))
 	color.Cyan("📋 Insertion order: %s", strings.Join(order, " → "))
 	fmt.Println()
 
-	// Truncate if requested
+	// Truncate if requested (outside transaction)
 	if seedConfig.Truncate {
 		if err := s.truncateTables(ctx, order); err != nil {
-			return fmt.Errorf("failed to truncate tables: %w", err)
+			if !seedConfig.Force {
+				return fmt.Errorf("failed to truncate tables: %w (use --force to continue)", err)
+			}
+			color.Yellow("⚠️  Truncate failed but continuing with --force: %v", err)
 		}
 	}
 
-	// Seed tables in order
+	// Start transaction for seeding (unless disabled)
+	inTransaction := false
+	if !seedConfig.NoTransaction {
+		if err := s.beginTransaction(ctx); err != nil {
+			color.Yellow("⚠️  Could not start transaction: %v (continuing without transaction)", err)
+		} else {
+			inTransaction = true
+			color.Cyan("🔒 Transaction started")
+		}
+	}
+
+	// Seed tables in order using batch inserts
+	var seedErr error
 	for _, tableName := range order {
 		table := tables[tableName]
 		count := seedConfig.Count
@@ -90,11 +140,86 @@ func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
 		}
 
 		if err := s.seedTable(ctx, table, count, seedConfig.Relations); err != nil {
-			return fmt.Errorf("failed to seed table %s: %w", tableName, err)
+			if !seedConfig.Force {
+				seedErr = fmt.Errorf("failed to seed table %s: %w", tableName, err)
+				break
+			}
+			color.Yellow("⚠️  Failed to seed %s but continuing with --force: %v", tableName, err)
 		}
 	}
 
+	// Handle transaction commit/rollback
+	if inTransaction {
+		if seedErr != nil {
+			color.Yellow("🔄 Rolling back transaction due to error...")
+			if rbErr := s.rollbackTransaction(ctx); rbErr != nil {
+				return fmt.Errorf("seed failed and rollback failed: %v (original: %w)", rbErr, seedErr)
+			}
+			color.Yellow("✅ Transaction rolled back")
+			return seedErr
+		}
+
+		if err := s.commitTransaction(ctx); err != nil {
+			s.rollbackTransaction(ctx)
+			return fmt.Errorf("failed to commit transaction: %w", err)
+		}
+		color.Cyan("🔓 Transaction committed")
+	} else if seedErr != nil {
+		return seedErr
+	}
+
 	color.Green("\n✅ Database seeding completed successfully!")
+	return nil
+}
+
+// beginTransaction starts a new database transaction
+func (s *Seeder) beginTransaction(ctx context.Context) error {
+	var query string
+	switch s.config.Database.Provider {
+	case "mysql":
+		query = "START TRANSACTION"
+	default:
+		query = "BEGIN"
+	}
+	_, err := s.adapter.ExecuteQuery(ctx, query)
+	return err
+}
+
+// commitTransaction commits the current transaction
+func (s *Seeder) commitTransaction(ctx context.Context) error {
+	_, err := s.adapter.ExecuteQuery(ctx, "COMMIT")
+	return err
+}
+
+// rollbackTransaction rolls back the current transaction
+func (s *Seeder) rollbackTransaction(ctx context.Context) error {
+	_, err := s.adapter.ExecuteQuery(ctx, "ROLLBACK")
+	return err
+}
+
+// validateForeignKeys checks that all FK references can be satisfied
+func (s *Seeder) validateForeignKeys(tables map[string]*TableInfo, order []string) error {
+	orderIndex := make(map[string]int)
+	for i, name := range order {
+		orderIndex[name] = i
+	}
+
+	for _, table := range tables {
+		for _, col := range table.Columns {
+			if col.IsFK && !col.Nullable {
+				refIdx, exists := orderIndex[col.FKTable]
+				if !exists {
+					return fmt.Errorf("table %s has NOT NULL FK column %s referencing non-existent table %s",
+						table.Name, col.Name, col.FKTable)
+				}
+				thisIdx := orderIndex[table.Name]
+				if refIdx >= thisIdx {
+					return fmt.Errorf("table %s has NOT NULL FK column %s but referenced table %s is seeded later (circular dependency?)",
+						table.Name, col.Name, col.FKTable)
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -227,13 +352,19 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, withRelations bool) error {
 	color.Cyan("  📝 Seeding %s (%d records)...", table.Name, count)
 
+	batchSize := s.seedConfig.Batch
+	if batchSize <= 0 {
+		batchSize = 100 
+	}
+
+	var batch []map[string]interface{}
+
 	for i := 0; i < count; i++ {
 		record := make(map[string]interface{})
 
 		for _, col := range table.Columns {
 			// Skip auto-increment primary keys
 			if col.IsPK {
-				// Skip if it's a serial type or autoincrement
 				typeUpper := strings.ToUpper(col.Type)
 				if strings.Contains(typeUpper, "SERIAL") ||
 					strings.Contains(typeUpper, "AUTO_INCREMENT") ||
@@ -247,6 +378,10 @@ func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, wit
 			if col.IsFK && withRelations {
 				if ids, exists := s.insertedIDs[col.FKTable]; exists && len(ids) > 0 {
 					record[col.Name] = ids[s.generator.rand.Intn(len(ids))]
+				} else if !col.Nullable {
+					// NOT NULL FK but no referenced data - this should have been caught in validation
+					return fmt.Errorf("cannot set NULL for NOT NULL FK column %s (no data in referenced table %s)",
+						col.Name, col.FKTable)
 				} else {
 					record[col.Name] = nil
 				}
@@ -255,14 +390,16 @@ func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, wit
 			}
 		}
 
-		// Insert record
-		id, err := s.insertRecord(ctx, table.Name, record, table.PrimaryKey)
-		if err != nil {
-			return fmt.Errorf("failed to insert record: %w", err)
-		}
+		batch = append(batch, record)
 
-		if id != nil {
-			s.insertedIDs[table.Name] = append(s.insertedIDs[table.Name], id)
+		// Insert batch when full or at end
+		if len(batch) >= batchSize || i == count-1 {
+			ids, err := s.insertBatch(ctx, table.Name, batch, table.PrimaryKey)
+			if err != nil {
+				return fmt.Errorf("failed to insert batch: %w", err)
+			}
+			s.insertedIDs[table.Name] = append(s.insertedIDs[table.Name], ids...)
+			batch = batch[:0] // reset batch
 		}
 	}
 
@@ -270,36 +407,126 @@ func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, wit
 	return nil
 }
 
+// insertBatch inserts multiple records in a single statement (when possible)
+func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []map[string]interface{}, pkColumn string) ([]interface{}, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+
+	// Validate table name
+	if !isValidIdentifier(tableName) {
+		return nil, fmt.Errorf("invalid table name: %s", tableName)
+	}
+
+	// For small batches or databases that don't support multi-row inserts well, insert one by one
+	if len(records) == 1 || s.config.Database.Provider == "sqlite" || s.config.Database.Provider == "sqlite3" {
+		var ids []interface{}
+		for _, record := range records {
+			id, err := s.insertRecord(ctx, tableName, record, pkColumn)
+			if err != nil {
+				return ids, err
+			}
+			if id != nil {
+				ids = append(ids, id)
+			}
+		}
+		return ids, nil
+	}
+
+	// Build multi-row INSERT for PostgreSQL/MySQL
+	// Get column order from first record
+	var columns []string
+	for col := range records[0] {
+		if !isValidIdentifier(col) {
+			return nil, fmt.Errorf("invalid column name: %s", col)
+		}
+		columns = append(columns, col)
+	}
+
+	var allValueStrs []string
+	for _, record := range records {
+		var valueStrs []string
+		for _, col := range columns {
+			val := record[col]
+			valueStrs = append(valueStrs, s.formatValue(val))
+		}
+		allValueStrs = append(allValueStrs, "("+strings.Join(valueStrs, ", ")+")")
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
+		tableName,
+		strings.Join(columns, ", "),
+		strings.Join(allValueStrs, ", "),
+	)
+
+	// Add RETURNING for PostgreSQL
+	if (s.config.Database.Provider == "postgresql" || s.config.Database.Provider == "postgres") && pkColumn != "" {
+		if !isValidIdentifier(pkColumn) {
+			return nil, fmt.Errorf("invalid primary key column: %s", pkColumn)
+		}
+		query += fmt.Sprintf(" RETURNING %s", pkColumn)
+	}
+
+	result, err := s.adapter.ExecuteQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract IDs from result
+	var ids []interface{}
+	if result != nil && len(result.Rows) > 0 && pkColumn != "" {
+		for _, row := range result.Rows {
+			if val, ok := row[pkColumn]; ok {
+				ids = append(ids, val)
+			}
+		}
+	}
+
+	return ids, nil
+}
+
+// formatValue formats a value for SQL insertion
+func (s *Seeder) formatValue(val interface{}) string {
+	if val == nil {
+		return "NULL"
+	}
+	switch v := val.(type) {
+	case string:
+		// Escape single quotes and backslashes
+		escaped := strings.ReplaceAll(v, "'", "''")
+		escaped = strings.ReplaceAll(escaped, "\\", "\\\\")
+		return fmt.Sprintf("'%s'", escaped)
+	case int, int32, int64, float32, float64:
+		return fmt.Sprintf("%v", v)
+	case bool:
+		if v {
+			return "1"
+		}
+		return "0"
+	case time.Time:
+		return fmt.Sprintf("'%s'", v.Format("2006-01-02 15:04:05"))
+	default:
+		escaped := strings.ReplaceAll(fmt.Sprintf("%v", v), "'", "''")
+		return fmt.Sprintf("'%s'", escaped)
+	}
+}
+
 func (s *Seeder) insertRecord(ctx context.Context, tableName string, record map[string]interface{}, pkColumn string) (interface{}, error) {
+	// Validate table name
+	if !isValidIdentifier(tableName) {
+		return nil, fmt.Errorf("invalid table name: %s", tableName)
+	}
+
 	var columns []string
 	var valueStrs []string
 
 	for col, val := range record {
-		columns = append(columns, col)
-		
-		// Format value for SQL
-		if val == nil {
-			valueStrs = append(valueStrs, "NULL")
-		} else {
-			switch v := val.(type) {
-			case string:
-				// Escape single quotes
-				escaped := strings.ReplaceAll(v, "'", "''")
-				valueStrs = append(valueStrs, fmt.Sprintf("'%s'", escaped))
-			case int, int32, int64, float32, float64:
-				valueStrs = append(valueStrs, fmt.Sprintf("%v", v))
-			case bool:
-				if v {
-					valueStrs = append(valueStrs, "1")
-				} else {
-					valueStrs = append(valueStrs, "0")
-				}
-			case time.Time:
-				valueStrs = append(valueStrs, fmt.Sprintf("'%s'", v.Format("2006-01-02 15:04:05")))
-			default:
-				valueStrs = append(valueStrs, fmt.Sprintf("'%v'", v))
-			}
+		// Validate column name
+		if !isValidIdentifier(col) {
+			return nil, fmt.Errorf("invalid column name: %s", col)
 		}
+		columns = append(columns, col)
+		valueStrs = append(valueStrs, s.formatValue(val))
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
@@ -308,12 +535,12 @@ func (s *Seeder) insertRecord(ctx context.Context, tableName string, record map[
 		strings.Join(valueStrs, ", "),
 	)
 
-	// Debug: print query
-	// fmt.Println("Query:", query)
-
 	// Add RETURNING for PostgreSQL
 	if s.config.Database.Provider == "postgresql" || s.config.Database.Provider == "postgres" {
 		if pkColumn != "" {
+			if !isValidIdentifier(pkColumn) {
+				return nil, fmt.Errorf("invalid primary key column: %s", pkColumn)
+			}
 			query += fmt.Sprintf(" RETURNING %s", pkColumn)
 		}
 	}
@@ -336,8 +563,6 @@ func (s *Seeder) insertRecord(ctx context.Context, tableName string, record map[
 	if s.config.Database.Provider == "sqlite" || s.config.Database.Provider == "sqlite3" {
 		idResult, err := s.adapter.ExecuteQuery(ctx, "SELECT last_insert_rowid()")
 		if err == nil && idResult != nil && len(idResult.Rows) > 0 {
-			// Debug: print what we got
-			// fmt.Printf("DEBUG last_insert_rowid result: %+v\n", idResult.Rows[0])
 			for _, v := range idResult.Rows[0] {
 				return v, nil
 			}
@@ -350,40 +575,50 @@ func (s *Seeder) insertRecord(ctx context.Context, tableName string, record map[
 func (s *Seeder) truncateTables(ctx context.Context, order []string) error {
 	color.Yellow("🗑️  Truncating tables...")
 
-	// Reverse order for truncation
+	var errors []string
+
+	// Reverse order for truncation (to respect FK constraints)
 	for i := len(order) - 1; i >= 0; i-- {
 		tableName := order[i]
 
+		// Validate table name
+		if !isValidIdentifier(tableName) {
+			errors = append(errors, fmt.Sprintf("invalid table name: %s", tableName))
+			continue
+		}
+
 		var query string
+		var err error
+
 		switch s.config.Database.Provider {
 		case "postgresql", "postgres":
 			query = fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", tableName)
-			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
-				color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
-			}
+			_, err = s.adapter.ExecuteQuery(ctx, query)
 		case "mysql":
 			query = fmt.Sprintf("TRUNCATE TABLE %s", tableName)
-			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
-				color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
-			}
+			_, err = s.adapter.ExecuteQuery(ctx, query)
 		case "sqlite", "sqlite3":
 			// Delete all rows
 			query = fmt.Sprintf("DELETE FROM %s", tableName)
-			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
-				color.Yellow("  ⚠️  Failed to delete from %s: %v", tableName, err)
-				continue
-			}
-			// Reset autoincrement counter
-			resetQuery := fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name='%s'", tableName)
-			if _, err := s.adapter.ExecuteQuery(ctx, resetQuery); err != nil {
-				// Ignore error if sqlite_sequence doesn't exist
+			_, err = s.adapter.ExecuteQuery(ctx, query)
+			if err == nil {
+				resetQuery := fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name='%s'", tableName)
+				s.adapter.ExecuteQuery(ctx, resetQuery) 
 			}
 		default:
 			query = fmt.Sprintf("DELETE FROM %s", tableName)
-			if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
-				color.Yellow("  ⚠️  Failed to truncate %s: %v", tableName, err)
-			}
+			_, err = s.adapter.ExecuteQuery(ctx, query)
 		}
+
+		if err != nil {
+			errMsg := fmt.Sprintf("failed to truncate %s: %v", tableName, err)
+			errors = append(errors, errMsg)
+			color.Yellow("  ⚠️  %s", errMsg)
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("truncate errors: %s", strings.Join(errors, "; "))
 	}
 
 	color.Green("✅ Tables truncated")

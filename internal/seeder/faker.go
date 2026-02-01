@@ -39,16 +39,18 @@ type DataGenerator struct {
 	patterns map[string]func() interface{}
 }
 
-func NewDataGenerator() *DataGenerator {
+func NewDataGenerator() (*DataGenerator, error) {
 	var data FakeData
-	json.Unmarshal(dataJSON, &data)
+	if err := json.Unmarshal(dataJSON, &data); err != nil {
+		return nil, fmt.Errorf("failed to parse embedded fake data: %w", err)
+	}
 
 	g := &DataGenerator{
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 		fakeData: &data,
 	}
 	g.initPatterns()
-	return g
+	return g, nil
 }
 
 func (g *DataGenerator) initPatterns() {
