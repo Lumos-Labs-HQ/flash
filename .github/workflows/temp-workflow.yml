@@ -1,0 +1,59 @@
+name: NPM Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+      
+      - name: Check if tag is beta
+        id: check_beta
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          if [[ "$TAG" == *"beta"* ]]; then
+            echo "Beta tag detected, skipping stable NPM release"
+            echo "is_beta=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "is_beta=false" >> $GITHUB_OUTPUT
+      
+      - name: Setup Node.js
+        if: steps.check_beta.outputs.is_beta == 'false'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Get version from tag
+        if: steps.check_beta.outputs.is_beta == 'false'
+        id: version
+        run: |
+          TAG=$(git describe --tags --abbrev=0)
+          VERSION=${TAG#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update package.json version
+        if: steps.check_beta.outputs.is_beta == 'false'
+        run: |
+          cd npm
+          npm version ${{ steps.version.outputs.VERSION }} --no-git-tag-version
+
+      - name: Update download.js version
+        if: steps.check_beta.outputs.is_beta == 'false'
+        run: |
+          cd npm/scripts
+          sed -i "s/const VERSION = '.*'/const VERSION = '${{ steps.version.outputs.VERSION }}'/" download.js
+
+      - name: Publish to npm (stable)
+        if: steps.check_beta.outputs.is_beta == 'false'
+        working-directory: ./npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
