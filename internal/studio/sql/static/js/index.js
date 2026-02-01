@@ -1,9 +1,6 @@
-// Filter state - synced with state object in studio.js
 let filters = [];
 let currentColumns = [];
 
-// Restore filters from state (called from studio.js on page load)
-// Note: With server-side filtering, the filters are already applied when loadTableData is called
 // This function just rebuilds the UI to show the active filters
 function restoreFilters(savedFilters) {
     if (!savedFilters || savedFilters.length === 0) return;
@@ -19,13 +16,9 @@ function restoreFilters(savedFilters) {
         addFilterRow(logic, filter.column, filter.operator, filter.value);
     });
 
-    // Sync local filters array
     filters = savedFilters;
 
-    // Update filter badge count
     updateFilterCount();
-
-    // Note: Data is already filtered server-side via loadTableData() which includes state.filters
 }
 
 function toggleFilters() {
@@ -42,19 +35,17 @@ function getColumnType(columnName) {
 
     const type = (col.type || '').toLowerCase();
 
-    // UUID
     if (type.includes('uuid')) return 'uuid';
-    // Numbers
+    
     if (type.includes('int') || type.includes('serial') || type.includes('decimal') ||
         type.includes('numeric') || type.includes('float') || type.includes('double') ||
         type.includes('real') || type.includes('money')) return 'number';
-    // Boolean
+
     if (type.includes('bool')) return 'boolean';
-    // Date/Time
+
     if (type.includes('date') || type.includes('time') || type.includes('timestamp')) return 'datetime';
-    // JSON
+    
     if (type.includes('json')) return 'json';
-    // Default to text
     return 'text';
 }
 
@@ -96,7 +87,6 @@ function addFilterRow(logic = 'where', column = '', operator = 'equals', value =
     document.getElementById('filter-rows').appendChild(row);
     updateFilterCount();
 
-    // Update operators based on column type
     const columnSelect = row.querySelector('.filter-column');
     updateFilterOperators(columnSelect);
 }
@@ -191,9 +181,7 @@ function applyFilters() {
             state.save();
         }
     }
-
-    // Server-side filtering: reload data with filters applied on the database
-    // This ensures filters work across the entire dataset, not just the current page
+    // Reload data with new filters
     if (typeof loadTableData === 'function') {
         showLoadingSkeleton();
         loadTableData();

@@ -1,3 +1,8 @@
+/**
+ * SQL Editor Main Module
+ * Handles editor setup, query execution, and results display
+ */
+
 let editor;
 let currentResults = null;
 let queryHistory = [];
@@ -5,6 +10,9 @@ let historyIndex = -1;
 
 // Storage key for SQL editor state
 const SQL_STORAGE_KEY = 'flashorm_sql_editor_state';
+
+const DEFAULT_CONTENT = `-- SQL Editor | Ctrl+Enter to run | Ctrl+Space for hints
+SELECT * FROM `;
 
 // Save SQL editor state
 function saveSqlState() {
@@ -44,8 +52,16 @@ function restoreSqlState() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    initializeEditor('text/x-sql');
+
+    // Load schema hints in background 
+    loadSchemaInBackground();
+});
+
+// Initialize the CodeMirror editor
+function initializeEditor(mode) {
     editor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
-        mode: 'text/x-sql',
+        mode: mode,
         theme: 'material-darker',
         lineNumbers: true,
         lineWrapping: true,
@@ -55,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         extraKeys: {
             'Ctrl-Enter': runQuery,
             'Cmd-Enter': runQuery,
-            'Ctrl-Space': 'autocomplete',
+            'Ctrl-Space': () => SqlHints.showSmartHint(editor),
             'Ctrl-/': toggleComment,
             'Cmd-/': toggleComment,
             'Ctrl-Up': () => navigateHistory(-1),
@@ -63,14 +79,24 @@ document.addEventListener('DOMContentLoaded', () => {
             'F5': runQuery
         },
         hintOptions: {
-            tables: {}
+            hint: SqlHints.smartSqlHint,
+            completeSingle: false,
+            closeOnUnfocus: true
         }
     });
 
+    // Setup auto-hint on typing
+    SqlHints.setupAutoHint(editor);
+
     // Try to restore previous state, otherwise use default content
     if (!restoreSqlState()) {
-        editor.setValue('-- Welcome to SQL Editor\\n-- Press Ctrl+Enter (or Cmd+Enter on Mac) to run query\\n-- Press F5 to run query\\n-- Press Ctrl+/ to toggle comment\\n-- Press Ctrl+Up/Down to navigate history\\n\\nSELECT * FROM users LIMIT 10;');
+        editor.setValue(DEFAULT_CONTENT);
     }
+
+    const lastLine = editor.lineCount() - 1;
+    const lastLineLength = editor.getLine(lastLine).length;
+    editor.setCursor({ line: lastLine, ch: lastLineLength });
+    editor.focus();
 
     // Save state on every change (debounced)
     let saveTimeout;
@@ -79,7 +105,6 @@ document.addEventListener('DOMContentLoaded', () => {
         saveTimeout = setTimeout(saveSqlState, 500);
     });
 
-    // Save state before page unload
     window.addEventListener('beforeunload', saveSqlState);
 
     // Also save state when clicking any navigation link
@@ -88,23 +113,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     setupResize();
-    loadTableHints();
-});
+}
 
-// Load table names for autocomplete
-async function loadTableHints() {
-    try {
-        const res = await fetch('/api/tables');
-        const json = await res.json();
-        if (json.success && json.data) {
-            const tables = {};
-            json.data.forEach(t => {
-                tables[t.name] = [];
-            });
-            editor.options.hintOptions.tables = tables;
-        }
-    } catch (e) {
-        console.error('Failed to load table hints:', e);
+// Load schema in background - doesn't block UI
+async function loadSchemaInBackground() {
+    await SqlHints.loadEditorHints();
+
+    // Update editor mode based on database provider
+    const mode = SqlHints.getCodeMirrorMode(SqlHints.getDbProvider());
+    if (editor && mode !== 'text/x-sql') {
+        editor.setOption('mode', mode);
+        console.log('[SQL Editor] Mode updated to:', mode);
     }
 }
 
@@ -144,7 +163,6 @@ async function runQuery() {
     query = query.trim();
     if (!query) return;
 
-    // Remove comments for execution but keep them in editor
     const cleanQuery = query.split('\n')
         .filter(line => !line.trim().startsWith('--'))
         .join('\n')
@@ -176,14 +194,6 @@ async function runQuery() {
 
         const data = await res.json();
         const elapsed = Date.now() - startTime;
-
-        // Debug logging - check console for data structure
-        // console.log('[SQL Debug] Response:', {
-        //     success: data.success,
-        //     columns: data.data?.columns,
-        //     rowCount: data.data?.rows?.length,
-        //     firstRow: data.data?.rows?.[0]
-        // });
 
         if (data.success) {
             currentResults = data.data;
@@ -217,12 +227,11 @@ function getQueryType(query) {
 }
 
 // Format value for display with proper type handling
-function formatCellValue(value, colName) {
+function formatCellValue(value) {
     if (value === null || value === undefined) {
         return '<span class="cell-null">NULL</span>';
     }
 
-    // Handle different types
     if (typeof value === 'boolean') {
         return `<span class="cell-bool">${value ? 'true' : 'false'}</span>`;
     }
@@ -232,11 +241,9 @@ function formatCellValue(value, colName) {
     }
 
     if (typeof value === 'object') {
-        // Handle Date objects
         if (value instanceof Date) {
             return `<span class="cell-date">${value.toISOString()}</span>`;
         }
-        // Handle JSON/Array
         try {
             const jsonStr = JSON.stringify(value, null, 2);
             const escaped = escapeHtml(jsonStr);
@@ -248,7 +255,7 @@ function formatCellValue(value, colName) {
 
     const strValue = String(value);
 
-    // UUID detection (8-4-4-4-12 format)
+    // UUID detection
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strValue)) {
         return `<span class="cell-uuid" title="${strValue}">${strValue}</span>`;
     }
@@ -268,7 +275,7 @@ function formatCellValue(value, colName) {
         return `<a href="${escapeHtml(strValue)}" target="_blank" class="cell-url">${escapeHtml(strValue)}</a>`;
     }
 
-    // Long text (truncate for display)
+    // Long text truncation
     if (strValue.length > 100) {
         const truncated = strValue.substring(0, 100) + '...';
         return `<span class="cell-text cell-truncated" title="${escapeHtml(strValue)}">${escapeHtml(truncated)}</span>`;
@@ -288,52 +295,25 @@ function displayResults(data, query, elapsed) {
     const resultsBody = document.getElementById('results-body');
     const queryType = getQueryType(query);
 
-    // Handle non-SELECT queries (INSERT, UPDATE, DELETE, SET, etc.)
+    // Handle non-SELECT queries
     if (!data || !data.rows || data.rows.length === 0) {
         let message = '';
         let icon = '✓';
 
         switch (queryType) {
-            case 'INSERT':
-                message = 'Row(s) inserted successfully';
-                break;
-            case 'UPDATE':
-                message = 'Row(s) updated successfully';
-                break;
-            case 'DELETE':
-                message = 'Row(s) deleted successfully';
-                break;
-            case 'CREATE':
-                message = 'Object created successfully';
-                break;
-            case 'ALTER':
-                message = 'Object altered successfully';
-                break;
-            case 'DROP':
-                message = 'Object dropped successfully';
-                icon = '⚠️';
-                break;
-            case 'TRUNCATE':
-                message = 'Table truncated successfully';
-                icon = '⚠️';
-                break;
-            case 'SET':
-                message = 'Variable set successfully';
-                break;
-            case 'TRANSACTION':
-                message = 'Transaction started';
-                break;
-            case 'COMMIT':
-                message = 'Transaction committed';
-                break;
-            case 'ROLLBACK':
-                message = 'Transaction rolled back';
-                break;
-            case 'SELECT':
-                message = 'Query executed successfully. No rows returned.';
-                break;
-            default:
-                message = 'Query executed successfully';
+            case 'INSERT': message = 'Row(s) inserted successfully'; break;
+            case 'UPDATE': message = 'Row(s) updated successfully'; break;
+            case 'DELETE': message = 'Row(s) deleted successfully'; break;
+            case 'CREATE': message = 'Object created successfully'; break;
+            case 'ALTER': message = 'Object altered successfully'; break;
+            case 'DROP': message = 'Object dropped successfully'; icon = '⚠️'; break;
+            case 'TRUNCATE': message = 'Table truncated successfully'; icon = '⚠️'; break;
+            case 'SET': message = 'Variable set successfully'; break;
+            case 'TRANSACTION': message = 'Transaction started'; break;
+            case 'COMMIT': message = 'Transaction committed'; break;
+            case 'ROLLBACK': message = 'Transaction rolled back'; break;
+            case 'SELECT': message = 'Query executed successfully. No rows returned.'; break;
+            default: message = 'Query executed successfully';
         }
 
         document.getElementById('results-info').textContent = `Query completed in ${elapsed}ms`;
@@ -368,7 +348,7 @@ function displayResults(data, query, elapsed) {
         html += `<td class="row-num">${idx + 1}</td>`;
         columns.forEach(col => {
             const value = row[col];
-            html += `<td>${formatCellValue(value, col)}</td>`;
+            html += `<td>${formatCellValue(value)}</td>`;
         });
         html += '</tr>';
     });
@@ -455,7 +435,7 @@ function setupResize() {
     const editorSection = document.querySelector('.editor-section');
     let isResizing = false;
 
-    handle.addEventListener('mousedown', (e) => {
+    handle.addEventListener('mousedown', () => {
         isResizing = true;
         document.body.style.cursor = 'ns-resize';
     });

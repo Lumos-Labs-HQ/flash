@@ -95,6 +95,9 @@ func (s *Server) setupRoutes() {
 	// Branch API
 	api.Get("/branches", s.handleGetBranches)
 	api.Post("/branches/switch", s.handleSwitchBranch)
+
+	// Editor hints API (cached on client-side)
+	api.Get("/editor/hints", s.handleGetEditorHints)
 }
 
 func (s *Server) Start(openBrowser bool) error {
@@ -260,4 +263,12 @@ func (s *Server) handleInsertRow(c *fiber.Ctx) error {
 		return common.JSONError(c, 500, err.Error())
 	}
 	return common.JSONFiberMap(c, fiber.Map{"success": true})
+}
+
+func (s *Server) handleGetEditorHints(c *fiber.Ctx) error {
+	hints, err := s.service.GetEditorHints()
+	if err != nil {
+		return common.JSONError(c, 500, err.Error())
+	}
+	return common.JSON(c, hints)
 }

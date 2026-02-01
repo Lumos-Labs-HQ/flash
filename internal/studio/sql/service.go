@@ -254,10 +254,6 @@ func (s *Service) DeleteRow(tableName, rowID string) error {
 	return s.adapter.ExecuteMigration(s.ctx, query)
 }
 
-func (s *Service) getRowCount(tableName string) (int, error) {
-	// Use efficient COUNT query instead of fetching all data
-	return s.adapter.GetTableRowCount(s.ctx, tableName)
-}
 
 func (s *Service) getFilteredRowCount(tableName, whereClause string) (int, error) {
 	if whereClause == "" {
@@ -395,7 +391,6 @@ func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[str
 
 
 func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string) ([]map[string]any, error) {
-	// Build the query with optional WHERE clause
 	var query string
 	if whereClause != "" {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT %d OFFSET %d",
@@ -416,7 +411,6 @@ func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClau
 
 	result, err := s.adapter.ExecuteQuery(s.ctx, query)
 	if err != nil {
-		// Final fallback: fetch all and filter in memory (inefficient but works)
 		data, err := s.adapter.GetTableData(s.ctx, tableName)
 		if err != nil {
 			return nil, err
@@ -454,7 +448,6 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	nodes := make([]map[string]any, 0, len(tables))
 	nodeIndex := make(map[string]string, len(tables))
 
-	// Process tables in parallel batches for better performance
 	batchSize := 10
 	for i := 0; i < len(tables); i += batchSize {
 		end := i + batchSize
@@ -749,4 +742,56 @@ func (s *Service) SwitchBranch(branchName string) error {
 	}
 
 	return nil
+}
+
+// GetEditorHints returns schema information optimized for editor autocomplete
+// This data should be cached on the client side to avoid repeated database calls
+func (s *Service) GetEditorHints() (map[string]any, error) {
+	s.ensureCorrectSchema()
+
+	tables, err := s.adapter.GetAllTableNames(s.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build schema map: table -> columns
+	schema := make(map[string][]map[string]string)
+
+	for _, tableName := range tables {
+		if tableName == "_flash_migrations" {
+			continue
+		}
+
+		columns, err := s.adapter.GetTableColumns(s.ctx, tableName)
+		if err != nil {
+			// Skip tables we can't read columns from
+			schema[tableName] = []map[string]string{}
+			continue
+		}
+
+		cols := make([]map[string]string, 0, len(columns))
+		seen := make(map[string]bool)
+		for _, col := range columns {
+			if seen[col.Name] {
+				continue
+			}
+			seen[col.Name] = true
+			cols = append(cols, map[string]string{
+				"name": col.Name,
+				"type": col.Type,
+			})
+		}
+		schema[tableName] = cols
+	}
+
+	// Get database provider
+	provider := "sql"
+	if s.cfg != nil {
+		provider = s.cfg.Database.Provider
+	}
+
+	return map[string]any{
+		"provider": provider,
+		"schema":   schema,
+	}, nil
 }

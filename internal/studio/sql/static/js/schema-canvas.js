@@ -1,4 +1,3 @@
-// DataGrip-style Schema Visualizer
 class SchemaCanvas {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -20,14 +19,14 @@ class SchemaCanvas {
         this.highlightedNodes = new Set();
         this.highlightedFields = new Map();
 
-        // Design constants - DataGrip style
+        // Design constants 
         this.nodeWidth = 240;
         this.headerHeight = 32;
         this.rowHeight = 24;
         this.nodePadding = 8;
         this.nodeRadius = 6;
 
-        // Colors - DataGrip dark theme
+        // Colors 
         this.colors = {
             bg: '#1e1e1e',
             grid: '#2a2a2a',
@@ -81,7 +80,6 @@ class SchemaCanvas {
         this.ctx.scale(dpr, dpr);
         this.dpr = dpr;
 
-        console.log('setupCanvas:', { containerW, containerH, dpr, canvasW: this.canvas.width, canvasH: this.canvas.height });
     }
 
     async loadSchema() {
@@ -99,20 +97,14 @@ class SchemaCanvas {
                     return;
                 }
 
-                // Debug: log relationships
-                console.log('Schema loaded:', rawNodes.length, 'tables,', rawEdges.length, 'relationships');
-                console.log('Edges:', rawEdges.map(e => `${e.sourceHandle} -> ${e.targetHandle}`));
-
                 document.getElementById('stats').textContent =
-                    `${rawNodes.length} tables • ${rawEdges.length} relationships`;
+                    `${rawNodes.length} tables`;
 
                 this.nodes = this.layoutNodes(rawNodes, rawEdges);
                 this.edges = rawEdges;
 
-                // Resolve any overlapping tables
                 this.resolveOverlaps();
 
-                // Hide all loading elements
                 this.hideMessage();
 
                 this.fitView();
@@ -246,7 +238,7 @@ class SchemaCanvas {
             if (adj.has(e.target)) adj.get(e.target).sources.push(e.source);
         });
 
-        // Find the central table (most connections = usually users table)
+       
         const sorted = [...nodes].sort((a, b) => {
             const aConns = (inDegree.get(a.id) || 0) + (outDegree.get(a.id) || 0);
             const bConns = (inDegree.get(b.id) || 0) + (outDegree.get(b.id) || 0);
@@ -298,7 +290,6 @@ class SchemaCanvas {
             levelGroups.get(level).push(n);
         });
 
-        // Calculate positions with improved spacing to avoid overlaps
         const positioned = [];
         const levelSpacing = this.nodeWidth + 80; // Increased spacing between levels
         const nodeSpacing = 35; // Increased spacing between nodes in same level
@@ -389,16 +380,6 @@ class SchemaCanvas {
 
         this.offset.x = screenCenterX / this.scale - contentCenterX;
         this.offset.y = screenCenterY / this.scale - contentCenterY;
-
-        console.log('fitView calculated:', {
-            canvasW, canvasH,
-            contentBounds: { minX, minY, maxX, maxY },
-            contentCenter: { x: contentCenterX, y: contentCenterY },
-            screenCenter: { x: screenCenterX, y: screenCenterY },
-            scale: this.scale,
-            offsetX: this.offset.x,
-            offsetY: this.offset.y
-        });
     }
 
     render() {
@@ -769,15 +750,20 @@ class SchemaCanvas {
             }
         });
 
-        // Mouse up
-        this.canvas.addEventListener('mouseup', () => {
-            this.draggedNode = null;
-            this.dragStartPos = null;
-            this.isPanning = false;
-            this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'default';
-        });
+        // Mouse up - listen on document to catch releases outside canvas
+        const handleMouseUp = () => {
+            if (this.draggedNode || this.isPanning) {
+                this.draggedNode = null;
+                this.dragStartPos = null;
+                this.isPanning = false;
+                this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'default';
+            }
+        };
 
-        // Wheel zoom
+        this.canvas.addEventListener('mouseup', handleMouseUp);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        // Wheel zoom 
         this.canvas.addEventListener('wheel', e => {
             e.preventDefault();
             const rect = this.canvas.getBoundingClientRect();
@@ -786,7 +772,8 @@ class SchemaCanvas {
             const worldX = mouseX / this.scale - this.offset.x;
             const worldY = mouseY / this.scale - this.offset.y;
 
-            const delta = e.deltaY < 0 ? 1.08 : 0.92;
+            // Smoother zoom with smaller delta
+            const delta = e.deltaY < 0 ? 1.05 : 0.95;
             this.scale = Math.max(0.1, Math.min(3, this.scale * delta));
 
             this.offset.x = mouseX / this.scale - worldX;
@@ -808,13 +795,31 @@ class SchemaCanvas {
             this.render();
         });
 
-        // Mouse leave
-        this.canvas.addEventListener('mouseleave', () => {
+        // Window blur - reset drag state when window loses focus
+        window.addEventListener('blur', () => {
+            if (this.draggedNode || this.isPanning) {
+                this.draggedNode = null;
+                this.dragStartPos = null;
+                this.isPanning = false;
+                this.canvas.style.cursor = 'default';
+            }
+        });
+
+        // Mouse leave - reset hover state but keep drag/pan if button is held
+        this.canvas.addEventListener('mouseleave', (e) => {
+            // Reset hover state
             if (this.hoveredNode || this.hoveredEdge) {
                 this.hoveredNode = null;
                 this.hoveredEdge = null;
                 this.updateHighlights();
                 this.render();
+            }
+
+            // If no mouse button is pressed, reset drag/pan state
+            if (e.buttons === 0) {
+                this.draggedNode = null;
+                this.dragStartPos = null;
+                this.isPanning = false;
                 this.canvas.style.cursor = 'default';
             }
         });
@@ -926,7 +931,6 @@ class SchemaCanvas {
     }
 
     hideMessage() {
-        // Remove all overlays and loading elements completely
         const overlays = this.container.querySelectorAll('.schema-overlay');
         overlays.forEach(el => el.remove());
 
@@ -936,14 +940,39 @@ class SchemaCanvas {
         this.container.classList.remove('loading');
     }
 
-    // Public API
     zoomIn() {
-        this.scale = Math.min(3, this.scale * 1.2);
+        // Smoother zoom with smaller factor (10% per click)
+        const canvasW = this.canvas.width / this.dpr;
+        const canvasH = this.canvas.height / this.dpr;
+        const centerX = canvasW / 2;
+        const centerY = canvasH / 2;
+
+        // Zoom towards center
+        const worldX = centerX / this.scale - this.offset.x;
+        const worldY = centerY / this.scale - this.offset.y;
+
+        this.scale = Math.min(3, this.scale * 1.1);
+
+        this.offset.x = centerX / this.scale - worldX;
+        this.offset.y = centerY / this.scale - worldY;
         this.render();
     }
 
     zoomOut() {
-        this.scale = Math.max(0.1, this.scale / 1.2);
+        // Smoother zoom with smaller factor (10% per click)
+        const canvasW = this.canvas.width / this.dpr;
+        const canvasH = this.canvas.height / this.dpr;
+        const centerX = canvasW / 2;
+        const centerY = canvasH / 2;
+
+        // Zoom towards center
+        const worldX = centerX / this.scale - this.offset.x;
+        const worldY = centerY / this.scale - this.offset.y;
+
+        this.scale = Math.max(0.1, this.scale / 1.1);
+
+        this.offset.x = centerX / this.scale - worldX;
+        this.offset.y = centerY / this.scale - worldY;
         this.render();
     }
 

@@ -123,6 +123,12 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
 .editor-wrapper {
     flex: 1;
     overflow: hidden;
+    background: #1a1a1a;
+}
+
+/* Hide textarea before CodeMirror initializes to prevent white flash */
+#sql-editor {
+    display: none;
 }
 
 .CodeMirror {
@@ -441,6 +447,8 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
     font-size: 13px !important;
     max-height: 300px !important;
     overflow-y: auto !important;
+    min-width: 200px !important;
+    z-index: 1000 !important;
 }
 
 .CodeMirror-hint {
@@ -519,4 +527,103 @@ body { background: #1a1a1a; color: #e0e0e0; overflow: hidden; }
 
 .CodeMirror-activeline-background {
     background: #222 !important;
+}
+
+/* Autocomplete hint types */
+.CodeMirror-hint.hint-keyword {
+    color: #c792ea !important;
+    position: relative;
+    padding-left: 28px !important;
+}
+
+.CodeMirror-hint.hint-keyword::before {
+    content: 'K';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: #5a3d7a;
+    color: #c792ea;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 16px;
+}
+
+.CodeMirror-hint.hint-table {
+    color: #82aaff !important;
+    position: relative;
+    padding-left: 28px !important;
+}
+
+.CodeMirror-hint.hint-table::before {
+    content: 'T';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: #2d4a6e;
+    color: #82aaff;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 16px;
+}
+
+/* Grammar hint - AI-like suggestions for next keyword */
+.CodeMirror-hint.hint-grammar {
+    color: #ffcb6b !important;
+    position: relative;
+    padding-left: 28px !important;
+    font-weight: 500;
+}
+
+.CodeMirror-hint.hint-grammar::before {
+    content: '→';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: #5a4d2e;
+    color: #ffcb6b;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 16px;
+}
+
+.CodeMirror-hint.hint-column {
+    color: #c3e88d !important;
+    position: relative;
+    padding-left: 28px !important;
+}
+
+.CodeMirror-hint.hint-column::before {
+    content: 'C';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: #3d5a3d;
+    color: #c3e88d;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 16px;
 }
