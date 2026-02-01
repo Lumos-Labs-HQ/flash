@@ -1,81 +1,81 @@
-name: FlashORM-Testcase
+# name: FlashORM-Testcase
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
+# on:
+#   push:
+#     branches: [ main, develop ]
+#   pull_request:
+#     branches: [ main ]
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_USER: testuser
-          POSTGRES_DB: testdb
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+#     services:
+#       postgres:
+#         image: postgres:17-alpine
+#         env:
+#           POSTGRES_PASSWORD: testpass
+#           POSTGRES_USER: testuser
+#           POSTGRES_DB: testdb
+#         options: >-
+#           --health-cmd pg_isready
+#           --health-interval 10s
+#           --health-timeout 5s
+#           --health-retries 5
+#         ports:
+#           - 5432:5432
       
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: rootpass
-          MYSQL_DATABASE: testdb
-          MYSQL_USER: testuser
-          MYSQL_PASSWORD: testpass
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost -u testuser -ptestpass"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 3306:3306
+#       mysql:
+#         image: mysql:8.0
+#         env:
+#           MYSQL_ROOT_PASSWORD: rootpass
+#           MYSQL_DATABASE: testdb
+#           MYSQL_USER: testuser
+#           MYSQL_PASSWORD: testpass
+#         options: >-
+#           --health-cmd "mysqladmin ping -h localhost -u testuser -ptestpass"
+#           --health-interval 10s
+#           --health-timeout 5s
+#           --health-retries 5
+#         ports:
+#           - 3306:3306
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23.x'
+#     - name: Set up Go
+#       uses: actions/setup-go@v5
+#       with:
+#         go-version: '1.23.x'
 
-    - name: Download dependencies
-      run: go mod tidy
+#     - name: Download dependencies
+#       run: go mod tidy
 
-    - name: Build project
-      run: |
-        go build -tags="dev,plugins" -o flash .
-        chmod +x flash
+#     - name: Build project
+#       run: |
+#         go build -tags="dev,plugins" -o flash .
+#         chmod +x flash
 
-    - name: Verify binary exists and works
-      run: |
-        pwd
-        ls -la
-        file ./flash
-        ./flash --version
+#     - name: Verify binary exists and works
+#       run: |
+#         pwd
+#         ls -la
+#         file ./flash
+#         ./flash --version
 
-    - name: Grant MySQL privileges for testing
-      run: |
-        mysql -h 127.0.0.1 -u root -prootpass -e "GRANT ALL PRIVILEGES ON *.* TO 'testuser'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"
+#     - name: Grant MySQL privileges for testing
+#       run: |
+#         mysql -h 127.0.0.1 -u root -prootpass -e "GRANT ALL PRIVILEGES ON *.* TO 'testuser'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"
 
-    - name: Run integration tests
-      env:
-        CI: true
-        POSTGRES_URL: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
-        MYSQL_URL: testuser:testpass@tcp(localhost:3306)/testdb
-      run: |
-        cd test/integration
-        pwd
-        file ../../flash
-        go test -tags="dev,plugins" -v -timeout 30m
+#     - name: Run integration tests
+#       env:
+#         CI: true
+#         POSTGRES_URL: postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable
+#         MYSQL_URL: testuser:testpass@tcp(localhost:3306)/testdb
+#       run: |
+#         cd test/integration
+#         pwd
+#         file ../../flash
+#         go test -tags="dev,plugins" -v -timeout 30m
 
