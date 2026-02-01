@@ -472,7 +472,6 @@ func (s *Service) FlushDB() error {
 	return s.client.FlushDB(s.ctx).Err()
 }
 
-// Helper functions
 func parseCommand(cmd string) []string {
 	var parts []string
 	var current strings.Builder
@@ -549,4 +548,647 @@ func formatResult(result interface{}) interface{} {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// ExportedKey represents a key with its value and metadata
+type ExportedKey struct {
+	Key   string      `json:"key"`
+	Type  string      `json:"type"`
+	TTL   int64       `json:"ttl"`
+	Value interface{} `json:"value"`
+}
+
+// ExportKeys exports all keys matching pattern to JSON format
+func (s *Service) ExportKeys(pattern string) ([]ExportedKey, error) {
+	if pattern == "" {
+		pattern = "*"
+	}
+
+	var allKeys []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := s.client.Scan(s.ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return nil, err
+		}
+		allKeys = append(allKeys, keys...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	exported := make([]ExportedKey, 0, len(allKeys))
+	for _, key := range allKeys {
+		keyInfo, err := s.GetKey(key)
+		if err != nil {
+			continue
+		}
+		exported = append(exported, ExportedKey{
+			Key:   keyInfo.Key,
+			Type:  keyInfo.Type,
+			TTL:   keyInfo.TTL,
+			Value: keyInfo.Value,
+		})
+	}
+
+	return exported, nil
+}
+
+// ImportKeys imports keys from exported JSON format
+func (s *Service) ImportKeys(keys []ExportedKey, overwrite bool) (int, int, error) {
+	imported := 0
+	skipped := 0
+
+	for _, key := range keys {
+		exists, _ := s.client.Exists(s.ctx, key.Key).Result()
+		if exists > 0 && !overwrite {
+			skipped++
+			continue
+		}
+
+		if err := s.SetKey(key.Key, key.Value, key.Type, key.TTL); err != nil {
+			skipped++
+			continue
+		}
+		imported++
+	}
+
+	return imported, skipped, nil
+}
+
+// MemoryInfo represents memory usage for a key
+type MemoryInfo struct {
+	Key        string `json:"key"`
+	Type       string `json:"type"`
+	MemoryUsed int64  `json:"memory_used"`
+	TTL        int64  `json:"ttl"`
+}
+
+// GetKeyMemory returns memory usage for a specific key
+func (s *Service) GetKeyMemory(key string) (*MemoryInfo, error) {
+	keyType, err := s.client.Type(s.ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	// MEMORY USAGE command (Redis 4.0+)
+	memoryUsed, err := s.client.MemoryUsage(s.ctx, key).Result()
+	if err != nil {
+		memoryUsed = 0
+	}
+
+	ttl, _ := s.client.TTL(s.ctx, key).Result()
+	ttlSeconds := int64(-1)
+	if ttl >= 0 {
+		ttlSeconds = int64(ttl.Seconds())
+	}
+
+	return &MemoryInfo{
+		Key:        key,
+		Type:       keyType,
+		MemoryUsed: memoryUsed,
+		TTL:        ttlSeconds,
+	}, nil
+}
+
+// GetMemoryStats returns memory statistics for all keys matching pattern
+func (s *Service) GetMemoryStats(pattern string, limit int) ([]MemoryInfo, map[string]int64, error) {
+	if pattern == "" {
+		pattern = "*"
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var keys []string
+	var cursor uint64
+	for len(keys) < limit {
+		scanned, nextCursor, err := s.client.Scan(s.ctx, cursor, pattern, int64(limit)).Result()
+		if err != nil {
+			return nil, nil, err
+		}
+		keys = append(keys, scanned...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	if len(keys) > limit {
+		keys = keys[:limit]
+	}
+
+	memoryInfos := make([]MemoryInfo, 0, len(keys))
+	typeStats := make(map[string]int64)
+
+	for _, key := range keys {
+		info, err := s.GetKeyMemory(key)
+		if err != nil {
+			continue
+		}
+		memoryInfos = append(memoryInfos, *info)
+		typeStats[info.Type] += info.MemoryUsed
+	}
+
+	// Sort by memory usage descending
+	sort.Slice(memoryInfos, func(i, j int) bool {
+		return memoryInfos[i].MemoryUsed > memoryInfos[j].MemoryUsed
+	})
+
+	return memoryInfos, typeStats, nil
+}
+
+// GetMemoryOverview returns overall memory statistics
+func (s *Service) GetMemoryOverview() (map[string]interface{}, error) {
+	info, err := s.client.Info(s.ctx, "memory").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]interface{})
+	lines := strings.Split(info, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				result[key] = value
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// SlowLogEntry represents a slow log entry
+type SlowLogEntry struct {
+	ID            int64    `json:"id"`
+	Timestamp     int64    `json:"timestamp"`
+	Duration      int64    `json:"duration_us"`
+	Command       []string `json:"command"`
+	ClientAddr    string   `json:"client_addr"`
+	ClientName    string   `json:"client_name"`
+	FormattedTime string   `json:"formatted_time"`
+}
+
+// GetSlowLog returns slow log entries
+func (s *Service) GetSlowLog(count int) ([]SlowLogEntry, error) {
+	if count <= 0 {
+		count = 50
+	}
+
+	result, err := s.client.SlowLogGet(s.ctx, int64(count)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]SlowLogEntry, 0, len(result))
+	for _, log := range result {
+		entry := SlowLogEntry{
+			ID:            log.ID,
+			Timestamp:     log.Time.Unix(),
+			Duration:      log.Duration.Microseconds(),
+			FormattedTime: log.Time.Format("2006-01-02 15:04:05"),
+			ClientAddr:    log.ClientAddr,
+			ClientName:    log.ClientName,
+		}
+
+		// Convert args to strings
+		entry.Command = make([]string, len(log.Args))
+		copy(entry.Command, log.Args)
+
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}
+
+// ResetSlowLog clears the slow log
+func (s *Service) ResetSlowLog() error {
+	return s.client.SlowLogReset(s.ctx).Err()
+}
+
+// GetSlowLogLen returns the number of entries in slow log
+func (s *Service) GetSlowLogLen() (int64, error) {
+	return s.client.Do(s.ctx, "SLOWLOG", "LEN").Int64()
+}
+
+// ScriptResult represents the result of a Lua script execution
+type ScriptResult struct {
+	Result   interface{} `json:"result"`
+	Duration string      `json:"duration"`
+	Error    string      `json:"error,omitempty"`
+}
+
+// ExecuteScript executes a Lua script
+func (s *Service) ExecuteScript(script string, keys []string, args []interface{}) *ScriptResult {
+	start := time.Now()
+	result := &ScriptResult{}
+
+	res, err := s.client.Eval(s.ctx, script, keys, args...).Result()
+	if err != nil {
+		result.Error = err.Error()
+	} else {
+		result.Result = formatResult(res)
+	}
+
+	result.Duration = time.Since(start).String()
+	return result
+}
+
+// LoadScript loads a script and returns its SHA
+func (s *Service) LoadScript(script string) (string, error) {
+	return s.client.ScriptLoad(s.ctx, script).Result()
+}
+
+// ExecuteScriptBySHA executes a script by its SHA
+func (s *Service) ExecuteScriptBySHA(sha string, keys []string, args []interface{}) *ScriptResult {
+	start := time.Now()
+	result := &ScriptResult{}
+
+	res, err := s.client.EvalSha(s.ctx, sha, keys, args...).Result()
+	if err != nil {
+		result.Error = err.Error()
+	} else {
+		result.Result = formatResult(res)
+	}
+
+	result.Duration = time.Since(start).String()
+	return result
+}
+
+// ScriptExists checks if scripts exist by their SHAs
+func (s *Service) ScriptExists(shas []string) ([]bool, error) {
+	return s.client.ScriptExists(s.ctx, shas...).Result()
+}
+
+// FlushScripts removes all loaded scripts
+func (s *Service) FlushScripts() error {
+	return s.client.ScriptFlush(s.ctx).Err()
+}
+
+// BulkSetTTL sets TTL for all keys matching pattern
+func (s *Service) BulkSetTTL(pattern string, ttl int64) (int, error) {
+	if pattern == "" {
+		return 0, fmt.Errorf("pattern is required")
+	}
+
+	var allKeys []string
+	var cursor uint64
+	for {
+		keys, nextCursor, err := s.client.Scan(s.ctx, cursor, pattern, 100).Result()
+		if err != nil {
+			return 0, err
+		}
+		allKeys = append(allKeys, keys...)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	updated := 0
+	for _, key := range allKeys {
+		var err error
+		if ttl <= 0 {
+			err = s.client.Persist(s.ctx, key).Err()
+		} else {
+			err = s.client.Expire(s.ctx, key, time.Duration(ttl)*time.Second).Err()
+		}
+		if err == nil {
+			updated++
+		}
+	}
+
+	return updated, nil
+}
+
+// GetConfig returns Redis configuration
+func (s *Service) GetConfig(pattern string) (map[string]string, error) {
+	if pattern == "" {
+		pattern = "*"
+	}
+
+	result, err := s.client.ConfigGet(s.ctx, pattern).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// SetConfig sets a Redis configuration parameter
+func (s *Service) SetConfig(key, value string) error {
+	return s.client.ConfigSet(s.ctx, key, value).Err()
+}
+
+// RewriteConfig rewrites the configuration file
+func (s *Service) RewriteConfig() error {
+	return s.client.ConfigRewrite(s.ctx).Err()
+}
+
+// ResetConfigStats resets statistics
+func (s *Service) ResetConfigStats() error {
+	return s.client.ConfigResetStat(s.ctx).Err()
+}
+
+// ReplicationInfo represents replication status
+type ReplicationInfo struct {
+	Role             string                   `json:"role"`
+	ConnectedSlaves  int                      `json:"connected_slaves"`
+	MasterHost       string                   `json:"master_host,omitempty"`
+	MasterPort       int                      `json:"master_port,omitempty"`
+	MasterLinkStatus string                   `json:"master_link_status,omitempty"`
+	Slaves           []map[string]interface{} `json:"slaves,omitempty"`
+	RawInfo          map[string]string        `json:"raw_info"`
+}
+
+// GetReplicationInfo returns replication status
+func (s *Service) GetReplicationInfo() (*ReplicationInfo, error) {
+	info, err := s.client.Info(s.ctx, "replication").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ReplicationInfo{
+		RawInfo: make(map[string]string),
+		Slaves:  make([]map[string]interface{}, 0),
+	}
+
+	lines := strings.Split(info, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				result.RawInfo[key] = value
+
+				switch key {
+				case "role":
+					result.Role = value
+				case "connected_slaves":
+					result.ConnectedSlaves, _ = strconv.Atoi(value)
+				case "master_host":
+					result.MasterHost = value
+				case "master_port":
+					result.MasterPort, _ = strconv.Atoi(value)
+				case "master_link_status":
+					result.MasterLinkStatus = value
+				}
+
+				// Parse slave info
+				if strings.HasPrefix(key, "slave") && strings.Contains(value, "ip=") {
+					slave := make(map[string]interface{})
+					slave["index"] = key
+					for _, pair := range strings.Split(value, ",") {
+						kv := strings.SplitN(pair, "=", 2)
+						if len(kv) == 2 {
+							slave[kv[0]] = kv[1]
+						}
+					}
+					result.Slaves = append(result.Slaves, slave)
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// ClusterInfo represents cluster information
+type ClusterInfo struct {
+	Enabled   bool                     `json:"enabled"`
+	State     string                   `json:"state,omitempty"`
+	SlotsOk   int                      `json:"slots_ok,omitempty"`
+	SlotsPfail int                      `json:"slots_pfail,omitempty"`
+	SlotsFail int                      `json:"slots_fail,omitempty"`
+	KnownNodes int                     `json:"known_nodes,omitempty"`
+	Size      int                      `json:"size,omitempty"`
+	Nodes     []map[string]interface{} `json:"nodes,omitempty"`
+	RawInfo   map[string]string        `json:"raw_info,omitempty"`
+}
+
+// GetClusterInfo returns cluster information
+func (s *Service) GetClusterInfo() (*ClusterInfo, error) {
+	result := &ClusterInfo{
+		RawInfo: make(map[string]string),
+	}
+
+	// Check if cluster is enabled
+	info, err := s.client.ClusterInfo(s.ctx).Result()
+	if err != nil {
+		// Cluster not enabled
+		result.Enabled = false
+		return result, nil
+	}
+
+	result.Enabled = true
+
+	lines := strings.Split(info, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				result.RawInfo[key] = value
+
+				switch key {
+				case "cluster_state":
+					result.State = value
+				case "cluster_slots_ok":
+					result.SlotsOk, _ = strconv.Atoi(value)
+				case "cluster_slots_pfail":
+					result.SlotsPfail, _ = strconv.Atoi(value)
+				case "cluster_slots_fail":
+					result.SlotsFail, _ = strconv.Atoi(value)
+				case "cluster_known_nodes":
+					result.KnownNodes, _ = strconv.Atoi(value)
+				case "cluster_size":
+					result.Size, _ = strconv.Atoi(value)
+				}
+			}
+		}
+	}
+
+	// Get cluster nodes
+	nodes, err := s.client.ClusterNodes(s.ctx).Result()
+	if err == nil {
+		result.Nodes = parseClusterNodes(nodes)
+	}
+
+	return result, nil
+}
+
+func parseClusterNodes(nodesStr string) []map[string]interface{} {
+	nodes := make([]map[string]interface{}, 0)
+	lines := strings.Split(nodesStr, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		parts := strings.Fields(line)
+		if len(parts) >= 8 {
+			node := map[string]interface{}{
+				"id":      parts[0],
+				"addr":    parts[1],
+				"flags":   parts[2],
+				"master":  parts[3],
+				"ping":    parts[4],
+				"pong":    parts[5],
+				"epoch":   parts[6],
+				"state":   parts[7],
+			}
+			if len(parts) > 8 {
+				node["slots"] = strings.Join(parts[8:], " ")
+			}
+			nodes = append(nodes, node)
+		}
+	}
+
+	return nodes
+}
+
+// ACLUser represents an ACL user
+type ACLUser struct {
+	Username string   `json:"username"`
+	Flags    []string `json:"flags"`
+	Keys     []string `json:"keys"`
+	Channels []string `json:"channels"`
+	Commands string   `json:"commands"`
+	RawRules string   `json:"raw_rules"`
+}
+
+// GetACLUsers returns list of ACL users
+func (s *Service) GetACLUsers() ([]string, error) {
+	return s.client.ACLList(s.ctx).Result()
+}
+
+// GetACLUser returns details for a specific user
+func (s *Service) GetACLUser(username string) (*ACLUser, error) {
+	result, err := s.client.Do(s.ctx, "ACL", "GETUSER", username).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	user := &ACLUser{
+		Username: username,
+	}
+
+	// Parse ACL result - it comes as a slice of alternating keys and values
+	if slice, ok := result.([]interface{}); ok {
+		for i := 0; i < len(slice)-1; i += 2 {
+			key := fmt.Sprintf("%v", slice[i])
+			value := slice[i+1]
+
+			switch key {
+			case "flags":
+				if flags, ok := value.([]interface{}); ok {
+					user.Flags = make([]string, len(flags))
+					for j, f := range flags {
+						user.Flags[j] = fmt.Sprintf("%v", f)
+					}
+				}
+			case "keys":
+				if keys, ok := value.([]interface{}); ok {
+					user.Keys = make([]string, len(keys))
+					for j, k := range keys {
+						user.Keys[j] = fmt.Sprintf("%v", k)
+					}
+				}
+			case "channels":
+				if channels, ok := value.([]interface{}); ok {
+					user.Channels = make([]string, len(channels))
+					for j, c := range channels {
+						user.Channels[j] = fmt.Sprintf("%v", c)
+					}
+				}
+			case "commands":
+				user.Commands = fmt.Sprintf("%v", value)
+			}
+		}
+	}
+
+	return user, nil
+}
+
+// CreateACLUser creates a new ACL user
+func (s *Service) CreateACLUser(username string, rules []string) error {
+	args := make([]interface{}, 0, len(rules)+2)
+	args = append(args, "ACL", "SETUSER", username)
+	for _, rule := range rules {
+		args = append(args, rule)
+	}
+	return s.client.Do(s.ctx, args...).Err()
+}
+
+// DeleteACLUser deletes an ACL user
+func (s *Service) DeleteACLUser(username string) error {
+	_, err := s.client.ACLDelUser(s.ctx, username).Result()
+	return err
+}
+
+// GetACLLog returns ACL security log
+func (s *Service) GetACLLog(count int) ([]map[string]interface{}, error) {
+	if count <= 0 {
+		count = 10
+	}
+
+	result, err := s.client.ACLLog(s.ctx, int64(count)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	logs := make([]map[string]interface{}, 0, len(result))
+	for _, entry := range result {
+		log := map[string]interface{}{
+			"count":           entry.Count,
+			"reason":          entry.Reason,
+			"context":         entry.Context,
+			"object":          entry.Object,
+			"username":        entry.Username,
+			"age_seconds":     entry.AgeSeconds,
+			"client_info":     entry.ClientInfo,
+			"entry_id":        entry.EntryID,
+			"timestamp_created": entry.TimestampCreated,
+			"timestamp_last_updated": entry.TimestampLastUpdated,
+		}
+		logs = append(logs, log)
+	}
+
+	return logs, nil
+}
+
+// ResetACLLog clears the ACL log
+func (s *Service) ResetACLLog() error {
+	return s.client.ACLLogReset(s.ctx).Err()
+}
+
+// Publish publishes a message to a channel
+func (s *Service) Publish(channel string, message interface{}) (int64, error) {
+	return s.client.Publish(s.ctx, channel, message).Result()
+}
+
+// GetPubSubChannels returns list of active channels
+func (s *Service) GetPubSubChannels(pattern string) ([]string, error) {
+	if pattern == "" {
+		pattern = "*"
+	}
+	return s.client.PubSubChannels(s.ctx, pattern).Result()
+}
+
+// GetPubSubNumSub returns number of subscribers per channel
+func (s *Service) GetPubSubNumSub(channels []string) (map[string]int64, error) {
+	return s.client.PubSubNumSub(s.ctx, channels...).Result()
+}
+
+// GetPubSubNumPat returns number of pattern subscriptions
+func (s *Service) GetPubSubNumPat() (int64, error) {
+	return s.client.PubSubNumPat(s.ctx).Result()
 }
