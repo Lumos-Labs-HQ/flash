@@ -370,8 +370,8 @@ func (sm *SchemaManager) GenerateMigrationSQL(diff *types.SchemaDiff) string {
 		}
 	}
 
-	for _, indexName := range diff.DroppedIndexes {
-		parts = append(parts, sm.adapter.GenerateDropIndexSQL(indexName))
+	for _, index := range diff.DroppedIndexes {
+		parts = append(parts, sm.adapter.GenerateDropIndexSQL(index))
 	}
 	for _, index := range diff.NewIndexes {
 		parts = append(parts, sm.adapter.GenerateAddIndexSQL(index))

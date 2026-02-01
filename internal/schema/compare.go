@@ -126,9 +126,9 @@ func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, dif
 		}
 	}
 
-	for name := range currentIndexes {
+	for name, index := range currentIndexes {
 		if _, exists := targetIndexes[name]; !exists {
-			diff.DroppedIndexes = append(diff.DroppedIndexes, name)
+			diff.DroppedIndexes = append(diff.DroppedIndexes, index)
 		}
 	}
 }
