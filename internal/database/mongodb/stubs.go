@@ -21,6 +21,10 @@ func (a *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	return nil
 }
 
+func (a *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string) error {
+	return nil
+}
+
 func (a *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
 	return nil
 }
@@ -93,7 +97,7 @@ func (a *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	return ""
 }
 
-func (a *Adapter) GenerateDropIndexSQL(indexName string) string {
+func (a *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
 	return ""
 }
 

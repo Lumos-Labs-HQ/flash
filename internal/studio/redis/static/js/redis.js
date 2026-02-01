@@ -1,18 +1,87 @@
-// Redis Studio JavaScript
+const REDIS_STORAGE_KEY = 'flashorm_redis_studio_state';
+
 const RedisStudio = {
     currentDb: 0,
     currentKey: null,
+    currentKeyTTL: -1,  // Store current key's TTL for preservation
+    currentKeyType: 'string',  // Store current key's type
     keys: [],
     commandHistory: [],
     historyIndex: -1,
     currentTab: 'browser',
     terminalInput: null,
 
+    // Save state to sessionStorage
+    saveState() {
+        const state = {
+            currentDb: this.currentDb,
+            currentKey: this.currentKey,
+            currentTab: this.currentTab,
+            commandHistory: this.commandHistory
+        };
+        try {
+            sessionStorage.setItem(REDIS_STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {
+            console.warn('Failed to save Redis state:', e);
+        }
+    },
+
+    // Restore state from sessionStorage
+    restoreState() {
+        try {
+            const saved = sessionStorage.getItem(REDIS_STORAGE_KEY);
+            if (saved) {
+                const state = JSON.parse(saved);
+                if (typeof state.currentDb === 'number') {
+                    this.currentDb = state.currentDb;
+                    const dbSelect = document.getElementById('dbSelect');
+                    if (dbSelect) dbSelect.value = state.currentDb;
+                }
+                if (state.commandHistory) {
+                    this.commandHistory = state.commandHistory;
+                }
+                if (state.currentTab) {
+                    this.currentTab = state.currentTab;
+                }
+                return state;
+            }
+        } catch (e) {
+            console.warn('Failed to restore Redis state:', e);
+        }
+        return null;
+    },
+
     init() {
         this.bindEvents();
-        this.loadKeys();
+
+        // Restore previous state
+        const savedState = this.restoreState();
+
+        // If we have a saved database, select it first
+        if (savedState && savedState.currentDb !== 0) {
+            this.selectDatabase(savedState.currentDb, false);  // false = don't save again
+        }
+
+        this.loadKeys().then(() => {
+            // If we had a selected key, restore it after keys load
+            if (savedState && savedState.currentKey) {
+                this.selectKey(savedState.currentKey);
+            }
+        });
+
+        // Switch to saved tab
+        if (savedState && savedState.currentTab) {
+            this.switchTab(savedState.currentTab);
+        }
+
         this.loadServerInfo();
         this.initTerminal();
+
+        // Save state on navigation
+        window.addEventListener('beforeunload', () => this.saveState());
+        document.querySelectorAll('a[href]').forEach(link => {
+            link.addEventListener('click', () => this.saveState());
+        });
     },
 
     bindEvents() {
@@ -249,7 +318,9 @@ const RedisStudio = {
     },
 
     selectKeyByIndex(index) {
-        if (this.keys[index]) this.selectKey(this.keys[index].key);
+        if (index >= 0 && index < this.keys.length && this.keys[index]) {
+            this.selectKey(this.keys[index].key);
+        }
     },
 
     filterKeys(search) {
@@ -269,7 +340,12 @@ const RedisStudio = {
             const response = await fetch('/api/key?key=' + encodeURIComponent(key));
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
+            // Store key metadata for later use (e.g., preserving TTL on save)
+            this.currentKeyTTL = json.data.ttl || -1;
+            this.currentKeyType = json.data.type || 'string';
             this.renderKeyDetail(json.data);
+            // Save state after key selection
+            this.saveState();
         } catch (error) {
             container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
         }
@@ -334,14 +410,23 @@ const RedisStudio = {
         if (!editor) return;
 
         try {
+            // Include TTL in the request to preserve it
+            const ttl = this.currentKeyTTL > 0 ? this.currentKeyTTL : 0;
+
             const response = await fetch('/api/key?key=' + encodeURIComponent(this.currentKey), {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value: editor.value, type: 'string' })
+                body: JSON.stringify({
+                    value: editor.value,
+                    type: this.currentKeyType || 'string',
+                    ttl: ttl  // Preserve existing TTL
+                })
             });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Saved', 'success');
+            this.showToast('Value saved', 'success');
+            // Refresh the key to get updated metadata
+            this.selectKey(this.currentKey);
         } catch (error) {
             this.showToast(error.message, 'error');
         }
@@ -358,12 +443,20 @@ const RedisStudio = {
 
     promptTTL() {
         if (!this.currentKey) return;
-        const ttl = prompt('Enter TTL in seconds (-1 to remove):');
+        const currentTTL = this.currentKeyTTL > 0 ? this.currentKeyTTL : -1;
+        const ttl = prompt(`Enter TTL in seconds (current: ${currentTTL === -1 ? 'no expiry' : currentTTL + 's'}). Use -1 to remove expiry:`);
         if (ttl === null) return;
         const n = parseInt(ttl);
-        if (isNaN(n)) { this.showToast('Invalid TTL', 'error'); return; }
-        const cmd = n === -1 ? 'PERSIST ' + this.currentKey : 'EXPIRE ' + this.currentKey + ' ' + n;
-        this.runCommand(cmd).then(() => this.selectKey(this.currentKey));
+        if (isNaN(n)) { this.showToast('Invalid TTL value', 'error'); return; }
+        const cmd = n <= 0 ? 'PERSIST ' + this.currentKey : 'EXPIRE ' + this.currentKey + ' ' + n;
+        this.runCommand(cmd).then(() => {
+            // Update stored TTL
+            this.currentKeyTTL = n <= 0 ? -1 : n;
+            // Refresh both key detail and keys list to update TTL badges
+            this.selectKey(this.currentKey);
+            this.loadKeys();  // Refresh sidebar badges
+            this.showToast(n <= 0 ? 'TTL removed' : `TTL set to ${n}s`, 'success');
+        });
     },
 
     deleteCurrentKey() {
@@ -399,7 +492,7 @@ const RedisStudio = {
     },
 
     // ===== DATABASE & PURGE =====
-    async selectDatabase(db) {
+    async selectDatabase(db, shouldSave = true) {
         try {
             const response = await fetch('/api/databases/' + db, { method: 'POST' });
             const json = await response.json();
@@ -411,6 +504,8 @@ const RedisStudio = {
             // Reinit terminal with new DB
             this.initTerminal();
             this.showToast('Switched to db' + db, 'info');
+            // Save state after database change
+            if (shouldSave) this.saveState();
         } catch (error) {
             this.showToast(error.message, 'error');
         }
@@ -441,8 +536,17 @@ const RedisStudio = {
         const el = document.getElementById(tab + 'Tab');
         if (el) el.style.display = 'flex';
 
+        // Load data for specific tabs
         if (tab === 'cli') setTimeout(() => this.focusTerminal(), 50);
         if (tab === 'stats') this.loadServerInfo();
+        if (tab === 'slowlog') this.loadSlowLog();
+        if (tab === 'config') this.loadConfig();
+        if (tab === 'acl') this.loadACLUsers();
+        if (tab === 'cluster') this.loadClusterInfo();
+        if (tab === 'pubsub') this.loadChannels();
+
+        // Save state after tab change
+        this.saveState();
     },
 
     // ===== SERVER INFO =====
@@ -552,6 +656,598 @@ const RedisStudio = {
         toast.textContent = msg;
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), 3000);
+    },
+
+    exportData: null,
+
+    showExportModal() {
+        document.getElementById('exportModal')?.classList.add('active');
+        document.getElementById('exportPreview').innerHTML = '<p style="color: var(--text-tertiary);">Click "Generate" to preview export data</p>';
+        this.exportData = null;
+    },
+
+    showImportModal() {
+        document.getElementById('importModal')?.classList.add('active');
+    },
+
+    async generateExport() {
+        const pattern = document.getElementById('exportPattern')?.value || '*';
+        const preview = document.getElementById('exportPreview');
+        preview.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const response = await fetch('/api/export?pattern=' + encodeURIComponent(pattern));
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            this.exportData = json.data;
+            preview.innerHTML = '<pre style="max-height:300px;overflow:auto;">' +
+                this.escapeHtml(JSON.stringify(json.data, null, 2)) + '</pre>' +
+                '<p style="margin-top:8px;color:var(--text-secondary);">' + (json.data.count || 0) + ' keys to export</p>';
+        } catch (error) {
+            preview.innerHTML = '<p style="color:var(--error);">Error: ' + this.escapeHtml(error.message) + '</p>';
+        }
+    },
+
+    downloadExport() {
+        if (!this.exportData) {
+            this.showToast('Generate export first', 'error');
+            return;
+        }
+        const blob = new Blob([JSON.stringify(this.exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'redis-export-' + new Date().toISOString().slice(0,10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        this.showToast('Downloaded', 'success');
+    },
+
+    async importKeys() {
+        const dataInput = document.getElementById('importData');
+        const overwrite = document.getElementById('importOverwrite')?.checked || false;
+
+        if (!dataInput?.value.trim()) {
+            this.showToast('Please enter JSON data', 'error');
+            return;
+        }
+
+        try {
+            const data = JSON.parse(dataInput.value);
+            const keys = data.keys || data;
+
+            const response = await fetch('/api/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ keys: keys, overwrite: overwrite })
+            });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            this.showToast(`Imported: ${json.imported}, Skipped: ${json.skipped}`, 'success');
+            this.closeModal('importModal');
+            this.loadKeys();
+            dataInput.value = '';
+        } catch (error) {
+            this.showToast('Import failed: ' + error.message, 'error');
+        }
+    },
+
+    showBulkTTLModal() {
+        document.getElementById('bulkTTLModal')?.classList.add('active');
+    },
+
+    async applyBulkTTL() {
+        const pattern = document.getElementById('bulkTTLPattern')?.value;
+        const ttl = parseInt(document.getElementById('bulkTTLValue')?.value || '0');
+
+        if (!pattern) {
+            this.showToast('Pattern is required', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/bulk-ttl', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern: pattern, ttl: ttl })
+            });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            this.showToast(`Updated TTL for ${json.updated} keys`, 'success');
+            this.closeModal('bulkTTLModal');
+            this.loadKeys();
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async loadMemoryStats() {
+        const pattern = document.getElementById('memoryPattern')?.value || '*';
+        const container = document.getElementById('memoryContent');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const [statsRes, overviewRes] = await Promise.all([
+                fetch('/api/memory/stats?pattern=' + encodeURIComponent(pattern) + '&limit=100'),
+                fetch('/api/memory/overview')
+            ]);
+            const stats = await statsRes.json();
+            const overview = await overviewRes.json();
+
+            if (!stats.success) throw new Error(stats.message);
+
+            const data = stats.data || {};
+            const keys = data.keys || [];
+            const typeStats = data.type_stats || {};
+            const mem = overview.data || {};
+
+            let html = '<div class="memory-overview">';
+            html += '<div class="stats-grid">';
+            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.used_memory_human || 'N/A') + '</div><div class="stat-label">Used Memory</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.used_memory_peak_human || 'N/A') + '</div><div class="stat-label">Peak Memory</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.used_memory_rss_human || 'N/A') + '</div><div class="stat-label">RSS Memory</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.mem_fragmentation_ratio || 'N/A') + '</div><div class="stat-label">Fragmentation</div></div>';
+            html += '</div></div>';
+
+            html += '<h4 style="margin:20px 0 10px;">Memory by Type</h4>';
+            html += '<div class="type-stats">';
+            for (const [type, bytes] of Object.entries(typeStats)) {
+                html += '<div class="type-stat"><span class="key-type ' + type + '">' + type + '</span><span>' + this.formatBytes(bytes) + '</span></div>';
+            }
+            html += '</div>';
+
+            html += '<h4 style="margin:20px 0 10px;">Top Keys by Memory (' + keys.length + ')</h4>';
+            html += '<table class="data-table"><thead><tr><th>Key</th><th>Type</th><th>Memory</th><th>TTL</th></tr></thead><tbody>';
+            for (const key of keys) {
+                html += '<tr><td>' + this.escapeHtml(key.key) + '</td><td><span class="key-type ' + key.type + '">' + key.type + '</span></td>';
+                html += '<td>' + this.formatBytes(key.memory_used) + '</td>';
+                html += '<td>' + (key.ttl === -1 ? '∞' : key.ttl + 's') + '</td></tr>';
+            }
+            html += '</tbody></table>';
+
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+        }
+    },
+
+    formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    },
+
+    async loadSlowLog() {
+        const container = document.getElementById('slowlogContent');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const response = await fetch('/api/slowlog?count=50');
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            const entries = json.data || [];
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No slow queries</h3><p>Slow queries will appear here when detected</p></div>';
+                return;
+            }
+
+            let html = '<table class="data-table"><thead><tr><th>ID</th><th>Time</th><th>Duration</th><th>Command</th><th>Client</th></tr></thead><tbody>';
+            for (const entry of entries) {
+                const duration = entry.duration_us >= 1000 ? (entry.duration_us / 1000).toFixed(2) + ' ms' : entry.duration_us + ' µs';
+                const cmd = Array.isArray(entry.command) ? entry.command.join(' ') : entry.command;
+                html += '<tr><td>' + entry.id + '</td>';
+                html += '<td>' + this.escapeHtml(entry.formatted_time || '') + '</td>';
+                html += '<td class="duration">' + duration + '</td>';
+                html += '<td class="command-cell"><code>' + this.escapeHtml(cmd.substring(0, 100)) + (cmd.length > 100 ? '...' : '') + '</code></td>';
+                html += '<td>' + this.escapeHtml(entry.client_addr || '-') + '</td></tr>';
+            }
+            html += '</tbody></table>';
+
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+        }
+    },
+
+    async resetSlowLog() {
+        if (!confirm('Clear the slow log?')) return;
+        try {
+            const response = await fetch('/api/slowlog', { method: 'DELETE' });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+            this.showToast('Slow log cleared', 'success');
+            this.loadSlowLog();
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async executeScript() {
+        const script = document.getElementById('scriptEditor')?.value;
+        const keysStr = document.getElementById('scriptKeys')?.value || '';
+        const argsStr = document.getElementById('scriptArgs')?.value || '';
+        const resultBox = document.getElementById('scriptResult');
+
+        if (!script) {
+            this.showToast('Enter a script', 'error');
+            return;
+        }
+
+        const keys = keysStr.split(',').map(k => k.trim()).filter(k => k);
+        const args = argsStr.split(',').map(a => a.trim()).filter(a => a);
+
+        resultBox.textContent = 'Executing...';
+
+        try {
+            const response = await fetch('/api/script/eval', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script: script, keys: keys, args: args })
+            });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            const data = json.data || {};
+            if (data.error) {
+                resultBox.textContent = 'Error: ' + data.error;
+                resultBox.style.color = 'var(--error)';
+            } else {
+                resultBox.textContent = JSON.stringify(data.result, null, 2) + '\n\nDuration: ' + data.duration;
+                resultBox.style.color = 'var(--text-primary)';
+            }
+        } catch (error) {
+            resultBox.textContent = 'Error: ' + error.message;
+            resultBox.style.color = 'var(--error)';
+        }
+    },
+
+    async loadScript() {
+        const script = document.getElementById('scriptEditor')?.value;
+        const resultBox = document.getElementById('scriptResult');
+
+        if (!script) {
+            this.showToast('Enter a script', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/script/load', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script: script })
+            });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            resultBox.textContent = 'Script loaded successfully!\nSHA: ' + json.sha;
+            resultBox.style.color = 'var(--success)';
+            this.showToast('Script loaded', 'success');
+        } catch (error) {
+            resultBox.textContent = 'Error: ' + error.message;
+            resultBox.style.color = 'var(--error)';
+        }
+    },
+
+    async flushScripts() {
+        if (!confirm('Flush all loaded scripts?')) return;
+        try {
+            const response = await fetch('/api/scripts', { method: 'DELETE' });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+            this.showToast('Scripts flushed', 'success');
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async publishMessage() {
+        const channel = document.getElementById('pubChannel')?.value;
+        const message = document.getElementById('pubMessage')?.value;
+
+        if (!channel) {
+            this.showToast('Channel is required', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/pubsub/publish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel: channel, message: message || '' })
+            });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            this.showToast(`Published to ${json.receivers} subscribers`, 'success');
+            document.getElementById('pubMessage').value = '';
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async loadChannels() {
+        const container = document.getElementById('channelsList');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const response = await fetch('/api/pubsub/channels');
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            const data = json.data || {};
+            const channels = data.channels || [];
+
+            if (channels.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No active channels</p><small style="color:var(--text-tertiary);">Channels only appear when subscribers are connected</small></div>';
+                return;
+            }
+
+            let html = '<div class="channels-grid">';
+            for (const ch of channels) {
+                html += '<div class="channel-item"><span class="channel-name">' + this.escapeHtml(ch.channel) + '</span>';
+                html += '<span class="channel-subs">' + ch.subscribers + ' subs</span></div>';
+            }
+            html += '</div>';
+            if (data.pattern_subscribers > 0) {
+                html += '<p style="margin-top:10px;color:var(--text-secondary);">Pattern subscribers: ' + data.pattern_subscribers + '</p>';
+            }
+
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+        }
+    },
+
+    async loadConfig() {
+        const pattern = document.getElementById('configPattern')?.value || '*';
+        const container = document.getElementById('configContent');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const response = await fetch('/api/config?pattern=' + encodeURIComponent(pattern));
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            const config = json.data || {};
+            const entries = Object.entries(config);
+
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No configuration found</p></div>';
+                return;
+            }
+
+            let html = '<table class="data-table config-table"><thead><tr><th>Parameter</th><th>Value</th><th></th></tr></thead><tbody>';
+            for (const [key, value] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
+                html += '<tr data-key="' + this.escapeHtml(key) + '">';
+                html += '<td class="config-key">' + this.escapeHtml(key) + '</td>';
+                html += '<td><input type="text" class="config-value-input" value="' + this.escapeHtml(value) + '" data-original="' + this.escapeHtml(value) + '"></td>';
+                html += '<td><button class="btn btn-sm" onclick="RedisStudio.saveConfigValue(this)">Save</button></td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+        }
+    },
+
+    async saveConfigValue(btn) {
+        const row = btn.closest('tr');
+        const key = row.dataset.key;
+        const input = row.querySelector('.config-value-input');
+        const value = input.value;
+
+        try {
+            const response = await fetch('/api/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key, value: value })
+            });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            input.dataset.original = value;
+            this.showToast('Config updated', 'success');
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async rewriteConfig() {
+        if (!confirm('Rewrite Redis configuration file?')) return;
+        try {
+            const response = await fetch('/api/config/rewrite', { method: 'POST' });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+            this.showToast('Config rewritten', 'success');
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async resetStats() {
+        if (!confirm('Reset server statistics?')) return;
+        try {
+            const response = await fetch('/api/config/resetstat', { method: 'POST' });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+            this.showToast('Stats reset', 'success');
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async loadACLUsers() {
+        const container = document.getElementById('aclContent');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const response = await fetch('/api/acl/users');
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            const users = json.data || [];
+
+            if (users.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No ACL users (Redis 6+ required)</p></div>';
+                return;
+            }
+
+            let html = '<table class="data-table"><thead><tr><th>User Rules</th></tr></thead><tbody>';
+            for (const user of users) {
+                html += '<tr><td><code>' + this.escapeHtml(user) + '</code></td></tr>';
+            }
+            html += '</tbody></table>';
+
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '<br><small>ACL requires Redis 6.0+</small></p></div>';
+        }
+    },
+
+    showACLLogModal() {
+        document.getElementById('aclLogModal')?.classList.add('active');
+        this.loadACLLog();
+    },
+
+    async loadACLLog() {
+        const container = document.getElementById('aclLogContent');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const response = await fetch('/api/acl/log?count=20');
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+
+            const logs = json.data || [];
+
+            if (logs.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>No ACL log entries</p></div>';
+                return;
+            }
+
+            let html = '<table class="data-table"><thead><tr><th>Reason</th><th>Context</th><th>Object</th><th>Username</th><th>Age</th></tr></thead><tbody>';
+            for (const log of logs) {
+                html += '<tr>';
+                html += '<td>' + this.escapeHtml(log.reason || '') + '</td>';
+                html += '<td>' + this.escapeHtml(log.context || '') + '</td>';
+                html += '<td>' + this.escapeHtml(log.object || '') + '</td>';
+                html += '<td>' + this.escapeHtml(log.username || '') + '</td>';
+                html += '<td>' + (log.age_seconds || 0) + 's</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+        }
+    },
+
+    async resetACLLog() {
+        try {
+            const response = await fetch('/api/acl/log', { method: 'DELETE' });
+            const json = await response.json();
+            if (!json.success) throw new Error(json.message);
+            this.showToast('ACL log cleared', 'success');
+            this.loadACLLog();
+        } catch (error) {
+            this.showToast('Failed: ' + error.message, 'error');
+        }
+    },
+
+    async loadClusterInfo() {
+        const container = document.getElementById('clusterContent');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+        try {
+            const [replRes, clusterRes] = await Promise.all([
+                fetch('/api/replication'),
+                fetch('/api/cluster')
+            ]);
+            const repl = await replRes.json();
+            const cluster = await clusterRes.json();
+
+            let html = '<div class="cluster-info">';
+
+            // Replication Info
+            html += '<h4>Replication</h4>';
+            if (repl.success && repl.data) {
+                const r = repl.data;
+                html += '<div class="stats-grid">';
+                html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(r.role || 'unknown') + '</div><div class="stat-label">Role</div></div>';
+                html += '<div class="stat-card"><div class="stat-value">' + (r.connected_slaves || 0) + '</div><div class="stat-label">Connected Slaves</div></div>';
+                if (r.master_host) {
+                    html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(r.master_host + ':' + r.master_port) + '</div><div class="stat-label">Master</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(r.master_link_status || 'unknown') + '</div><div class="stat-label">Link Status</div></div>';
+                }
+                html += '</div>';
+
+                if (r.slaves && r.slaves.length > 0) {
+                    html += '<h5 style="margin-top:15px;">Slaves</h5>';
+                    html += '<table class="data-table"><thead><tr><th>Index</th><th>IP</th><th>Port</th><th>State</th><th>Offset</th></tr></thead><tbody>';
+                    for (const slave of r.slaves) {
+                        html += '<tr>';
+                        html += '<td>' + this.escapeHtml(slave.index || '') + '</td>';
+                        html += '<td>' + this.escapeHtml(slave.ip || '') + '</td>';
+                        html += '<td>' + this.escapeHtml(slave.port || '') + '</td>';
+                        html += '<td>' + this.escapeHtml(slave.state || '') + '</td>';
+                        html += '<td>' + this.escapeHtml(slave.offset || '') + '</td>';
+                        html += '</tr>';
+                    }
+                    html += '</tbody></table>';
+                }
+            } else {
+                html += '<p style="color:var(--text-tertiary);">Replication info not available</p>';
+            }
+
+            // Cluster Info
+            html += '<h4 style="margin-top:25px;">Cluster</h4>';
+            if (cluster.success && cluster.data) {
+                const c = cluster.data;
+                if (!c.enabled) {
+                    html += '<p style="color:var(--text-tertiary);">Cluster mode is not enabled</p>';
+                } else {
+                    html += '<div class="stats-grid">';
+                    html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(c.state || 'unknown') + '</div><div class="stat-label">State</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + (c.known_nodes || 0) + '</div><div class="stat-label">Nodes</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + (c.slots_ok || 0) + '</div><div class="stat-label">Slots OK</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + (c.size || 0) + '</div><div class="stat-label">Size</div></div>';
+                    html += '</div>';
+
+                    if (c.nodes && c.nodes.length > 0) {
+                        html += '<h5 style="margin-top:15px;">Nodes</h5>';
+                        html += '<table class="data-table"><thead><tr><th>ID</th><th>Address</th><th>Flags</th><th>State</th><th>Slots</th></tr></thead><tbody>';
+                        for (const node of c.nodes) {
+                            html += '<tr>';
+                            html += '<td title="' + this.escapeHtml(node.id || '') + '">' + this.escapeHtml((node.id || '').substring(0, 8)) + '...</td>';
+                            html += '<td>' + this.escapeHtml(node.addr || '') + '</td>';
+                            html += '<td>' + this.escapeHtml(node.flags || '') + '</td>';
+                            html += '<td>' + this.escapeHtml(node.state || '') + '</td>';
+                            html += '<td>' + this.escapeHtml(node.slots || '') + '</td>';
+                            html += '</tr>';
+                        }
+                        html += '</tbody></table>';
+                    }
+                }
+            } else {
+                html += '<p style="color:var(--text-tertiary);">Cluster info not available</p>';
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+        } catch (error) {
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+        }
     }
 };
 

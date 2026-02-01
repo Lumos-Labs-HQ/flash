@@ -1003,3 +1003,354 @@ body {
     font-size: 12px;
     color: var(--text-primary);
 }
+
+/* ===== NEW FEATURE STYLES ===== */
+
+/* Tab Toolbar */
+.tab-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+
+/* Scrollable Content */
+.scrollable-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+}
+
+.scrollable-content > .data-table {
+    margin: -16px;
+    margin-bottom: 0;
+    width: calc(100% + 32px);
+}
+
+.scrollable-content > .data-table th {
+    top: -16px;
+    padding-top: 26px;
+}
+
+/* Data Table */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.data-table th,
+.data-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.data-table th {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+}
+
+.data-table tr:hover td {
+    background: var(--bg-hover);
+}
+
+.data-table code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+}
+
+.data-table .duration {
+    color: var(--orange);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.data-table .command-cell {
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Memory Analysis */
+.memory-overview {
+    margin-bottom: 20px;
+}
+
+.type-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.type-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+/* Scripts Container */
+.scripts-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px;
+    gap: 16px;
+}
+
+.script-editor-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.section-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.script-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.code-editor {
+    flex: 1;
+    width: 100%;
+    min-height: 200px;
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.5;
+}
+
+.code-editor:focus {
+    border-color: var(--blue);
+}
+
+.script-params {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.script-params .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.script-result-section {
+    min-height: 150px;
+}
+
+.script-result-section h4 {
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.result-box {
+    background: #0d0d0d;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-height: 100px;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Pub/Sub */
+.pubsub-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    padding: 16px;
+    height: 100%;
+}
+
+.pubsub-section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.pubsub-section h4 {
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.channels-list {
+    max-height: 400px;
+    overflow: auto;
+}
+
+.channels-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.channel-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+.channel-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+}
+
+.channel-subs {
+    font-size: 11px;
+    color: var(--text-tertiary);
+}
+
+/* Config */
+.config-table td {
+    padding: 6px 12px;
+}
+
+.config-key {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--blue);
+    white-space: nowrap;
+}
+
+.config-value-input {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    outline: none;
+}
+
+.config-value-input:focus {
+    border-color: var(--blue);
+}
+
+/* Cluster Info */
+.cluster-info {
+    padding: 0;
+}
+
+.cluster-info h4 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.cluster-info h5 {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+/* Large Modal */
+.modal-lg {
+    max-width: 700px;
+}
+
+/* Export Preview */
+.export-preview {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    min-height: 100px;
+    max-height: 350px;
+    overflow: auto;
+    margin-top: 16px;
+}
+
+.export-preview pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Checkbox */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* CSS Variables for colors */
+:root {
+    --success: #10b981;
+    --error: #ef4444;
+}
+
+/* Responsive adjustments for tabs */
+@media (max-width: 1200px) {
+    .tabs-bar {
+        flex-wrap: wrap;
+    }
+
+    .pubsub-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tab content toolbar inputs */
+.tab-toolbar .form-input {
+    padding: 6px 10px;
+    font-size: 12px;
+}

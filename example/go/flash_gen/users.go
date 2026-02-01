@@ -262,7 +262,7 @@ func (q *Queries) Getpostwithcomments(id int64) ([]GetpostwithcommentsRow, error
 	}
 	defer rows.Close()
 
-	var items []GetpostwithcommentsRow
+	items := make([]GetpostwithcommentsRow, 0, 8) // Pre-allocate for typical result size
 	for rows.Next() {
 		var item GetpostwithcommentsRow
 		if err := rows.Scan(&item.PostId, &item.Title, &item.Content, &item.Author, &item.CommentText, &item.Commenter); err != nil {
@@ -355,7 +355,7 @@ func (q *Queries) Getcomplexuseranalytics(total_posts int64, total_comments int6
 	}
 	defer rows.Close()
 
-	var items []GetcomplexuseranalyticsRow
+	items := make([]GetcomplexuseranalyticsRow, 0, 8) // Pre-allocate for typical result size
 	for rows.Next() {
 		var item GetcomplexuseranalyticsRow
 		if err := rows.Scan(&item.Id, &item.Name, &item.Email, &item.Role, &item.Isadmin, &item.UserCreatedAt, &item.TotalPosts, &item.PublishedPosts, &item.DraftPosts, &item.TotalComments, &item.PostsCommentedOn, &item.CategoriesUsed, &item.CategoryNames, &item.LastPostDate, &item.LastCommentDate, &item.AvgPostLength, &item.ActivityLevel, &item.EngagementScore); err != nil {

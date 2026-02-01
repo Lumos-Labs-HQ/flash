@@ -6,11 +6,30 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
-func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, currentEnums, targetEnums []types.SchemaEnum) *types.SchemaDiff {
+func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, currentEnums, targetEnums []types.SchemaEnum, targetIndexes []types.SchemaIndex) *types.SchemaDiff {
 	diff := &types.SchemaDiff{}
 	currentMap, targetMap := sm.buildTableMaps(current, target)
 
-	for _, targetTable := range target {
+	// Merge standalone indexes into target tables
+	// These are CREATE INDEX statements that appear outside of CREATE TABLE
+	for _, index := range targetIndexes {
+		if table, exists := targetMap[index.Table]; exists {
+			// Check if index isn't already in the table (avoid duplicates)
+			isDuplicate := false
+			for _, existingIndex := range table.Indexes {
+				if existingIndex.Name == index.Name {
+					isDuplicate = true
+					break
+				}
+			}
+			if !isDuplicate {
+				table.Indexes = append(table.Indexes, index)
+				targetMap[index.Table] = table
+			}
+		}
+	}
+
+	for _, targetTable := range targetMap {
 		if currentTable, exists := currentMap[targetTable.Name]; !exists {
 			diff.NewTables = append(diff.NewTables, targetTable)
 		} else if tableDiff := sm.compareTablesForDiff(currentTable, targetTable); tableDiff != nil {
@@ -24,7 +43,7 @@ func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, cur
 		}
 	}
 
-	sm.compareIndexes(current, target, diff)
+	sm.compareIndexes(current, sm.tableMapsToSlice(targetMap), diff)
 	sm.compareEnums(currentEnums, targetEnums, diff)
 	return diff
 }
@@ -40,6 +59,15 @@ func (sm *SchemaManager) buildTableMaps(current, target []types.SchemaTable) (ma
 		targetMap[table.Name] = table
 	}
 	return currentMap, targetMap
+}
+
+// tableMapsToSlice converts target table map back to slice for comparison
+func (sm *SchemaManager) tableMapsToSlice(targetMap map[string]types.SchemaTable) []types.SchemaTable {
+	var tables []types.SchemaTable
+	for _, table := range targetMap {
+		tables = append(tables, table)
+	}
+	return tables
 }
 
 func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable) *types.TableDiff {
@@ -98,16 +126,17 @@ func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, dif
 		}
 	}
 
-	for name := range currentIndexes {
+	for name, index := range currentIndexes {
 		if _, exists := targetIndexes[name]; !exists {
-			diff.DroppedIndexes = append(diff.DroppedIndexes, name)
+			diff.DroppedIndexes = append(diff.DroppedIndexes, index)
 		}
 	}
 }
 
 func (sm *SchemaManager) compareEnums(current, target []types.SchemaEnum, diff *types.SchemaDiff) {
-	currentMap := make(map[string]types.SchemaEnum)
-	targetMap := make(map[string]types.SchemaEnum)
+	// PERFORMANCE: Pre-allocate maps
+	currentMap := make(map[string]types.SchemaEnum, len(current))
+	targetMap := make(map[string]types.SchemaEnum, len(target))
 
 	for _, enum := range current {
 		currentMap[enum.Name] = enum

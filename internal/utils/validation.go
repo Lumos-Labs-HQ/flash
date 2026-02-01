@@ -7,6 +7,44 @@ import (
 	"strings"
 )
 
+// SchemaColumn represents a column that can be validated
+type SchemaColumn interface {
+	GetName() string
+}
+
+// SchemaTable represents a table that can be validated
+type SchemaTable interface {
+	GetName() string
+	GetColumns() []SchemaColumn
+}
+
+// Schema represents a schema that can be validated
+type Schema interface {
+	GetTables() []SchemaTable
+}
+
+// SimpleColumn is a wrapper for basic column validation
+type SimpleColumn struct {
+	Name string
+}
+
+func (c SimpleColumn) GetName() string { return c.Name }
+
+// SimpleTable is a wrapper for basic table validation
+type SimpleTable struct {
+	Name    string
+	Columns []SimpleColumn
+}
+
+func (t SimpleTable) GetName() string { return t.Name }
+func (t SimpleTable) GetColumns() []SchemaColumn {
+	cols := make([]SchemaColumn, len(t.Columns))
+	for i, c := range t.Columns {
+		cols[i] = c
+	}
+	return cols
+}
+
 var (
 	ctePatternRegex            *regexp.Regexp
 	tablePatternRegex          *regexp.Regexp
@@ -45,7 +83,13 @@ func init() {
 	unqualifiedColPatternRegex = regexp.MustCompile(`\b(\w+)\b`)
 }
 
+// tableAccessor is a helper interface for extracting table info via type assertion
+type tableAccessor interface {
+	GetTableNames() map[string]bool
+}
+
 // ValidateTableReferences checks if tables referenced in queries exist in the schema
+// Uses type assertion for performance instead of reflection
 func ValidateTableReferences(sql string, schema interface{}, sourceFile string) error {
 	if schema == nil {
 		return nil
@@ -55,36 +99,13 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		sourceFile = "queries"
 	}
 
-	schemaVal := reflect.ValueOf(schema)
-	if schemaVal.Kind() == reflect.Ptr {
-		schemaVal = schemaVal.Elem()
+	// Try to extract table names using type assertion
+	tableNames := extractTableNamesFromSchema(schema)
+	if tableNames == nil {
+		return nil // Cannot extract, skip validation
 	}
 
-	if schemaVal.Kind() != reflect.Struct {
-		return nil
-	}
-
-	tablesField := schemaVal.FieldByName("Tables")
-	if !tablesField.IsValid() || tablesField.Kind() != reflect.Slice {
-		return nil
-	}
-
-	// Extract table names from schema
-	tableNames := make(map[string]bool, tablesField.Len()) // Pre-allocate
-	for i := 0; i < tablesField.Len(); i++ {
-		tablePtr := tablesField.Index(i)
-		if tablePtr.Kind() == reflect.Ptr {
-			tablePtr = tablePtr.Elem()
-		}
-		if tablePtr.Kind() == reflect.Struct {
-			nameField := tablePtr.FieldByName("Name")
-			if nameField.IsValid() && nameField.Kind() == reflect.String {
-				tableNames[strings.ToLower(nameField.String())] = true
-			}
-		}
-	}
-
-	cteNames := make(map[string]bool, 4) // Pre-allocate with reasonable capacity
+	cteNames := make(map[string]bool, 4)
 	cteMatches := ctePatternRegex.FindAllStringSubmatch(sql, -1)
 	for _, match := range cteMatches {
 		if len(match) > 1 {
@@ -134,7 +155,7 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 				}
 			}
 
-			return fmt.Errorf("# package FlashORM\ndb\\queries\\%s.sql:%d:%d: relation \"%s\" does not exist", sourceFile, lineNum, colPos, tableName)
+			return fmt.Errorf("# package flash\ndb\\queries\\%s.sql:%d:%d: relation \"%s\" does not exist", sourceFile, lineNum, colPos, tableName)
 		}
 	}
 
@@ -143,6 +164,70 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 	}
 
 	return nil
+}
+
+// extractTableNamesFromSchema extracts table names from various schema types
+func extractTableNamesFromSchema(schema interface{}) map[string]bool {
+	// Try known interface types first (fast path)
+	if s, ok := schema.(interface{ GetTables() []interface{ GetName() string } }); ok {
+		tables := s.GetTables()
+		names := make(map[string]bool, len(tables))
+		for _, t := range tables {
+			names[strings.ToLower(t.GetName())] = true
+		}
+		return names
+	}
+
+	// Try struct with Tables field via type assertion on common patterns
+	type tablesHolder struct {
+		Tables interface{}
+	}
+
+	// Check for *parser.Schema-like structure with Tables []*Table
+	type tableWithName interface {
+		GetName() string
+	}
+
+	// Use type switch for known patterns
+	switch s := schema.(type) {
+	case interface{ GetTableNames() map[string]bool }:
+		return s.GetTableNames()
+	default:
+		// Fallback: try to access via type assertion for common schema patterns
+		return extractTableNamesViaReflection(s)
+	}
+}
+
+// extractTableNamesViaReflection is the fallback that uses reflection
+func extractTableNamesViaReflection(schema interface{}) map[string]bool {
+	schemaVal := reflect.ValueOf(schema)
+	if schemaVal.Kind() == reflect.Ptr {
+		schemaVal = schemaVal.Elem()
+	}
+
+	if schemaVal.Kind() != reflect.Struct {
+		return nil
+	}
+
+	tablesField := schemaVal.FieldByName("Tables")
+	if !tablesField.IsValid() || tablesField.Kind() != reflect.Slice {
+		return nil
+	}
+
+	tableNames := make(map[string]bool, tablesField.Len())
+	for i := 0; i < tablesField.Len(); i++ {
+		tablePtr := tablesField.Index(i)
+		if tablePtr.Kind() == reflect.Ptr {
+			tablePtr = tablePtr.Elem()
+		}
+		if tablePtr.Kind() == reflect.Struct {
+			nameField := tablePtr.FieldByName("Name")
+			if nameField.IsValid() && nameField.Kind() == reflect.String {
+				tableNames[strings.ToLower(nameField.String())] = true
+			}
+		}
+	}
+	return tableNames
 }
 
 // ValidateColumnReferences checks if columns referenced in queries exist in the schema

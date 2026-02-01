@@ -6,10 +6,7 @@ VALUES ($1, $2, $3, $4);
 SELECT * FROM users
 WHERE email = $1;
 
--- name: CreateCategory :one
-INSERT INTO categories (name)
-VALUES ($1)
-RETURNING *;
+
 
 -- name: CreatePost :one
 INSERT INTO posts (user_id, category_id, title, content)

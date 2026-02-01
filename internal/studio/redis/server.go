@@ -62,15 +62,17 @@ func (s *Server) setupRoutes() {
 
 	// Server info
 	api.Get("/info", s.handleGetInfo)
+	api.Get("/info/extended", s.handleGetExtendedInfo)
 	api.Get("/dbsize", s.handleGetDBSize)
 
+	// Key operations
 	api.Get("/keys", s.handleGetKeys)
 	api.Post("/keys", s.handleSetKey)
 	api.Post("/keys/bulk-delete", s.handleBulkDeleteKeys)
-	api.Get("/key", s.handleGetKey)       
-	api.Put("/key", s.handleUpdateKey)   
+	api.Get("/key", s.handleGetKey)
+	api.Put("/key", s.handleUpdateKey)
 	api.Delete("/key", s.handleDeleteKey)
-	api.Post("/flush", s.handleFlushDB)  
+	api.Post("/flush", s.handleFlushDB)
 
 	// CLI
 	api.Post("/cli", s.handleCLI)
@@ -78,6 +80,51 @@ func (s *Server) setupRoutes() {
 	// Database selection
 	api.Get("/databases", s.handleGetDatabases)
 	api.Post("/databases/:db", s.handleSelectDatabase)
+
+	// Export/Import
+	api.Get("/export", s.handleExportKeys)
+	api.Post("/import", s.handleImportKeys)
+
+	// Memory Analysis
+	api.Get("/memory/stats", s.handleGetMemoryStats)
+	api.Get("/memory/overview", s.handleGetMemoryOverview)
+	api.Get("/memory/key", s.handleGetKeyMemory)
+
+	// Slow Log
+	api.Get("/slowlog", s.handleGetSlowLog)
+	api.Delete("/slowlog", s.handleResetSlowLog)
+	api.Get("/slowlog/len", s.handleGetSlowLogLen)
+
+	// Lua Scripting
+	api.Post("/script/eval", s.handleExecuteScript)
+	api.Post("/script/load", s.handleLoadScript)
+	api.Post("/script/evalsha", s.handleExecuteScriptBySHA)
+	api.Delete("/scripts", s.handleFlushScripts)
+
+	// Bulk TTL
+	api.Post("/bulk-ttl", s.handleBulkSetTTL)
+
+	// Config Management
+	api.Get("/config", s.handleGetConfig)
+	api.Put("/config", s.handleSetConfig)
+	api.Post("/config/rewrite", s.handleRewriteConfig)
+	api.Post("/config/resetstat", s.handleResetConfigStats)
+
+	// Cluster/Replication
+	api.Get("/replication", s.handleGetReplicationInfo)
+	api.Get("/cluster", s.handleGetClusterInfo)
+
+	// ACL Management
+	api.Get("/acl/users", s.handleGetACLUsers)
+	api.Get("/acl/users/:username", s.handleGetACLUser)
+	api.Post("/acl/users", s.handleCreateACLUser)
+	api.Delete("/acl/users/:username", s.handleDeleteACLUser)
+	api.Get("/acl/log", s.handleGetACLLog)
+	api.Delete("/acl/log", s.handleResetACLLog)
+
+	// Pub/Sub
+	api.Post("/pubsub/publish", s.handlePublish)
+	api.Get("/pubsub/channels", s.handleGetChannels)
 }
 
 func (s *Server) Start(openBrowser bool) error {
@@ -97,7 +144,6 @@ func (s *Server) Start(openBrowser bool) error {
 	return s.app.Listen(fmt.Sprintf(":%d", s.port))
 }
 
-// UI Handler
 func (s *Server) handleIndex(c *fiber.Ctx) error {
 	databases := make([]int, 16)
 	for i := 0; i < 16; i++ {

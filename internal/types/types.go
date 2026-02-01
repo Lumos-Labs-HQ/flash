@@ -40,7 +40,7 @@ type SchemaDiff struct {
 	DroppedTables  []string
 	ModifiedTables []TableDiff
 	NewIndexes     []SchemaIndex
-	DroppedIndexes []string
+	DroppedIndexes []SchemaIndex // Changed from []string to include table name for MySQL DROP INDEX
 	NewEnums       []SchemaEnum
 	DroppedEnums   []string
 }

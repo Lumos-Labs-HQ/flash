@@ -4,32 +4,28 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 type Generator struct {
 	Config       *config.Config
-	insertRegex  *regexp.Regexp
-	updateRegex  *regexp.Regexp
-	deleteRegex  *regexp.Regexp
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
+	cache        *gencommon.GenerationCache
 }
 
 func New(cfg *config.Config) *Generator {
 	return &Generator{
 		Config:       cfg,
-		insertRegex:  regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`),
-		updateRegex:  regexp.MustCompile(`(?i)UPDATE\s+(\w+)`),
-		deleteRegex:  regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`),
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
+		cache:        gencommon.NewGenerationCache(),
 	}
 }
 
@@ -49,7 +45,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	if err := g.generateQueries(queries); err != nil {
+	if err := g.generateQueriesIncremental(queries, false); err != nil {
 		return err
 	}
 
@@ -57,7 +53,11 @@ func (g *Generator) Generate() error {
 		return err
 	}
 
-	return g.generateTypeScriptDeclarations(schema, queries)
+	if err := g.generateTypeScriptDeclarations(schema, queries); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *Generator) generateQueries(queries []*parser.Query) error {
@@ -315,16 +315,10 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 		return "Object"
 	}
 
-	if match := g.insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		return utils.Capitalize(match[1])
-	}
-
-	if match := g.updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		return utils.Capitalize(match[1])
-	}
-
-	if match := g.deleteRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		return utils.Capitalize(match[1])
+	// Use shared utility to extract table name
+	tableName := utils.ExtractTableName(query.SQL)
+	if tableName != "" {
+		return utils.Capitalize(tableName)
 	}
 
 	return "Object"
@@ -395,7 +389,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	w.WriteString("module.exports = { New, Queries };\n")
 
-	path := filepath.Join(g.Config.Gen.JS.Out, "database.js")
+	path := filepath.Join(g.Config.Gen.JS.Out, "index.js")
 	return os.WriteFile(path, []byte(w.String()), 0644)
 }
 

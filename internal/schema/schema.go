@@ -134,15 +134,17 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 	}
 
 	// Topological sort using Kahn's algorithm
+	// dependencies[A] = [B, C] means A depends on B and C (A has FK to B and C)
+	// We want B and C created BEFORE A, so A's in-degree = number of dependencies
 	var sorted []types.SchemaTable
 	inDegree := make(map[string]int)
 
-	// Initialize in-degrees to 0 for all tables
+	// CRITICAL: Initialize in-degree for ALL tables first (even those with no FKs)
 	for _, table := range tables {
 		inDegree[table.Name] = 0
 	}
 
-	// Set in-degree based on dependency count
+	// Calculate in-degree: how many tables each table depends on
 	for tableName, deps := range dependencies {
 		inDegree[tableName] = len(deps)
 	}
@@ -154,12 +156,11 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 			queue = append(queue, tableName)
 		}
 	}
+	
+	// Process tables (sort queue only once for determinism)
 	sort.Strings(queue)
 
 	for len(queue) > 0 {
-		// Sort queue for deterministic output
-		sort.Strings(queue)
-
 		tableName := queue[0]
 		queue = queue[1:]
 
@@ -167,13 +168,18 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 			sorted = append(sorted, *table)
 		}
 
-		// Find tables that depend on this one (have FK to this table) and reduce their in-degree
+		// Find tables that depend on this one and reduce their in-degree
 		for depTableName, deps := range dependencies {
 			for _, dep := range deps {
 				if dep == tableName {
 					inDegree[depTableName]--
 					if inDegree[depTableName] == 0 {
-						queue = append(queue, depTableName)
+						// Insert in sorted position to maintain determinism
+						insertPos := 0
+						for insertPos < len(queue) && queue[insertPos] < depTableName {
+							insertPos++
+						}
+						queue = append(queue[:insertPos], append([]string{depTableName}, queue[insertPos:]...)...)
 					}
 					break
 				}
@@ -283,10 +289,18 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	}
 
 	// Use the new ParseSchemaPath that handles both files and directories
-	targetTables, targetEnums, _, err := sm.ParseSchemaPath(targetSchemaPath)
+	// CRITICAL: Don't discard targetIndexes! They contain standalone CREATE INDEX statements
+	targetTables, targetEnums, targetIndexes, err := sm.ParseSchemaPath(targetSchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target schema: %w", err)
 	}
+
+	// DEBUG: Print what was parsed
+	// fmt.Printf("DEBUG: Parsed %d tables from schema file\n", len(targetTables))
+	// fmt.Printf("DEBUG: Parsed %d standalone indexes from schema file\n", len(targetIndexes))
+	// for _, idx := range targetIndexes {
+	// 	fmt.Printf("  - Index: %s on table %s, columns: %v\n", idx.Name, idx.Table, idx.Columns)
+	// }
 
 	// Get current enums from database
 	currentEnums, err := sm.adapter.GetCurrentEnums(ctx)
@@ -294,7 +308,16 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 		currentEnums = []types.SchemaEnum{}
 	}
 
-	return sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums), nil
+	// Pass both tables and standalone indexes to compareSchemas
+	diff := sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums, targetIndexes)
+	
+	// DEBUG: Print diff results
+	// fmt.Printf("DEBUG: Diff has %d new indexes\n", len(diff.NewIndexes))
+	// for _, idx := range diff.NewIndexes {
+	// 	fmt.Printf("  - New index: %s\n", idx.Name)
+	// }
+	
+	return diff, nil
 }
 
 func (sm *SchemaManager) GenerateSchemaSQL(tables []types.SchemaTable) string {
@@ -347,8 +370,8 @@ func (sm *SchemaManager) GenerateMigrationSQL(diff *types.SchemaDiff) string {
 		}
 	}
 
-	for _, indexName := range diff.DroppedIndexes {
-		parts = append(parts, sm.adapter.GenerateDropIndexSQL(indexName))
+	for _, index := range diff.DroppedIndexes {
+		parts = append(parts, sm.adapter.GenerateDropIndexSQL(index))
 	}
 	for _, index := range diff.NewIndexes {
 		parts = append(parts, sm.adapter.GenerateAddIndexSQL(index))

@@ -22,6 +22,7 @@ type DatabaseAdapter interface {
 	// Migration operations
 	GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error)
 	RecordMigration(ctx context.Context, migrationID, name, checksum string) error
+	RemoveMigrationRecord(ctx context.Context, migrationID string) error
 	ExecuteMigration(ctx context.Context, migrationSQL string) error
 	ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error
 	ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error)
@@ -29,8 +30,8 @@ type DatabaseAdapter interface {
 	// Schema operations
 	GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error)
 	GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error)
-	GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error)
-	GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)
+	GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) // Compatibility - prefer batch versions
+	GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)  // Compatibility - prefer batch versions
 	GetAllTableNames(ctx context.Context) ([]string, error)
 	PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
 
@@ -53,7 +54,7 @@ type DatabaseAdapter interface {
 	GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string
 	GenerateDropColumnSQL(tableName, columnName string) string
 	GenerateAddIndexSQL(index types.SchemaIndex) string
-	GenerateDropIndexSQL(indexName string) string
+	GenerateDropIndexSQL(index types.SchemaIndex) string
 
 	// Data type mapping
 	MapColumnType(dbType string) string

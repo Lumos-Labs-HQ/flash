@@ -289,7 +289,10 @@ func (m *Migrator) Reset(ctx context.Context, force bool) error {
 		return fmt.Errorf("failed to get table names: %w", err)
 	}
 
-	m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 0")
+	// MySQL requires disabling foreign key checks to drop tables with FK constraints
+	if m.provider == "mysql" {
+		m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 0")
+	}
 
 	for _, table := range tables {
 		if err := m.adapter.DropTable(ctx, table); err != nil {
@@ -297,7 +300,10 @@ func (m *Migrator) Reset(ctx context.Context, force bool) error {
 		}
 	}
 
-	m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 1")
+	// Re-enable foreign key checks for MySQL
+	if m.provider == "mysql" {
+		m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 1")
+	}
 
 	// Drop all enums
 	enums, err := m.adapter.GetCurrentEnums(ctx)
@@ -586,6 +592,5 @@ func (m *Migrator) extractDownSQL(filePath string) string {
 
 // removeMigrationRecord removes a migration record from the tracking table
 func (m *Migrator) removeMigrationRecord(ctx context.Context, migrationID string) error {
-	query := fmt.Sprintf("DELETE FROM _flash_migrations WHERE id = '%s'", migrationID)
-	return m.adapter.ExecuteMigration(ctx, query)
+	return m.adapter.RemoveMigrationRecord(ctx, migrationID)
 }

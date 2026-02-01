@@ -10,7 +10,12 @@ async def main():
     pool = await asyncpg.create_pool(DATABASE_URL)
     
     db = new(pool)
+
     
+    user = await db.create_user()
+     
+    print('Default user ID:', user.em)
+
     newuser = await db.create_user('jack', 'jack@gmail.com', '123 street', True)
     print('New user ID:', newuser)
     

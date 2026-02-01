@@ -272,6 +272,9 @@ func (s *Adapter) GenerateAddColumnSQL(tableName string, column types.SchemaColu
 }
 
 // GenerateDropColumnSQL generates SQL to drop a column in SQLite
+// NOTE: DROP COLUMN requires SQLite version 3.35.0+ (released March 2021).
+// Older versions will fail with a syntax error. If you need to support older
+// SQLite versions, you must recreate the table without the dropped column.
 func (s *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN \"%s\";", tableName, columnName)
 }
@@ -285,8 +288,8 @@ func (s *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	return fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s);", unique, index.Name, index.Table, columns)
 }
 
-func (s *Adapter) GenerateDropIndexSQL(indexName string) string {
-	return fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", indexName)
+func (s *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
+	return fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)
 }
 
 func (s *Adapter) FormatColumnType(column types.SchemaColumn) string {

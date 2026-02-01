@@ -36,12 +36,32 @@
                 </svg>
                 New Key
             </button>
+            <button class="btn btn-sm" onclick="RedisStudio.showExportModal()" title="Export keys to JSON">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Export
+            </button>
+            <button class="btn btn-sm" onclick="RedisStudio.showImportModal()" title="Import keys from JSON">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Import
+            </button>
+            <button class="btn btn-sm" onclick="RedisStudio.showBulkTTLModal()" title="Set TTL for multiple keys">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Bulk TTL
+            </button>
             <button class="btn btn-sm btn-danger" onclick="RedisStudio.flushDatabase()" title="Delete ALL keys in current database">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                     <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
                 </svg>
-                Purge DB
+                Purge
             </button>
             <button class="icon-btn" onclick="RedisStudio.loadKeys()" title="Refresh keys">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -92,6 +112,54 @@
                     </svg>
                     Stats
                 </button>
+                <button class="tab" data-tab="memory">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
+                        <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+                        <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+                    </svg>
+                    Memory
+                </button>
+                <button class="tab" data-tab="slowlog">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    Slow Log
+                </button>
+                <button class="tab" data-tab="scripts">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                    </svg>
+                    Lua
+                </button>
+                <button class="tab" data-tab="pubsub">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                    Pub/Sub
+                </button>
+                <button class="tab" data-tab="config">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+                    </svg>
+                    Config
+                </button>
+                <button class="tab" data-tab="acl">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+                    </svg>
+                    ACL
+                </button>
+                <button class="tab" data-tab="cluster">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="19" cy="12" r="2"/>
+                        <circle cx="5" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>
+                        <line x1="12" y1="7" x2="12" y2="10"/><line x1="12" y1="14" x2="12" y2="17"/>
+                        <line x1="14" y1="12" x2="17" y2="12"/><line x1="7" y1="12" x2="10" y2="12"/>
+                    </svg>
+                    Cluster
+                </button>
             </div>
 
             <!-- Browser Tab -->
@@ -117,6 +185,121 @@
             <!-- Stats Tab -->
             <div class="tab-content" id="statsTab" style="display: none;">
                 <div class="loading"><div class="spinner"></div></div>
+            </div>
+
+            <!-- Memory Tab -->
+            <div class="tab-content" id="memoryTab" style="display: none;">
+                <div class="tab-toolbar">
+                    <input type="text" id="memoryPattern" class="form-input" placeholder="Pattern (default: *)" style="width: 200px;">
+                    <button class="btn btn-sm btn-primary" onclick="RedisStudio.loadMemoryStats()">Analyze</button>
+                </div>
+                <div id="memoryContent" class="scrollable-content">
+                    <div class="empty-state"><h3>Click Analyze to view memory usage</h3></div>
+                </div>
+            </div>
+
+            <!-- Slow Log Tab -->
+            <div class="tab-content" id="slowlogTab" style="display: none;">
+                <div class="tab-toolbar">
+                    <button class="btn btn-sm btn-primary" onclick="RedisStudio.loadSlowLog()">Refresh</button>
+                    <button class="btn btn-sm btn-danger" onclick="RedisStudio.resetSlowLog()">Clear Log</button>
+                </div>
+                <div id="slowlogContent" class="scrollable-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Lua Scripts Tab -->
+            <div class="tab-content" id="scriptsTab" style="display: none;">
+                <div class="scripts-container">
+                    <div class="script-editor-section">
+                        <div class="section-header">
+                            <h4>Lua Script Editor</h4>
+                            <div class="script-actions">
+                                <button class="btn btn-sm btn-primary" onclick="RedisStudio.executeScript()">Execute</button>
+                                <button class="btn btn-sm" onclick="RedisStudio.loadScript()">Load Script</button>
+                                <button class="btn btn-sm btn-danger" onclick="RedisStudio.flushScripts()">Flush All</button>
+                            </div>
+                        </div>
+                        <textarea id="scriptEditor" class="code-editor" placeholder="-- Enter Lua script here
+-- Example: return redis.call('GET', KEYS[1])"></textarea>
+                        <div class="script-params">
+                            <div class="form-group">
+                                <label class="form-label">KEYS (comma separated)</label>
+                                <input type="text" id="scriptKeys" class="form-input" placeholder="key1, key2">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">ARGV (comma separated)</label>
+                                <input type="text" id="scriptArgs" class="form-input" placeholder="arg1, arg2">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="script-result-section">
+                        <h4>Result</h4>
+                        <pre id="scriptResult" class="result-box">-- Script output will appear here</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pub/Sub Tab -->
+            <div class="tab-content" id="pubsubTab" style="display: none;">
+                <div class="pubsub-container">
+                    <div class="pubsub-section">
+                        <h4>Publish Message</h4>
+                        <div class="form-group">
+                            <label class="form-label">Channel</label>
+                            <input type="text" id="pubChannel" class="form-input" placeholder="channel-name">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Message</label>
+                            <textarea id="pubMessage" class="form-textarea" placeholder="Message content"></textarea>
+                        </div>
+                        <button class="btn btn-primary" onclick="RedisStudio.publishMessage()">Publish</button>
+                    </div>
+                    <div class="pubsub-section">
+                        <div class="section-header">
+                            <h4>Active Channels</h4>
+                            <button class="btn btn-sm" onclick="RedisStudio.loadChannels()">Refresh</button>
+                        </div>
+                        <div id="channelsList" class="channels-list">
+                            <div class="empty-state"><p>No active channels</p><small style="color:var(--text-tertiary);">Channels only appear when subscribers are connected</small></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Tab -->
+            <div class="tab-content" id="configTab" style="display: none;">
+                <div class="tab-toolbar">
+                    <input type="text" id="configPattern" class="form-input" placeholder="Pattern (default: *)" style="width: 200px;">
+                    <button class="btn btn-sm btn-primary" onclick="RedisStudio.loadConfig()">Load</button>
+                    <button class="btn btn-sm" onclick="RedisStudio.rewriteConfig()">Rewrite Config</button>
+                    <button class="btn btn-sm" onclick="RedisStudio.resetStats()">Reset Stats</button>
+                </div>
+                <div id="configContent" class="scrollable-content config-grid">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- ACL Tab -->
+            <div class="tab-content" id="aclTab" style="display: none;">
+                <div class="tab-toolbar">
+                    <button class="btn btn-sm btn-primary" onclick="RedisStudio.loadACLUsers()">Refresh</button>
+                    <button class="btn btn-sm" onclick="RedisStudio.showACLLogModal()">View ACL Log</button>
+                </div>
+                <div id="aclContent" class="scrollable-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Cluster Tab -->
+            <div class="tab-content" id="clusterTab" style="display: none;">
+                <div class="tab-toolbar">
+                    <button class="btn btn-sm btn-primary" onclick="RedisStudio.loadClusterInfo()">Refresh</button>
+                </div>
+                <div id="clusterContent" class="scrollable-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
             </div>
         </main>
     </div>
@@ -161,6 +344,119 @@
             <div class="modal-footer">
                 <button class="btn" onclick="RedisStudio.closeModal('newKeyModal')">Cancel</button>
                 <button class="btn btn-primary" onclick="RedisStudio.createNewKey()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div class="modal" id="exportModal">
+        <div class="modal-backdrop" onclick="RedisStudio.closeModal('exportModal')"></div>
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h3>Export Keys</h3>
+                <button class="icon-btn" onclick="RedisStudio.closeModal('exportModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Pattern (leave empty for all keys)</label>
+                    <input type="text" id="exportPattern" class="form-input" placeholder="*">
+                </div>
+                <div class="export-preview" id="exportPreview">
+                    <p style="color: var(--text-tertiary);">Click "Generate" to preview export data</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="RedisStudio.closeModal('exportModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="RedisStudio.generateExport()">Generate</button>
+                <button class="btn btn-success" onclick="RedisStudio.downloadExport()">Download JSON</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal" id="importModal">
+        <div class="modal-backdrop" onclick="RedisStudio.closeModal('importModal')"></div>
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h3>Import Keys</h3>
+                <button class="icon-btn" onclick="RedisStudio.closeModal('importModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">JSON Data</label>
+                    <textarea id="importData" class="form-textarea code-editor" placeholder='{"keys": [{"key": "mykey", "type": "string", "value": "myvalue", "ttl": -1}]}'></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="importOverwrite"> Overwrite existing keys
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="RedisStudio.closeModal('importModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="RedisStudio.importKeys()">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk TTL Modal -->
+    <div class="modal" id="bulkTTLModal">
+        <div class="modal-backdrop" onclick="RedisStudio.closeModal('bulkTTLModal')"></div>
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Bulk Set TTL</h3>
+                <button class="icon-btn" onclick="RedisStudio.closeModal('bulkTTLModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Key Pattern</label>
+                    <input type="text" id="bulkTTLPattern" class="form-input" placeholder="user:*">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">TTL (seconds)</label>
+                    <input type="number" id="bulkTTLValue" class="form-input" placeholder="3600" value="3600">
+                    <span style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px; display: block;">Use 0 or -1 to remove expiration</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="RedisStudio.closeModal('bulkTTLModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="RedisStudio.applyBulkTTL()">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACL Log Modal -->
+    <div class="modal" id="aclLogModal">
+        <div class="modal-backdrop" onclick="RedisStudio.closeModal('aclLogModal')"></div>
+        <div class="modal-dialog modal-lg">
+            <div class="modal-header">
+                <h3>ACL Security Log</h3>
+                <button class="icon-btn" onclick="RedisStudio.closeModal('aclLogModal')">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="aclLogContent" class="scrollable-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="RedisStudio.resetACLLog()">Clear Log</button>
+                <button class="btn" onclick="RedisStudio.closeModal('aclLogModal')">Close</button>
             </div>
         </div>
     </div>

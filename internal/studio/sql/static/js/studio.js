@@ -1,4 +1,6 @@
-// State
+// State Management with Session Persistence
+const STORAGE_KEY = 'flashorm_studio_state';
+
 const state = {
     currentTable: null,
     data: null,
@@ -6,7 +8,57 @@ const state = {
     page: 1,
     limit: 50,
     tablesCache: null,
-    foreignKeys: new Map() 
+    foreignKeys: new Map(),
+    filters: [],
+    scrollPosition: 0,
+
+    // Persist state to sessionStorage
+    save() {
+        const toSave = {
+            currentTable: this.currentTable,
+            page: this.page,
+            limit: this.limit,
+            filters: this.filters,
+            scrollPosition: window.scrollY || 0,
+            // Convert Map to array for JSON serialization
+            changes: Array.from(this.changes.entries())
+        };
+        try {
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+        } catch (e) {
+            console.warn('Failed to save state:', e);
+        }
+    },
+
+    // Restore state from sessionStorage
+    restore() {
+        try {
+            const saved = sessionStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                this.currentTable = parsed.currentTable || null;
+                this.page = parsed.page || 1;
+                this.limit = parsed.limit || 50;
+                this.filters = parsed.filters || [];
+                this.scrollPosition = parsed.scrollPosition || 0;
+                // Restore changes Map
+                if (parsed.changes && Array.isArray(parsed.changes)) {
+                    this.changes = new Map(parsed.changes);
+                }
+                return true;
+            }
+        } catch (e) {
+            console.warn('Failed to restore state:', e);
+        }
+        return false;
+    },
+
+    // Clear persisted state
+    clear() {
+        this.changes.clear();
+        this.filters = [];
+        sessionStorage.removeItem(STORAGE_KEY);
+    }
 };
 
 // Simple notification function (fallback if index.js showNotification not loaded yet)
@@ -16,10 +68,10 @@ function showNotification(message, type = 'info') {
         window._showNotificationImpl(message, type);
         return;
     }
-    
+
     // Remove existing notifications
     document.querySelectorAll('.toast-notification').forEach(n => n.remove());
-    
+
     const toast = document.createElement('div');
     toast.className = `toast-notification toast-${type}`;
     toast.innerHTML = `
@@ -27,10 +79,10 @@ function showNotification(message, type = 'info') {
         <span class="toast-message">${message}</span>
     `;
     document.body.appendChild(toast);
-    
+
     // Animate in
     requestAnimationFrame(() => toast.classList.add('show'));
-    
+
     // Auto remove
     setTimeout(() => {
         toast.classList.remove('show');
@@ -39,9 +91,44 @@ function showNotification(message, type = 'info') {
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    loadTables();
+document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
+    await loadTables();
+
+    // Restore previous state if available
+    if (state.restore()) {
+        // Restore the previously selected table
+        if (state.currentTable) {
+            await selectTable(state.currentTable);
+
+            // Restore filters after table data is fully loaded
+            // Need a short delay to ensure DOM and columns are ready
+            setTimeout(() => {
+                if (state.filters && state.filters.length > 0 && typeof restoreFilters === 'function') {
+                    restoreFilters(state.filters);
+                }
+            }, 200);
+
+            // Restore scroll position after render
+            setTimeout(() => {
+                window.scrollTo(0, state.scrollPosition);
+            }, 300);
+        }
+    }
+
+    // Save state before page unload
+    window.addEventListener('beforeunload', () => {
+        state.scrollPosition = window.scrollY;
+        state.save();
+    });
+
+    // Also save state when clicking any navigation link (for tab switching)
+    document.querySelectorAll('a[href]').forEach(link => {
+        link.addEventListener('click', () => {
+            state.scrollPosition = window.scrollY;
+            state.save();
+        });
+    });
 });
 
 // Setup
@@ -53,7 +140,7 @@ function setupEventListeners() {
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
     const searchTables = document.getElementById('search-tables');
-    
+
     if (saveBtn) saveBtn.addEventListener('click', saveChanges);
     if (addBtn) addBtn.addEventListener('click', showAddRowDialog);
     if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
@@ -66,7 +153,7 @@ function setupEventListeners() {
 
 function debounce(func, wait) {
     let timeout;
-    return function(...args) {
+    return function (...args) {
         clearTimeout(timeout);
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
@@ -77,7 +164,7 @@ async function loadTables() {
     try {
         const res = await fetch('/api/tables');
         const json = await res.json();
-        
+
         if (json.success) {
             state.tablesCache = json.data;
             renderTablesList(json.data);
@@ -90,12 +177,12 @@ async function loadTables() {
 // Render tables
 function renderTablesList(tables) {
     const container = document.getElementById('tables-list');
-    
+
     if (!tables || tables.length === 0) {
         container.innerHTML = '<div style="padding: 12px; color: #666; font-size: 12px;">No models found</div>';
         return;
     }
-    
+
     container.innerHTML = tables.map(table => `
         <div class="table-item" data-table="${table.name}" onclick="selectTable('${table.name}')" title="${table.name}">
             <span class="table-item-name">${table.name}</span>
@@ -108,12 +195,12 @@ function renderTablesList(tables) {
 function filterTables(e) {
     const search = e.target.value.toLowerCase();
     if (!state.tablesCache) return;
-    
+
     if (!search) {
         renderTablesList(state.tablesCache);
         return;
     }
-    
+
     const filtered = state.tablesCache.filter(t => t.name.toLowerCase().includes(search));
     renderTablesList(filtered);
 }
@@ -123,14 +210,14 @@ async function selectTable(tableName) {
     state.currentTable = tableName;
     state.page = 1;
     state.changes.clear();
-    
+
     document.getElementById('current-table').textContent = tableName;
     document.getElementById('save-btn').style.display = 'none';
-    
+
     document.querySelectorAll('.table-item').forEach(item => {
         item.classList.toggle('active', item.dataset.table === tableName);
     });
-    
+
     showLoadingSkeleton();
     await loadTableData();
 }
@@ -145,19 +232,44 @@ function showLoadingSkeleton() {
     `;
 }
 
-// Load data
+// Load data with server-side filtering
 async function loadTableData() {
     if (!state.currentTable) return;
-    
+
     try {
-        const res = await fetch(`/api/tables/${state.currentTable}?page=${state.page}&limit=${state.limit}`);
+        // Build URL with filters
+        let url = `/api/tables/${state.currentTable}?page=${state.page}&limit=${state.limit}`;
+
+        // Add filters to request if any exist
+        if (state.filters && state.filters.length > 0) {
+            const filtersJSON = encodeURIComponent(JSON.stringify(state.filters));
+            url += `&filters=${filtersJSON}`;
+        }
+
+        const res = await fetch(url);
         const json = await res.json();
-        
+
         if (json.success) {
             state.data = json.data;
             const rowCount = json.data.rows ? json.data.rows.length : 0;
-            document.getElementById('row-count').textContent = `${rowCount} of ${json.data.total || 0}`;
-            currentColumns = json.data.columns || [];
+            const totalFiltered = json.data.total || 0;
+            document.getElementById('row-count').textContent = `${rowCount} of ${totalFiltered}`;
+
+            // Deduplicate columns before setting global
+            if (json.data.columns) {
+                const seen = new Set();
+                const uniqueCols = [];
+                json.data.columns.forEach(col => {
+                    if (!seen.has(col.name)) {
+                        seen.add(col.name);
+                        uniqueCols.push(col);
+                    }
+                });
+                currentColumns = uniqueCols;
+            } else {
+                currentColumns = [];
+            }
+
             renderDataGrid(json.data);
             updatePagination(json.data);
         }
@@ -169,7 +281,7 @@ async function loadTableData() {
 // Render grid
 function renderDataGrid(data) {
     const container = document.getElementById('grid-container');
-    
+
     if (!data.rows || data.rows.length === 0) {
         if (data.columns && data.columns.length > 0) {
             const schemaInfo = `
@@ -180,15 +292,15 @@ function renderDataGrid(data) {
                     </div>
                     <div class="schema-columns-grid">
                         ${data.columns.map(col => {
-                            let badges = [];
-                            if (col.primary_key) badges.push('<span class="badge badge-primary">PK</span>');
-                            if (col.foreign_key_table) badges.push('<span class="badge badge-purple">FK → ' + col.foreign_key_table + '.' + col.foreign_key_column + '</span>');
-                            if (col.isUnique) badges.push('<span class="badge badge-success">Unique</span>');
-                            if (col.isAutoIncrement) badges.push('<span class="badge badge-warning">Auto Inc</span>');
-                            if (!col.nullable) badges.push('<span class="badge badge-info">NOT NULL</span>');
-                            if (col.default !== null && col.default !== undefined && col.default !== '') badges.push('<span class="badge badge-secondary">Default: ' + col.default + '</span>');
-                            
-                            return `
+                let badges = [];
+                if (col.primary_key) badges.push('<span class="badge badge-primary">PK</span>');
+                if (col.foreign_key_table) badges.push('<span class="badge badge-purple">FK → ' + col.foreign_key_table + '.' + col.foreign_key_column + '</span>');
+                if (col.isUnique) badges.push('<span class="badge badge-success">Unique</span>');
+                if (col.isAutoIncrement) badges.push('<span class="badge badge-warning">Auto Inc</span>');
+                if (!col.nullable) badges.push('<span class="badge badge-info">NOT NULL</span>');
+                if (col.default !== null && col.default !== undefined && col.default !== '') badges.push('<span class="badge badge-secondary">Default: ' + col.default + '</span>');
+
+                return `
                                 <div class="schema-column-card">
                                     <div class="schema-column-header">
                                         <div class="schema-column-main">
@@ -199,11 +311,11 @@ function renderDataGrid(data) {
                                     ${badges.length > 0 ? '<div class="schema-column-badges">' + badges.join('') + '</div>' : ''}
                                 </div>
                             `;
-                        }).join('')}
+            }).join('')}
                     </div>
                 </div>
             `;
-            
+
             container.innerHTML = schemaInfo + `
                 <div class="empty-state">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -216,7 +328,7 @@ function renderDataGrid(data) {
         }
         return;
     }
-    
+
     // Store foreign key info
     if (data.columns) {
         const seen = new Set();
@@ -262,33 +374,33 @@ function renderDataGrid(data) {
 // Render row
 function renderRow(row, idx, columns) {
     const rowId = row.id || idx;
-    
+
     return `
         <tr>
             <td>
                 <input type="checkbox" class="row-checkbox" data-row="${rowId}" style="cursor: pointer;" onchange="toggleRowSelection(this)">
             </td>
             ${columns.map(col => {
-                const fk = state.foreignKeys.get(col.name);
-                const value = row[col.name];
-                const valueStr = String(value || '');
-                
-                // FK cells have special click handler, others are editable
-                const cellClass = fk && value ? 'cell value-fk' : 'cell';
-                const onClick = fk && value ? 
-                    `onclick="event.stopPropagation(); navigateToForeignKey('${fk.table}', '${fk.column}', '${value}'); return false;"` : 
-                    `onclick="editCell(this)"`;
-                
-                const titleText = fk ? `Click to view ${fk.table}.${fk.column} = ${value}` : valueStr;
-                
-                return `
+        const fk = state.foreignKeys.get(col.name);
+        const value = row[col.name];
+        const valueStr = String(value || '');
+
+        // FK cells have special click handler, others are editable
+        const cellClass = fk && value ? 'cell value-fk' : 'cell';
+        const onClick = fk && value ?
+            `onclick="event.stopPropagation(); navigateToForeignKey('${fk.table}', '${fk.column}', '${value}'); return false;"` :
+            `onclick="editCell(this)"`;
+
+        const titleText = fk ? `Click to view ${fk.table}.${fk.column} = ${value}` : valueStr;
+
+        return `
                     <td class="${cellClass}" data-row="${rowId}" data-column="${col.name}" 
                         ${onClick} 
                         title="${titleText.replace(/"/g, '&quot;')}">
                         ${formatValue(value, fk)}
                     </td>
                 `;
-            }).join('')}
+    }).join('')}
         </tr>
     `;
 }
@@ -296,32 +408,32 @@ function renderRow(row, idx, columns) {
 // foreign key reference - Show popup
 async function navigateToForeignKey(tableName, columnName, value) {
     console.log(`Showing FK reference: ${tableName}.${columnName} = ${value}`);
-    
+
     const loadingHtml = `
         <div style="text-align: center; padding: 40px; color: #888;">
             <div class="spinner" style="margin: 0 auto 16px;"></div>
             <div>Loading reference data...</div>
         </div>
     `;
-    showModal('Foreign Key Reference', loadingHtml, 'info', false); 
-    
+    showModal('Foreign Key Reference', loadingHtml, 'info', false);
+
     try {
         const response = await fetch(`/api/tables/${tableName}?page=1&limit=1000`);
         const json = await response.json();
-        
+
         if (!json.success || !json.data.rows || json.data.rows.length === 0) {
             showModal('Foreign Key Reference', `No data found in table ${tableName}`, 'warning', false);
             return;
         }
-        
+
         const row = json.data.rows.find(r => r[columnName] == value);
         if (!row) {
             showModal('Foreign Key Reference', `No row found in ${tableName} where ${columnName} = ${value}`, 'warning', false);
             return;
         }
-        
+
         const columns = json.data.columns;
-        
+
         const tableHtml = `
             <div style="margin-bottom: 12px; color: #888; font-size: 12px;">
                 Reference: ${tableName}.${columnName} = ${value}
@@ -350,7 +462,7 @@ async function navigateToForeignKey(tableName, columnName, value) {
                 </button>
             </div>
         `;
-        
+
         showModal('Foreign Key Reference', tableHtml, 'info', false);
     } catch (err) {
         console.error('Failed to fetch FK reference:', err);
@@ -361,7 +473,7 @@ async function navigateToForeignKey(tableName, columnName, value) {
 // Helper function to navigate to table with filter
 async function goToTable(tableName, columnName, value) {
     document.querySelectorAll('.custom-modal').forEach(m => m.classList.remove('show'));
-    
+
     await selectTable(tableName);
     setTimeout(() => {
         if (!state.data || !state.data.columns) return;
@@ -388,7 +500,7 @@ function toggleRowSelection(checkbox) {
     } else {
         row.style.background = '';
     }
-    
+
     const anyChecked = document.querySelectorAll('.row-checkbox:checked').length > 0;
     document.getElementById('delete-selected-btn').style.display = anyChecked ? 'block' : 'none';
 }
@@ -397,9 +509,9 @@ function toggleRowSelection(checkbox) {
 async function deleteSelected() {
     const checked = document.querySelectorAll('.row-checkbox:checked');
     if (checked.length === 0) return;
-    
+
     const rowIds = Array.from(checked).map(cb => cb.dataset.row);
-    
+
     showConfirm(
         'Confirm Deletion',
         `Are you sure you want to delete ${checked.length} record(s)? This action cannot be undone.`,
@@ -410,9 +522,9 @@ async function deleteSelected() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ row_ids: rowIds })
                 });
-                
+
                 const json = await res.json();
-                
+
                 if (json.success) {
                     showModal('Success', json.message, 'success');
                     refreshData();
@@ -442,51 +554,69 @@ function formatValue(value, fk = null) {
         if (value instanceof Date) {
             return `<span class="value-date">${value.toISOString()}</span>`;
         }
+
+        // Handle UUID byte arrays (arrays of 16 numbers 0-255)
+        if (Array.isArray(value) && value.length === 16 && value.every(b => typeof b === 'number' && b >= 0 && b <= 255)) {
+            const uuid = bytesToUuid(value);
+            return `<span class="value-uuid" data-original-value="${escapeHtmlAttr(uuid)}" title="${uuid}">${escapeHtmlValue(uuid)}</span>`;
+        }
+
         // Handle arrays and objects (JSON)
         try {
             const jsonStr = JSON.stringify(value);
             const escapedJson = escapeHtmlValue(jsonStr);
-            return `<span class="value-json" title="${escapedJson}">${escapedJson}</span>`;
+            return `<span class="value-json" data-original-value="${escapeHtmlAttr(jsonStr)}" title="${escapedJson}">${escapedJson}</span>`;
         } catch {
             return `<span class="value-object">[Object]</span>`;
         }
     }
-    
+
     // String value - detect type
     const strValue = String(value);
-    
+
     // UUID detection (standard 8-4-4-4-12 format)
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strValue)) {
         return `<span class="value-uuid" title="${strValue}">${escapeHtmlValue(strValue)}</span>`;
     }
-    
+
     // Datetime detection
     if (/^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}:\d{2}/.test(strValue)) {
         return `<span class="value-date">${escapeHtmlValue(strValue)}</span>`;
     }
-    
+
     // Email detection
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(strValue)) {
         return `<span class="value-email">${escapeHtmlValue(strValue)}</span>`;
     }
-    
+
     // URL detection
     if (/^https?:\/\//.test(strValue)) {
         return `<a href="${escapeHtmlValue(strValue)}" target="_blank" class="value-url">${escapeHtmlValue(strValue)}</a>`;
     }
-    
+
     // Foreign key
     if (fk) {
         return `<span class="value-fk">${escapeHtmlValue(strValue)}</span>`;
     }
-    
-    // Long text truncation
+
+    // Long text truncation - store original in data attribute
     if (strValue.length > 100) {
         const truncated = strValue.substring(0, 100) + '...';
-        return `<span class="value-string value-truncated" title="${escapeHtmlValue(strValue)}">${escapeHtmlValue(truncated)}</span>`;
+        return `<span class="value-string value-truncated" data-original-value="${escapeHtmlAttr(strValue)}" title="${escapeHtmlValue(strValue)}">${escapeHtmlValue(truncated)}</span>`;
     }
-    
-    return `<span class="value-string">${escapeHtmlValue(strValue)}</span>`;
+
+    return `<span class="value-string" data-original-value="${escapeHtmlAttr(strValue)}">${escapeHtmlValue(strValue)}</span>`;
+}
+
+// HTML escape utility for attribute values (handles quotes properly)
+function escapeHtmlAttr(text) {
+    if (text == null) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 // HTML escape utility for values
@@ -494,6 +624,14 @@ function escapeHtmlValue(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Convert byte array to UUID string (8-4-4-4-12 format)
+function bytesToUuid(bytes) {
+    if (!bytes || bytes.length !== 16) return '';
+
+    const hex = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 // Keyboard handler for collapsing/expanding sidebar
@@ -514,30 +652,50 @@ function expandSidebar() {
     sb.classList.remove('collapsed');
 }
 
-// Edit cell
+// Edit cell - Fixed to use original value, not truncated display text
 function editCell(cell) {
     if (cell.querySelector('textarea') || cell.classList.contains('value-fk')) return;
-    
+
     const rowId = cell.dataset.row;
     const column = cell.dataset.column;
-    const currentValue = cell.textContent.trim();
-    
+
+    // Get the original value from data attribute, not the display text
+    const valueSpan = cell.querySelector('[data-original-value]');
+    let originalValue;
+
+    if (valueSpan && valueSpan.dataset.originalValue !== undefined) {
+        originalValue = valueSpan.dataset.originalValue;
+    } else {
+        // Fallback to text content for non-truncated values
+        originalValue = cell.textContent.trim();
+    }
+
+    // Handle NULL display
+    if (originalValue === 'NULL' || cell.querySelector('.value-null')) {
+        originalValue = '';
+    }
+
     const textarea = document.createElement('textarea');
-    textarea.value = currentValue === 'NULL' ? '' : currentValue;
-    
-    textarea.addEventListener('blur', () => saveCell(cell, textarea, rowId, column));
+    textarea.value = originalValue;
+
+    // Store original for cancel operation
+    const storedOriginal = originalValue;
+
+    textarea.addEventListener('blur', () => saveCell(cell, textarea, rowId, column, storedOriginal));
     textarea.addEventListener('keydown', (e) => {
         // Ctrl+Enter or Cmd+Enter to save
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
             textarea.blur();
         }
-        // Escape to cancel
+        // Escape to cancel - restore to original value
         if (e.key === 'Escape') {
-            cell.innerHTML = formatValue(currentValue);
+            e.preventDefault();
+            cell.innerHTML = formatValue(storedOriginal === '' ? null : storedOriginal);
             cell.classList.remove('cell-editing');
         }
     });
-    
+
     cell.innerHTML = '';
     cell.appendChild(textarea);
     cell.classList.add('cell-editing');
@@ -545,33 +703,36 @@ function editCell(cell) {
     textarea.select();
 }
 
-// Save cell
-function saveCell(cell, textarea, rowId, column) {
+// Save cell - Updated to compare with original value and persist state
+function saveCell(cell, textarea, rowId, column, originalValue) {
     const newValue = textarea.value;
-    const oldValue = cell.textContent;
-    
-    if (newValue !== oldValue) {
+
+    // Compare with original value, not display text
+    if (newValue !== originalValue) {
         if (!state.changes.has(rowId)) {
             state.changes.set(rowId, {});
         }
         state.changes.get(rowId)[column] = newValue;
-        
+
         cell.classList.add('cell-dirty');
         document.getElementById('save-btn').style.display = 'block';
+
+        // Persist changes to session storage
+        state.save();
     }
-    
-    cell.innerHTML = formatValue(newValue);
+
+    cell.innerHTML = formatValue(newValue === '' ? null : newValue);
     cell.classList.remove('cell-editing');
 }
 
 // Save changes
 async function saveChanges() {
     if (state.changes.size === 0) return;
-    
+
     const saveBtn = document.getElementById('save-btn');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
-    
+
     const changes = [];
     state.changes.forEach((cols, rowId) => {
         Object.entries(cols).forEach(([colName, value]) => {
@@ -583,16 +744,16 @@ async function saveChanges() {
             });
         });
     });
-    
+
     try {
         const res = await fetch(`/api/tables/${state.currentTable}/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ changes })
         });
-        
+
         const json = await res.json();
-        
+
         if (json.success) {
             state.changes.clear();
             showModal('Success', json.message, 'success');
@@ -609,80 +770,7 @@ async function saveChanges() {
 }
 
 // Add row - Show modal with form
-function showAddRowDialog() {
-    if (!state.currentTable || !state.data) return;
-    
-    showAddRowModal(state.data.columns, async (data) => {
-        try {
-            const res = await fetch(`/api/tables/${state.currentTable}/add`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data })
-            });
-            
-            const json = await res.json();
-            
-            if (json.success) {
-                showModal('Success', 'Record added successfully', 'success');
-                refreshData();
-            } else {
-                showModal('Error', json.message, 'error');
-            }
-        } catch (err) {
-            showModal('Error', 'Failed to add record: ' + err.message, 'error');
-        }
-    });
-}
-
-function addRow() {
-    showAddRowDialog();
-}
-async function saveChanges() {
-    if (state.changes.size === 0) return;
-    
-    const saveBtn = document.getElementById('save-btn');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-    
-    const changes = [];
-    state.changes.forEach((cols, rowId) => {
-        Object.entries(cols).forEach(([column, value]) => {
-            changes.push({ 
-                row_id: String(rowId), 
-                column, 
-                value: String(value), 
-                action: 'update' 
-            });
-        });
-    });
-    
-    try {
-        const res = await fetch(`/api/tables/${state.currentTable}/save`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ changes })
-        });
-        
-        const json = await res.json();
-        
-        if (json.success) {
-            state.changes.clear();
-            saveBtn.style.display = 'none';
-            document.querySelectorAll('.cell-dirty').forEach(c => c.classList.remove('cell-dirty'));
-            showModal('Success', 'Changes saved successfully', 'success');
-            refreshData();
-        } else {
-            showModal('Error', json.message || 'Failed to save', 'error');
-        }
-    } catch (err) {
-        showModal('Error', err.message, 'error');
-    } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = 'Save changes';
-    }
-}
-
-// Add row
+// Add row - single unified function
 function addRow() {
     if (!state.currentTable || !state.data) return;
 
@@ -696,7 +784,7 @@ function addRow() {
             });
             const json = await res.json();
             if (json.success) {
-                showModal('Success', 'Row added', 'success');
+                showModal('Success', 'Row added successfully', 'success');
                 refreshData();
             } else {
                 showModal('Error', json.message || 'Failed to add row', 'error');
@@ -705,6 +793,11 @@ function addRow() {
             showModal('Error', err.message, 'error');
         }
     });
+}
+
+// Alias for backwards compatibility
+function showAddRowDialog() {
+    addRow();
 }
 
 // Delete row
@@ -733,30 +826,30 @@ function refreshData() {
         showNotification('Tables list refreshed', 'success');
         return;
     }
-    
+
     // Clear changes
     state.changes.clear();
     document.getElementById('save-btn').style.display = 'none';
-    
+
     // Clear dirty cells
     document.querySelectorAll('.cell-dirty').forEach(c => c.classList.remove('cell-dirty'));
-    
+
     // Clear filter UI without reloading (we'll reload after)
     const filterRows = document.getElementById('filter-rows');
     if (filterRows) {
         filterRows.innerHTML = '';
     }
-    
+
     // Clear filters array (defined in index.js)
     if (typeof filters !== 'undefined') {
         filters.length = 0; // Clear the array in-place
     }
-    
+
     // Update filter badge
     if (typeof updateFilterCount === 'function') {
         updateFilterCount();
     }
-    
+
     // Close filter panel if open
     const filterPanel = document.getElementById('filter-panel');
     if (filterPanel && filterPanel.classList.contains('show')) {
@@ -764,11 +857,11 @@ function refreshData() {
         const filterBtn = document.getElementById('filter-btn');
         if (filterBtn) filterBtn.classList.remove('active');
     }
-    
+
     // Reload data and tables
     loadTableData();
     loadTables();
-    
+
     // Show feedback
     showNotification('Data refreshed', 'success');
 }
@@ -786,18 +879,18 @@ function updatePagination(data) {
     const pageInfo = document.getElementById('page-info');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
-    
+
     if (data.total === 0) {
         pagination.style.display = 'none';
         return;
     }
-    
+
     pagination.style.display = 'flex';
-    
+
     const start = (data.page - 1) * data.limit + 1;
     const end = Math.min(data.page * data.limit, data.total);
     pageInfo.textContent = `${start}-${end} of ${data.total}`;
-    
+
     prevBtn.disabled = data.page === 1;
     nextBtn.disabled = end >= data.total;
 }
@@ -805,14 +898,14 @@ function updatePagination(data) {
 // Modal system - Show a custom modal with title, content, and type
 function showModal(title, content, type = 'info', blocking = false) {
     document.querySelectorAll('.custom-modal').forEach(m => m.remove());
-    
+
     const iconMap = {
         'info': '<span class="iconify" data-icon="mdi:information" style="color: #4a9eff;"></span>',
         'success': '<span class="iconify" data-icon="mdi:check-circle" style="color: #10b981;"></span>',
         'warning': '<span class="iconify" data-icon="mdi:alert" style="color: #f59e0b;"></span>',
         'error': '<span class="iconify" data-icon="mdi:alert-circle" style="color: #ef4444;"></span>'
     };
-    
+
     const modal = document.createElement('div');
     modal.className = 'custom-modal';
     modal.innerHTML = `
@@ -831,11 +924,11 @@ function showModal(title, content, type = 'info', blocking = false) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
-    
+
     setTimeout(() => modal.classList.add('show'), 10);
-    
+
     if (!blocking) {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -843,7 +936,7 @@ function showModal(title, content, type = 'info', blocking = false) {
             }
         });
     }
-    
+
     // Close on Escape key
     const escHandler = (e) => {
         if (e.key === 'Escape') {

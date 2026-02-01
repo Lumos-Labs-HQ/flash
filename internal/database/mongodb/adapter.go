@@ -363,6 +363,26 @@ func (a *Adapter) DeleteDocument(ctx context.Context, collection string, id stri
 	return err
 }
 
+// BulkDeleteDocuments deletes multiple documents by IDs using $in operator
+func (a *Adapter) BulkDeleteDocuments(ctx context.Context, collection string, ids []string) (int64, error) {
+	coll := a.database.Collection(collection)
+
+	objectIDs := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		objectID, err := parseObjectID(id)
+		if err != nil {
+			return 0, fmt.Errorf("invalid ID %s: %w", id, err)
+		}
+		objectIDs = append(objectIDs, objectID)
+	}
+
+	result, err := coll.DeleteMany(ctx, bson.M{"_id": bson.M{"$in": objectIDs}})
+	if err != nil {
+		return 0, err
+	}
+	return result.DeletedCount, nil
+}
+
 // CreateCollection creates a new collection
 func (a *Adapter) CreateCollection(ctx context.Context, name string, options interface{}) error {
 	return a.database.CreateCollection(ctx, name)

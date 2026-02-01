@@ -26,16 +26,6 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async createCategory(name) {
-    let stmt = this._stmts.get('createCategory');
-    if (!stmt) {
-      stmt = `INSERT INTO categories (name) VALUES ($1) RETURNING *;`;
-      this._stmts.set('createCategory', stmt);
-    }
-    const r = await this.db.query(stmt, [name]);
-    return r.rows[0] || null;
-  }
-
   async createPost(user_id, category_id, title, content) {
     let stmt = this._stmts.get('createPost');
     if (!stmt) {

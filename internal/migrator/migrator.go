@@ -106,7 +106,10 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	filepath := filepath.Join(m.migrationsDir, filename)
 
 	var sqlContent string
-	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 {
+	// CRITICAL FIX: Also check for index changes!
+	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && 
+	   len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
+	   len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -138,17 +141,22 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) stri
 	for _, enum := range diff.NewEnums {
 		values := make([]string, len(enum.Values))
 		for i, v := range enum.Values {
-			values[i] = fmt.Sprintf("'%s'", v)
+			// Escape single quotes in enum values for SQL safety
+			escapedValue := strings.ReplaceAll(v, "'", "''")
+			values[i] = fmt.Sprintf("'%s'", escapedValue)
 		}
-		enumSQL := fmt.Sprintf(`DO $$ 
+		// Escape the enum name for both single-quoted string and double-quoted identifier
+		escapedNameSingle := strings.ReplaceAll(enum.Name, "'", "''")
+		escapedNameDouble := strings.ReplaceAll(enum.Name, "\"", "\"\"")
+		enumSQL := fmt.Sprintf(`DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '%s') THEN
         CREATE TYPE "%s" AS ENUM (%s);
     END IF;
-END $$;`, enum.Name, enum.Name, strings.Join(values, ", "))
+END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		upStatements = append(upStatements, enumSQL)
-		// DOWN: Drop enum
-		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enum.Name)}, downStatements...)
+		// DOWN: Drop enum (escape double quotes for identifier)
+		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", escapedNameDouble)}, downStatements...)
 	}
 
 	// UP: Create new tables and their indexes
@@ -212,6 +220,27 @@ END $$;`, enum.Name, enum.Name, strings.Join(values, ", "))
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
 		// DOWN: We can't fully restore dropped enums
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
+	}
+
+	// CRITICAL FIX: Add standalone index changes!
+	// UP: Drop indexes first (before adding new ones that might conflict)
+	for _, index := range diff.DroppedIndexes {
+		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(index))
+		// DOWN: We can't fully restore dropped indexes
+		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", index.Name)}, downStatements...)
+	}
+
+	// UP: Add new indexes
+	for _, index := range diff.NewIndexes {
+		if strings.HasPrefix(index.Name, "sqlite_") {
+			continue
+		}
+		indexSQL := m.adapter.GenerateAddIndexSQL(index)
+		if indexSQL != "" {
+			upStatements = append(upStatements, indexSQL)
+			// DOWN: Drop the added index
+			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
+		}
 	}
 
 	return m.formatMigrationFileWithDown(name, upStatements, downStatements)

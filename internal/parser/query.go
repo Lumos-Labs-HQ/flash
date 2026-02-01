@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
@@ -47,7 +49,10 @@ func NewQueryParser(cfg *config.Config) *QueryParser {
 func (p *QueryParser) Parse(schema *Schema) ([]*Query, error) {
 	queriesPath := p.Config.Queries
 	if !filepath.IsAbs(queriesPath) {
-		cwd, _ := os.Getwd()
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current working directory: %w", err)
+		}
 		queriesPath = filepath.Join(cwd, queriesPath)
 	}
 
@@ -56,16 +61,77 @@ func (p *QueryParser) Parse(schema *Schema) ([]*Query, error) {
 		return nil, err
 	}
 
-	queries := make([]*Query, 0, len(files)*4)
-	for _, file := range files {
-		fileQueries, err := p.parseQueryFile(file, schema)
-		if err != nil {
-			return nil, err
-		}
-		queries = append(queries, fileQueries...)
+	if len(files) == 0 {
+		return []*Query{}, nil
 	}
 
-	return queries, nil
+	// Use concurrent processing for better performance on large projects
+	return p.parseFilesConcurrently(files, schema)
+}
+
+// parseFilesConcurrently processes query files in parallel using worker pool
+func (p *QueryParser) parseFilesConcurrently(files []string, schema *Schema) ([]*Query, error) {
+	// Create indexed schema for O(1) lookups
+	indexedSchema := NewIndexedSchema(schema)
+	
+	// Determine optimal worker count (don't exceed CPU count or file count)
+	numWorkers := runtime.NumCPU()
+	if numWorkers > len(files) {
+		numWorkers = len(files)
+	}
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	// Channels for work distribution and result collection
+	type parseResult struct {
+		queries []*Query
+		err     error
+		file    string
+	}
+	
+	fileChan := make(chan string, len(files))
+	resultChan := make(chan parseResult, len(files))
+
+	// Launch worker goroutines
+	var wg sync.WaitGroup
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for file := range fileChan {
+				queries, err := p.parseQueryFile(file, indexedSchema.Schema)
+				resultChan <- parseResult{
+					queries: queries,
+					err:     err,
+					file:    file,
+				}
+			}
+		}()
+	}
+
+	// Send files to workers
+	for _, file := range files {
+		fileChan <- file
+	}
+	close(fileChan)
+
+	// Wait for all workers to finish
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	// Collect results
+	allQueries := make([]*Query, 0, len(files)*4)
+	for result := range resultChan {
+		if result.err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", result.file, result.err)
+		}
+		allQueries = append(allQueries, result.queries...)
+	}
+
+	return allQueries, nil
 }
 
 func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query, error) {
@@ -157,12 +223,23 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
+	// Use indexed lookup for O(1) performance
 	var table *Table
 	for _, t := range schema.Tables {
 		if strings.EqualFold(t.Name, tableName) {
 			table = t
 			break
 		}
+	}
+
+	// CRITICAL: If table is referenced but not found, return error
+	if tableName != "" && table == nil {
+		availableTables := make([]string, len(schema.Tables))
+		for i, t := range schema.Tables {
+			availableTables[i] = t.Name
+		}
+		return fmt.Errorf("table '%s' referenced in query '%s' does not exist in schema. Available tables: %v",
+			tableName, query.Name, availableTables)
 	}
 
 	paramMatches := paramRegex.FindAllString(query.SQL, -1)
@@ -182,6 +259,20 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 	query.Params = make([]*Param, paramCount)
 	usedParamNames := make(map[string]int)
+
+	// CRITICAL: Validate INSERT/UPDATE columns exist in schema before proceeding
+	if table != nil {
+		sqlUpper := strings.ToUpper(query.SQL)
+		if strings.Contains(sqlUpper, "INSERT INTO") {
+			if err := p.validateInsertColumns(query.SQL, table); err != nil {
+				return fmt.Errorf("validation error in query '%s': %w", query.Name, err)
+			}
+		} else if strings.Contains(sqlUpper, "UPDATE") {
+			if err := p.validateUpdateColumns(query.SQL, table); err != nil {
+				return fmt.Errorf("validation error in query '%s': %w", query.Name, err)
+			}
+		}
+	}
 
 	for i := 0; i < paramCount; i++ {
 		paramName := fmt.Sprintf("param%d", i+1)
@@ -545,7 +636,7 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 		tableName := matches[1]
 		columnName := matches[2]
 
-		// Look up in schema
+		// Try indexed lookup first
 		for _, table := range schema.Tables {
 			if strings.EqualFold(table.Name, tableName) {
 				for _, col := range table.Columns {
@@ -626,4 +717,131 @@ func (p *QueryParser) inferTypeFromCTE(sql string, cteAlias string, cteColumn st
 	}
 
 	return "", false, false
+}
+
+// validateInsertColumns validates that all columns in an INSERT statement exist in the table
+func (p *QueryParser) validateInsertColumns(sql string, table *Table) error {
+	insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+[\w"]+\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)`)
+	matches := insertRegex.FindStringSubmatch(sql)
+	
+	if len(matches) < 3 {
+		return nil
+	}
+
+	columnsStr := matches[1]
+	valuesStr := matches[2]
+	
+	columnNames := strings.Split(columnsStr, ",")
+	valueParams := strings.Split(valuesStr, ",")
+
+	if len(columnNames) != len(valueParams) {
+		return fmt.Errorf("column-value count mismatch: %d columns but %d values provided",
+			len(columnNames), len(valueParams))
+	}
+
+	validColumns := make(map[string]bool)
+	for _, col := range table.Columns {
+		validColumns[strings.ToLower(col.Name)] = true
+	}
+
+	var invalidColumns []string
+	for _, colName := range columnNames {
+		colName = strings.TrimSpace(colName)
+		colName = strings.Trim(colName, `"'`)
+		colName = strings.ToLower(colName)
+
+		if !validColumns[colName] {
+			invalidColumns = append(invalidColumns, colName)
+		}
+	}
+
+	if len(invalidColumns) > 0 {
+		return fmt.Errorf("column(s) %v do not exist in table '%s'. Available columns: %v",
+			invalidColumns, table.Name, p.getColumnNames(table))
+	}
+
+	return nil
+}
+
+// validateUpdateColumns validates that all columns in an UPDATE SET clause exist in the table
+func (p *QueryParser) validateUpdateColumns(sql string, table *Table) error {
+	updateRegex := regexp.MustCompile(`(?i)UPDATE\s+[\w"]+\s+SET\s+(.+?)(?:\s+WHERE|\s+RETURNING|$)`)
+	matches := updateRegex.FindStringSubmatch(sql)
+
+	if len(matches) < 2 {
+		return nil
+	}
+
+	setClause := matches[1]
+	assignments := p.splitSetClause(setClause)
+
+	validColumns := make(map[string]bool)
+	for _, col := range table.Columns {
+		validColumns[strings.ToLower(col.Name)] = true
+	}
+
+	var invalidColumns []string
+	for _, assignment := range assignments {
+		parts := strings.SplitN(assignment, "=", 2)
+		if len(parts) < 1 {
+			continue
+		}
+
+		colName := strings.TrimSpace(parts[0])
+		colName = strings.Trim(colName, `"'`)
+		colName = strings.ToLower(colName)
+
+		if !validColumns[colName] {
+			invalidColumns = append(invalidColumns, colName)
+		}
+	}
+
+	if len(invalidColumns) > 0 {
+		return fmt.Errorf("column(s) %v do not exist in table '%s'. Available columns: %v",
+			invalidColumns, table.Name, p.getColumnNames(table))
+	}
+
+	return nil
+}
+
+// splitSetClause splits SET clause by comma, respecting parentheses
+func (p *QueryParser) splitSetClause(setClause string) []string {
+	var result []string
+	var current strings.Builder
+	parenDepth := 0
+
+	for _, char := range setClause {
+		switch char {
+		case '(':
+			parenDepth++
+			current.WriteRune(char)
+		case ')':
+			parenDepth--
+			current.WriteRune(char)
+		case ',':
+			if parenDepth == 0 {
+				result = append(result, current.String())
+				current.Reset()
+			} else {
+				current.WriteRune(char)
+			}
+		default:
+			current.WriteRune(char)
+		}
+	}
+
+	if current.Len() > 0 {
+		result = append(result, current.String())
+	}
+
+	return result
+}
+
+// getColumnNames returns a list of column names from a table for error messages
+func (p *QueryParser) getColumnNames(table *Table) []string {
+	var names []string
+	for _, col := range table.Columns {
+		names = append(names, col.Name)
+	}
+	return names
 }

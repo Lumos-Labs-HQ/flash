@@ -6,10 +6,46 @@ from datetime import datetime
 from decimal import Decimal
 
 @dataclass
+class Comments:
+    id: int
+    post_id: int
+    content: str
+    created_at: datetime
+
+@dataclass
+class Likes:
+    id: int
+    post_id: int
+    comment_id: int
+    content: str
+    created_at: datetime
+
+@dataclass
+class Posts:
+    id: int
+    user_id: int
+    title: str
+    content: str
+    created_at: datetime
+
+@dataclass
+class Shares:
+    id: int
+    post_id: int
+    content: str
+    created_at: datetime
+
+@dataclass
 class Users:
     id: int
     name: str
     email: str
     created_at: datetime
-    updated_at: datetime
+
+@dataclass
+class Hshsh:
+    id: int
+    name: str
+    email: str
+    created_at: datetime
 

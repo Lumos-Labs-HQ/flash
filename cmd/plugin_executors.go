@@ -24,9 +24,7 @@ func ExecuteCorePlugin() error {
 	coreRoot.AddCommand(rawCmd)
 	coreRoot.AddCommand(branchCmd)
 	coreRoot.AddCommand(checkoutCmd)
-
 	coreRoot.AddCommand(genCmd)
-
 	coreRoot.AddCommand(exportCmd)
 
 	return coreRoot.Execute()
@@ -41,6 +39,17 @@ func ExecuteStudioPlugin() error {
 	studioRoot.AddCommand(studioCmd)
 
 	return studioRoot.Execute()
+}
+
+func ExecuteSeedPlugin() error {
+	seedRoot := &cobra.Command{
+		Use:   "flash",
+		Short: "FlashORM Seed Plugin",
+	}
+
+	seedRoot.AddCommand(seedCmd)
+
+	return seedRoot.Execute()
 }
 
 func ExecuteAllPlugin() error {
@@ -65,6 +74,9 @@ func ExecuteAllPlugin() error {
 
 	// Add studio command
 	allRoot.AddCommand(studioCmd)
+
+	// Add seed command
+	allRoot.AddCommand(seedCmd)
 
 	return allRoot.Execute()
 }

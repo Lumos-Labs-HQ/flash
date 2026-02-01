@@ -1,35 +1,32 @@
 package gogen
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 type Generator struct {
 	Config       *config.Config
-	insertRegex  *regexp.Regexp
-	updateRegex  *regexp.Regexp
-	deleteRegex  *regexp.Regexp
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
+	cache        *gencommon.GenerationCache
 }
 
 func New(cfg *config.Config) *Generator {
 	return &Generator{
 		Config:       cfg,
-		insertRegex:  regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`),
-		updateRegex:  regexp.MustCompile(`(?i)UPDATE\s+(\w+)`),
-		deleteRegex:  regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`),
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
+		cache:        gencommon.NewGenerationCache(),
 	}
 }
 
@@ -38,30 +35,76 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	// Parse schema
 	schema, err := g.schemaParser.Parse()
 	if err != nil {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
 
+	// Compute current checksums for incremental generation
+	schemaHash, err := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
+	if err != nil {
+		schemaHash = "" // Fallback: regenerate all
+	}
+
+	configHash := g.computeConfigChecksum()
+	
+	// Check if full regeneration is needed
+	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+
+	// Parse queries
 	queries, err := g.queryParser.Parse(schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	if err := g.generateModels(); err != nil {
+	// Generate models (only if schema changed)
+	if fullRegen || g.cache.SchemaChecksum != schemaHash {
+		if err := g.generateModels(); err != nil {
+			return err
+		}
+	}
+
+	// Generate DB interface (only if needed)
+	if fullRegen || g.cache.SchemaChecksum != schemaHash {
+		if err := g.generateDB(); err != nil {
+			return err
+		}
+	}
+
+	// Generate queries with incremental support
+	if err := g.generateQueriesIncremental(queries, fullRegen); err != nil {
 		return err
 	}
 
-	if err := g.generateDB(); err != nil {
-		return err
-	}
-
-	if err := g.generateQueries(queries); err != nil {
-		return err
+	// Update cache
+	g.cache.UpdateSchemaChecksum(schemaHash)
+	g.cache.UpdateConfigChecksum(configHash)
+	g.cache.MarkGeneration()
+	
+	// Save cache to disk
+	if err := g.cache.Save(); err != nil {
+		// Non-fatal: just log and continue
+		fmt.Printf("Warning: failed to save generation cache: %v\n", err)
 	}
 
 	return nil
+}
+
+// computeConfigChecksum computes hash of relevant config fields
+func (g *Generator) computeConfigChecksum() string {
+	// Hash relevant config fields that affect generation
+	configStr := fmt.Sprintf("%s|%s|%s|%v|%v|%v",
+		g.Config.SchemaDir,
+		g.Config.Queries,
+		g.Config.Database.Provider,
+		g.Config.Gen.Go.Enabled,
+		g.Config.Gen.JS.Enabled,
+		g.Config.Gen.Python.Enabled,
+	)
+	hash := sha256.Sum256([]byte(configStr))
+	return fmt.Sprintf("%x", hash)
 }
 
 func (g *Generator) generateModels() error {
@@ -256,14 +299,18 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
 	hasReturning := strings.Contains(strings.ToUpper(query.SQL), "RETURNING")
 
-	if len(query.Columns) == 0 {
-		if hasReturning {
-		} else {
-			return query.Columns
-		}
-	} else if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
+	// No columns and no RETURNING clause - nothing to expand
+	if len(query.Columns) == 0 && !hasReturning {
 		return query.Columns
-	} else if len(query.Columns) > 1 {
+	}
+
+	// Single non-wildcard column - no expansion needed
+	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
+		return query.Columns
+	}
+
+	// Multiple columns - check if any is a wildcard
+	if len(query.Columns) > 1 {
 		hasWildcard := false
 		for _, col := range query.Columns {
 			if col.Name == "*" {
@@ -276,7 +323,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		}
 	}
 
-	tableName := g.extractTableName(query.SQL)
+	tableName := utils.ExtractTableName(query.SQL)
 	if tableName == "" {
 		return query.Columns
 	}
@@ -306,35 +353,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	return expanded
 }
 
-func (g *Generator) extractTableName(sql string) string {
-	sqlUpper := strings.ToUpper(sql)
 
-	if strings.Contains(sqlUpper, "INSERT INTO") {
-		re := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-		matches := re.FindStringSubmatch(sql)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	if strings.Contains(sqlUpper, "FROM") {
-		re := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-		matches := re.FindStringSubmatch(sql)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	if strings.Contains(sqlUpper, "UPDATE") {
-		re := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-		matches := re.FindStringSubmatch(sql)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	return ""
-}
 
 func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)
@@ -354,7 +373,7 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	}
 
 	cmd := strings.ToLower(query.Cmd)
-	isModifying := g.isModifyingQuery(query.SQL)
+	isModifying := utils.IsModifyingQuery(query.SQL)
 
 	code.WriteString(fmt.Sprintf("func (q *Queries) %s(", methodName))
 
@@ -404,7 +423,6 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	stmtKey := fmt.Sprintf("%s_stmt", methodName)
 
 	if isHotQuery {
-		code.WriteString("\t// OPTIMIZED: Use prepared statement cache for hot query\n")
 		code.WriteString(fmt.Sprintf("\tstmt := q.stmts[\"%s\"]\n", stmtKey))
 		code.WriteString("\tif stmt == nil {\n")
 		code.WriteString("\t\tvar err error\n")
@@ -541,9 +559,9 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 			code.WriteString("\tdefer rows.Close()\n\n")
 
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\tvar items []%sRow\n", methodName))
+				code.WriteString(fmt.Sprintf("\titems := make([]%sRow, 0, 8) \n", methodName))
 			} else {
-				code.WriteString(fmt.Sprintf("\tvar items []%s\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
+				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) \n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 			}
 
 			code.WriteString("\tfor rows.Next() {\n")
@@ -617,12 +635,7 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	return nil
 }
 
-func (g *Generator) isModifyingQuery(sql string) bool {
-	sqlUpper := strings.ToUpper(sql)
-	pattern := `\b(INSERT|UPDATE|DELETE)\b`
-	matched, _ := regexp.MatchString(pattern, sqlUpper)
-	return matched
-}
+
 
 func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	sqlTypeLower := strings.ToLower(sqlType)

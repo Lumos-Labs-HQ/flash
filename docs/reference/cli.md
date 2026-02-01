@@ -33,6 +33,7 @@ flash init [flags]
 ```bash
 flash init --postgresql
 flash init --sqlite
+flash init --mysql
 ```
 
 ### `flash migrate`
@@ -86,21 +87,36 @@ Generates code based on your `flash.config.json` configuration for Go, TypeScrip
 Launch FlashORM Studio web interface.
 
 ```bash
-flash studio [flags]
+flash studio [subcommand] [flags]
 ```
+
+**Subcommands:**
+- `sql` (default): Launch SQL Studio for PostgreSQL, MySQL, or SQLite
+- `mongodb`: Launch MongoDB Studio
+- `redis`: Launch Redis Studio
 
 **Flags:**
 - `--port, -p`: Port to run studio on (default: 5555)
 - `--browser, -b`: Open browser automatically (default: true)
+- `--no-browser`: Disable automatic browser opening
 - `--db`: Database URL (overrides config)
-- `--redis`: Redis URL for Redis Studio
+- `--url`: Connection URL (for redis/mongodb subcommands)
 
 **Examples:**
 ```bash
+# SQL Studio (PostgreSQL, MySQL, SQLite)
 flash studio
 flash studio --port 3000
 flash studio --db "postgres://user:pass@localhost:5432/mydb"
-flash studio --redis "redis://localhost:6379"
+flash studio sql --db "mysql://user:pass@localhost:3306/mydb"
+
+# MongoDB Studio
+flash studio mongodb --url "mongodb://localhost:27017/mydb"
+flash studio mongodb --url "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
+
+# Redis Studio
+flash studio redis --url "redis://localhost:6379"
+flash studio redis --url "redis://:password@localhost:6379" --port 3000
 ```
 
 ### `flash pull`
@@ -157,6 +173,56 @@ Show current migration and branch status.
 ```bash
 flash status
 ```
+
+### `flash seed`
+
+Seed database with realistic fake data for development and testing.
+
+```bash
+flash seed [tables...] [flags]
+```
+
+**Arguments:**
+- `tables...`: Optional list of tables with counts in format `table:count` (e.g., `users:100 posts:500`)
+
+**Flags:**
+- `--count, -c`: Number of rows to generate per table (default: 10)
+- `--table, -t`: Specific table to seed (alternative to positional args)
+- `--truncate`: Truncate tables before seeding
+- `--force, -f`: Skip confirmation
+- `--relations`: Include foreign key relationships
+
+**Examples:**
+```bash
+# Seed all tables with default count (10)
+flash seed
+
+# Seed all tables with 100 rows each
+flash seed --count 100
+
+# Seed specific table
+flash seed --table users --count 50
+
+# Seed multiple tables with different counts
+flash seed users:100 posts:500 comments:1000
+
+# Truncate and reseed
+flash seed --truncate --force
+
+# Seed with relationship handling
+flash seed --relations --count 50
+```
+
+**Smart Data Generation:**
+FlashORM automatically generates appropriate data based on column names:
+- `email` → realistic emails
+- `name`, `first_name`, `last_name` → human names
+- `phone` → phone numbers
+- `url`, `website` → URLs
+- `address`, `city`, `country` → location data
+- `created_at`, `updated_at` → timestamps
+- `password` → hashed passwords
+- `price`, `amount` → currency values
 
 ### `flash reset`
 

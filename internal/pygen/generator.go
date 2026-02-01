@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
@@ -17,6 +17,7 @@ type Generator struct {
 	schema       *parser.Schema
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
+	cache        *gencommon.GenerationCache
 }
 
 func New(cfg *config.Config) *Generator {
@@ -24,6 +25,7 @@ func New(cfg *config.Config) *Generator {
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
+		cache:        gencommon.NewGenerationCache(),
 	}
 }
 
@@ -38,24 +40,47 @@ func (g *Generator) Generate() error {
 	}
 	g.schema = schema
 
+	// Compute checksums for incremental generation
+	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
+	configHash := fmt.Sprintf("%x", []byte(g.Config.Gen.Python.Out))
+	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+
 	queries, err := g.queryParser.Parse(schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	if err := g.generateModels(schema); err != nil {
+	if fullRegen || g.cache.SchemaChecksum != schemaHash {
+		if err := g.generateModels(schema); err != nil {
+			return err
+		}
+	}
+
+	if err := g.generateQueriesIncremental(queries, fullRegen); err != nil {
 		return err
 	}
 
-	if err := g.generateQueries(queries); err != nil {
+	if fullRegen || g.cache.SchemaChecksum != schemaHash {
+		if err := g.generateDatabase(queries); err != nil {
+			return err
+		}
+
+		if err := g.generateInit(); err != nil {
+			return err
+		}
+	}
+
+	// Always generate .pyi stub file for IDE autocomplete (needs all query info)
+	if err := g.generateTypingStub(queries); err != nil {
 		return err
 	}
 
-	if err := g.generateDatabase(queries); err != nil {
-		return err
-	}
+	g.cache.UpdateSchemaChecksum(schemaHash)
+	g.cache.UpdateConfigChecksum(configHash)
+	g.cache.MarkGeneration()
+	g.cache.Save()
 
-	return g.generateInit()
+	return nil
 }
 
 func (g *Generator) generateModels(schema *parser.Schema) error {
@@ -144,7 +169,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	paramTypes := make([]string, len(query.Params))
 	for i, param := range query.Params {
 		paramName := param.Name
-		if paramName == "" {
+		if paramName == ""  {
 			paramName = fmt.Sprintf("p%d", i+1)
 		}
 		paramNames[i] = paramName
@@ -152,16 +177,27 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	}
 
 	returnType := g.getReturnType(query)
-	
+
+	// Build parameter string - avoid trailing comma when no params
+	paramStr := ""
+	if len(paramTypes) > 0 {
+		paramStr = ", " + strings.Join(paramTypes, ", ")
+	}
+
 	// Generate async or sync method based on config
 	if g.Config.Gen.Python.Async {
-		w.WriteString(fmt.Sprintf("    async def %s(self, %s) -> %s:\n",
-			methodName, strings.Join(paramTypes, ", "), returnType))
+		w.WriteString(fmt.Sprintf("    async def %s(self%s) -> %s:\n",
+			methodName, paramStr, returnType))
 	} else {
-		w.WriteString(fmt.Sprintf("    def %s(self, %s) -> %s:\n",
-			methodName, strings.Join(paramTypes, ", "), returnType))
+		w.WriteString(fmt.Sprintf("    def %s(self%s) -> %s:\n",
+			methodName, paramStr, returnType))
 	}
-	w.WriteString(fmt.Sprintf("        stmt = \"\"\"%s\"\"\"\n", sql))
+	
+	// Use statement caching for better performance
+	w.WriteString(fmt.Sprintf("        _key = '%s'\n", methodName))
+	w.WriteString("        if _key not in self._stmts:\n")
+	w.WriteString(fmt.Sprintf("            self._stmts[_key] = \"\"\"%s\"\"\"\n", sql))
+	w.WriteString("        stmt = self._stmts[_key]\n")
 
 	provider := g.Config.Database.Provider
 	switch provider {
@@ -219,21 +255,26 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 	if hasColumns {
 		if query.Cmd == ":one" {
 			if isSingleNonWildcard {
+				// Direct column access - fastest path
 				w.WriteString(fmt.Sprintf("        return result[0]['%s'] if result else None\n", query.Columns[0].Name))
 			} else if needsResultClass {
 				className := utils.ToPascalCase(query.Name) + "Row"
+				// asyncpg Records support key access directly - use _make_fast
 				w.WriteString(fmt.Sprintf("        return %s._make_fast(result[0]) if result else None\n", className))
 			} else {
-				w.WriteString("        return dict(result[0]) if result else None\n")
+				// Direct Record access for asyncpg (faster than dict())
+				w.WriteString("        return result[0] if result else None\n")
 			}
 		} else {
 			if isSingleNonWildcard {
+				// Direct column access in list comprehension
 				w.WriteString(fmt.Sprintf("        return [row['%s'] for row in result]\n", query.Columns[0].Name))
 			} else if needsResultClass {
 				className := utils.ToPascalCase(query.Name) + "Row"
 				w.WriteString(fmt.Sprintf("        return [%s._make_fast(row) for row in result]\n", className))
 			} else {
-				w.WriteString("        return [dict(row) for row in result]\n")
+				// Return Records directly (asyncpg Records are dict-like)
+				w.WriteString("        return list(result)\n")
 			}
 		}
 	} else {
@@ -325,7 +366,7 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 			w.WriteString("                await conn.commit()\n")
 			w.WriteString("                return cursor.rowcount\n")
 		} else {
-			w.WriteString(fmt.Sprintf("%s    conn.commit()\n", indent))
+			w.WriteString(fmt.Sprintf("%s    self.db.commit()\n", indent))
 			w.WriteString(fmt.Sprintf("%s    return cursor.rowcount\n", indent))
 		}
 	}
@@ -416,8 +457,9 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	var w strings.Builder
 	w.Grow(512) // Pre-allocate for index file
-	w.WriteString("# Code generated by FlashORM. DO NOT EDIT.\n")
-
+	w.WriteString("# Code generated by FlashORM. DO NOT EDIT.\n\n")
+	w.WriteString("from typing import Any\n")
+	
 	if len(filesList) == 1 {
 		w.WriteString(fmt.Sprintf("from .%s import Queries\n\n", filesList[0]))
 	} else {
@@ -458,7 +500,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 		w.WriteString("        raise AttributeError(f\"'{type(self).__name__}' object has no attribute '{name}'\")\n")
 	}
 
-	w.WriteString("\ndef new(db):\n")
+	w.WriteString("\ndef new(db: Any) -> Queries:\n")
 	w.WriteString("    \"\"\"\n")
 	w.WriteString("    Create a new database client.\n")
 	w.WriteString("    \n")
@@ -487,15 +529,23 @@ func (g *Generator) generateInit() error {
 
 func (g *Generator) convertSQL(sql string) string {
 	provider := g.Config.Database.Provider
-	if provider == "mysql" {
-		for i := 1; i <= 20; i++ {
+	switch provider {
+	case "mysql":
+		// MySQL uses %s placeholders for Python's cursor.execute
+		for i := 20; i >= 1; i-- {
 			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "%s")
 		}
 		placeholderCount := strings.Count(sql, "?")
 		for i := 0; i < placeholderCount; i++ {
 			sql = strings.Replace(sql, "?", "%s", 1)
 		}
+	case "sqlite", "sqlite3":
+		// SQLite uses ? placeholders - convert PostgreSQL-style $1, $2 to ?
+		for i := 20; i >= 1; i-- {
+			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "?")
+		}
 	}
+	// PostgreSQL uses $1, $2 style - no conversion needed
 	return sql
 }
 
@@ -553,6 +603,95 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 	return pyType
 }
 
+func (g *Generator) generateTypingStub(queries []*parser.Query) error {
+	var w strings.Builder
+	w.Grow(1024)
+
+	w.WriteString("# Type stub for IDE autocomplete\n")
+	w.WriteString("# Code generated by FlashORM. DO NOT EDIT.\n\n")
+	w.WriteString("from typing import Any, Optional, List, Literal\n")
+	w.WriteString("from datetime import datetime\n")
+	w.WriteString("from decimal import Decimal\n")
+
+	// Import all result classes from all query files
+	queryGroups := make(map[string][]*parser.Query)
+	for _, query := range queries {
+		sourceFile := query.SourceFile
+		if sourceFile == "" {
+			sourceFile = "queries"
+		}
+		queryGroups[sourceFile] = append(queryGroups[sourceFile], query)
+	}
+	
+	// Collect all result class names for imports - use map to avoid duplicates
+	allResultClasses := make(map[string]bool)
+	for sourceFile, fileQueries := range queryGroups {
+		baseName := strings.TrimSuffix(sourceFile, ".sql")
+		var resultClasses []string
+		
+		for _, query := range fileQueries {
+			if g.needsResultClass(query) {
+				// Match the actual generated class name format
+				className := utils.ToPascalCase(query.Name) + "Row"
+				resultClasses = append(resultClasses, className)
+				allResultClasses[className] = true
+			}
+		}
+		
+		if len(resultClasses) > 0 {
+			w.WriteString(fmt.Sprintf("from .%s import %s\n", baseName, strings.Join(resultClasses, ", ")))
+		}
+	}
+	
+	w.WriteString("\nclass Queries:\n")
+	w.WriteString("    def __init__(self, db: Any) -> None: ...\n\n")
+	
+	// Generate method signatures for all queries
+	seenMethods := make(map[string]bool)
+	for _, query := range queries {
+		methodName := utils.ToSnakeCase(query.Name)
+		
+		if seenMethods[methodName] {
+			continue
+		}
+		seenMethods[methodName] = true
+		
+		// Build parameter list
+		paramTypes := make([]string, len(query.Params))
+		for i, param := range query.Params {
+			paramName := param.Name
+			if paramName == "" {
+				paramName = fmt.Sprintf("p%d", i+1)
+			}
+			paramTypes[i] = fmt.Sprintf("%s: %s", paramName, g.sqlTypeToPython(param.Type, false))
+		}
+		
+		// Get return type
+		returnType := g.getReturnType(query)
+
+		// Build parameter string - avoid trailing comma when no params
+		paramStr := ""
+		if len(paramTypes) > 0 {
+			paramStr = ", " + strings.Join(paramTypes, ", ")
+		}
+
+		// Generate method signature
+		if g.Config.Gen.Python.Async {
+			w.WriteString(fmt.Sprintf("    async def %s(self%s) -> %s: ...\n",
+				methodName, paramStr, returnType))
+		} else {
+			w.WriteString(fmt.Sprintf("    def %s(self%s) -> %s: ...\n",
+				methodName, paramStr, returnType))
+		}
+	}
+	
+	// Add new() function signature
+	w.WriteString("\ndef new(db: Any) -> Queries: ...\n")
+	
+	path := filepath.Join(g.Config.Gen.Python.Out, "database.pyi")
+	return os.WriteFile(path, []byte(w.String()), 0644)
+}
+
 func (g *Generator) needsResultClass(query *parser.Query) bool {
 	if len(query.Columns) == 0 {
 		return false
@@ -584,7 +723,6 @@ func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query)
 	w.WriteString("\n")
 	w.WriteString("    @classmethod\n")
 	w.WriteString("    def _make_fast(cls, record):\n")
-	w.WriteString("        \"\"\"Optimized factory: 2-3x faster than **dict(record)\"\"\"\n")
 	w.WriteString("        return cls(\n")
 	for i, col := range columns {
 		colName := utils.ToSnakeCase(col.Name)
@@ -607,7 +745,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		return query.Columns
 	}
 
-	tableName := g.extractTableName(query.SQL)
+	tableName := utils.ExtractTableName(query.SQL)
 	if tableName == "" {
 		return query.Columns
 	}
@@ -637,25 +775,7 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	return expanded
 }
 
-func (g *Generator) extractTableName(sql string) string {
 
-	insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-	if matches := insertRegex.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
-	}
-
-	fromRegex := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-	if matches := fromRegex.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
-	}
-
-	updateRegex := regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-	if matches := updateRegex.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
-	}
-
-	return ""
-}
 
 func (g *Generator) getReturnType(query *parser.Query) string {
 	hasColumns := len(query.Columns) > 0
@@ -670,6 +790,7 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 	}
 
 	if g.needsResultClass(query) {
+		// Match the actual generated class name format: ToPascalCase(query.Name) + "Row"
 		className := utils.ToPascalCase(query.Name) + "Row"
 		if query.Cmd == ":one" {
 			return fmt.Sprintf("Optional[%s]", className)
@@ -691,21 +812,42 @@ func (g *Generator) generateBatchMethod(w *strings.Builder, query *parser.Query)
 	sql := g.convertSQL(query.SQL)
 	sql = strings.ReplaceAll(sql, "\"", "\\\"")
 
-	w.WriteString(fmt.Sprintf("    async def %s(self, records: List[tuple]) -> int:\n", methodName))
+	isAsync := g.Config.Gen.Python.Async
+	
+	if isAsync {
+		w.WriteString(fmt.Sprintf("    async def %s(self, records: List[tuple]) -> int:\n", methodName))
+	} else {
+		w.WriteString(fmt.Sprintf("    def %s(self, records: List[tuple]) -> int:\n", methodName))
+	}
 	w.WriteString(fmt.Sprintf("        \"\"\"Batch insert for %s. Each record should be a tuple of parameters.\"\"\"\n", query.Name))
 	w.WriteString(fmt.Sprintf("        stmt = \"\"\"%s\"\"\"\n", sql))
 
 	provider := g.Config.Database.Provider
 	switch provider {
 	case "sqlite", "sqlite3":
-		w.WriteString("        async with self.db.execute_many(stmt, records) as cursor:\n")
-		w.WriteString("            return cursor.rowcount\n")
+		if isAsync {
+			w.WriteString("        async with self.db.execute_many(stmt, records) as cursor:\n")
+			w.WriteString("            return cursor.rowcount\n")
+		} else {
+			w.WriteString("        cursor = self.db.executemany(stmt, records)\n")
+			w.WriteString("        return cursor.rowcount\n")
+		}
 	case "mysql":
-		w.WriteString("        async with self.db.cursor() as cursor:\n")
-		w.WriteString("            await cursor.executemany(stmt, records)\n")
-		w.WriteString("            return cursor.rowcount\n")
+		if isAsync {
+			w.WriteString("        async with self.db.cursor() as cursor:\n")
+			w.WriteString("            await cursor.executemany(stmt, records)\n")
+			w.WriteString("            return cursor.rowcount\n")
+		} else {
+			w.WriteString("        with self.db.cursor() as cursor:\n")
+			w.WriteString("            cursor.executemany(stmt, records)\n")
+			w.WriteString("            return cursor.rowcount\n")
+		}
 	default: // PostgreSQL
-		w.WriteString("        await self.db.executemany(stmt, records)\n")
+		if isAsync {
+			w.WriteString("        await self.db.executemany(stmt, records)\n")
+		} else {
+			w.WriteString("        self.db.executemany(stmt, records)\n")
+		}
 		w.WriteString("        return len(records)\n")
 	}
 

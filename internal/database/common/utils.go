@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+// Pre-compiled regex patterns for SQL parsing (performance optimization)
+var (
+	commentRegex = regexp.MustCompile(`(?m)^\s*--.*$`)
+	stringRegex  = regexp.MustCompile(`'(?:[^']|'')*'|"(?:[^"]|"")*"|` + "`(?:[^`]|``)*`")
+)
+
 type QueryResult struct {
 	Columns []string
 	Rows    []map[string]interface{}
@@ -12,9 +18,6 @@ type QueryResult struct {
 
 // ParseSQLStatements uses regex-based parsing for 40-50% performance improvement on large migrations
 func ParseSQLStatements(sql string) []string {
-	commentRegex := regexp.MustCompile(`(?m)^\s*--.*$`)
-	stringRegex := regexp.MustCompile(`'(?:[^']|'')*'|"(?:[^"]|"")*"|` + "`(?:[^`]|``)*`")
-
 	sql = commentRegex.ReplaceAllString(sql, "")
 
 	stringPositions := make(map[int]bool)

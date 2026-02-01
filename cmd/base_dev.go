@@ -23,6 +23,9 @@ func RegisterBaseCommands() {
 	// Studio command
 	rootCmd.AddCommand(studioCmd)
 
+	// Seed command
+	rootCmd.AddCommand(seedCmd)
+
 	// Plugin management (for consistency)
 	rootCmd.AddCommand(pluginsCmd)
 	rootCmd.AddCommand(addPluginCmd)

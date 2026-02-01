@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -94,6 +95,9 @@ func (s *Server) setupRoutes() {
 	// Branch API
 	api.Get("/branches", s.handleGetBranches)
 	api.Post("/branches/switch", s.handleSwitchBranch)
+
+	// Editor hints API (cached on client-side)
+	api.Get("/editor/hints", s.handleGetEditorHints)
 }
 
 func (s *Server) Start(openBrowser bool) error {
@@ -140,7 +144,15 @@ func (s *Server) handleGetTableData(c *fiber.Ctx) error {
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	limit, _ := strconv.Atoi(c.Query("limit", "50"))
 
-	data, err := s.service.GetTableData(tableName, page, limit)
+	// Parse filters from query parameter (JSON encoded)
+	var filters []common.Filter
+	if filtersJSON := c.Query("filters"); filtersJSON != "" {
+		if err := json.Unmarshal([]byte(filtersJSON), &filters); err != nil {
+			return common.JSONError(c, 400, "Invalid filters format")
+		}
+	}
+
+	data, err := s.service.GetTableDataFiltered(tableName, page, limit, filters)
 	if err != nil {
 		return common.JSONError(c, 500, err.Error())
 	}
@@ -251,4 +263,12 @@ func (s *Server) handleInsertRow(c *fiber.Ctx) error {
 		return common.JSONError(c, 500, err.Error())
 	}
 	return common.JSONFiberMap(c, fiber.Map{"success": true})
+}
+
+func (s *Server) handleGetEditorHints(c *fiber.Ctx) error {
+	hints, err := s.service.GetEditorHints()
+	if err != nil {
+		return common.JSONError(c, 500, err.Error())
+	}
+	return common.JSON(c, hints)
 }

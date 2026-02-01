@@ -1,6 +1,6 @@
 {
   "version": "2",
-  "schema_path": "db/schema/schema.sql",
+  "schema_path": "db/schema",
   "queries": "db/queries/",
   "migrations_path": "db/migrations",
   "export_path": "db/export",

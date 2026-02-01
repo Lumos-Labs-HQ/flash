@@ -52,20 +52,20 @@ export interface GetPostDetailsWithAllRelationsResult {
   status: 'draft' | 'published' | 'archived';
   created_at: Date;
   updated_at: Date;
-  author_id: number;
+  author_id: string;
   author_name: string;
   author_email: string;
   author_role: string;
-  author_is_admin: boolean;
+  author_is_admin: string;
   category_id: number;
   category_name: string;
   comment_count: number;
-  unique_commenters: string;
-  all_comments: string;
-  commenter_names: string;
-  last_comment_date: Date;
-  content_length: string;
-  hours_since_created: string;
+  unique_commenters: number;
+  all_comments: string | null;
+  commenter_names: string[] | null;
+  last_comment_date: Date | null;
+  content_length: number | null;
+  hours_since_created: number | null;
 }
 
 export interface GetComplexUserAnalyticsResult {
@@ -75,16 +75,16 @@ export interface GetComplexUserAnalyticsResult {
   role: 'admin' | 'moderator' | 'user' | 'guest';
   isadmin: boolean;
   user_created_at: string;
-  total_posts: number;
-  published_posts: boolean;
+  total_posts: string;
+  published_posts: string;
   draft_posts: string;
-  total_comments: number;
+  total_comments: string;
   posts_commented_on: string;
   categories_used: string;
   category_names: string;
-  last_post_date: Date;
-  last_comment_date: Date;
-  avg_post_length: number | null;
+  last_post_date: string;
+  last_comment_date: string;
+  avg_post_length: number;
   activity_level: string;
   engagement_score: string;
 }
@@ -92,9 +92,9 @@ export interface GetComplexUserAnalyticsResult {
 export class Queries {
   constructor(db: any);
 
+  createCategory(name: string): Promise<Categories | null>;
   createUser(name: string, email: string, address: string, isadmin: boolean): Promise<number>;
   getUserByEmail(email: string): Promise<Users | null>;
-  createCategory(name: string): Promise<Categories | null>;
   createPost(user_id: number, category_id: number, title: string, content: string): Promise<Posts | null>;
   createComment(post_id: number, user_id: number, content: string): Promise<Comments | null>;
   getPostWithComments(id: number): Promise<GetPostWithCommentsResult[]>;

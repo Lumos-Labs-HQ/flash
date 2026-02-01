@@ -261,8 +261,19 @@ func (s *Service) DeleteDocument(collection, id string) error {
 	return mongoAdapter.DeleteDocument(s.ctx, collection, id)
 }
 
-// BulkDeleteDocuments deletes multiple documents
+// BulkDeleteDocuments deletes multiple documents efficiently using $in operator
 func (s *Service) BulkDeleteDocuments(collection string, ids []string) error {
+	// Try bulk delete first (more efficient)
+	type MongoBulkDeleter interface {
+		BulkDeleteDocuments(ctx context.Context, collection string, ids []string) (int64, error)
+	}
+
+	if bulkAdapter, ok := s.adapter.(MongoBulkDeleter); ok {
+		_, err := bulkAdapter.BulkDeleteDocuments(s.ctx, collection, ids)
+		return err
+	}
+
+	// Fallback to one-by-one deletion
 	type MongoDocumentDeleter interface {
 		DeleteDocument(ctx context.Context, collection string, id string) error
 	}

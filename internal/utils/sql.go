@@ -7,7 +7,52 @@ import (
 	"strings"
 )
 
-var blockCommentRegex = regexp.MustCompile(`/\*[\s\S]*?\*/`)
+// Pre-compiled regex patterns for SQL parsing (performance optimization)
+var (
+	blockCommentRegex    = regexp.MustCompile(`/\*[\s\S]*?\*/`)
+	insertIntoRegex      = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
+	fromTableRegex       = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
+	updateTableRegex     = regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
+	deleteFromRegex      = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`)
+	modifyingQueryRegex  = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE)\b`)
+)
+
+// ExtractTableName extracts the primary table name from a SQL query.
+// Works with INSERT INTO, SELECT FROM, UPDATE, and DELETE FROM statements.
+func ExtractTableName(sql string) string {
+	sqlUpper := strings.ToUpper(sql)
+
+	if strings.Contains(sqlUpper, "INSERT INTO") {
+		if matches := insertIntoRegex.FindStringSubmatch(sql); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
+	if strings.Contains(sqlUpper, "FROM") {
+		if matches := fromTableRegex.FindStringSubmatch(sql); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
+	if strings.Contains(sqlUpper, "UPDATE") {
+		if matches := updateTableRegex.FindStringSubmatch(sql); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
+	if strings.Contains(sqlUpper, "DELETE") {
+		if matches := deleteFromRegex.FindStringSubmatch(sql); len(matches) > 1 {
+			return matches[1]
+		}
+	}
+
+	return ""
+}
+
+// IsModifyingQuery returns true if the SQL contains INSERT, UPDATE, or DELETE.
+func IsModifyingQuery(sql string) bool {
+	return modifyingQueryRegex.MatchString(strings.ToUpper(sql))
+}
 
 func RemoveComments(sql string) string {
 	var result strings.Builder
@@ -32,45 +77,12 @@ func RemoveComments(sql string) string {
 	// Remove block comments
 	return blockCommentRegex.ReplaceAllString(result.String(), "")
 }
-
+// SplitColumns splits a comma-separated column string, respecting parentheses depth.
+// This handles cases like "col1, COALESCE(a, b), col2" correctly.
 func SplitColumns(columnsStr string) []string {
 	result := make([]string, 0, 8) // Pre-allocate with reasonable capacity
 	var current strings.Builder
 	current.Grow(64) // Pre-allocate buffer for column strings
-	parenDepth := 0
-
-	for i := 0; i < len(columnsStr); i++ {
-		char := columnsStr[i]
-		switch char {
-		case '(':
-			parenDepth++
-			current.WriteByte(char)
-		case ')':
-			parenDepth--
-			current.WriteByte(char)
-		case ',':
-			if parenDepth == 0 {
-				result = append(result, current.String())
-				current.Reset()
-				current.Grow(64) // Reset with pre-allocation
-			} else {
-				current.WriteByte(char)
-			}
-		default:
-			current.WriteByte(char)
-		}
-	}
-
-	if current.Len() > 0 {
-		result = append(result, current.String())
-	}
-
-	return result
-}
-
-func SmartSplitColumns(columnsStr string) []string {
-	var result []string
-	var current strings.Builder
 	parenDepth := 0
 
 	for _, char := range columnsStr {
@@ -85,6 +97,7 @@ func SmartSplitColumns(columnsStr string) []string {
 			if parenDepth == 0 {
 				result = append(result, current.String())
 				current.Reset()
+				current.Grow(64) // Reset with pre-allocation
 			} else {
 				current.WriteRune(char)
 			}
@@ -98,6 +111,12 @@ func SmartSplitColumns(columnsStr string) []string {
 	}
 
 	return result
+}
+
+// SmartSplitColumns is an alias for SplitColumns for backward compatibility.
+// Deprecated: Use SplitColumns directly.
+func SmartSplitColumns(columnsStr string) []string {
+	return SplitColumns(columnsStr)
 }
 
 func ExtractSelectColumns(sql string) string {
