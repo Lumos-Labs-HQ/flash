@@ -319,7 +319,9 @@ const RedisStudio = {
     },
 
     selectKeyByIndex(index) {
-        if (this.keys[index]) this.selectKey(this.keys[index].key);
+        if (index >= 0 && index < this.keys.length && this.keys[index]) {
+            this.selectKey(this.keys[index].key);
+        }
     },
 
     filterKeys(search) {

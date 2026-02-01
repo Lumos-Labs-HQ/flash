@@ -231,15 +231,21 @@ async function loadCollections() {
     }
 }
 
-async function selectCollection(name) {
+async function selectCollection(name, evt) {
     currentCollection = name;
-    currentFilter = ''; 
+    currentFilter = '';
     page = 1;
     selected.clear();
     const textSearch = $('#text-search');
     if (textSearch) textSearch.value = '';
     $$('.collection-item').forEach(el => el.classList.remove('active'));
-    event.currentTarget.classList.add('active');
+    // Use passed event or find by data attribute
+    if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('active');
+    } else {
+        const item = $(`.collection-item[data-name="${name.toLowerCase()}"]`);
+        if (item) item.classList.add('active');
+    }
     $('#breadcrumb').textContent = `${dbConnectionString} > ${currentDatabase} > ${name}`;
     $('#tabs-bar').style.display = 'flex';
     $('#toolbar').style.display = 'flex';
@@ -1068,7 +1074,7 @@ function renderCollections() {
         const isActive = col.name === currentCollection;
         const jsonName = JSON.stringify(col.name);
         return `
-    <div class="collection-item ${isActive ? 'active' : ''}" onclick='selectCollection(${jsonName})' oncontextmenu='showCollContextMenu(event, ${jsonName})' data-name="${dataName}">
+    <div class="collection-item ${isActive ? 'active' : ''}" onclick='selectCollection(${jsonName}, event)' oncontextmenu='showCollContextMenu(event, ${jsonName})' data-name="${dataName}">
       <div class="item-name">
         <ion-icon name="folder-outline"></ion-icon>
         ${safeName}
@@ -1156,8 +1162,10 @@ async function deleteDatabase(dbName) {
             if (currentDatabase === dbName) {
                 currentDatabase = null;
                 currentCollection = null;
-                $$('#collections-list').innerHTML = '<div class="empty-state">Select a database</div>';
-                $$('#main-content').innerHTML = '<div class="empty-state">Select a database and collection</div>';
+                const collList = $('#collections-list');
+                if (collList) collList.innerHTML = '<div class="empty-state">Select a database</div>';
+                const mainContent = $('#main-content');
+                if (mainContent) mainContent.innerHTML = '<div class="empty-state">Select a database and collection</div>';
             }
         } else {
             showError(data.error || 'Failed to delete database');

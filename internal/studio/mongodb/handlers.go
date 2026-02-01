@@ -246,6 +246,13 @@ func (s *Server) handleBulkDeleteDocuments(c *fiber.Ctx) error {
 // Aggregation Handler
 func (s *Server) handleAggregate(c *fiber.Ctx) error {
 	name := c.Params("name")
+	dbName := c.Query("database")
+
+	if dbName != "" {
+		if err := s.service.SwitchDatabase(dbName); err != nil {
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+		}
+	}
 
 	var rawPipeline []interface{}
 	if err := c.BodyParser(&rawPipeline); err != nil {
@@ -286,6 +293,13 @@ func (s *Server) handleGetIndexes(c *fiber.Ctx) error {
 
 func (s *Server) handleCreateIndex(c *fiber.Ctx) error {
 	name := c.Params("name")
+	dbName := c.Query("database")
+
+	if dbName != "" {
+		if err := s.service.SwitchDatabase(dbName); err != nil {
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+		}
+	}
 
 	var req struct {
 		Keys   map[string]interface{} `json:"keys"`
@@ -304,6 +318,13 @@ func (s *Server) handleCreateIndex(c *fiber.Ctx) error {
 func (s *Server) handleDropIndex(c *fiber.Ctx) error {
 	name := c.Params("name")
 	indexName := c.Params("indexName")
+	dbName := c.Query("database")
+
+	if dbName != "" {
+		if err := s.service.SwitchDatabase(dbName); err != nil {
+			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+		}
+	}
 
 	if err := s.service.DropIndex(name, indexName); err != nil {
 		return common.JSONError(c, 500, err.Error())

@@ -291,36 +291,37 @@ func (s *Service) SetKey(key string, value interface{}, keyType string, ttl int6
 		return s.client.Set(s.ctx, key, strVal, expiration).Err()
 
 	case "list":
-		s.client.Del(s.ctx, key)
 		vals, ok := value.([]interface{})
 		if !ok {
 			return fmt.Errorf("invalid list value")
 		}
 		if len(vals) > 0 {
+			s.client.Del(s.ctx, key)
 			if err := s.client.RPush(s.ctx, key, vals...).Err(); err != nil {
 				return err
 			}
 		}
 
 	case "set":
-		s.client.Del(s.ctx, key)
 		vals, ok := value.([]interface{})
 		if !ok {
 			return fmt.Errorf("invalid set value")
 		}
 		if len(vals) > 0 {
+			s.client.Del(s.ctx, key)
 			if err := s.client.SAdd(s.ctx, key, vals...).Err(); err != nil {
 				return err
 			}
 		}
 
 	case "hash":
-		s.client.Del(s.ctx, key)
 		hashVal, ok := value.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("invalid hash value")
 		}
+		// Only delete and recreate if we have values to set
 		if len(hashVal) > 0 {
+			s.client.Del(s.ctx, key)
 			args := make([]interface{}, 0, len(hashVal)*2)
 			for k, v := range hashVal {
 				args = append(args, k, v)
@@ -331,7 +332,6 @@ func (s *Service) SetKey(key string, value interface{}, keyType string, ttl int6
 		}
 
 	case "zset":
-		s.client.Del(s.ctx, key)
 		vals, ok := value.([]interface{})
 		if !ok {
 			return fmt.Errorf("invalid zset value")
@@ -346,7 +346,9 @@ func (s *Service) SetKey(key string, value interface{}, keyType string, ttl int6
 				})
 			}
 		}
+		// Only delete and recreate if we have members to set
 		if len(members) > 0 {
+			s.client.Del(s.ctx, key)
 			if err := s.client.ZAdd(s.ctx, key, members...).Err(); err != nil {
 				return err
 			}
@@ -441,6 +443,7 @@ func (s *Service) SelectDatabase(db int) error {
 	newClient := redis.NewClient(opts)
 
 	if err := newClient.Ping(s.ctx).Err(); err != nil {
+		newClient.Close() // Close the new client on error to prevent resource leak
 		return err
 	}
 
