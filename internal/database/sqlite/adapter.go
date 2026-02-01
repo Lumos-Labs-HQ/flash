@@ -180,6 +180,11 @@ func (s *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	return tx.Commit()
 }
 
+func (s *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string) error {
+	_, err := s.db.ExecContext(ctx, "DELETE FROM _flash_migrations WHERE id = ?", migrationID)
+	return err
+}
+
 func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

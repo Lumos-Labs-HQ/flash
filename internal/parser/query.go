@@ -232,6 +232,16 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
+	// CRITICAL: If table is referenced but not found, return error
+	if tableName != "" && table == nil {
+		availableTables := make([]string, len(schema.Tables))
+		for i, t := range schema.Tables {
+			availableTables[i] = t.Name
+		}
+		return fmt.Errorf("table '%s' referenced in query '%s' does not exist in schema. Available tables: %v",
+			tableName, query.Name, availableTables)
+	}
+
 	paramMatches := paramRegex.FindAllString(query.SQL, -1)
 
 	var paramCount int

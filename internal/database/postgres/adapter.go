@@ -147,6 +147,11 @@ func (p *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	return tx.Commit(ctx)
 }
 
+func (p *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string) error {
+	_, err := p.pool.Exec(ctx, "DELETE FROM _flash_migrations WHERE id = $1", migrationID)
+	return err
+}
+
 func (p *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {

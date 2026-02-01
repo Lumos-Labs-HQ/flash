@@ -22,6 +22,7 @@ type DatabaseAdapter interface {
 	// Migration operations
 	GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error)
 	RecordMigration(ctx context.Context, migrationID, name, checksum string) error
+	RemoveMigrationRecord(ctx context.Context, migrationID string) error
 	ExecuteMigration(ctx context.Context, migrationSQL string) error
 	ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error
 	ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error)
@@ -53,7 +54,7 @@ type DatabaseAdapter interface {
 	GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string
 	GenerateDropColumnSQL(tableName, columnName string) string
 	GenerateAddIndexSQL(index types.SchemaIndex) string
-	GenerateDropIndexSQL(indexName string) string
+	GenerateDropIndexSQL(index types.SchemaIndex) string
 
 	// Data type mapping
 	MapColumnType(dbType string) string

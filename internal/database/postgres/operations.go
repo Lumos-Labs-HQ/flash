@@ -278,8 +278,8 @@ func (p *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	return fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s);", unique, index.Name, index.Table, columns)
 }
 
-func (p *Adapter) GenerateDropIndexSQL(indexName string) string {
-	return fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", indexName)
+func (p *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
+	return fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)
 }
 
 func (p *Adapter) FormatColumnType(column types.SchemaColumn) string {

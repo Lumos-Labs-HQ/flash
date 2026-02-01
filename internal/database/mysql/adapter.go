@@ -226,6 +226,11 @@ func (m *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	return tx.Commit()
 }
 
+func (m *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string) error {
+	_, err := m.db.ExecContext(ctx, "DELETE FROM _flash_migrations WHERE id = ?", migrationID)
+	return err
+}
+
 func (m *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
