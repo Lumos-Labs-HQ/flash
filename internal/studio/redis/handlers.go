@@ -1,55 +1,60 @@
 package redis
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
-	"github.com/gofiber/fiber/v2"
 )
 
-func (s *Server) handleGetInfo(c *fiber.Ctx) error {
+func (s *Server) handleGetInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := s.service.GetInfo()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, info)
+	common.JSON(w, info)
 }
 
-func (s *Server) handleGetDBSize(c *fiber.Ctx) error {
+func (s *Server) handleGetDBSize(w http.ResponseWriter, r *http.Request) {
 	size, err := s.service.GetDBSize()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONFiberMap(c, fiber.Map{"size": size})
+	common.JSONMap(w, common.Map{"size": size})
 }
 
-func (s *Server) handleGetKeys(c *fiber.Ctx) error {
-	pattern := c.Query("pattern", "*")
-	cursor, _ := strconv.ParseUint(c.Query("cursor", "0"), 10, 64)
-	count, _ := strconv.ParseInt(c.Query("count", "100"), 10, 64)
+func (s *Server) handleGetKeys(w http.ResponseWriter, r *http.Request) {
+	pattern := common.Query(r, "pattern", "*")
+	cursor, _ := strconv.ParseUint(common.Query(r, "cursor", "0"), 10, 64)
+	count, _ := strconv.ParseInt(common.Query(r, "count", "100"), 10, 64)
 
 	result, err := s.service.GetKeys(pattern, cursor, count)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
-func (s *Server) handleGetKey(c *fiber.Ctx) error {
-	key := c.Query("key")
+func (s *Server) handleGetKey(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
 	if key == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "key is required")
+		common.JSONError(w, http.StatusBadRequest, "key is required")
+		return
 	}
 
 	keyInfo, err := s.service.GetKey(key)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusNotFound, err.Error())
+		common.JSONError(w, http.StatusNotFound, err.Error())
+		return
 	}
-	return common.JSON(c, keyInfo)
+	common.JSON(w, keyInfo)
 }
 
-func (s *Server) handleSetKey(c *fiber.Ctx) error {
+func (s *Server) handleSetKey(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Key   string      `json:"key"`
 		Value interface{} `json:"value"`
@@ -57,12 +62,14 @@ func (s *Server) handleSetKey(c *fiber.Ctx) error {
 		TTL   int64       `json:"ttl"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Key == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "key is required")
+		common.JSONError(w, http.StatusBadRequest, "key is required")
+		return
 	}
 
 	if body.Type == "" {
@@ -70,16 +77,18 @@ func (s *Server) handleSetKey(c *fiber.Ctx) error {
 	}
 
 	if err := s.service.SetKey(body.Key, body.Value, body.Type, body.TTL); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "key created successfully")
+	common.JSONMessage(w, "key created successfully")
 }
 
-func (s *Server) handleUpdateKey(c *fiber.Ctx) error {
-	key := c.Query("key")
+func (s *Server) handleUpdateKey(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
 	if key == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "key is required")
+		common.JSONError(w, http.StatusBadRequest, "key is required")
+		return
 	}
 
 	var body struct {
@@ -88,219 +97,245 @@ func (s *Server) handleUpdateKey(c *fiber.Ctx) error {
 		TTL   int64       `json:"ttl"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Type == "" {
 		existingKey, err := s.service.GetKey(key)
 		if err != nil {
-			return common.JSONError(c, fiber.StatusNotFound, err.Error())
+			common.JSONError(w, http.StatusNotFound, err.Error())
+			return
 		}
 		body.Type = existingKey.Type
 	}
 
 	if err := s.service.SetKey(key, body.Value, body.Type, body.TTL); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "key updated successfully")
+	common.JSONMessage(w, "key updated successfully")
 }
 
-func (s *Server) handleDeleteKey(c *fiber.Ctx) error {
-	key := c.Query("key")
+func (s *Server) handleDeleteKey(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
 	if key == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "key is required")
+		common.JSONError(w, http.StatusBadRequest, "key is required")
+		return
 	}
 
 	if err := s.service.DeleteKey(key); err != nil {
-		return common.JSONError(c, fiber.StatusNotFound, err.Error())
+		common.JSONError(w, http.StatusNotFound, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "key deleted successfully")
+	common.JSONMessage(w, "key deleted successfully")
 }
 
-func (s *Server) handleBulkDeleteKeys(c *fiber.Ctx) error {
+func (s *Server) handleBulkDeleteKeys(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Keys []string `json:"keys"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if len(body.Keys) == 0 {
-		return common.JSONError(c, fiber.StatusBadRequest, "keys array is required")
+		common.JSONError(w, http.StatusBadRequest, "keys array is required")
+		return
 	}
 
 	deleted, err := s.service.BulkDeleteKeys(body.Keys)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{
+	common.JSONMap(w, common.Map{
 		"success": true,
 		"message": "keys deleted successfully",
 		"deleted": deleted,
 	})
 }
 
-func (s *Server) handleCLI(c *fiber.Ctx) error {
+func (s *Server) handleCLI(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Command string `json:"command"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Command == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "command is required")
+		common.JSONError(w, http.StatusBadRequest, "command is required")
+		return
 	}
 
 	result := s.service.ExecuteCLI(body.Command)
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
-func (s *Server) handleGetDatabases(c *fiber.Ctx) error {
+func (s *Server) handleGetDatabases(w http.ResponseWriter, r *http.Request) {
 	databases, err := s.service.GetDatabases()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, databases)
+	common.JSON(w, databases)
 }
 
-func (s *Server) handleSelectDatabase(c *fiber.Ctx) error {
-	dbStr := c.Params("db")
+func (s *Server) handleSelectDatabase(w http.ResponseWriter, r *http.Request) {
+	dbStr := r.PathValue("db")
 	db, err := strconv.Atoi(dbStr)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid database index")
+		common.JSONError(w, http.StatusBadRequest, "invalid database index")
+		return
 	}
 
 	if err := s.service.SelectDatabase(db); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "database selected successfully")
+	common.JSONMessage(w, "database selected successfully")
 }
 
-func (s *Server) handleFlushDB(c *fiber.Ctx) error {
+func (s *Server) handleFlushDB(w http.ResponseWriter, r *http.Request) {
 	if err := s.service.FlushDB(); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "database flushed successfully")
+	common.JSONMessage(w, "database flushed successfully")
 }
 
-func (s *Server) handleExportKeys(c *fiber.Ctx) error {
-	pattern := c.Query("pattern", "*")
+func (s *Server) handleExportKeys(w http.ResponseWriter, r *http.Request) {
+	pattern := common.Query(r, "pattern", "*")
 
 	keys, err := s.service.ExportKeys(pattern)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSON(c, fiber.Map{
+	common.JSON(w, common.Map{
 		"keys":  keys,
 		"count": len(keys),
 	})
 }
 
-func (s *Server) handleImportKeys(c *fiber.Ctx) error {
+func (s *Server) handleImportKeys(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Keys      []ExportedKey `json:"keys"`
 		Overwrite bool          `json:"overwrite"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	imported, skipped, err := s.service.ImportKeys(body.Keys, body.Overwrite)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{
+	common.JSONMap(w, common.Map{
 		"success":  true,
 		"imported": imported,
 		"skipped":  skipped,
 	})
 }
 
-func (s *Server) handleGetMemoryStats(c *fiber.Ctx) error {
-	pattern := c.Query("pattern", "*")
-	limit, _ := strconv.Atoi(c.Query("limit", "100"))
+func (s *Server) handleGetMemoryStats(w http.ResponseWriter, r *http.Request) {
+	pattern := common.Query(r, "pattern", "*")
+	limit, _ := strconv.Atoi(common.Query(r, "limit", "100"))
 
 	memoryInfos, typeStats, err := s.service.GetMemoryStats(pattern, limit)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSON(c, fiber.Map{
+	common.JSON(w, common.Map{
 		"keys":       memoryInfos,
 		"type_stats": typeStats,
 	})
 }
 
-func (s *Server) handleGetMemoryOverview(c *fiber.Ctx) error {
+func (s *Server) handleGetMemoryOverview(w http.ResponseWriter, r *http.Request) {
 	overview, err := s.service.GetMemoryOverview()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, overview)
+	common.JSON(w, overview)
 }
 
-func (s *Server) handleGetKeyMemory(c *fiber.Ctx) error {
-	key := c.Query("key")
+func (s *Server) handleGetKeyMemory(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
 	if key == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "key is required")
+		common.JSONError(w, http.StatusBadRequest, "key is required")
+		return
 	}
 
 	info, err := s.service.GetKeyMemory(key)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, info)
+	common.JSON(w, info)
 }
 
-func (s *Server) handleGetSlowLog(c *fiber.Ctx) error {
-	count, _ := strconv.Atoi(c.Query("count", "50"))
+func (s *Server) handleGetSlowLog(w http.ResponseWriter, r *http.Request) {
+	count, _ := strconv.Atoi(common.Query(r, "count", "50"))
 
 	entries, err := s.service.GetSlowLog(count)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, entries)
+	common.JSON(w, entries)
 }
 
-func (s *Server) handleResetSlowLog(c *fiber.Ctx) error {
+func (s *Server) handleResetSlowLog(w http.ResponseWriter, r *http.Request) {
 	if err := s.service.ResetSlowLog(); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "slow log reset successfully")
+	common.JSONMessage(w, "slow log reset successfully")
 }
 
-func (s *Server) handleGetSlowLogLen(c *fiber.Ctx) error {
+func (s *Server) handleGetSlowLogLen(w http.ResponseWriter, r *http.Request) {
 	length, err := s.service.GetSlowLogLen()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONFiberMap(c, fiber.Map{"length": length})
+	common.JSONMap(w, common.Map{"length": length})
 }
 
-func (s *Server) handleExecuteScript(c *fiber.Ctx) error {
+func (s *Server) handleExecuteScript(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Script string        `json:"script"`
 		Keys   []string      `json:"keys"`
 		Args   []interface{} `json:"args"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Script == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "script is required")
+		common.JSONError(w, http.StatusBadRequest, "script is required")
+		return
 	}
 
 	if body.Keys == nil {
@@ -311,39 +346,43 @@ func (s *Server) handleExecuteScript(c *fiber.Ctx) error {
 	}
 
 	result := s.service.ExecuteScript(body.Script, body.Keys, body.Args)
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
-func (s *Server) handleLoadScript(c *fiber.Ctx) error {
+func (s *Server) handleLoadScript(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Script string `json:"script"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	sha, err := s.service.LoadScript(body.Script)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{"sha": sha})
+	common.JSONMap(w, common.Map{"sha": sha})
 }
 
-func (s *Server) handleExecuteScriptBySHA(c *fiber.Ctx) error {
+func (s *Server) handleExecuteScriptBySHA(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		SHA  string        `json:"sha"`
 		Keys []string      `json:"keys"`
 		Args []interface{} `json:"args"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.SHA == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "sha is required")
+		common.JSONError(w, http.StatusBadRequest, "sha is required")
+		return
 	}
 
 	if body.Keys == nil {
@@ -354,205 +393,231 @@ func (s *Server) handleExecuteScriptBySHA(c *fiber.Ctx) error {
 	}
 
 	result := s.service.ExecuteScriptBySHA(body.SHA, body.Keys, body.Args)
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
-func (s *Server) handleFlushScripts(c *fiber.Ctx) error {
+func (s *Server) handleFlushScripts(w http.ResponseWriter, r *http.Request) {
 	if err := s.service.FlushScripts(); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "scripts flushed successfully")
+	common.JSONMessage(w, "scripts flushed successfully")
 }
 
-func (s *Server) handleBulkSetTTL(c *fiber.Ctx) error {
+func (s *Server) handleBulkSetTTL(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Pattern string `json:"pattern"`
 		TTL     int64  `json:"ttl"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Pattern == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "pattern is required")
+		common.JSONError(w, http.StatusBadRequest, "pattern is required")
+		return
 	}
 
 	updated, err := s.service.BulkSetTTL(body.Pattern, body.TTL)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{
+	common.JSONMap(w, common.Map{
 		"success": true,
 		"updated": updated,
 	})
 }
 
-func (s *Server) handleGetConfig(c *fiber.Ctx) error {
-	pattern := c.Query("pattern", "*")
+func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	pattern := common.Query(r, "pattern", "*")
 
 	config, err := s.service.GetConfig(pattern)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, config)
+	common.JSON(w, config)
 }
 
-func (s *Server) handleSetConfig(c *fiber.Ctx) error {
+func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Key   string `json:"key"`
 		Value string `json:"value"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Key == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "key is required")
+		common.JSONError(w, http.StatusBadRequest, "key is required")
+		return
 	}
 
 	if err := s.service.SetConfig(body.Key, body.Value); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "configuration updated successfully")
+	common.JSONMessage(w, "configuration updated successfully")
 }
 
-func (s *Server) handleRewriteConfig(c *fiber.Ctx) error {
+func (s *Server) handleRewriteConfig(w http.ResponseWriter, r *http.Request) {
 	if err := s.service.RewriteConfig(); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "configuration rewritten successfully")
+	common.JSONMessage(w, "configuration rewritten successfully")
 }
 
-func (s *Server) handleResetConfigStats(c *fiber.Ctx) error {
+func (s *Server) handleResetConfigStats(w http.ResponseWriter, r *http.Request) {
 	if err := s.service.ResetConfigStats(); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "statistics reset successfully")
+	common.JSONMessage(w, "statistics reset successfully")
 }
 
-func (s *Server) handleGetReplicationInfo(c *fiber.Ctx) error {
+func (s *Server) handleGetReplicationInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := s.service.GetReplicationInfo()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, info)
+	common.JSON(w, info)
 }
 
-func (s *Server) handleGetClusterInfo(c *fiber.Ctx) error {
+func (s *Server) handleGetClusterInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := s.service.GetClusterInfo()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, info)
+	common.JSON(w, info)
 }
 
-func (s *Server) handleGetACLUsers(c *fiber.Ctx) error {
+func (s *Server) handleGetACLUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.service.GetACLUsers()
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, users)
+	common.JSON(w, users)
 }
 
-func (s *Server) handleGetACLUser(c *fiber.Ctx) error {
-	username := c.Params("username")
+func (s *Server) handleGetACLUser(w http.ResponseWriter, r *http.Request) {
+	username := r.PathValue("username")
 	if username == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "username is required")
+		common.JSONError(w, http.StatusBadRequest, "username is required")
+		return
 	}
 
 	user, err := s.service.GetACLUser(username)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, user)
+	common.JSON(w, user)
 }
 
-func (s *Server) handleCreateACLUser(c *fiber.Ctx) error {
+func (s *Server) handleCreateACLUser(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Username string   `json:"username"`
 		Rules    []string `json:"rules"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Username == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "username is required")
+		common.JSONError(w, http.StatusBadRequest, "username is required")
+		return
 	}
 
 	if err := s.service.CreateACLUser(body.Username, body.Rules); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "user created successfully")
+	common.JSONMessage(w, "user created successfully")
 }
 
-func (s *Server) handleDeleteACLUser(c *fiber.Ctx) error {
-	username := c.Params("username")
+func (s *Server) handleDeleteACLUser(w http.ResponseWriter, r *http.Request) {
+	username := r.PathValue("username")
 	if username == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "username is required")
+		common.JSONError(w, http.StatusBadRequest, "username is required")
+		return
 	}
 
 	if err := s.service.DeleteACLUser(username); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONMessage(c, "user deleted successfully")
+	common.JSONMessage(w, "user deleted successfully")
 }
 
-func (s *Server) handleGetACLLog(c *fiber.Ctx) error {
-	count, _ := strconv.Atoi(c.Query("count", "10"))
+func (s *Server) handleGetACLLog(w http.ResponseWriter, r *http.Request) {
+	count, _ := strconv.Atoi(common.Query(r, "count", "10"))
 
 	logs, err := s.service.GetACLLog(count)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, logs)
+	common.JSON(w, logs)
 }
 
-func (s *Server) handleResetACLLog(c *fiber.Ctx) error {
+func (s *Server) handleResetACLLog(w http.ResponseWriter, r *http.Request) {
 	if err := s.service.ResetACLLog(); err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "ACL log reset successfully")
+	common.JSONMessage(w, "ACL log reset successfully")
 }
 
-func (s *Server) handlePublish(c *fiber.Ctx) error {
+func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Channel string `json:"channel"`
 		Message string `json:"message"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return common.JSONError(c, fiber.StatusBadRequest, "invalid request body")
+	if err := common.ParseJSON(r, &body); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 
 	if body.Channel == "" {
-		return common.JSONError(c, fiber.StatusBadRequest, "channel is required")
+		common.JSONError(w, http.StatusBadRequest, "channel is required")
+		return
 	}
 
 	receivers, err := s.service.Publish(body.Channel, body.Message)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{
+	common.JSONMap(w, common.Map{
 		"success":   true,
 		"receivers": receivers,
 	})
 }
 
-func (s *Server) handleGetChannels(c *fiber.Ctx) error {
-	pattern := c.Query("pattern", "*")
+func (s *Server) handleGetChannels(w http.ResponseWriter, r *http.Request) {
+	pattern := common.Query(r, "pattern", "*")
 
 	channels, err := s.service.GetPubSubChannels(pattern)
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	// Get subscriber counts
@@ -561,13 +626,13 @@ func (s *Server) handleGetChannels(c *fiber.Ctx) error {
 		numSub, _ = s.service.GetPubSubNumSub(channels)
 	}
 
-	result := make([]fiber.Map, 0, len(channels))
+	result := make([]common.Map, 0, len(channels))
 	for _, ch := range channels {
 		count := int64(0)
 		if numSub != nil {
 			count = numSub[ch]
 		}
-		result = append(result, fiber.Map{
+		result = append(result, common.Map{
 			"channel":     ch,
 			"subscribers": count,
 		})
@@ -575,14 +640,14 @@ func (s *Server) handleGetChannels(c *fiber.Ctx) error {
 
 	numPat, _ := s.service.GetPubSubNumPat()
 
-	return common.JSON(c, fiber.Map{
-		"channels":             result,
-		"pattern_subscribers":  numPat,
+	common.JSON(w, common.Map{
+		"channels":            result,
+		"pattern_subscribers": numPat,
 	})
 }
 
-func (s *Server) handleGetExtendedInfo(c *fiber.Ctx) error {
-	section := c.Query("section", "all")
+func (s *Server) handleGetExtendedInfo(w http.ResponseWriter, r *http.Request) {
+	section := common.Query(r, "section", "all")
 
 	var info string
 	var err error
@@ -594,7 +659,8 @@ func (s *Server) handleGetExtendedInfo(c *fiber.Ctx) error {
 	}
 
 	if err != nil {
-		return common.JSONError(c, fiber.StatusInternalServerError, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	// Parse into sections
@@ -621,5 +687,5 @@ func (s *Server) handleGetExtendedInfo(c *fiber.Ctx) error {
 		}
 	}
 
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }

@@ -1,23 +1,56 @@
 package common
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"encoding/json"
+	"net/http"
+)
+
+// Map replaces fiber.Map
+type Map = map[string]any
+
+// writeJSON sets headers, status, and encodes JSON to the response writer
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
 
 // JSON sends a success response with data
-func JSON(c *fiber.Ctx, data any) error {
-	return c.JSON(Response{Success: true, Data: data})
+func JSON(w http.ResponseWriter, data any) {
+	writeJSON(w, http.StatusOK, Response{Success: true, Data: data})
 }
 
 // JSONMessage sends a success response with message
-func JSONMessage(c *fiber.Ctx, message string) error {
-	return c.JSON(Response{Success: true, Message: message})
+func JSONMessage(w http.ResponseWriter, message string) {
+	writeJSON(w, http.StatusOK, Response{Success: true, Message: message})
 }
 
 // JSONError sends an error response
-func JSONError(c *fiber.Ctx, status int, message string) error {
-	return c.Status(status).JSON(Response{Success: false, Message: message})
+func JSONError(w http.ResponseWriter, status int, message string) {
+	writeJSON(w, status, Response{Success: false, Message: message})
 }
 
-// JSONFiberMap sends a fiber.Map response
-func JSONFiberMap(c *fiber.Ctx, data fiber.Map) error {
-	return c.JSON(data)
+// JSONMap sends an arbitrary map as JSON (replaces JSONFiberMap)
+func JSONMap(w http.ResponseWriter, data Map) {
+	writeJSON(w, http.StatusOK, data)
+}
+
+// JSONRaw sends any data as JSON without wrapping in Response
+func JSONRaw(w http.ResponseWriter, data any) {
+	writeJSON(w, http.StatusOK, data)
+}
+
+// ParseJSON decodes the JSON request body into target
+func ParseJSON(r *http.Request, target any) error {
+	defer r.Body.Close()
+	return json.NewDecoder(r.Body).Decode(target)
+}
+
+// Query returns the query parameter value, or defaultValue if empty/missing
+func Query(r *http.Request, key, defaultValue string) string {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return defaultValue
+	}
+	return v
 }

@@ -1,29 +1,32 @@
 package sql
 
 import (
+	"net/http"
 	"os"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
-	"github.com/gofiber/fiber/v2"
 )
 
-func (s *Server) handlePreviewSchemaChange(c *fiber.Ctx) error {
+func (s *Server) handlePreviewSchemaChange(w http.ResponseWriter, r *http.Request) {
 	var change SchemaChange
-	if err := c.BodyParser(&change); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &change); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	preview, err := s.service.PreviewSchemaChange(&change)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return c.JSON(preview)
+	common.JSONRaw(w, preview)
 }
 
-func (s *Server) handleApplySchemaChange(c *fiber.Ctx) error {
+func (s *Server) handleApplySchemaChange(w http.ResponseWriter, r *http.Request) {
 	var change SchemaChange
-	if err := c.BodyParser(&change); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &change); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	configPath := ""
@@ -32,7 +35,8 @@ func (s *Server) handleApplySchemaChange(c *fiber.Ctx) error {
 	}
 
 	if err := s.service.ApplySchemaChange(&change, configPath); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	message := "Schema change applied successfully"
@@ -40,45 +44,48 @@ func (s *Server) handleApplySchemaChange(c *fiber.Ctx) error {
 		message += " (migration files not created - no config found)"
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{"success": true, "message": message})
+	common.JSONMap(w, common.Map{"success": true, "message": message})
 }
 
-func (s *Server) handleCheckConfig(c *fiber.Ctx) error {
+func (s *Server) handleCheckConfig(w http.ResponseWriter, r *http.Request) {
 	exists := false
 	if _, err := os.Stat("./flash.config.json"); err == nil {
 		exists = true
 	}
-	return common.JSONFiberMap(c, fiber.Map{"exists": exists})
+	common.JSONMap(w, common.Map{"exists": exists})
 }
 
-func (s *Server) handleGetBranches(c *fiber.Ctx) error {
+func (s *Server) handleGetBranches(w http.ResponseWriter, r *http.Request) {
 	branches, current, err := s.service.GetBranches()
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONFiberMap(c, fiber.Map{"branches": branches, "current": current})
+	common.JSONMap(w, common.Map{"branches": branches, "current": current})
 }
 
-func (s *Server) handleSwitchBranch(c *fiber.Ctx) error {
+func (s *Server) handleSwitchBranch(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Branch string `json:"branch"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &req); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	if err := s.service.SwitchBranch(req.Branch); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{
+	common.JSONMap(w, common.Map{
 		"success": true,
 		"message": "Branch switched. Please refresh the page to see changes.",
 	})
 }
 
-func (s *Server) handleExport(c *fiber.Ctx) error {
-	exportTypeStr := c.Params("type")
+func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
+	exportTypeStr := r.PathValue("type")
 
 	var exportType common.ExportType
 	switch exportTypeStr {
@@ -89,33 +96,38 @@ func (s *Server) handleExport(c *fiber.Ctx) error {
 	case "complete":
 		exportType = common.ExportComplete
 	default:
-		return common.JSONError(c, 400, "Invalid export type. Use: schema_only, data_only, or complete")
+		common.JSONError(w, http.StatusBadRequest, "Invalid export type. Use: schema_only, data_only, or complete")
+		return
 	}
 
 	data, err := s.service.ExportDatabase(exportType)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSON(c, data)
+	common.JSON(w, data)
 }
 
-func (s *Server) handleImport(c *fiber.Ctx) error {
+func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	var importData common.ExportData
-	if err := c.BodyParser(&importData); err != nil {
-		return common.JSONError(c, 400, "Invalid import data format")
+	if err := common.ParseJSON(r, &importData); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid import data format")
+		return
 	}
 
 	if importData.Version == "" || len(importData.Tables) == 0 {
-		return common.JSONError(c, 400, "Invalid import data: missing version or tables")
+		common.JSONError(w, http.StatusBadRequest, "Invalid import data: missing version or tables")
+		return
 	}
 
 	result, err := s.service.ImportDatabase(&importData)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{
+	common.JSONMap(w, common.Map{
 		"success": true,
 		"message": "Import completed",
 		"result":  result,

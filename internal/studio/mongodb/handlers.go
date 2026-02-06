@@ -2,103 +2,117 @@ package mongodb
 
 import (
 	"encoding/json"
+	"net/http"
 	"strconv"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
-	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
 // Database Handlers
-func (s *Server) handleGetDatabases(c *fiber.Ctx) error {
+func (s *Server) handleGetDatabases(w http.ResponseWriter, r *http.Request) {
 	databases, err := s.service.GetDatabases()
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, databases)
+	common.JSON(w, databases)
 }
 
-func (s *Server) handleSelectDatabase(c *fiber.Ctx) error {
-	dbName := c.Params("name")
+func (s *Server) handleSelectDatabase(w http.ResponseWriter, r *http.Request) {
+	dbName := r.PathValue("name")
 	if dbName == "" {
-		return common.JSONError(c, 400, "database name is required")
+		common.JSONError(w, http.StatusBadRequest, "database name is required")
+		return
 	}
 
 	if err := s.service.SwitchDatabase(dbName); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Database switched successfully")
+	common.JSONMessage(w, "Database switched successfully")
 }
 
-func (s *Server) handleDropDatabase(c *fiber.Ctx) error {
-	dbName := c.Params("name")
+func (s *Server) handleDropDatabase(w http.ResponseWriter, r *http.Request) {
+	dbName := r.PathValue("name")
 	if dbName == "" {
-		return common.JSONError(c, 400, "database name is required")
+		common.JSONError(w, http.StatusBadRequest, "database name is required")
+		return
 	}
 
 	if err := s.service.DropDatabase(dbName); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Database dropped successfully")
+	common.JSONMessage(w, "Database dropped successfully")
 }
 
-func (s *Server) handleCreateDatabase(c *fiber.Ctx) error {
+func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name string `json:"name"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return common.JSONError(c, 400, "invalid request body")
+	if err := common.ParseJSON(r, &req); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
 	}
 	if req.Name == "" {
-		return common.JSONError(c, 400, "database name is required")
+		common.JSONError(w, http.StatusBadRequest, "database name is required")
+		return
 	}
 
 	if err := s.service.CreateDatabase(req.Name); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Database created successfully")
+	common.JSONMessage(w, "Database created successfully")
 }
 
 // Collection Handlers
-func (s *Server) handleGetCollections(c *fiber.Ctx) error {
-	dbName := c.Query("database")
+func (s *Server) handleGetCollections(w http.ResponseWriter, r *http.Request) {
+	dbName := r.URL.Query().Get("database")
 	if dbName == "" {
-		return common.JSONError(c, 400, "database parameter is required")
+		common.JSONError(w, http.StatusBadRequest, "database parameter is required")
+		return
 	}
 
 	collections, err := s.service.GetCollections(dbName)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, collections)
+	common.JSON(w, collections)
 }
 
-func (s *Server) handleGetCollectionData(c *fiber.Ctx) error {
-	dbName := c.Query("database")
+func (s *Server) handleGetCollectionData(w http.ResponseWriter, r *http.Request) {
+	dbName := r.URL.Query().Get("database")
 	if dbName == "" {
-		return common.JSONError(c, 400, "database parameter is required")
+		common.JSONError(w, http.StatusBadRequest, "database parameter is required")
+		return
 	}
 
 	if err := s.service.SwitchDatabase(dbName); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	name := c.Params("name")
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	limit, _ := strconv.Atoi(c.Query("limit", "50"))
+	name := r.PathValue("name")
+	page, _ := strconv.Atoi(common.Query(r, "page", "1"))
+	limit, _ := strconv.Atoi(common.Query(r, "limit", "50"))
 
 	result, err := s.service.GetDocuments(dbName, name, page, limit)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
-func (s *Server) handleCreateCollection(c *fiber.Ctx) error {
-	dbName := c.Query("database")
+func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) {
+	dbName := r.URL.Query().Get("database")
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
@@ -106,157 +120,177 @@ func (s *Server) handleCreateCollection(c *fiber.Ctx) error {
 		Name    string                 `json:"name"`
 		Options map[string]interface{} `json:"options"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &req); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	if err := s.service.CreateCollection(req.Name, req.Options); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Collection created successfully")
+	common.JSONMessage(w, "Collection created successfully")
 }
 
-func (s *Server) handleDropCollection(c *fiber.Ctx) error {
-	name := c.Params("name")
-	dbName := c.Query("database")
+func (s *Server) handleDropCollection(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	if err := s.service.DropCollection(name); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Collection dropped successfully")
+	common.JSONMessage(w, "Collection dropped successfully")
 }
 
 // Document Handlers
-func (s *Server) handleGetDocuments(c *fiber.Ctx) error {
-	dbName := c.Query("database")
+func (s *Server) handleGetDocuments(w http.ResponseWriter, r *http.Request) {
+	dbName := r.URL.Query().Get("database")
 	if dbName == "" {
-		return common.JSONError(c, 400, "database parameter is required")
+		common.JSONError(w, http.StatusBadRequest, "database parameter is required")
+		return
 	}
 
-	name := c.Params("name")
-	page, _ := strconv.Atoi(c.Query("page", "1"))
-	limit, _ := strconv.Atoi(c.Query("limit", "50"))
-	filterStr := c.Query("filter", "")
+	name := r.PathValue("name")
+	page, _ := strconv.Atoi(common.Query(r, "page", "1"))
+	limit, _ := strconv.Atoi(common.Query(r, "limit", "50"))
+	filterStr := common.Query(r, "filter", "")
 
 	var filter bson.M
 	if filterStr != "" {
 		if err := json.Unmarshal([]byte(filterStr), &filter); err != nil {
-			return common.JSONError(c, 400, "Invalid filter JSON: "+err.Error())
+			common.JSONError(w, http.StatusBadRequest, "Invalid filter JSON: "+err.Error())
+			return
 		}
 	}
 
 	result, err := s.service.GetDocumentsWithFilter(dbName, name, page, limit, filter)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
-func (s *Server) handleInsertDocument(c *fiber.Ctx) error {
-	name := c.Params("name")
-	dbName := c.Query("database")
+func (s *Server) handleInsertDocument(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	var document map[string]interface{}
-	if err := c.BodyParser(&document); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &document); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	id, err := s.service.InsertDocument(name, document)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	return common.JSONFiberMap(c, fiber.Map{"success": true, "message": "Document inserted successfully", "id": id})
+	common.JSONMap(w, common.Map{"success": true, "message": "Document inserted successfully", "id": id})
 }
 
-func (s *Server) handleUpdateDocument(c *fiber.Ctx) error {
-	name := c.Params("name")
-	id := c.Params("id")
-	dbName := c.Query("database")
+func (s *Server) handleUpdateDocument(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	id := r.PathValue("id")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	var document map[string]interface{}
-	if err := c.BodyParser(&document); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &document); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	if err := s.service.UpdateDocument(name, id, document); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Document updated successfully")
+	common.JSONMessage(w, "Document updated successfully")
 }
 
-func (s *Server) handleDeleteDocument(c *fiber.Ctx) error {
-	name := c.Params("name")
-	id := c.Params("id")
-	dbName := c.Query("database")
+func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	id := r.PathValue("id")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	if err := s.service.DeleteDocument(name, id); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Document deleted successfully")
+	common.JSONMessage(w, "Document deleted successfully")
 }
 
-func (s *Server) handleBulkDeleteDocuments(c *fiber.Ctx) error {
-	name := c.Params("name")
-	dbName := c.Query("database")
+func (s *Server) handleBulkDeleteDocuments(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	var req struct {
 		IDs []string `json:"ids"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &req); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	if err := s.service.BulkDeleteDocuments(name, req.IDs); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Documents deleted successfully")
+	common.JSONMessage(w, "Documents deleted successfully")
 }
 
 // Aggregation Handler
-func (s *Server) handleAggregate(c *fiber.Ctx) error {
-	name := c.Params("name")
-	dbName := c.Query("database")
+func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	var rawPipeline []interface{}
-	if err := c.BodyParser(&rawPipeline); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &rawPipeline); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	pipeline := make([]bson.M, len(rawPipeline))
@@ -268,36 +302,40 @@ func (s *Server) handleAggregate(c *fiber.Ctx) error {
 
 	result, err := s.service.Aggregate(name, pipeline)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
 // Index Handlers
-func (s *Server) handleGetIndexes(c *fiber.Ctx) error {
-	name := c.Params("name")
-	dbName := c.Query("database")
+func (s *Server) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	indexes, err := s.service.GetIndexes(name)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, indexes)
+	common.JSON(w, indexes)
 }
 
-func (s *Server) handleCreateIndex(c *fiber.Ctx) error {
-	name := c.Params("name")
-	dbName := c.Query("database")
+func (s *Server) handleCreateIndex(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
@@ -305,48 +343,54 @@ func (s *Server) handleCreateIndex(c *fiber.Ctx) error {
 		Keys   map[string]interface{} `json:"keys"`
 		Unique bool                   `json:"unique"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &req); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	if err := s.service.CreateIndex(name, req.Keys, req.Unique); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Index created successfully")
+	common.JSONMessage(w, "Index created successfully")
 }
 
-func (s *Server) handleDropIndex(c *fiber.Ctx) error {
-	name := c.Params("name")
-	indexName := c.Params("indexName")
-	dbName := c.Query("database")
+func (s *Server) handleDropIndex(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	indexName := r.PathValue("indexName")
+	dbName := r.URL.Query().Get("database")
 
 	if dbName != "" {
 		if err := s.service.SwitchDatabase(dbName); err != nil {
-			return common.JSONError(c, 500, "Failed to switch database: "+err.Error())
+			common.JSONError(w, http.StatusInternalServerError, "Failed to switch database: "+err.Error())
+			return
 		}
 	}
 
 	if err := s.service.DropIndex(name, indexName); err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSONMessage(c, "Index dropped successfully")
+	common.JSONMessage(w, "Index dropped successfully")
 }
 
 // Query Handler
-func (s *Server) handleQuery(c *fiber.Ctx) error {
-	name := c.Params("name")
+func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
 
 	var req struct {
 		Filter string `json:"filter"`
 		Limit  int    `json:"limit"`
 	}
-	if err := c.BodyParser(&req); err != nil {
-		return common.JSONError(c, 400, "Invalid request")
+	if err := common.ParseJSON(r, &req); err != nil {
+		common.JSONError(w, http.StatusBadRequest, "Invalid request")
+		return
 	}
 
 	var filter bson.M
 	if err := json.Unmarshal([]byte(req.Filter), &filter); err != nil {
-		return common.JSONError(c, 400, "Invalid filter format")
+		common.JSONError(w, http.StatusBadRequest, "Invalid filter format")
+		return
 	}
 
 	if req.Limit == 0 {
@@ -355,26 +399,29 @@ func (s *Server) handleQuery(c *fiber.Ctx) error {
 
 	result, err := s.service.Query(name, filter, req.Limit)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, result)
+	common.JSON(w, result)
 }
 
 // Stats Handlers
-func (s *Server) handleGetStats(c *fiber.Ctx) error {
+func (s *Server) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.service.GetStats()
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, stats)
+	common.JSON(w, stats)
 }
 
-func (s *Server) handleGetCollectionStats(c *fiber.Ctx) error {
-	name := c.Params("name")
+func (s *Server) handleGetCollectionStats(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
 
 	stats, err := s.service.GetCollectionStats(name)
 	if err != nil {
-		return common.JSONError(c, 500, err.Error())
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	return common.JSON(c, stats)
+	common.JSON(w, stats)
 }

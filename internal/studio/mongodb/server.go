@@ -3,15 +3,17 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"html/template"
+	"net/http"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
-	"github.com/gofiber/fiber/v2"
 )
 
 type Server struct {
-	app           *fiber.App
+	mux           *http.ServeMux
+	tmpl          *template.Template
 	service       *Service
 	port          int
 	connectionURL string
@@ -29,10 +31,12 @@ func NewServer(cfg *config.Config, port int) *Server {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
 
-	app := common.NewApp(TemplatesFS)
+	mux := http.NewServeMux()
+	tmpl := common.ParseTemplates(TemplatesFS)
 
 	server := &Server{
-		app:           app,
+		mux:           mux,
+		tmpl:          tmpl,
 		service:       NewService(adapter),
 		port:          port,
 		connectionURL: dbURL,
@@ -43,72 +47,69 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	common.SetupStaticFS(s.app, StaticFS)
+	common.SetupStaticFS(s.mux, StaticFS)
 
 	// UI Routes
-	s.app.Get("/", s.handleIndex)
-	s.app.Get("/collections", s.handleCollections)
-	s.app.Get("/aggregation", s.handleAggregation)
-	s.app.Get("/indexes", s.handleIndexes)
+	s.mux.HandleFunc("GET /{$}", s.handleIndex)
+	s.mux.HandleFunc("GET /collections", s.handleCollections)
+	s.mux.HandleFunc("GET /aggregation", s.handleAggregation)
+	s.mux.HandleFunc("GET /indexes", s.handleIndexes)
 
-	// API Routes
-	api := s.app.Group("/api")
+	// API Routes - Databases
+	s.mux.HandleFunc("GET /api/databases", s.handleGetDatabases)
+	s.mux.HandleFunc("POST /api/databases", s.handleCreateDatabase)
+	s.mux.HandleFunc("POST /api/databases/{name}/select", s.handleSelectDatabase)
+	s.mux.HandleFunc("DELETE /api/databases/{name}", s.handleDropDatabase)
 
-	// Databases
-	api.Get("/databases", s.handleGetDatabases)
-	api.Post("/databases", s.handleCreateDatabase)
-	api.Post("/databases/:name/select", s.handleSelectDatabase)
-	api.Delete("/databases/:name", s.handleDropDatabase)
+	// API Routes - Collections
+	s.mux.HandleFunc("GET /api/collections", s.handleGetCollections)
+	s.mux.HandleFunc("GET /api/collections/{name}", s.handleGetCollectionData)
+	s.mux.HandleFunc("POST /api/collections", s.handleCreateCollection)
+	s.mux.HandleFunc("DELETE /api/collections/{name}", s.handleDropCollection)
 
-	// Collections
-	api.Get("/collections", s.handleGetCollections)
-	api.Get("/collections/:name", s.handleGetCollectionData)
-	api.Post("/collections", s.handleCreateCollection)
-	api.Delete("/collections/:name", s.handleDropCollection)
+	// API Routes - Documents
+	s.mux.HandleFunc("GET /api/collections/{name}/documents", s.handleGetDocuments)
+	s.mux.HandleFunc("POST /api/collections/{name}/documents", s.handleInsertDocument)
+	s.mux.HandleFunc("PUT /api/collections/{name}/documents/{id}", s.handleUpdateDocument)
+	s.mux.HandleFunc("DELETE /api/collections/{name}/documents/{id}", s.handleDeleteDocument)
+	s.mux.HandleFunc("POST /api/collections/{name}/documents/bulk-delete", s.handleBulkDeleteDocuments)
 
-	// Documents
-	api.Get("/collections/:name/documents", s.handleGetDocuments)
-	api.Post("/collections/:name/documents", s.handleInsertDocument)
-	api.Put("/collections/:name/documents/:id", s.handleUpdateDocument)
-	api.Delete("/collections/:name/documents/:id", s.handleDeleteDocument)
-	api.Post("/collections/:name/documents/bulk-delete", s.handleBulkDeleteDocuments)
+	// API Routes - Aggregation
+	s.mux.HandleFunc("POST /api/collections/{name}/aggregate", s.handleAggregate)
 
-	// Aggregation
-	api.Post("/collections/:name/aggregate", s.handleAggregate)
+	// API Routes - Indexes
+	s.mux.HandleFunc("GET /api/collections/{name}/indexes", s.handleGetIndexes)
+	s.mux.HandleFunc("POST /api/collections/{name}/indexes", s.handleCreateIndex)
+	s.mux.HandleFunc("DELETE /api/collections/{name}/indexes/{indexName}", s.handleDropIndex)
 
-	// Indexes
-	api.Get("/collections/:name/indexes", s.handleGetIndexes)
-	api.Post("/collections/:name/indexes", s.handleCreateIndex)
-	api.Delete("/collections/:name/indexes/:indexName", s.handleDropIndex)
+	// API Routes - Query
+	s.mux.HandleFunc("POST /api/collections/{name}/query", s.handleQuery)
 
-	// Query
-	api.Post("/collections/:name/query", s.handleQuery)
-
-	// Stats
-	api.Get("/stats", s.handleGetStats)
-	api.Get("/collections/:name/stats", s.handleGetCollectionStats)
+	// API Routes - Stats
+	s.mux.HandleFunc("GET /api/stats", s.handleGetStats)
+	s.mux.HandleFunc("GET /api/collections/{name}/stats", s.handleGetCollectionStats)
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	return common.StartServer(s.app, &s.port, "MongoDB Studio", openBrowser)
+	return common.StartServer(s.mux, &s.port, "MongoDB Studio", openBrowser)
 }
 
 // UI Handlers
-func (s *Server) handleIndex(c *fiber.Ctx) error {
-	return c.Render("templates/index", fiber.Map{
+func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	s.tmpl.ExecuteTemplate(w, "index.html", common.Map{
 		"Title":         "FlashORM MongoDB Studio",
 		"ConnectionURL": s.connectionURL,
 	})
 }
 
-func (s *Server) handleCollections(c *fiber.Ctx) error {
-	return c.Render("templates/collections", fiber.Map{"Title": "Collections - FlashORM MongoDB Studio"})
+func (s *Server) handleCollections(w http.ResponseWriter, r *http.Request) {
+	s.tmpl.ExecuteTemplate(w, "collections.html", common.Map{"Title": "Collections - FlashORM MongoDB Studio"})
 }
 
-func (s *Server) handleAggregation(c *fiber.Ctx) error {
-	return c.Render("templates/aggregation", fiber.Map{"Title": "Aggregation - FlashORM MongoDB Studio"})
+func (s *Server) handleAggregation(w http.ResponseWriter, r *http.Request) {
+	s.tmpl.ExecuteTemplate(w, "aggregation.html", common.Map{"Title": "Aggregation - FlashORM MongoDB Studio"})
 }
 
-func (s *Server) handleIndexes(c *fiber.Ctx) error {
-	return c.Render("templates/indexes", fiber.Map{"Title": "Indexes - FlashORM MongoDB Studio"})
+func (s *Server) handleIndexes(w http.ResponseWriter, r *http.Request) {
+	s.tmpl.ExecuteTemplate(w, "indexes.html", common.Map{"Title": "Indexes - FlashORM MongoDB Studio"})
 }

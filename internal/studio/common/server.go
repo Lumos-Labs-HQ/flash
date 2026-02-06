@@ -3,12 +3,9 @@ package common
 import (
 	"embed"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/filesystem"
-	"github.com/gofiber/template/html/v2"
 )
 
 //go:embed static/*
@@ -25,32 +22,30 @@ func init() {
 	commonJS, _ = CommonStaticFS.ReadFile("static/js/common.js")
 }
 
-// NewApp creates a new Fiber app with the given template FS
-func NewApp(templatesFS fs.FS) *fiber.App {
-	engine := html.NewFileSystem(http.FS(templatesFS), ".html")
-	return fiber.New(fiber.Config{Views: engine})
+// ParseTemplates parses HTML templates from the given embedded FS
+func ParseTemplates(templatesFS fs.FS) *template.Template {
+	return template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 }
 
-// SetupStaticFS mounts studio-specific and common static files on the app
-func SetupStaticFS(app *fiber.App, studioStaticFS embed.FS) {
+// SetupStaticFS mounts studio-specific and common static files on the mux
+func SetupStaticFS(mux *http.ServeMux, studioStaticFS embed.FS) {
 	staticFS, _ := fs.Sub(studioStaticFS, "static")
-	app.Use("/static", filesystem.New(filesystem.Config{
-		Root: http.FS(staticFS),
-	}))
+	fileServer := http.FileServer(http.FS(staticFS))
+	mux.Handle("GET /static/", http.StripPrefix("/static/", fileServer))
 
 	// Serve common shared files
-	app.Get("/common/static/css/base.css", func(c *fiber.Ctx) error {
-		c.Set("Content-Type", "text/css")
-		return c.Send(baseCSS)
+	mux.HandleFunc("GET /common/static/css/base.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css")
+		w.Write(baseCSS)
 	})
-	app.Get("/common/static/js/common.js", func(c *fiber.Ctx) error {
-		c.Set("Content-Type", "application/javascript")
-		return c.Send(commonJS)
+	mux.HandleFunc("GET /common/static/js/common.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Write(commonJS)
 	})
 }
 
 // StartServer finds an available port, prints the URL, optionally opens a browser, and starts listening
-func StartServer(app *fiber.App, port *int, name string, openBrowser bool) error {
+func StartServer(mux *http.ServeMux, port *int, name string, openBrowser bool) error {
 	available := FindAvailablePort(*port)
 	if available != *port {
 		fmt.Printf("Port %d is in use, using port %d instead\n", *port, available)
@@ -64,5 +59,5 @@ func StartServer(app *fiber.App, port *int, name string, openBrowser bool) error
 		go OpenBrowser(url)
 	}
 
-	return app.Listen(fmt.Sprintf(":%d", *port))
+	return http.ListenAndServe(fmt.Sprintf(":%d", *port), mux)
 }
