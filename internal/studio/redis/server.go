@@ -3,13 +3,9 @@ package redis
 import (
 	"context"
 	"fmt"
-	"io/fs"
-	"net/http"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/filesystem"
-	"github.com/gofiber/template/html/v2"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -33,9 +29,7 @@ func NewServer(connectionURL string, port int) *Server {
 		panic(fmt.Sprintf("Failed to connect to Redis: %v", err))
 	}
 
-	engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
-
-	app := fiber.New(fiber.Config{Views: engine})
+	app := common.NewApp(TemplatesFS)
 
 	server := &Server{
 		app:           app,
@@ -49,10 +43,7 @@ func NewServer(connectionURL string, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	staticFS, _ := fs.Sub(StaticFS, "static")
-	s.app.Use("/static", filesystem.New(filesystem.Config{
-		Root: http.FS(staticFS),
-	}))
+	common.SetupStaticFS(s.app, StaticFS)
 
 	// UI Routes
 	s.app.Get("/", s.handleIndex)
@@ -128,20 +119,7 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	port := common.FindAvailablePort(s.port)
-	if port != s.port {
-		fmt.Printf("⚠️  Port %d is in use, using port %d instead\n", s.port, port)
-		s.port = port
-	}
-
-	url := fmt.Sprintf("http://localhost:%d", s.port)
-	fmt.Printf("🚀 FlashORM Redis Studio starting on %s\n", url)
-
-	if openBrowser {
-		go common.OpenBrowser(url)
-	}
-
-	return s.app.Listen(fmt.Sprintf(":%d", s.port))
+	return common.StartServer(s.app, &s.port, "Redis Studio", openBrowser)
 }
 
 func (s *Server) handleIndex(c *fiber.Ctx) error {

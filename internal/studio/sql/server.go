@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
-	"net/http"
 	"strconv"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/branch"
@@ -13,8 +11,6 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/filesystem"
-	"github.com/gofiber/template/html/v2"
 )
 
 type Server struct {
@@ -49,9 +45,7 @@ func NewServer(cfg *config.Config, port int) *Server {
 		}
 	}
 
-	engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
-
-	app := fiber.New(fiber.Config{Views: engine})
+	app := common.NewApp(TemplatesFS)
 
 	server := &Server{
 		app:     app,
@@ -64,10 +58,7 @@ func NewServer(cfg *config.Config, port int) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	staticFS, _ := fs.Sub(StaticFS, "static")
-	s.app.Use("/static", filesystem.New(filesystem.Config{
-		Root: http.FS(staticFS),
-	}))
+	common.SetupStaticFS(s.app, StaticFS)
 
 	// UI routes
 	s.app.Get("/", s.handleIndex)
@@ -105,20 +96,7 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	port := common.FindAvailablePort(s.port)
-	if port != s.port {
-		fmt.Printf("⚠️  Port %d is in use, using port %d instead\n", s.port, port)
-		s.port = port
-	}
-
-	url := fmt.Sprintf("http://localhost:%d", s.port)
-	fmt.Printf("🚀 FlashORM Studio starting on %s\n", url)
-
-	if openBrowser {
-		go common.OpenBrowser(url)
-	}
-
-	return s.app.Listen(fmt.Sprintf(":%d", s.port))
+	return common.StartServer(s.app, &s.port, "Studio", openBrowser)
 }
 
 // UI Handlers

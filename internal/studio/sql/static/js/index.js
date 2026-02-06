@@ -91,11 +91,6 @@ function addFilterRow(logic = 'where', column = '', operator = 'equals', value =
     updateFilterOperators(columnSelect);
 }
 
-// Escape HTML attribute values
-function escapeHtmlAttr(str) {
-    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 // Update filter operators based on column type
 function updateFilterOperators(selectElement) {
     const columnName = selectElement.value;
@@ -286,14 +281,14 @@ async function switchBranch(branchName) {
         });
 
         if (response.ok) {
-            showNotification(`Switched to branch: ${branchName}`, 'success');
+            showToast(`Switched to branch: ${branchName}`, 'success');
             location.reload(); // Reload to show data from new branch
         } else {
-            showNotification('Failed to switch branch', 'error');
+            showToast('Failed to switch branch', 'error');
         }
     } catch (error) {
         console.error('Failed to switch branch:', error);
-        showNotification('Failed to switch branch', 'error');
+        showToast('Failed to switch branch', 'error');
     }
 }
 
@@ -301,35 +296,6 @@ async function switchBranch(branchName) {
 document.addEventListener('DOMContentLoaded', () => {
     loadBranches();
 });
-
-// Show notification toast
-function showNotification(message, type = 'info') {
-    const existing = document.querySelector('.notification-toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = `notification-toast notification-${type}`;
-
-    const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠',
-        info: 'ℹ'
-    };
-
-    toast.innerHTML = `
-        <span class="notification-icon">${icons[type] || icons.info}</span>
-        <span class="notification-message">${message}</span>
-    `;
-
-    document.body.appendChild(toast);
-
-    setTimeout(() => toast.classList.add('show'), 10);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
 
 // Dropdown toggle
 function toggleDropdown(dropdownId) {
@@ -358,7 +324,7 @@ async function exportDatabase(exportType) {
     // Close dropdown
     document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
 
-    showNotification('Exporting database...', 'info');
+    showToast('Exporting database...', 'info');
 
     try {
         const response = await fetch(`/api/export/${exportType}`);
@@ -366,7 +332,7 @@ async function exportDatabase(exportType) {
 
         // Check for error response
         if (responseData.success === false && responseData.message) {
-            showNotification(responseData.message, 'error');
+            showToast(responseData.message, 'error');
             return;
         }
 
@@ -387,10 +353,10 @@ async function exportDatabase(exportType) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        showNotification(`Export completed: ${exportType}`, 'success');
+        showToast(`Export completed: ${exportType}`, 'success');
     } catch (err) {
         console.error('Export failed:', err);
-        showNotification('Export failed: ' + err.message, 'error');
+        showToast('Export failed: ' + err.message, 'error');
     }
 }
 
@@ -414,7 +380,7 @@ async function handleImportFile(event) {
         try {
             importData = JSON.parse(content);
         } catch (parseErr) {
-            showNotification('Invalid JSON file', 'error');
+            showToast('Invalid JSON file', 'error');
             return;
         }
 
@@ -426,7 +392,7 @@ async function handleImportFile(event) {
 
         // Validate import data structure
         if (!importData.version || !importData.tables) {
-            showNotification('Invalid export file format', 'error');
+            showToast('Invalid export file format', 'error');
             return;
         }
 
@@ -465,13 +431,13 @@ async function handleImportFile(event) {
 
     } catch (err) {
         console.error('Import failed:', err);
-        showNotification('Import failed: ' + err.message, 'error');
+        showToast('Import failed: ' + err.message, 'error');
     }
 }
 
 // Perform the actual import
 async function performImport(importData) {
-    showNotification('Importing database...', 'info');
+    showToast('Importing database...', 'info');
 
     try {
         const response = await fetch('/api/import', {
@@ -483,7 +449,7 @@ async function performImport(importData) {
         const result = await response.json();
 
         if (!result.success) {
-            showNotification(result.message || 'Import failed', 'error');
+            showToast(result.message || 'Import failed', 'error');
             return;
         }
 
@@ -525,6 +491,6 @@ async function performImport(importData) {
 
     } catch (err) {
         console.error('Import failed:', err);
-        showNotification('Import failed: ' + err.message, 'error');
+        showToast('Import failed: ' + err.message, 'error');
     }
 }

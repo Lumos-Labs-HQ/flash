@@ -284,13 +284,6 @@ function formatCellValue(value) {
     return `<span class="cell-text">${escapeHtml(strValue)}</span>`;
 }
 
-// HTML escape utility
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function displayResults(data, query, elapsed) {
     const resultsBody = document.getElementById('results-body');
     const queryType = getQueryType(query);
@@ -361,7 +354,7 @@ function displayResults(data, query, elapsed) {
         td.addEventListener('click', () => {
             const text = td.textContent;
             navigator.clipboard.writeText(text).then(() => {
-                showToast('Copied to clipboard');
+                showToast('Copied to clipboard', 'success');
             }).catch(() => { });
         });
         td.style.cursor = 'pointer';
@@ -380,23 +373,6 @@ function displayError(message) {
         </div>
     `;
     document.getElementById('export-btn').style.display = 'none';
-}
-
-// Show toast notification
-function showToast(message, duration = 2000) {
-    const existing = document.querySelector('.sql-toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = 'sql-toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => toast.classList.add('show'), 10);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, duration);
 }
 
 function clearEditor() {

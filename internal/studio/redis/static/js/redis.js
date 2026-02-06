@@ -239,7 +239,7 @@ const RedisStudio = {
         if (result === null || result === undefined) return '<span class="nil">(nil)</span>';
         if (result === 'OK') return '<span class="ok">OK</span>';
         if (typeof result === 'number') return '<span class="integer">(integer) ' + result + '</span>';
-        if (typeof result === 'string') return '<span class="str">"' + this.escapeHtml(result) + '"</span>';
+        if (typeof result === 'string') return '<span class="str">"' + escapeHtml(result) + '"</span>';
 
         if (Array.isArray(result)) {
             if (result.length === 0) return '(empty array)';
@@ -248,16 +248,16 @@ const RedisStudio = {
                 const item = result[i];
                 let val;
                 if (item === null) val = '<span class="nil">(nil)</span>';
-                else if (typeof item === 'string') val = '<span class="str">"' + this.escapeHtml(item) + '"</span>';
+                else if (typeof item === 'string') val = '<span class="str">"' + escapeHtml(item) + '"</span>';
                 else if (typeof item === 'number') val = '<span class="integer">' + item + '</span>';
-                else val = this.escapeHtml(String(item));
+                else val = escapeHtml(String(item));
                 html += '<span class="idx">' + (i + 1) + ')</span> ' + val + '\n';
             }
             return html.trim();
         }
 
         if (typeof result === 'object') {
-            return this.escapeHtml(JSON.stringify(result, null, 2));
+            return escapeHtml(JSON.stringify(result, null, 2));
         }
 
         return String(result);
@@ -293,7 +293,7 @@ const RedisStudio = {
             document.getElementById('keysCount').textContent = this.keys.length + ' keys';
             this.renderKeys();
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -312,7 +312,7 @@ const RedisStudio = {
             const isActive = this.currentKey === key.key ? 'active' : '';
             const ttl = key.ttl > 0 ? '<span class="ttl-badge">' + this.formatTTL(key.ttl) + '</span>' : '';
             html += '<div class="key-item ' + isActive + '" onclick="RedisStudio.selectKeyByIndex(' + i + ')">' +
-                '<div class="key-name"><span class="key-type ' + key.type + '">' + key.type + '</span><span>' + this.escapeHtml(key.key) + '</span></div>' + ttl + '</div>';
+                '<div class="key-name"><span class="key-type ' + key.type + '">' + key.type + '</span><span>' + escapeHtml(key.key) + '</span></div>' + ttl + '</div>';
         }
         container.innerHTML = html;
     },
@@ -347,7 +347,7 @@ const RedisStudio = {
             // Save state after key selection
             this.saveState();
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -360,7 +360,7 @@ const RedisStudio = {
 
         container.innerHTML = '<div class="key-header">' +
             '<div class="key-info"><span class="key-type ' + data.type + '">' + data.type + '</span>' +
-            '<h2>' + this.escapeHtml(data.key) + '</h2>' +
+            '<h2>' + escapeHtml(data.key) + '</h2>' +
             '<span class="ttl-badge ' + ttlClass + '">' + ttlText + '</span></div>' +
             '<div class="key-actions">' +
             '<button class="btn btn-sm" onclick="RedisStudio.copyKey()">Copy Key</button>' +
@@ -375,32 +375,32 @@ const RedisStudio = {
             case 'string':
                 return '<div class="value-display"><div class="value-display-header"><span>String (' + (data.value?.length || 0) + ' bytes)</span>' +
                     '<button class="copy-btn" onclick="RedisStudio.copyValue()">Copy</button></div>' +
-                    '<div class="value-display-body"><textarea class="value-editor" id="valueEditor">' + this.escapeHtml(data.value || '') + '</textarea></div></div>' +
+                    '<div class="value-display-body"><textarea class="value-editor" id="valueEditor">' + escapeHtml(data.value || '') + '</textarea></div></div>' +
                     '<div style="margin-top:12px"><button class="btn btn-success" onclick="RedisStudio.saveValue()">Save</button></div>';
             case 'list':
             case 'set':
                 const items = Array.isArray(data.value) ? data.value : [];
                 let html = '<div class="value-display"><div class="value-display-header"><span>' + data.type + ' (' + items.length + ' items)</span></div><div class="value-display-body"><div class="list-items">';
                 items.forEach((item, i) => {
-                    html += '<div class="list-item">' + (data.type === 'list' ? '<span class="list-item-index">' + i + '</span>' : '') + '<span class="list-item-value">' + this.escapeHtml(String(item)) + '</span></div>';
+                    html += '<div class="list-item">' + (data.type === 'list' ? '<span class="list-item-index">' + i + '</span>' : '') + '<span class="list-item-value">' + escapeHtml(String(item)) + '</span></div>';
                 });
                 return html + '</div></div></div>';
             case 'zset':
                 const zitems = Array.isArray(data.value) ? data.value : [];
                 let zhtml = '<div class="value-display"><div class="value-display-header"><span>Sorted Set (' + zitems.length + ')</span></div><div class="value-display-body"><div class="list-items">';
                 zitems.forEach(item => {
-                    zhtml += '<div class="list-item"><span class="list-item-index">' + (item.score || 0) + '</span><span class="list-item-value">' + this.escapeHtml(String(item.member || '')) + '</span></div>';
+                    zhtml += '<div class="list-item"><span class="list-item-index">' + (item.score || 0) + '</span><span class="list-item-value">' + escapeHtml(String(item.member || '')) + '</span></div>';
                 });
                 return zhtml + '</div></div></div>';
             case 'hash':
                 const entries = data.value ? Object.entries(data.value) : [];
                 let hhtml = '<div class="value-display"><div class="value-display-header"><span>Hash (' + entries.length + ' fields)</span></div><div class="value-display-body"><div class="list-items">';
                 entries.forEach(([k, v]) => {
-                    hhtml += '<div class="hash-item"><span class="hash-item-key">' + this.escapeHtml(k) + '</span><span class="hash-item-value">' + this.escapeHtml(String(v)) + '</span></div>';
+                    hhtml += '<div class="hash-item"><span class="hash-item-key">' + escapeHtml(k) + '</span><span class="hash-item-value">' + escapeHtml(String(v)) + '</span></div>';
                 });
                 return hhtml + '</div></div></div>';
             default:
-                return '<div class="value-display"><div class="value-display-body">' + this.escapeHtml(JSON.stringify(data.value)) + '</div></div>';
+                return '<div class="value-display"><div class="value-display-body">' + escapeHtml(JSON.stringify(data.value)) + '</div></div>';
         }
     },
 
@@ -424,21 +424,21 @@ const RedisStudio = {
             });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Value saved', 'success');
+            showToast('Value saved', 'success');
             // Refresh the key to get updated metadata
             this.selectKey(this.currentKey);
         } catch (error) {
-            this.showToast(error.message, 'error');
+            showToast(error.message, 'error');
         }
     },
 
     copyValue() {
         const editor = document.getElementById('valueEditor');
-        if (editor) { navigator.clipboard.writeText(editor.value); this.showToast('Copied', 'success'); }
+        if (editor) { navigator.clipboard.writeText(editor.value); showToast('Copied', 'success'); }
     },
 
     copyKey() {
-        if (this.currentKey) { navigator.clipboard.writeText(this.currentKey); this.showToast('Key copied', 'success'); }
+        if (this.currentKey) { navigator.clipboard.writeText(this.currentKey); showToast('Key copied', 'success'); }
     },
 
     promptTTL() {
@@ -447,7 +447,7 @@ const RedisStudio = {
         const ttl = prompt(`Enter TTL in seconds (current: ${currentTTL === -1 ? 'no expiry' : currentTTL + 's'}). Use -1 to remove expiry:`);
         if (ttl === null) return;
         const n = parseInt(ttl);
-        if (isNaN(n)) { this.showToast('Invalid TTL value', 'error'); return; }
+        if (isNaN(n)) { showToast('Invalid TTL value', 'error'); return; }
         const cmd = n <= 0 ? 'PERSIST ' + this.currentKey : 'EXPIRE ' + this.currentKey + ' ' + n;
         this.runCommand(cmd).then(() => {
             // Update stored TTL
@@ -455,7 +455,7 @@ const RedisStudio = {
             // Refresh both key detail and keys list to update TTL badges
             this.selectKey(this.currentKey);
             this.loadKeys();  // Refresh sidebar badges
-            this.showToast(n <= 0 ? 'TTL removed' : `TTL set to ${n}s`, 'success');
+            showToast(n <= 0 ? 'TTL removed' : `TTL set to ${n}s`, 'success');
         });
     },
 
@@ -472,9 +472,9 @@ const RedisStudio = {
             this.currentKey = null;
             this.loadKeys();
             document.getElementById('keyDetail').innerHTML = '<div class="empty-state"><h3>Select a key</h3></div>';
-            this.showToast('Deleted', 'success');
+            showToast('Deleted', 'success');
         } catch (error) {
-            this.showToast(error.message, 'error');
+            showToast(error.message, 'error');
         }
     },
 
@@ -503,11 +503,11 @@ const RedisStudio = {
             document.getElementById('keyDetail').innerHTML = '<div class="empty-state"><h3>Select a key</h3></div>';
             // Reinit terminal with new DB
             this.initTerminal();
-            this.showToast('Switched to db' + db, 'info');
+            showToast('Switched to db' + db, 'info');
             // Save state after database change
             if (shouldSave) this.saveState();
         } catch (error) {
-            this.showToast(error.message, 'error');
+            showToast(error.message, 'error');
         }
     },
 
@@ -521,9 +521,9 @@ const RedisStudio = {
             this.currentKey = null;
             this.loadKeys();
             document.getElementById('keyDetail').innerHTML = '<div class="empty-state"><h3>Database purged</h3></div>';
-            this.showToast('Database purged', 'success');
+            showToast('Database purged', 'success');
         } catch (error) {
-            this.showToast(error.message, 'error');
+            showToast(error.message, 'error');
         }
     },
 
@@ -563,17 +563,17 @@ const RedisStudio = {
 
             const d = json.data || {};
             container.innerHTML = '<div class="stats-container"><div class="stats-grid">' +
-                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.version || 'N/A') + '</div><div class="stat-label">Version</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.mode || 'standalone') + '</div><div class="stat-label">Mode</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + escapeHtml(d.version || 'N/A') + '</div><div class="stat-label">Version</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + escapeHtml(d.mode || 'standalone') + '</div><div class="stat-label">Mode</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + (d.connected_clients || 0) + '</div><div class="stat-label">Clients</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.used_memory || 'N/A') + '</div><div class="stat-label">Used Memory</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.peak_memory || 'N/A') + '</div><div class="stat-label">Peak Memory</div></div>' +
-                '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(d.max_memory || 'N/A') + '</div><div class="stat-label">Max Memory</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + escapeHtml(d.used_memory || 'N/A') + '</div><div class="stat-label">Used Memory</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + escapeHtml(d.peak_memory || 'N/A') + '</div><div class="stat-label">Peak Memory</div></div>' +
+                '<div class="stat-card"><div class="stat-value">' + escapeHtml(d.max_memory || 'N/A') + '</div><div class="stat-label">Max Memory</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + (d.total_keys || 0) + '</div><div class="stat-label">Keys</div></div>' +
                 '<div class="stat-card"><div class="stat-value">' + this.formatUptime(d.uptime) + '</div><div class="stat-label">Uptime</div></div>' +
-                '</div><div class="stats-info"><h4>OS</h4><p>' + this.escapeHtml(d.os || 'N/A') + '</p></div></div>';
+                '</div><div class="stats-info"><h4>OS</h4><p>' + escapeHtml(d.os || 'N/A') + '</p></div></div>';
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -592,7 +592,7 @@ const RedisStudio = {
         const valueInput = document.getElementById('newKeyValue');
         const ttlInput = document.getElementById('newKeyTTL');
 
-        if (!keyInput?.value.trim()) { this.showToast('Key name required', 'error'); return; }
+        if (!keyInput?.value.trim()) { showToast('Key name required', 'error'); return; }
 
         const keyName = keyInput.value.trim();
         const ttl = parseInt(ttlInput?.value || '-1');
@@ -614,12 +614,12 @@ const RedisStudio = {
             this.closeModal('newKeyModal');
             this.loadKeys();
             this.selectKey(keyName);
-            this.showToast('Created', 'success');
+            showToast('Created', 'success');
             keyInput.value = '';
             if (valueInput) valueInput.value = '';
             if (ttlInput) ttlInput.value = '-1';
         } catch (error) {
-            this.showToast(error.message, 'error');
+            showToast(error.message, 'error');
         }
     },
 
@@ -640,22 +640,6 @@ const RedisStudio = {
         const m = Math.floor((s % 3600) / 60);
         if (h > 0) return h + 'h ' + m + 'm';
         return m + 'm';
-    },
-
-    escapeHtml(str) {
-        if (str == null) return '';
-        const div = document.createElement('div');
-        div.textContent = String(str);
-        return div.innerHTML;
-    },
-
-    showToast(msg, type) {
-        let toast = document.getElementById('toast');
-        if (!toast) { toast = document.createElement('div'); toast.id = 'toast'; document.body.appendChild(toast); }
-        toast.className = 'toast toast-' + (type || 'info');
-        toast.textContent = msg;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3000);
     },
 
     exportData: null,
@@ -682,16 +666,16 @@ const RedisStudio = {
 
             this.exportData = json.data;
             preview.innerHTML = '<pre style="max-height:300px;overflow:auto;">' +
-                this.escapeHtml(JSON.stringify(json.data, null, 2)) + '</pre>' +
+                escapeHtml(JSON.stringify(json.data, null, 2)) + '</pre>' +
                 '<p style="margin-top:8px;color:var(--text-secondary);">' + (json.data.count || 0) + ' keys to export</p>';
         } catch (error) {
-            preview.innerHTML = '<p style="color:var(--error);">Error: ' + this.escapeHtml(error.message) + '</p>';
+            preview.innerHTML = '<p style="color:var(--error);">Error: ' + escapeHtml(error.message) + '</p>';
         }
     },
 
     downloadExport() {
         if (!this.exportData) {
-            this.showToast('Generate export first', 'error');
+            showToast('Generate export first', 'error');
             return;
         }
         const blob = new Blob([JSON.stringify(this.exportData, null, 2)], { type: 'application/json' });
@@ -703,7 +687,7 @@ const RedisStudio = {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        this.showToast('Downloaded', 'success');
+        showToast('Downloaded', 'success');
     },
 
     async importKeys() {
@@ -711,7 +695,7 @@ const RedisStudio = {
         const overwrite = document.getElementById('importOverwrite')?.checked || false;
 
         if (!dataInput?.value.trim()) {
-            this.showToast('Please enter JSON data', 'error');
+            showToast('Please enter JSON data', 'error');
             return;
         }
 
@@ -727,12 +711,12 @@ const RedisStudio = {
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
 
-            this.showToast(`Imported: ${json.imported}, Skipped: ${json.skipped}`, 'success');
+            showToast(`Imported: ${json.imported}, Skipped: ${json.skipped}`, 'success');
             this.closeModal('importModal');
             this.loadKeys();
             dataInput.value = '';
         } catch (error) {
-            this.showToast('Import failed: ' + error.message, 'error');
+            showToast('Import failed: ' + error.message, 'error');
         }
     },
 
@@ -745,7 +729,7 @@ const RedisStudio = {
         const ttl = parseInt(document.getElementById('bulkTTLValue')?.value || '0');
 
         if (!pattern) {
-            this.showToast('Pattern is required', 'error');
+            showToast('Pattern is required', 'error');
             return;
         }
 
@@ -758,11 +742,11 @@ const RedisStudio = {
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
 
-            this.showToast(`Updated TTL for ${json.updated} keys`, 'success');
+            showToast(`Updated TTL for ${json.updated} keys`, 'success');
             this.closeModal('bulkTTLModal');
             this.loadKeys();
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -788,10 +772,10 @@ const RedisStudio = {
 
             let html = '<div class="memory-overview">';
             html += '<div class="stats-grid">';
-            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.used_memory_human || 'N/A') + '</div><div class="stat-label">Used Memory</div></div>';
-            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.used_memory_peak_human || 'N/A') + '</div><div class="stat-label">Peak Memory</div></div>';
-            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.used_memory_rss_human || 'N/A') + '</div><div class="stat-label">RSS Memory</div></div>';
-            html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(mem.mem_fragmentation_ratio || 'N/A') + '</div><div class="stat-label">Fragmentation</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(mem.used_memory_human || 'N/A') + '</div><div class="stat-label">Used Memory</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(mem.used_memory_peak_human || 'N/A') + '</div><div class="stat-label">Peak Memory</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(mem.used_memory_rss_human || 'N/A') + '</div><div class="stat-label">RSS Memory</div></div>';
+            html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(mem.mem_fragmentation_ratio || 'N/A') + '</div><div class="stat-label">Fragmentation</div></div>';
             html += '</div></div>';
 
             html += '<h4 style="margin:20px 0 10px;">Memory by Type</h4>';
@@ -804,7 +788,7 @@ const RedisStudio = {
             html += '<h4 style="margin:20px 0 10px;">Top Keys by Memory (' + keys.length + ')</h4>';
             html += '<table class="data-table"><thead><tr><th>Key</th><th>Type</th><th>Memory</th><th>TTL</th></tr></thead><tbody>';
             for (const key of keys) {
-                html += '<tr><td>' + this.escapeHtml(key.key) + '</td><td><span class="key-type ' + key.type + '">' + key.type + '</span></td>';
+                html += '<tr><td>' + escapeHtml(key.key) + '</td><td><span class="key-type ' + key.type + '">' + key.type + '</span></td>';
                 html += '<td>' + this.formatBytes(key.memory_used) + '</td>';
                 html += '<td>' + (key.ttl === -1 ? '∞' : key.ttl + 's') + '</td></tr>';
             }
@@ -812,7 +796,7 @@ const RedisStudio = {
 
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -844,16 +828,16 @@ const RedisStudio = {
                 const duration = entry.duration_us >= 1000 ? (entry.duration_us / 1000).toFixed(2) + ' ms' : entry.duration_us + ' µs';
                 const cmd = Array.isArray(entry.command) ? entry.command.join(' ') : entry.command;
                 html += '<tr><td>' + entry.id + '</td>';
-                html += '<td>' + this.escapeHtml(entry.formatted_time || '') + '</td>';
+                html += '<td>' + escapeHtml(entry.formatted_time || '') + '</td>';
                 html += '<td class="duration">' + duration + '</td>';
-                html += '<td class="command-cell"><code>' + this.escapeHtml(cmd.substring(0, 100)) + (cmd.length > 100 ? '...' : '') + '</code></td>';
-                html += '<td>' + this.escapeHtml(entry.client_addr || '-') + '</td></tr>';
+                html += '<td class="command-cell"><code>' + escapeHtml(cmd.substring(0, 100)) + (cmd.length > 100 ? '...' : '') + '</code></td>';
+                html += '<td>' + escapeHtml(entry.client_addr || '-') + '</td></tr>';
             }
             html += '</tbody></table>';
 
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -863,10 +847,10 @@ const RedisStudio = {
             const response = await fetch('/api/slowlog', { method: 'DELETE' });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Slow log cleared', 'success');
+            showToast('Slow log cleared', 'success');
             this.loadSlowLog();
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -877,7 +861,7 @@ const RedisStudio = {
         const resultBox = document.getElementById('scriptResult');
 
         if (!script) {
-            this.showToast('Enter a script', 'error');
+            showToast('Enter a script', 'error');
             return;
         }
 
@@ -914,7 +898,7 @@ const RedisStudio = {
         const resultBox = document.getElementById('scriptResult');
 
         if (!script) {
-            this.showToast('Enter a script', 'error');
+            showToast('Enter a script', 'error');
             return;
         }
 
@@ -929,7 +913,7 @@ const RedisStudio = {
 
             resultBox.textContent = 'Script loaded successfully!\nSHA: ' + json.sha;
             resultBox.style.color = 'var(--success)';
-            this.showToast('Script loaded', 'success');
+            showToast('Script loaded', 'success');
         } catch (error) {
             resultBox.textContent = 'Error: ' + error.message;
             resultBox.style.color = 'var(--error)';
@@ -942,9 +926,9 @@ const RedisStudio = {
             const response = await fetch('/api/scripts', { method: 'DELETE' });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Scripts flushed', 'success');
+            showToast('Scripts flushed', 'success');
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -953,7 +937,7 @@ const RedisStudio = {
         const message = document.getElementById('pubMessage')?.value;
 
         if (!channel) {
-            this.showToast('Channel is required', 'error');
+            showToast('Channel is required', 'error');
             return;
         }
 
@@ -966,10 +950,10 @@ const RedisStudio = {
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
 
-            this.showToast(`Published to ${json.receivers} subscribers`, 'success');
+            showToast(`Published to ${json.receivers} subscribers`, 'success');
             document.getElementById('pubMessage').value = '';
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -992,7 +976,7 @@ const RedisStudio = {
 
             let html = '<div class="channels-grid">';
             for (const ch of channels) {
-                html += '<div class="channel-item"><span class="channel-name">' + this.escapeHtml(ch.channel) + '</span>';
+                html += '<div class="channel-item"><span class="channel-name">' + escapeHtml(ch.channel) + '</span>';
                 html += '<span class="channel-subs">' + ch.subscribers + ' subs</span></div>';
             }
             html += '</div>';
@@ -1002,7 +986,7 @@ const RedisStudio = {
 
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -1026,9 +1010,9 @@ const RedisStudio = {
 
             let html = '<table class="data-table config-table"><thead><tr><th>Parameter</th><th>Value</th><th></th></tr></thead><tbody>';
             for (const [key, value] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
-                html += '<tr data-key="' + this.escapeHtml(key) + '">';
-                html += '<td class="config-key">' + this.escapeHtml(key) + '</td>';
-                html += '<td><input type="text" class="config-value-input" value="' + this.escapeHtml(value) + '" data-original="' + this.escapeHtml(value) + '"></td>';
+                html += '<tr data-key="' + escapeHtml(key) + '">';
+                html += '<td class="config-key">' + escapeHtml(key) + '</td>';
+                html += '<td><input type="text" class="config-value-input" value="' + escapeHtml(value) + '" data-original="' + escapeHtml(value) + '"></td>';
                 html += '<td><button class="btn btn-sm" onclick="RedisStudio.saveConfigValue(this)">Save</button></td>';
                 html += '</tr>';
             }
@@ -1036,7 +1020,7 @@ const RedisStudio = {
 
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -1056,9 +1040,9 @@ const RedisStudio = {
             if (!json.success) throw new Error(json.message);
 
             input.dataset.original = value;
-            this.showToast('Config updated', 'success');
+            showToast('Config updated', 'success');
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -1068,9 +1052,9 @@ const RedisStudio = {
             const response = await fetch('/api/config/rewrite', { method: 'POST' });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Config rewritten', 'success');
+            showToast('Config rewritten', 'success');
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -1080,9 +1064,9 @@ const RedisStudio = {
             const response = await fetch('/api/config/resetstat', { method: 'POST' });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('Stats reset', 'success');
+            showToast('Stats reset', 'success');
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -1104,13 +1088,13 @@ const RedisStudio = {
 
             let html = '<table class="data-table"><thead><tr><th>User Rules</th></tr></thead><tbody>';
             for (const user of users) {
-                html += '<tr><td><code>' + this.escapeHtml(user) + '</code></td></tr>';
+                html += '<tr><td><code>' + escapeHtml(user) + '</code></td></tr>';
             }
             html += '</tbody></table>';
 
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '<br><small>ACL requires Redis 6.0+</small></p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '<br><small>ACL requires Redis 6.0+</small></p></div>';
         }
     },
 
@@ -1138,10 +1122,10 @@ const RedisStudio = {
             let html = '<table class="data-table"><thead><tr><th>Reason</th><th>Context</th><th>Object</th><th>Username</th><th>Age</th></tr></thead><tbody>';
             for (const log of logs) {
                 html += '<tr>';
-                html += '<td>' + this.escapeHtml(log.reason || '') + '</td>';
-                html += '<td>' + this.escapeHtml(log.context || '') + '</td>';
-                html += '<td>' + this.escapeHtml(log.object || '') + '</td>';
-                html += '<td>' + this.escapeHtml(log.username || '') + '</td>';
+                html += '<td>' + escapeHtml(log.reason || '') + '</td>';
+                html += '<td>' + escapeHtml(log.context || '') + '</td>';
+                html += '<td>' + escapeHtml(log.object || '') + '</td>';
+                html += '<td>' + escapeHtml(log.username || '') + '</td>';
                 html += '<td>' + (log.age_seconds || 0) + 's</td>';
                 html += '</tr>';
             }
@@ -1149,7 +1133,7 @@ const RedisStudio = {
 
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     },
 
@@ -1158,10 +1142,10 @@ const RedisStudio = {
             const response = await fetch('/api/acl/log', { method: 'DELETE' });
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
-            this.showToast('ACL log cleared', 'success');
+            showToast('ACL log cleared', 'success');
             this.loadACLLog();
         } catch (error) {
-            this.showToast('Failed: ' + error.message, 'error');
+            showToast('Failed: ' + error.message, 'error');
         }
     },
 
@@ -1184,11 +1168,11 @@ const RedisStudio = {
             if (repl.success && repl.data) {
                 const r = repl.data;
                 html += '<div class="stats-grid">';
-                html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(r.role || 'unknown') + '</div><div class="stat-label">Role</div></div>';
+                html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(r.role || 'unknown') + '</div><div class="stat-label">Role</div></div>';
                 html += '<div class="stat-card"><div class="stat-value">' + (r.connected_slaves || 0) + '</div><div class="stat-label">Connected Slaves</div></div>';
                 if (r.master_host) {
-                    html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(r.master_host + ':' + r.master_port) + '</div><div class="stat-label">Master</div></div>';
-                    html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(r.master_link_status || 'unknown') + '</div><div class="stat-label">Link Status</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(r.master_host + ':' + r.master_port) + '</div><div class="stat-label">Master</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(r.master_link_status || 'unknown') + '</div><div class="stat-label">Link Status</div></div>';
                 }
                 html += '</div>';
 
@@ -1197,11 +1181,11 @@ const RedisStudio = {
                     html += '<table class="data-table"><thead><tr><th>Index</th><th>IP</th><th>Port</th><th>State</th><th>Offset</th></tr></thead><tbody>';
                     for (const slave of r.slaves) {
                         html += '<tr>';
-                        html += '<td>' + this.escapeHtml(slave.index || '') + '</td>';
-                        html += '<td>' + this.escapeHtml(slave.ip || '') + '</td>';
-                        html += '<td>' + this.escapeHtml(slave.port || '') + '</td>';
-                        html += '<td>' + this.escapeHtml(slave.state || '') + '</td>';
-                        html += '<td>' + this.escapeHtml(slave.offset || '') + '</td>';
+                        html += '<td>' + escapeHtml(slave.index || '') + '</td>';
+                        html += '<td>' + escapeHtml(slave.ip || '') + '</td>';
+                        html += '<td>' + escapeHtml(slave.port || '') + '</td>';
+                        html += '<td>' + escapeHtml(slave.state || '') + '</td>';
+                        html += '<td>' + escapeHtml(slave.offset || '') + '</td>';
                         html += '</tr>';
                     }
                     html += '</tbody></table>';
@@ -1218,7 +1202,7 @@ const RedisStudio = {
                     html += '<p style="color:var(--text-tertiary);">Cluster mode is not enabled</p>';
                 } else {
                     html += '<div class="stats-grid">';
-                    html += '<div class="stat-card"><div class="stat-value">' + this.escapeHtml(c.state || 'unknown') + '</div><div class="stat-label">State</div></div>';
+                    html += '<div class="stat-card"><div class="stat-value">' + escapeHtml(c.state || 'unknown') + '</div><div class="stat-label">State</div></div>';
                     html += '<div class="stat-card"><div class="stat-value">' + (c.known_nodes || 0) + '</div><div class="stat-label">Nodes</div></div>';
                     html += '<div class="stat-card"><div class="stat-value">' + (c.slots_ok || 0) + '</div><div class="stat-label">Slots OK</div></div>';
                     html += '<div class="stat-card"><div class="stat-value">' + (c.size || 0) + '</div><div class="stat-label">Size</div></div>';
@@ -1229,11 +1213,11 @@ const RedisStudio = {
                         html += '<table class="data-table"><thead><tr><th>ID</th><th>Address</th><th>Flags</th><th>State</th><th>Slots</th></tr></thead><tbody>';
                         for (const node of c.nodes) {
                             html += '<tr>';
-                            html += '<td title="' + this.escapeHtml(node.id || '') + '">' + this.escapeHtml((node.id || '').substring(0, 8)) + '...</td>';
-                            html += '<td>' + this.escapeHtml(node.addr || '') + '</td>';
-                            html += '<td>' + this.escapeHtml(node.flags || '') + '</td>';
-                            html += '<td>' + this.escapeHtml(node.state || '') + '</td>';
-                            html += '<td>' + this.escapeHtml(node.slots || '') + '</td>';
+                            html += '<td title="' + escapeHtml(node.id || '') + '">' + escapeHtml((node.id || '').substring(0, 8)) + '...</td>';
+                            html += '<td>' + escapeHtml(node.addr || '') + '</td>';
+                            html += '<td>' + escapeHtml(node.flags || '') + '</td>';
+                            html += '<td>' + escapeHtml(node.state || '') + '</td>';
+                            html += '<td>' + escapeHtml(node.slots || '') + '</td>';
                             html += '</tr>';
                         }
                         html += '</tbody></table>';
@@ -1246,7 +1230,7 @@ const RedisStudio = {
             html += '</div>';
             container.innerHTML = html;
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + this.escapeHtml(error.message) + '</p></div>';
+            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
         }
     }
 };

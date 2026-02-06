@@ -1,12 +1,3 @@
-function $(sel) { return document.querySelector(sel) }
-function $$(sel) { return document.querySelectorAll(sel) }
-
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 function extractHostnameFromURL(url) {
     try {
         const match = url.match(/mongodb(?:\+srv)?:\/\/(?:[^:]+:[^@]+@)?([^/?]+)/);
@@ -845,21 +836,6 @@ function openModal(id) {
 
 function closeModals() {
     $$('.modal').forEach(m => m.classList.remove('active'));
-}
-
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.innerHTML = `
-        <ion-icon name="${type === 'success' ? 'checkmark-circle' : type === 'error' ? 'alert-circle' : 'information-circle'}"></ion-icon>
-        <span>${message}</span>
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.classList.add('show'), 10);
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
 }
 
 function showSuccess(msg) {

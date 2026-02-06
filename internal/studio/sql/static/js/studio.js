@@ -61,35 +61,6 @@ const state = {
     }
 };
 
-// Simple notification function (fallback if index.js showNotification not loaded yet)
-function showNotification(message, type = 'info') {
-    // Check if a notification function exists in index.js
-    if (window._showNotificationImpl) {
-        window._showNotificationImpl(message, type);
-        return;
-    }
-
-    // Remove existing notifications
-    document.querySelectorAll('.toast-notification').forEach(n => n.remove());
-
-    const toast = document.createElement('div');
-    toast.className = `toast-notification toast-${type}`;
-    toast.innerHTML = `
-        <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
-        <span class="toast-message">${message}</span>
-    `;
-    document.body.appendChild(toast);
-
-    // Animate in
-    requestAnimationFrame(() => toast.classList.add('show'));
-
-    // Auto remove
-    setTimeout(() => {
-        toast.classList.remove('show');
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
-}
-
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
@@ -558,13 +529,13 @@ function formatValue(value, fk = null) {
         // Handle UUID byte arrays (arrays of 16 numbers 0-255)
         if (Array.isArray(value) && value.length === 16 && value.every(b => typeof b === 'number' && b >= 0 && b <= 255)) {
             const uuid = bytesToUuid(value);
-            return `<span class="value-uuid" data-original-value="${escapeHtmlAttr(uuid)}" title="${uuid}">${escapeHtmlValue(uuid)}</span>`;
+            return `<span class="value-uuid" data-original-value="${escapeHtmlAttr(uuid)}" title="${uuid}">${escapeHtml(uuid)}</span>`;
         }
 
         // Handle arrays and objects (JSON)
         try {
             const jsonStr = JSON.stringify(value);
-            const escapedJson = escapeHtmlValue(jsonStr);
+            const escapedJson = escapeHtml(jsonStr);
             return `<span class="value-json" data-original-value="${escapeHtmlAttr(jsonStr)}" title="${escapedJson}">${escapedJson}</span>`;
         } catch {
             return `<span class="value-object">[Object]</span>`;
@@ -576,54 +547,36 @@ function formatValue(value, fk = null) {
 
     // UUID detection (standard 8-4-4-4-12 format)
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strValue)) {
-        return `<span class="value-uuid" title="${strValue}">${escapeHtmlValue(strValue)}</span>`;
+        return `<span class="value-uuid" title="${strValue}">${escapeHtml(strValue)}</span>`;
     }
 
     // Datetime detection
     if (/^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}:\d{2}/.test(strValue)) {
-        return `<span class="value-date">${escapeHtmlValue(strValue)}</span>`;
+        return `<span class="value-date">${escapeHtml(strValue)}</span>`;
     }
 
     // Email detection
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(strValue)) {
-        return `<span class="value-email">${escapeHtmlValue(strValue)}</span>`;
+        return `<span class="value-email">${escapeHtml(strValue)}</span>`;
     }
 
     // URL detection
     if (/^https?:\/\//.test(strValue)) {
-        return `<a href="${escapeHtmlValue(strValue)}" target="_blank" class="value-url">${escapeHtmlValue(strValue)}</a>`;
+        return `<a href="${escapeHtml(strValue)}" target="_blank" class="value-url">${escapeHtml(strValue)}</a>`;
     }
 
     // Foreign key
     if (fk) {
-        return `<span class="value-fk">${escapeHtmlValue(strValue)}</span>`;
+        return `<span class="value-fk">${escapeHtml(strValue)}</span>`;
     }
 
     // Long text truncation - store original in data attribute
     if (strValue.length > 100) {
         const truncated = strValue.substring(0, 100) + '...';
-        return `<span class="value-string value-truncated" data-original-value="${escapeHtmlAttr(strValue)}" title="${escapeHtmlValue(strValue)}">${escapeHtmlValue(truncated)}</span>`;
+        return `<span class="value-string value-truncated" data-original-value="${escapeHtmlAttr(strValue)}" title="${escapeHtml(strValue)}">${escapeHtml(truncated)}</span>`;
     }
 
-    return `<span class="value-string" data-original-value="${escapeHtmlAttr(strValue)}">${escapeHtmlValue(strValue)}</span>`;
-}
-
-// HTML escape utility for attribute values (handles quotes properly)
-function escapeHtmlAttr(text) {
-    if (text == null) return '';
-    return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-}
-
-// HTML escape utility for values
-function escapeHtmlValue(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return `<span class="value-string" data-original-value="${escapeHtmlAttr(strValue)}">${escapeHtml(strValue)}</span>`;
 }
 
 // Convert byte array to UUID string (8-4-4-4-12 format)
@@ -823,7 +776,7 @@ function refreshData() {
     if (!state.currentTable) {
         // If no table is selected, just reload the tables list
         loadTables();
-        showNotification('Tables list refreshed', 'success');
+        showToast('Tables list refreshed', 'success');
         return;
     }
 
@@ -863,7 +816,7 @@ function refreshData() {
     loadTables();
 
     // Show feedback
-    showNotification('Data refreshed', 'success');
+    showToast('Data refreshed', 'success');
 }
 
 // Pagination
