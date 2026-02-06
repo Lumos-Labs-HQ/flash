@@ -1,69 +1,55 @@
-## 🧪 FlashORM Beta Release v2.2.0-beta4
+## FlashORM Beta Release v2.3.1-beta-dev
 
-⚠️ **This is a BETA release** - Use for testing purposes only!
-This release may contain experimental features, bugs, or breaking changes.
-Not recommended for production use.
-<!-- 
+> **This is a BETA release** - Use for testing purposes only!
+> This release may contain experimental features, bugs, or breaking changes.
+
+### What's New
+
+#### Plugin System (New Architecture)
+- Modular plugin system: `core`, `studio`, `all`
+- Install only what you need: `flash add-plug core`
+- Automatic fallback to `all` plugin if installed
+- Version management: latest, beta, or specific (`flash add-plug core@1.0.0`)
+- Online plugin browser: `flash plugins --online`
+
+#### SQL Studio - Export/Import
+- Export database as Schema Only, Data Only, or Complete (schema + data)
+- Import previously exported JSON data back into the database
+- Available through the SQL Studio web interface
+
+#### Dependency Cleanup
+- Removed Fiber framework -> replaced with `net/http` 
+- Removed Viper -> replaced with stdlib `encoding/json`
+- Removed lib/pq -> `pgx/v5` is the only PostgreSQL driver
+- Removed mapstructure -> only `json` struct tags
+- ~8 fewer dependencies, smaller binary size
+
+#### Bug Fixes
+- Fixed `down` command missing from plugin registry
+- Fixed CSS duplication across studio static assets
+
 ### Installation
 
-#### Option 1: NPM (Node.js)
-
 ```bash
+# NPM
+npm install -g flashorm@beta
 
-# install specific beta version
-npm install -g flashorm@2.2.0-beta4
+# Python
+pip install flashorm==2.3.1b1
 
-# Verify installation
-flash --version
-```
+# Go
+go install github.com/Lumos-Labs-HQ/flash@v2.3.1-beta-dev
 
-#### Option 2: PyPI (Python)
-
-```bash
-# Install the beta version
-pip install flashorm==2.2.0b3
-
-# Or upgrade if you have a previous version
-pip install --upgrade flashorm==2.2.0b3
-
-# Verify installation
-flash --version
-```
-
-#### Option 3: Go Install
-
-```bash
-# Install from source with beta tag
-go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta4
-
-# Verify installation
-flash --version
-```
-
-#### Option 4: Direct Binary Download
-
-```bash
-# Download binary directly from this release
-# For Linux/macOS:
-curl -L https://github.com/Lumos-Labs-HQ/flash/releases/download/v2.2.0-beta4/flash-linux-amd64 -o flash
-chmod +x flash
-sudo mv flash /usr/local/bin/
-
-# For Windows (PowerShell):
-# Download flash-windows-amd64.exe from release assets
-# Add to PATH or place in desired location
+# Direct binary download from release assets, then:
+flash add-plug all
 ```
 
 ### Installing Plugins
 
-After installing the base CLI, install plugins:
-
 ```bash
-# Install core ORM features
-flash add-plug core
-
-# Install visual database editor
-flash add-plug studio
+# Install individual plugins
+flash add-plug core       # ORM + seeding
+flash add-plug studio     # Visual database editor
 
 # Or install everything
 flash add-plug all
@@ -72,20 +58,10 @@ flash add-plug all
 flash plugins
 ```
 
-**Note for beta testing:** Plugins are downloaded from the same beta release automatically.
-
-### Beta Testing
-
-Please report any issues you encounter:
-
-- Open an issue on GitHub
-- Include the beta version number
-- Provide detailed reproduction steps
-
 ### What's Included
 
 - **Base CLI binaries**: `flash-{platform}-{arch}`
-- **Core Plugin binaries**: `flash-plugin-core-{platform}-{arch}`
+- **Core Plugin binaries**: `flash-plugin-core-{platform}-{arch}` (includes seed)
 - **Studio Plugin binaries**: `flash-plugin-studio-{platform}-{arch}`
 - **All Plugin binaries**: `flash-plugin-all-{platform}-{arch}`
 
@@ -94,41 +70,3 @@ Please report any issues you encounter:
 - Linux (amd64, arm64)
 - macOS (amd64, arm64 - Apple Silicon)
 - Windows (amd64, arm64)
-
-### Uninstalling Beta
-
-If you want to switch back to stable or remove beta:
-
-```bash
-# NPM
-npm uninstall -g flashorm
-npm install -g flashorm@latest  # Install stable
-
-# Python
-pip uninstall flashorm
-pip install flashorm  # Install stable
-
-# Manual binary
-rm /usr/local/bin/flash  # Linux/macOS
-# Or remove from PATH on Windows
-```
-
-### Known Beta Limitations
-
-- Beta versions may have incomplete features
-- Documentation may not reflect all changes
-- Breaking changes possible between beta releases
-- Plugin compatibility may vary
-
-### Upgrading Between Beta Versions
-
-```bash
-# NPM - always gets latest beta
-npm install -g flashorm@beta
-
-# Python - specify exact version
-pip install --upgrade flashorm==2.2.0b3
-
-# Go - install new tag
-go install github.com/Lumos-Labs-HQ/flash@v2.2.0-beta4
-``` -->
