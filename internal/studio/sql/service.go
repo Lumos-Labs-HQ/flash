@@ -795,3 +795,647 @@ func (s *Service) GetEditorHints() (map[string]any, error) {
 		"schema":   schema,
 	}, nil
 }
+
+// sortTablesByDependency sorts tables in topological order based on foreign key dependencies
+func (s *Service) sortTablesByDependency(ctx context.Context, tables []string) ([]string, error) {
+	dependencies := make(map[string][]string)
+	for _, t := range tables {
+		dependencies[t] = []string{}
+	}
+
+	// Get foreign key info for each table
+	for _, tableName := range tables {
+		columns, err := s.adapter.GetTableColumns(ctx, tableName)
+		if err != nil {
+			continue
+		}
+		for _, col := range columns {
+			if col.ForeignKeyTable != "" {
+				dependencies[tableName] = append(dependencies[tableName], col.ForeignKeyTable)
+			}
+		}
+	}
+
+	// Kahn's algorithm for topological sort
+	inDegree := make(map[string]int)
+	for _, t := range tables {
+		inDegree[t] = 0
+	}
+
+	// Count incoming edges (how many tables reference this table)
+	for _, deps := range dependencies {
+		for _, dep := range deps {
+			if _, exists := inDegree[dep]; exists {
+				inDegree[dep]++ // This is reversed - we want tables with no dependencies first
+			}
+		}
+	}
+
+	// Reset and calculate properly
+	for _, t := range tables {
+		inDegree[t] = len(dependencies[t])
+	}
+
+	// Queue tables with no dependencies
+	var queue []string
+	for _, t := range tables {
+		if inDegree[t] == 0 {
+			queue = append(queue, t)
+		}
+	}
+
+	var sorted []string
+	for len(queue) > 0 {
+		// Pop from queue
+		current := queue[0]
+		queue = queue[1:]
+		sorted = append(sorted, current)
+
+		// For each table that depends on current, reduce its in-degree
+		for t, deps := range dependencies {
+			for _, dep := range deps {
+				if dep == current {
+					inDegree[t]--
+					if inDegree[t] == 0 {
+						queue = append(queue, t)
+					}
+				}
+			}
+		}
+	}
+
+	// If we couldn't sort all tables (circular dependency), add remaining
+	if len(sorted) < len(tables) {
+		for _, t := range tables {
+			found := false
+			for _, s := range sorted {
+				if s == t {
+					found = true
+					break
+				}
+			}
+			if !found {
+				sorted = append(sorted, t)
+			}
+		}
+	}
+
+	return sorted, nil
+}
+
+// getEnumTypes retrieves all custom ENUM types from PostgreSQL
+func (s *Service) getEnumTypes(ctx context.Context) ([]common.ExportEnumType, error) {
+	// This query works for PostgreSQL to get all enum types and their values
+	query := `
+		SELECT t.typname as enum_name,
+		       array_agg(e.enumlabel ORDER BY e.enumsortorder) as enum_values
+		FROM pg_type t
+		JOIN pg_enum e ON t.oid = e.enumtypid
+		JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+		WHERE n.nspname = 'public'
+		GROUP BY t.typname
+		ORDER BY t.typname
+	`
+
+	result, err := s.adapter.ExecuteQuery(ctx, query)
+	if err != nil {
+		// Not PostgreSQL or no enums - return empty
+		return []common.ExportEnumType{}, nil
+	}
+
+	var enumTypes []common.ExportEnumType
+	for _, row := range result.Rows {
+		enumName, ok := row["enum_name"].(string)
+		if !ok {
+			continue
+		}
+
+		var values []string
+		// Handle the array of enum values
+		if enumValues, ok := row["enum_values"].([]any); ok {
+			for _, v := range enumValues {
+				if str, ok := v.(string); ok {
+					values = append(values, str)
+				}
+			}
+		} else if enumValuesStr, ok := row["enum_values"].(string); ok {
+			// PostgreSQL may return as string like {val1,val2,val3}
+			enumValuesStr = strings.Trim(enumValuesStr, "{}")
+			if enumValuesStr != "" {
+				values = strings.Split(enumValuesStr, ",")
+			}
+		}
+
+		if len(values) > 0 {
+			enumTypes = append(enumTypes, common.ExportEnumType{
+				Name:   enumName,
+				Values: values,
+			})
+		}
+	}
+
+	return enumTypes, nil
+}
+
+// ExportDatabase exports the database schema and/or data based on export type
+func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportData, error) {
+	s.ensureCorrectSchema()
+
+	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
+	defer cancel()
+
+	// Get all tables
+	tables, err := s.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tables: %w", err)
+	}
+
+	// Sort tables by dependency order (tables without FK first)
+	sortedTables, err := s.sortTablesByDependency(ctx, tables)
+	if err != nil {
+		// Fallback to original order if sorting fails
+		sortedTables = tables
+	}
+
+	provider := "sql"
+	if s.cfg != nil {
+		provider = s.cfg.Database.Provider
+	}
+
+	exportData := &common.ExportData{
+		Version:          "1.0",
+		ExportedAt:       time.Now().UTC().Format(time.RFC3339),
+		DatabaseProvider: provider,
+		ExportType:       exportType,
+		Tables:           make([]common.ExportTable, 0),
+	}
+
+	// Export ENUM types for schema exports (PostgreSQL)
+	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
+		if provider == "postgresql" {
+			enumTypes, err := s.getEnumTypes(ctx)
+			if err == nil && len(enumTypes) > 0 {
+				exportData.EnumTypes = enumTypes
+			}
+		}
+	}
+
+	for _, tableName := range sortedTables {
+		if tableName == "_flash_migrations" {
+			continue
+		}
+
+		exportTable := common.ExportTable{
+			Name: tableName,
+		}
+
+		// Export schema if needed
+		if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
+			schema, err := s.getTableSchema(ctx, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get schema for table %s: %w", tableName, err)
+			}
+			exportTable.Schema = schema
+		}
+
+		// Export data if needed
+		if exportType == common.ExportDataOnly || exportType == common.ExportComplete {
+			data, err := s.getAllTableData(ctx, tableName)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get data for table %s: %w", tableName, err)
+			}
+			exportTable.Data = data
+		}
+
+		exportData.Tables = append(exportData.Tables, exportTable)
+	}
+
+	return exportData, nil
+}
+
+// getTableSchema returns the schema for a table
+func (s *Service) getTableSchema(ctx context.Context, tableName string) (*common.ExportTableSchema, error) {
+	columns, err := s.adapter.GetTableColumns(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	exportColumns := make([]common.ExportColumn, 0, len(columns))
+	seen := make(map[string]bool)
+
+	for _, col := range columns {
+		if seen[col.Name] {
+			continue
+		}
+		seen[col.Name] = true
+
+		exportColumns = append(exportColumns, common.ExportColumn{
+			Name:             col.Name,
+			Type:             col.Type,
+			Nullable:         col.Nullable,
+			PrimaryKey:       col.IsPrimary,
+			Default:          col.Default,
+			AutoIncrement:    col.IsAutoIncrement,
+			Unique:           col.IsUnique,
+			ForeignKeyTable:  col.ForeignKeyTable,
+			ForeignKeyColumn: col.ForeignKeyColumn,
+		})
+	}
+
+	return &common.ExportTableSchema{
+		Columns: exportColumns,
+	}, nil
+}
+
+// getAllTableData returns all data from a table
+func (s *Service) getAllTableData(ctx context.Context, tableName string) ([]map[string]any, error) {
+	// Get total row count
+	count, err := s.adapter.GetTableRowCount(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	if count == 0 {
+		return []map[string]any{}, nil
+	}
+
+	// Fetch all data in batches
+	batchSize := 1000
+	allData := make([]map[string]any, 0, count)
+
+	for offset := 0; offset < count; offset += batchSize {
+		query := fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d",
+			common.QuoteIdentifier(tableName), batchSize, offset)
+
+		result, err := s.adapter.ExecuteQuery(ctx, query)
+		if err != nil {
+			// Fallback to GetTableData
+			data, err := s.adapter.GetTableData(ctx, tableName)
+			if err != nil {
+				return nil, err
+			}
+			return data, nil
+		}
+
+		allData = append(allData, result.Rows...)
+	}
+
+	return allData, nil
+}
+
+// sortImportTablesByDependency sorts import tables in topological order based on foreign key dependencies
+func (s *Service) sortImportTablesByDependency(tables []common.ExportTable) []common.ExportTable {
+	// Build dependency graph from schema info
+	dependencies := make(map[string][]string)
+	tableMap := make(map[string]common.ExportTable)
+
+	for _, t := range tables {
+		tableMap[t.Name] = t
+		dependencies[t.Name] = []string{}
+
+		if t.Schema != nil {
+			for _, col := range t.Schema.Columns {
+				if col.ForeignKeyTable != "" {
+					dependencies[t.Name] = append(dependencies[t.Name], col.ForeignKeyTable)
+				}
+			}
+		}
+	}
+
+	// Calculate in-degree (number of dependencies)
+	inDegree := make(map[string]int)
+	for _, t := range tables {
+		inDegree[t.Name] = len(dependencies[t.Name])
+	}
+
+	// Queue tables with no dependencies
+	var queue []string
+	for _, t := range tables {
+		if inDegree[t.Name] == 0 {
+			queue = append(queue, t.Name)
+		}
+	}
+
+	var sortedNames []string
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		sortedNames = append(sortedNames, current)
+
+		// For each table that depends on current, reduce its in-degree
+		for name, deps := range dependencies {
+			for _, dep := range deps {
+				if dep == current {
+					inDegree[name]--
+					if inDegree[name] == 0 {
+						queue = append(queue, name)
+					}
+				}
+			}
+		}
+	}
+
+	// Add any remaining tables (circular dependencies)
+	for _, t := range tables {
+		found := false
+		for _, name := range sortedNames {
+			if name == t.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			sortedNames = append(sortedNames, t.Name)
+		}
+	}
+
+	// Build sorted result
+	sorted := make([]common.ExportTable, 0, len(tables))
+	for _, name := range sortedNames {
+		if t, ok := tableMap[name]; ok {
+			sorted = append(sorted, t)
+		}
+	}
+
+	return sorted
+}
+
+// createEnumType creates a PostgreSQL ENUM type
+func (s *Service) createEnumType(ctx context.Context, enumType common.ExportEnumType) error {
+	// Quote each enum value
+	quotedValues := make([]string, len(enumType.Values))
+	for i, v := range enumType.Values {
+		quotedValues[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
+	}
+
+	query := fmt.Sprintf("CREATE TYPE %s AS ENUM (%s)",
+		common.QuoteIdentifier(enumType.Name),
+		strings.Join(quotedValues, ", "))
+
+	return s.adapter.ExecuteMigration(ctx, query)
+}
+
+// ImportDatabase imports data from an export file
+func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportResult, error) {
+	s.ensureCorrectSchema()
+
+	result := &common.ImportResult{
+		EnumTypesCreated: make([]string, 0),
+		TablesCreated:    make([]string, 0),
+		TablesUpdated:    make([]string, 0),
+		Errors:           make([]string, 0),
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, 120*time.Second)
+	defer cancel()
+
+	// Phase 0: Create ENUM types first (before tables)
+	if len(importData.EnumTypes) > 0 {
+		for _, enumType := range importData.EnumTypes {
+			if err := s.createEnumType(ctx, enumType); err != nil {
+				// Check if enum already exists (not an error)
+				if !strings.Contains(err.Error(), "already exists") {
+					result.Errors = append(result.Errors, fmt.Sprintf("Failed to create enum %s: %v", enumType.Name, err))
+				}
+			} else {
+				result.EnumTypesCreated = append(result.EnumTypesCreated, enumType.Name)
+			}
+		}
+	}
+
+	// Get existing tables
+	existingTables, err := s.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing tables: %w", err)
+	}
+	existingTableMap := make(map[string]bool)
+	for _, t := range existingTables {
+		existingTableMap[t] = true
+	}
+
+	// Sort tables by dependency order
+	sortedTables := s.sortImportTablesByDependency(importData.Tables)
+
+	// Collect FK constraints to add after all tables are created
+	type fkConstraint struct {
+		tableName string
+		colName   string
+		fkTable   string
+		fkColumn  string
+	}
+	var pendingFKs []fkConstraint
+
+	// Phase 1: Create tables WITHOUT foreign key constraints
+	for _, table := range sortedTables {
+		tableExists := existingTableMap[table.Name]
+
+		if table.Schema != nil {
+			if !tableExists {
+				// Create the table without FK constraints
+				if err := s.createTableFromSchemaNoFK(ctx, table.Name, table.Schema); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("Failed to create table %s: %v", table.Name, err))
+					continue
+				}
+				result.TablesCreated = append(result.TablesCreated, table.Name)
+				existingTableMap[table.Name] = true
+
+				// Collect FK constraints to add later
+				for _, col := range table.Schema.Columns {
+					if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
+						pendingFKs = append(pendingFKs, fkConstraint{
+							tableName: table.Name,
+							colName:   col.Name,
+							fkTable:   col.ForeignKeyTable,
+							fkColumn:  col.ForeignKeyColumn,
+						})
+					}
+				}
+			} else {
+				// Update existing table - add missing columns
+				added, err := s.updateTableSchema(ctx, table.Name, table.Schema)
+				if err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("Failed to update schema for %s: %v", table.Name, err))
+				} else {
+					result.ColumnsAdded += added
+					if added > 0 {
+						result.TablesUpdated = append(result.TablesUpdated, table.Name)
+					}
+				}
+			}
+		}
+	}
+
+	// Phase 2: Add foreign key constraints (optional - skip if referenced table doesn't exist)
+	for _, fk := range pendingFKs {
+		if !existingTableMap[fk.fkTable] {
+			// Referenced table doesn't exist, skip this FK
+			continue
+		}
+
+		query := fmt.Sprintf("ALTER TABLE %s ADD FOREIGN KEY (%s) REFERENCES %s(%s)",
+			common.QuoteIdentifier(fk.tableName),
+			common.QuoteIdentifier(fk.colName),
+			common.QuoteIdentifier(fk.fkTable),
+			common.QuoteIdentifier(fk.fkColumn))
+
+		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+			// FK constraint errors are non-fatal, just log them
+			result.Errors = append(result.Errors, fmt.Sprintf("Failed to add FK on %s.%s: %v", fk.tableName, fk.colName, err))
+		}
+	}
+
+	// Phase 3: Import data in dependency order
+	for _, table := range sortedTables {
+		if len(table.Data) > 0 && existingTableMap[table.Name] {
+			inserted, updated, err := s.importTableData(ctx, table.Name, table.Data)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to import data for %s: %v", table.Name, err))
+			} else {
+				result.RowsInserted += inserted
+				result.RowsUpdated += updated
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// createTableFromSchemaNoFK creates a new table from the export schema WITHOUT foreign key constraints
+func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	var columnDefs []string
+
+	for _, col := range schema.Columns {
+		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), col.Type)
+
+		if col.PrimaryKey {
+			def += " PRIMARY KEY"
+		}
+		if col.AutoIncrement {
+			// Handle auto-increment based on database type
+			if s.cfg != nil && (s.cfg.Database.Provider == "mysql") {
+				def += " AUTO_INCREMENT"
+			}
+			// For PostgreSQL, SERIAL type already handles auto-increment
+		}
+		if !col.Nullable && !col.PrimaryKey {
+			def += " NOT NULL"
+		}
+		if col.Unique && !col.PrimaryKey {
+			def += " UNIQUE"
+		}
+		if col.Default != "" {
+			def += fmt.Sprintf(" DEFAULT %s", col.Default)
+		}
+
+		columnDefs = append(columnDefs, def)
+	}
+
+	query := fmt.Sprintf("CREATE TABLE %s (\n  %s\n)",
+		common.QuoteIdentifier(tableName),
+		strings.Join(columnDefs, ",\n  "))
+
+	return s.adapter.ExecuteMigration(ctx, query)
+}
+
+// updateTableSchema updates an existing table by adding missing columns
+func (s *Service) updateTableSchema(ctx context.Context, tableName string, schema *common.ExportTableSchema) (int, error) {
+	// Get existing columns
+	existingCols, err := s.adapter.GetTableColumns(ctx, tableName)
+	if err != nil {
+		return 0, err
+	}
+
+	existingColMap := make(map[string]bool)
+	for _, col := range existingCols {
+		existingColMap[col.Name] = true
+	}
+
+	added := 0
+	for _, col := range schema.Columns {
+		if existingColMap[col.Name] {
+			continue // Column already exists
+		}
+
+		// Add the missing column
+		def := col.Type
+		if !col.Nullable {
+			// For adding columns, we need to allow NULL or provide a default
+			if col.Default != "" {
+				def += fmt.Sprintf(" DEFAULT %s", col.Default)
+			}
+			// Don't add NOT NULL when adding column without default to avoid errors
+		}
+		if col.Unique {
+			def += " UNIQUE"
+		}
+		if col.Default != "" && col.Nullable {
+			def += fmt.Sprintf(" DEFAULT %s", col.Default)
+		}
+
+		query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s",
+			common.QuoteIdentifier(tableName),
+			common.QuoteIdentifier(col.Name),
+			def)
+
+		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+			return added, fmt.Errorf("failed to add column %s: %w", col.Name, err)
+		}
+		added++
+	}
+
+	return added, nil
+}
+
+// importTableData imports data into an existing table
+func (s *Service) importTableData(ctx context.Context, tableName string, data []map[string]any) (int, int, error) {
+	// Get primary key column
+	columns, err := s.adapter.GetTableColumns(ctx, tableName)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	pkColumn := ""
+	for _, col := range columns {
+		if col.IsPrimary {
+			pkColumn = col.Name
+			break
+		}
+	}
+
+	inserted := 0
+	updated := 0
+
+	for _, row := range data {
+		// Check if row exists (by primary key)
+		exists := false
+		if pkColumn != "" {
+			if pkValue, ok := row[pkColumn]; ok && pkValue != nil {
+				query := fmt.Sprintf("SELECT 1 FROM %s WHERE %s = '%v' LIMIT 1",
+					common.QuoteIdentifier(tableName),
+					common.QuoteIdentifier(pkColumn),
+					pkValue)
+
+				result, err := s.adapter.ExecuteQuery(ctx, query)
+				if err == nil && len(result.Rows) > 0 {
+					exists = true
+				}
+			}
+		}
+
+		if exists {
+			// Update existing row
+			if err := s.UpdateRow(tableName, row[pkColumn], row); err != nil {
+				continue // Skip errors for individual rows
+			}
+			updated++
+		} else {
+			// Insert new row
+			if err := s.InsertRow(tableName, row); err != nil {
+				continue // Skip errors for individual rows
+			}
+			inserted++
+		}
+	}
+
+	return inserted, updated, nil
+}

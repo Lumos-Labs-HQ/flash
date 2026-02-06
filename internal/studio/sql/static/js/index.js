@@ -330,3 +330,201 @@ function showNotification(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
+
+// Dropdown toggle
+function toggleDropdown(dropdownId) {
+    const dropdown = document.getElementById(dropdownId);
+    const allDropdowns = document.querySelectorAll('.dropdown-menu');
+
+    // Close all other dropdowns
+    allDropdowns.forEach(d => {
+        if (d.id !== dropdownId) {
+            d.classList.remove('show');
+        }
+    });
+
+    dropdown.classList.toggle('show');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.dropdown')) {
+        document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
+    }
+});
+
+// Export database
+async function exportDatabase(exportType) {
+    // Close dropdown
+    document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
+
+    showNotification('Exporting database...', 'info');
+
+    try {
+        const response = await fetch(`/api/export/${exportType}`);
+        const responseData = await response.json();
+
+        // Check for error response
+        if (responseData.success === false && responseData.message) {
+            showNotification(responseData.message, 'error');
+            return;
+        }
+
+        // Extract the actual export data (unwrap from {success, data} wrapper if present)
+        const exportData = responseData.data ? responseData.data : responseData;
+
+        // Create and download JSON file (save only the export data, not the wrapper)
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        a.download = `database_export_${exportType}_${timestamp}.json`;
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showNotification(`Export completed: ${exportType}`, 'success');
+    } catch (err) {
+        console.error('Export failed:', err);
+        showNotification('Export failed: ' + err.message, 'error');
+    }
+}
+
+// Trigger import file selection
+function triggerImport() {
+    document.getElementById('import-file-input').click();
+}
+
+// Handle import file selection
+async function handleImportFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Reset file input for future imports
+    event.target.value = '';
+
+    try {
+        const content = await file.text();
+        let importData;
+
+        try {
+            importData = JSON.parse(content);
+        } catch (parseErr) {
+            showNotification('Invalid JSON file', 'error');
+            return;
+        }
+
+        // Handle both formats: raw export data OR wrapped with {success, data}
+        // If the file has a "data" wrapper (old format), unwrap it
+        if (importData.success !== undefined && importData.data) {
+            importData = importData.data;
+        }
+
+        // Validate import data structure
+        if (!importData.version || !importData.tables) {
+            showNotification('Invalid export file format', 'error');
+            return;
+        }
+
+        // Show confirmation dialog with import details
+        const tableCount = importData.tables.length;
+        const hasSchema = importData.tables.some(t => t.schema);
+        const hasData = importData.tables.some(t => t.data && t.data.length > 0);
+        const enumCount = importData.enum_types ? importData.enum_types.length : 0;
+
+        let details = `<div style="margin-bottom: 16px;">
+            <p><strong>File:</strong> ${file.name}</p>
+            <p><strong>Export Type:</strong> ${importData.export_type || 'unknown'}</p>
+            <p><strong>Database:</strong> ${importData.database_provider || 'unknown'}</p>
+            ${enumCount > 0 ? `<p><strong>Enum Types:</strong> ${enumCount}</p>` : ''}
+            <p><strong>Tables:</strong> ${tableCount}</p>
+            <p><strong>Contains Schema:</strong> ${hasSchema ? 'Yes' : 'No'}</p>
+            <p><strong>Contains Data:</strong> ${hasData ? 'Yes' : 'No'}</p>
+        </div>
+        ${enumCount > 0 ? `<div style="background: #2a2a2a; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+            <strong>Enum types to create:</strong>
+            <ul style="margin: 8px 0 0 20px;">
+                ${importData.enum_types.map(e => `<li>${e.name} (${e.values.length} values)</li>`).join('')}
+            </ul>
+        </div>` : ''}
+        <div style="background: #2a2a2a; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+            <strong>Tables to import:</strong>
+            <ul style="margin: 8px 0 0 20px; max-height: 150px; overflow-y: auto;">
+                ${importData.tables.map(t => `<li>${t.name} ${t.data ? `(${t.data.length} rows)` : '(schema only)'}</li>`).join('')}
+            </ul>
+        </div>
+        <p style="color: #f59e0b;">This will create enum types, tables, and add missing columns/data.</p>`;
+
+        showConfirm('Import Database', details, async () => {
+            await performImport(importData);
+        });
+
+    } catch (err) {
+        console.error('Import failed:', err);
+        showNotification('Import failed: ' + err.message, 'error');
+    }
+}
+
+// Perform the actual import
+async function performImport(importData) {
+    showNotification('Importing database...', 'info');
+
+    try {
+        const response = await fetch('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(importData)
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            showNotification(result.message || 'Import failed', 'error');
+            return;
+        }
+
+        // Show import results
+        const r = result.result;
+        let summary = [];
+
+        if (r.enum_types_created && r.enum_types_created.length > 0) {
+            summary.push(`Enum types created: ${r.enum_types_created.join(', ')}`);
+        }
+        if (r.tables_created && r.tables_created.length > 0) {
+            summary.push(`Tables created: ${r.tables_created.join(', ')}`);
+        }
+        if (r.tables_updated && r.tables_updated.length > 0) {
+            summary.push(`Tables updated: ${r.tables_updated.join(', ')}`);
+        }
+        if (r.columns_added > 0) {
+            summary.push(`Columns added: ${r.columns_added}`);
+        }
+        if (r.rows_inserted > 0) {
+            summary.push(`Rows inserted: ${r.rows_inserted}`);
+        }
+        if (r.rows_updated > 0) {
+            summary.push(`Rows updated: ${r.rows_updated}`);
+        }
+        if (r.errors && r.errors.length > 0) {
+            summary.push(`<span style="color: #ef4444;">Errors: ${r.errors.length}</span>`);
+        }
+
+        const summaryHtml = summary.length > 0
+            ? `<ul style="margin: 0; padding-left: 20px;">${summary.map(s => `<li>${s}</li>`).join('')}</ul>`
+            : 'No changes were made.';
+
+        showModal('Import Complete', summaryHtml, r.errors && r.errors.length > 0 ? 'warning' : 'success');
+
+        // Refresh the data
+        refreshData();
+        loadTables();
+
+    } catch (err) {
+        console.error('Import failed:', err);
+        showNotification('Import failed: ' + err.message, 'error');
+    }
+}

@@ -76,3 +76,48 @@ func (s *Server) handleSwitchBranch(c *fiber.Ctx) error {
 		"message": "Branch switched. Please refresh the page to see changes.",
 	})
 }
+
+func (s *Server) handleExport(c *fiber.Ctx) error {
+	exportTypeStr := c.Params("type")
+
+	var exportType common.ExportType
+	switch exportTypeStr {
+	case "schema_only":
+		exportType = common.ExportSchemaOnly
+	case "data_only":
+		exportType = common.ExportDataOnly
+	case "complete":
+		exportType = common.ExportComplete
+	default:
+		return common.JSONError(c, 400, "Invalid export type. Use: schema_only, data_only, or complete")
+	}
+
+	data, err := s.service.ExportDatabase(exportType)
+	if err != nil {
+		return common.JSONError(c, 500, err.Error())
+	}
+
+	return common.JSON(c, data)
+}
+
+func (s *Server) handleImport(c *fiber.Ctx) error {
+	var importData common.ExportData
+	if err := c.BodyParser(&importData); err != nil {
+		return common.JSONError(c, 400, "Invalid import data format")
+	}
+
+	if importData.Version == "" || len(importData.Tables) == 0 {
+		return common.JSONError(c, 400, "Invalid import data: missing version or tables")
+	}
+
+	result, err := s.service.ImportDatabase(&importData)
+	if err != nil {
+		return common.JSONError(c, 500, err.Error())
+	}
+
+	return common.JSONFiberMap(c, fiber.Map{
+		"success": true,
+		"message": "Import completed",
+		"result":  result,
+	})
+}

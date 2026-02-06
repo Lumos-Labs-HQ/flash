@@ -63,8 +63,77 @@ type BranchInfo struct {
 
 // Filter represents a single filter condition for server-side filtering
 type Filter struct {
-	Logic    string `json:"logic"`    // "where", "and", "or"
-	Column   string `json:"column"`   // Column name
-	Operator string `json:"operator"` // "equals", "not_equals", "contains", etc.
-	Value    string `json:"value"`    // Filter value
+	Logic    string `json:"logic"`    
+	Column   string `json:"column"`   
+	Operator string `json:"operator"` 
+	Value    string `json:"value"`    
+}
+
+// ExportType defines the type of export
+type ExportType string
+
+const (
+	ExportSchemaOnly ExportType = "schema_only"
+	ExportDataOnly   ExportType = "data_only"
+	ExportComplete   ExportType = "complete"
+)
+
+// ExportEnumType represents a PostgreSQL ENUM type
+type ExportEnumType struct {
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
+}
+
+// ExportColumn represents a column in the export schema
+type ExportColumn struct {
+	Name             string `json:"name"`
+	Type             string `json:"type"`
+	Nullable         bool   `json:"nullable"`
+	PrimaryKey       bool   `json:"primary_key"`
+	Default          string `json:"default,omitempty"`
+	AutoIncrement    bool   `json:"auto_increment,omitempty"`
+	Unique           bool   `json:"unique,omitempty"`
+	ForeignKeyTable  string `json:"foreign_key_table,omitempty"`
+	ForeignKeyColumn string `json:"foreign_key_column,omitempty"`
+}
+
+// ExportIndex represents an index in the export schema
+type ExportIndex struct {
+	Name    string   `json:"name"`
+	Columns []string `json:"columns"`
+	Unique  bool     `json:"unique"`
+}
+
+// ExportTableSchema represents the schema of a table
+type ExportTableSchema struct {
+	Columns []ExportColumn `json:"columns"`
+	Indexes []ExportIndex  `json:"indexes,omitempty"`
+}
+
+// ExportTable represents a single table in the export
+type ExportTable struct {
+	Name   string             `json:"name"`
+	Schema *ExportTableSchema `json:"schema,omitempty"`
+	Data   []map[string]any   `json:"data,omitempty"`
+}
+
+// ExportData represents the complete export structure
+type ExportData struct {
+	Version          string           `json:"version"`
+	ExportedAt       string           `json:"exported_at"`
+	DatabaseProvider string           `json:"database_provider"`
+	ExportType       ExportType       `json:"export_type"`
+	EnumTypes        []ExportEnumType `json:"enum_types,omitempty"`
+	Tables           []ExportTable    `json:"tables"`
+}
+
+// ImportResult represents the result of an import operation
+type ImportResult struct {
+	EnumTypesCreated []string `json:"enum_types_created,omitempty"`
+	TablesCreated    []string `json:"tables_created"`
+	TablesUpdated    []string `json:"tables_updated"`
+	ColumnsAdded     int      `json:"columns_added"`
+	RowsInserted     int      `json:"rows_inserted"`
+	RowsUpdated      int      `json:"rows_updated"`
+	Errors           []string `json:"errors,omitempty"`
 }

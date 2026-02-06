@@ -64,6 +64,34 @@
                         <span class="iconify" data-icon="mdi:filter-outline"></span> Filters
                         <span id="filter-count" class="filter-badge" style="display: none;">0</span>
                     </button>
+
+                    <!-- Export Dropdown -->
+                    <div class="dropdown">
+                        <button class="btn btn-secondary dropdown-toggle" onclick="toggleDropdown('export-dropdown')">
+                            <span class="iconify" data-icon="mdi:download"></span> Export
+                        </button>
+                        <div id="export-dropdown" class="dropdown-menu">
+                            <button class="dropdown-item" onclick="exportDatabase('schema_only')">
+                                <span class="iconify" data-icon="mdi:file-code-outline"></span>
+                                Schema Only
+                            </button>
+                            <button class="dropdown-item" onclick="exportDatabase('data_only')">
+                                <span class="iconify" data-icon="mdi:database-export"></span>
+                                Data Only
+                            </button>
+                            <button class="dropdown-item" onclick="exportDatabase('complete')">
+                                <span class="iconify" data-icon="mdi:package-variant-closed"></span>
+                                Complete (Schema + Data)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Import Button -->
+                    <button class="btn btn-secondary" onclick="triggerImport()">
+                        <span class="iconify" data-icon="mdi:upload"></span> Import
+                    </button>
+                    <input type="file" id="import-file-input" accept=".json" style="display: none;" onchange="handleImportFile(event)">
+
                     <button id="delete-selected-btn" class="btn btn-secondary" style="display: none; background: #dc2626; color: #fff;">Delete selected</button>
                     <button id="save-btn" class="btn btn-primary" style="display: none;">Save changes</button>
                     <button id="add-btn" class="btn btn-success">Add record</button>

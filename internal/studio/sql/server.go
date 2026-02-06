@@ -98,6 +98,10 @@ func (s *Server) setupRoutes() {
 
 	// Editor hints API (cached on client-side)
 	api.Get("/editor/hints", s.handleGetEditorHints)
+
+	// Export/Import API
+	api.Get("/export/:type", s.handleExport)
+	api.Post("/import", s.handleImport)
 }
 
 func (s *Server) Start(openBrowser bool) error {
