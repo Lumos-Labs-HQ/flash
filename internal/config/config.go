@@ -1,55 +1,86 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/spf13/viper"
 )
 
+// ConfigFile is the path to the config file, set by the cmd package from --config flag.
+var ConfigFile string
+
 type Config struct {
-	Version        string   `json:"version" mapstructure:"version"`
-	SchemaPath     string   `json:"schema_path" mapstructure:"schema_path"` // Deprecated: use SchemaDir instead
-	SchemaDir      string   `json:"schema_dir" mapstructure:"schema_dir"`   // New: folder containing .sql schema files
-	Queries        string   `json:"queries" mapstructure:"queries"`
-	MigrationsPath string   `json:"migrations_path" mapstructure:"migrations_path"`
-	ExportPath     string   `json:"export_path" mapstructure:"export_path"`
-	Database       Database `json:"database" mapstructure:"database"`
-	Gen            Gen      `json:"gen" mapstructure:"gen"`
+	Version        string   `json:"version"`
+	SchemaPath     string   `json:"schema_path"` // Deprecated: use SchemaDir instead
+	SchemaDir      string   `json:"schema_dir"`  // New: folder containing .sql schema files
+	Queries        string   `json:"queries"`
+	MigrationsPath string   `json:"migrations_path"`
+	ExportPath     string   `json:"export_path"`
+	Database       Database `json:"database"`
+	Gen            Gen      `json:"gen"`
 }
 
 type Database struct {
-	Provider string `json:"provider" mapstructure:"provider"`
-	URLEnv   string `json:"url_env" mapstructure:"url_env"`
+	Provider string `json:"provider"`
+	URLEnv   string `json:"url_env"`
 }
 
 type Gen struct {
-	Go     GoGen     `json:"go,omitempty" mapstructure:"go"`
-	JS     JSGen     `json:"js,omitempty" mapstructure:"js"`
-	Python PythonGen `json:"python,omitempty" mapstructure:"python"`
+	Go     GoGen     `json:"go,omitempty"`
+	JS     JSGen     `json:"js,omitempty"`
+	Python PythonGen `json:"python,omitempty"`
 }
 
 type GoGen struct {
-	Enabled bool `json:"enabled,omitempty" mapstructure:"enabled"`
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 type JSGen struct {
-	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
-	Out     string `json:"out,omitempty" mapstructure:"out"`
+	Enabled bool   `json:"enabled,omitempty"`
+	Out     string `json:"out,omitempty"`
 }
+
 type PythonGen struct {
-	Enabled bool   `json:"enabled,omitempty" mapstructure:"enabled"`
-	Out     string `json:"out,omitempty" mapstructure:"out"`
-	Async   bool   `json:"async,omitempty" mapstructure:"async"` // true = async (default), false = sync
+	Enabled bool   `json:"enabled,omitempty"`
+	Out     string `json:"out,omitempty"`
+	Async   bool   `json:"async,omitempty"` // true = async (default), false = sync
+}
+
+// pythonRaw is used to detect whether "async" was explicitly set in the JSON.
+type pythonRaw struct {
+	Async *bool `json:"async"`
+}
+type genRaw struct {
+	Python pythonRaw `json:"python"`
+}
+type configRaw struct {
+	Gen genRaw `json:"gen"`
 }
 
 func Load() (*Config, error) {
 	var cfg Config
 
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	path := ConfigFile
+	if path == "" {
+		path = "flash.config.json"
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	pythonAsyncSet := false
+	if data != nil {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return nil, fmt.Errorf("failed to parse config: %w", err)
+		}
+		// Check if python.async was explicitly set
+		var raw configRaw
+		json.Unmarshal(data, &raw)
+		pythonAsyncSet = raw.Gen.Python.Async != nil
 	}
 
 	// Set defaults
@@ -95,7 +126,7 @@ func Load() (*Config, error) {
 	if cfg.Gen.Python.Out == "" && cfg.Gen.Python.Enabled {
 		cfg.Gen.Python.Out = "flash_gen"
 	}
-	if cfg.Gen.Python.Enabled && !viper.IsSet("gen.python.async") {
+	if cfg.Gen.Python.Enabled && !pythonAsyncSet {
 		cfg.Gen.Python.Async = true
 	}
 

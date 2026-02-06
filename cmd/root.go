@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -104,7 +104,6 @@ func Execute() error {
 			// Check if this command requires a plugin
 			requiredPlugin, requiresPlugin := plugin.GetRequiredPlugin(commandName)
 			if requiresPlugin {
-				// Initialize plugin manager
 				manager, err := plugin.NewManager()
 				if err != nil {
 					return fmt.Errorf("failed to initialize plugin manager: %w", err)
@@ -112,23 +111,18 @@ func Execute() error {
 
 				// Check if the exact plugin is installed
 				if manager.IsPluginInstalled(requiredPlugin) {
-					// Execute plugin
 					return manager.ExecutePlugin(requiredPlugin, os.Args[1:])
 				}
 
-				// Check if 'all' plugin is installed
 				if manager.IsPluginInstalled("all") {
 					return manager.ExecutePlugin("all", os.Args[1:])
 				}
 
-				// Plugin not installed
 				color.Red("❌ Command '%s' requires plugin '%s'", commandName, requiredPlugin)
 				fmt.Println()
-				color.Cyan("📦 Install it using: flash add-plug %s", requiredPlugin)
-				fmt.Println()
-				color.White("Plugin info: %s", plugin.GetPluginDescription(requiredPlugin))
-				fmt.Println()
-				color.Yellow("💡 Tip: Install 'all' plugin for complete functionality: flash add-plug all")
+				color.Cyan("📦 Install it using:")
+				color.Cyan("   flash add-plug %s    # Install only what you need", requiredPlugin)
+				color.Cyan("   flash add-plug all   # Install everything")
 				return fmt.Errorf("missing required plugin: %s", requiredPlugin)
 			}
 		}
@@ -139,45 +133,35 @@ func Execute() error {
 
 // checkPluginRequirement checks if a command requires a plugin and handles it
 func checkPluginRequirement(cmd *cobra.Command, args []string) error {
-	// Skip plugin check for plugin management commands and help
 	commandName := cmd.Name()
 	if commandName == "flash" || commandName == "plugins" || commandName == "add-plug" ||
 		commandName == "rm-plug" || commandName == "help" || commandName == "version" {
 		return nil
 	}
 
-	// Check if command requires a plugin
 	requiredPlugin, requiresPlugin := plugin.GetRequiredPlugin(commandName)
 	if !requiresPlugin {
 		return nil
 	}
 
-	// Initialize plugin manager
 	manager, err := plugin.NewManager()
 	if err != nil {
 		return fmt.Errorf("failed to initialize plugin manager: %w", err)
 	}
 
-	// Check if the exact plugin is installed
 	if manager.IsPluginInstalled(requiredPlugin) {
-		// Execute plugin
 		return manager.ExecutePlugin(requiredPlugin, os.Args[1:])
 	}
 
-	// Check if 'all' plugin is installed (which includes both core and studio)
 	if manager.IsPluginInstalled("all") {
-		// Execute the 'all' plugin
 		return manager.ExecutePlugin("all", os.Args[1:])
 	}
 
-	// Plugin not installed, show helpful message
 	color.Red("❌ Command '%s' requires plugin '%s'", commandName, requiredPlugin)
 	fmt.Println()
-	color.Cyan("📦 Install it using: flash add-plug %s", requiredPlugin)
-	fmt.Println()
-	color.White("Plugin info: %s", plugin.GetPluginDescription(requiredPlugin))
-	fmt.Println()
-	color.Yellow("💡 Tip: Install 'all' plugin for complete functionality: flash add-plug all")
+	color.Cyan("📦 Install it using:")
+	color.Cyan("   flash add-plug %s    # Install only what you need", requiredPlugin)
+	color.Cyan("   flash add-plug all   # Install everything")
 	return fmt.Errorf("missing required plugin: %s", requiredPlugin)
 }
 
@@ -197,17 +181,5 @@ func initConfig() {
 		godotenv.Load(".env.local")
 	}
 
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.AddConfigPath(".")
-		viper.SetConfigType("json")
-		viper.SetConfigName("flash.config")
-	}
-
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		// fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
+	config.ConfigFile = cfgFile
 }

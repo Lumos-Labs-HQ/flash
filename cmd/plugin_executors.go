@@ -1,5 +1,5 @@
-//go:build plugins
-// +build plugins
+//go:build plugin_core
+// +build plugin_core
 
 package cmd
 
@@ -26,57 +26,7 @@ func ExecuteCorePlugin() error {
 	coreRoot.AddCommand(checkoutCmd)
 	coreRoot.AddCommand(genCmd)
 	coreRoot.AddCommand(exportCmd)
+	coreRoot.AddCommand(seedCmd)
 
 	return coreRoot.Execute()
-}
-
-func ExecuteStudioPlugin() error {
-	studioRoot := &cobra.Command{
-		Use:   "flash",
-		Short: "FlashORM Studio Plugin",
-	}
-
-	studioRoot.AddCommand(studioCmd)
-
-	return studioRoot.Execute()
-}
-
-func ExecuteSeedPlugin() error {
-	seedRoot := &cobra.Command{
-		Use:   "flash",
-		Short: "FlashORM Seed Plugin",
-	}
-
-	seedRoot.AddCommand(seedCmd)
-
-	return seedRoot.Execute()
-}
-
-func ExecuteAllPlugin() error {
-	allRoot := &cobra.Command{
-		Use:   "flash",
-		Short: "FlashORM - Complete Package",
-	}
-
-	// Add all core commands
-	allRoot.AddCommand(initCmd)
-	allRoot.AddCommand(migrateCmd)
-	allRoot.AddCommand(applyCmd)
-	allRoot.AddCommand(downCmd)
-	allRoot.AddCommand(statusCmd)
-	allRoot.AddCommand(pullCmd)
-	allRoot.AddCommand(resetCmd)
-	allRoot.AddCommand(rawCmd)
-	allRoot.AddCommand(branchCmd)
-	allRoot.AddCommand(checkoutCmd)
-	allRoot.AddCommand(genCmd)
-	allRoot.AddCommand(exportCmd)
-
-	// Add studio command
-	allRoot.AddCommand(studioCmd)
-
-	// Add seed command
-	allRoot.AddCommand(seedCmd)
-
-	return allRoot.Execute()
 }

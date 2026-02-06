@@ -1,5 +1,5 @@
-//go:build plugins
-// +build plugins
+//go:build plugin_all
+// +build plugin_all
 
 package main
 

@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
 	cfgFile string
-	Version = "2.2.0-beta6-dev"
+	Version = "2.3.1-beta-dev"
 )
 
 func showBanner() {
@@ -103,17 +103,5 @@ func initConfig() {
 		godotenv.Load(".env.local")
 	}
 
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
-		viper.AddConfigPath(".")
-		viper.SetConfigName("flash.config")
-		viper.SetConfigType("json")
-	}
-
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		// Config loaded successfully
-	}
+	config.ConfigFile = cfgFile
 }
