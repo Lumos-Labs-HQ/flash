@@ -68,8 +68,10 @@
 
                     <!-- Export Dropdown -->
                     <div class="dropdown">
-                        <button class="btn btn-secondary dropdown-toggle" onclick="toggleDropdown('export-dropdown')">
-                            <span class="iconify" data-icon="mdi:download"></span> Export
+                        <button id="export-btn" class="btn btn-export dropdown-toggle" onclick="toggleDropdown('export-dropdown')">
+                            <span class="iconify" data-icon="mdi:download"></span>
+                            <span class="btn-text">Export</span>
+                            <span class="btn-spinner"></span>
                         </button>
                         <div id="export-dropdown" class="dropdown-menu">
                             <button class="dropdown-item" onclick="exportDatabase('schema_only')">
@@ -88,8 +90,10 @@
                     </div>
 
                     <!-- Import Button -->
-                    <button class="btn btn-secondary" onclick="triggerImport()">
-                        <span class="iconify" data-icon="mdi:upload"></span> Import
+                    <button id="import-btn" class="btn btn-import" onclick="triggerImport()">
+                        <span class="iconify" data-icon="mdi:upload"></span>
+                        <span class="btn-text">Import</span>
+                        <span class="btn-spinner"></span>
                     </button>
                     <input type="file" id="import-file-input" accept=".json" style="display: none;" onchange="handleImportFile(event)">
 

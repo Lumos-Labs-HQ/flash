@@ -1891,5 +1891,13 @@ window.addEventListener('DOMContentLoaded', () => {
             showCreateEnum();
             window.location.hash = '';
         }, 1000);
+    } else if (hash.startsWith('#edit-')) {
+        const tableName = decodeURIComponent(hash.substring(6));
+        if (tableName) {
+            setTimeout(() => {
+                window.openTableEdit(tableName);
+                window.location.hash = '';
+            }, 1000);
+        }
     }
 });

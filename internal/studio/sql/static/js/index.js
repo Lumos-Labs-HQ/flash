@@ -220,6 +220,137 @@ async function executeSQLQuery() {
     }
 }
 
+// Context Menu for table items
+(function() {
+    let contextMenu = null;
+    let contextTableName = null;
+
+    function createContextMenu() {
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.innerHTML = `
+            <button class="context-menu-item" data-action="edit">
+                <span class="iconify" data-icon="mdi:pencil"></span>
+                Edit Table
+            </button>
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-item-danger" data-action="delete">
+                <span class="iconify" data-icon="mdi:delete"></span>
+                Delete Table
+            </button>
+        `;
+        menu.addEventListener('click', function(e) {
+            const item = e.target.closest('.context-menu-item');
+            if (!item) return;
+            const action = item.dataset.action;
+            hideContextMenu();
+            if (action === 'edit') editTableFromContext();
+            else if (action === 'delete') deleteTableFromContext();
+        });
+        document.body.appendChild(menu);
+        return menu;
+    }
+
+    function showContextMenu(e, tableName) {
+        e.preventDefault();
+        e.stopPropagation();
+        contextTableName = tableName;
+
+        if (!contextMenu) {
+            contextMenu = createContextMenu();
+        }
+
+        contextMenu.style.display = 'block';
+        contextMenu.style.left = e.clientX + 'px';
+        contextMenu.style.top = e.clientY + 'px';
+
+        // Ensure menu stays within viewport
+        requestAnimationFrame(() => {
+            const rect = contextMenu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                contextMenu.style.left = (e.clientX - rect.width) + 'px';
+            }
+            if (rect.bottom > window.innerHeight) {
+                contextMenu.style.top = (e.clientY - rect.height) + 'px';
+            }
+        });
+    }
+
+    function hideContextMenu() {
+        if (contextMenu) {
+            contextMenu.style.display = 'none';
+        }
+    }
+
+    // Attach right-click handler via event delegation
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('tables-list').addEventListener('contextmenu', function(e) {
+            const tableItem = e.target.closest('.table-item');
+            if (tableItem) {
+                showContextMenu(e, tableItem.dataset.table);
+            }
+        });
+    });
+
+    // Hide context menu on click elsewhere or scroll
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('scroll', hideContextMenu, true);
+    document.addEventListener('contextmenu', function(e) {
+        if (!e.target.closest('.table-item')) {
+            hideContextMenu();
+        }
+    });
+
+    // Edit table - navigate to schema visualizer
+    function editTableFromContext() {
+        if (contextTableName) {
+            window.location.href = '/schema#edit-' + encodeURIComponent(contextTableName);
+        }
+    }
+
+    // Delete table
+    function deleteTableFromContext() {
+        if (!contextTableName) return;
+        const tableName = contextTableName;
+
+        showConfirm(
+            'Delete Table',
+            '<p>Are you sure you want to delete the table <strong>' + escapeHtml(tableName) + '</strong>?</p>' +
+            '<p style="color: #ef4444;">This action cannot be undone. All data in this table will be permanently lost.</p>',
+            async () => {
+                try {
+                    const res = await fetch('/api/schema/apply', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type: 'drop_table', table: tableName })
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                        showToast('Table "' + tableName + '" deleted successfully', 'success');
+                        if (state.currentTable === tableName) {
+                            state.currentTable = null;
+                            state.data = null;
+                            document.getElementById('current-table').textContent = 'Select a model';
+                            document.getElementById('grid-container').innerHTML =
+                                '<div class="empty-state">' +
+                                    '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+                                        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>' +
+                                    '</svg>' +
+                                    '<div>Select a model to view data</div>' +
+                                '</div>';
+                        }
+                        loadTables();
+                    } else {
+                        showModal('Error', json.message || 'Failed to delete table', 'error');
+                    }
+                } catch (err) {
+                    showModal('Error', 'Failed to delete table: ' + err.message, 'error');
+                }
+            }
+        );
+    }
+})();
+
 const originalSelectTable = selectTable;
 selectTable = async function (tableName) {
     await originalSelectTable(tableName);
@@ -324,6 +455,8 @@ async function exportDatabase(exportType) {
     // Close dropdown
     document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
 
+    const exportBtn = document.getElementById('export-btn');
+    exportBtn.classList.add('loading');
     showToast('Exporting database...', 'info');
 
     try {
@@ -357,6 +490,8 @@ async function exportDatabase(exportType) {
     } catch (err) {
         console.error('Export failed:', err);
         showToast('Export failed: ' + err.message, 'error');
+    } finally {
+        exportBtn.classList.remove('loading');
     }
 }
 
@@ -437,6 +572,8 @@ async function handleImportFile(event) {
 
 // Perform the actual import
 async function performImport(importData) {
+    const importBtn = document.getElementById('import-btn');
+    importBtn.classList.add('loading');
     showToast('Importing database...', 'info');
 
     try {
@@ -492,5 +629,7 @@ async function performImport(importData) {
     } catch (err) {
         console.error('Import failed:', err);
         showToast('Import failed: ' + err.message, 'error');
+    } finally {
+        importBtn.classList.remove('loading');
     }
 }

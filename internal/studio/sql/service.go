@@ -1160,6 +1160,69 @@ func (s *Service) sortImportTablesByDependency(tables []common.ExportTable) []co
 	return sorted
 }
 
+// getFKChecksState queries the current FK check state and returns a restore function.
+// It only disables FK checks if they are currently enabled; if already disabled it's a no-op.
+func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) {
+	provider := ""
+	if s.cfg != nil {
+		provider = s.cfg.Database.Provider
+	}
+
+	switch provider {
+	case "mysql":
+		// Query current state
+		res, err := s.adapter.ExecuteQuery(ctx, "SELECT @@FOREIGN_KEY_CHECKS AS fk")
+		if err == nil && len(res.Rows) > 0 {
+			val := fmt.Sprintf("%v", res.Rows[0]["fk"])
+			if val == "0" {
+				// Already disabled, nothing to do
+				return func() {}
+			}
+		}
+		_ = s.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 0")
+		return func() {
+			_ = s.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 1")
+		}
+
+	case "sqlite", "sqlite3":
+		res, err := s.adapter.ExecuteQuery(ctx, "PRAGMA foreign_keys")
+		if err == nil && len(res.Rows) > 0 {
+			// PRAGMA returns "foreign_keys" column with 0 or 1
+			for _, v := range res.Rows[0] {
+				if fmt.Sprintf("%v", v) == "0" {
+					// Already disabled
+					return func() {}
+				}
+			}
+		}
+		_ = s.adapter.ExecuteMigration(ctx, "PRAGMA foreign_keys = OFF")
+		return func() {
+			_ = s.adapter.ExecuteMigration(ctx, "PRAGMA foreign_keys = ON")
+		}
+
+	default: // postgresql, postgres
+		var original string
+		res, err := s.adapter.ExecuteQuery(ctx, "SHOW session_replication_role")
+		if err == nil && len(res.Rows) > 0 {
+			for _, v := range res.Rows[0] {
+				original = fmt.Sprintf("%v", v)
+				break
+			}
+		}
+		if original == "replica" {
+			// Already disabled
+			return func() {}
+		}
+		if original == "" {
+			original = "origin"
+		}
+		_ = s.adapter.ExecuteMigration(ctx, "SET session_replication_role = 'replica'")
+		return func() {
+			_ = s.adapter.ExecuteMigration(ctx, fmt.Sprintf("SET session_replication_role = '%s'", original))
+		}
+	}
+}
+
 // createEnumType creates a PostgreSQL ENUM type
 func (s *Service) createEnumType(ctx context.Context, enumType common.ExportEnumType) error {
 	// Quote each enum value
@@ -1265,7 +1328,22 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 		}
 	}
 
-	// Phase 2: Add foreign key constraints (optional - skip if referenced table doesn't exist)
+	// Phase 2: Disable FK checks (if enabled) and import data in dependency order
+	restoreFK := s.disableFKChecksIfNeeded(ctx)
+	for _, table := range sortedTables {
+		if len(table.Data) > 0 && existingTableMap[table.Name] {
+			inserted, updated, err := s.importTableData(ctx, table.Name, table.Data)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("Failed to import data for %s: %v", table.Name, err))
+			} else {
+				result.RowsInserted += inserted
+				result.RowsUpdated += updated
+			}
+		}
+	}
+	restoreFK()
+
+	// Phase 3: Add foreign key constraints (after all data is in place)
 	for _, fk := range pendingFKs {
 		if !existingTableMap[fk.fkTable] {
 			// Referenced table doesn't exist, skip this FK
@@ -1281,19 +1359,6 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
 			// FK constraint errors are non-fatal, just log them
 			result.Errors = append(result.Errors, fmt.Sprintf("Failed to add FK on %s.%s: %v", fk.tableName, fk.colName, err))
-		}
-	}
-
-	// Phase 3: Import data in dependency order
-	for _, table := range sortedTables {
-		if len(table.Data) > 0 && existingTableMap[table.Name] {
-			inserted, updated, err := s.importTableData(ctx, table.Name, table.Data)
-			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("Failed to import data for %s: %v", table.Name, err))
-			} else {
-				result.RowsInserted += inserted
-				result.RowsUpdated += updated
-			}
 		}
 	}
 
@@ -1386,9 +1451,13 @@ func (s *Service) updateTableSchema(ctx context.Context, tableName string, schem
 	return added, nil
 }
 
-// importTableData imports data into an existing table
+// importTableData imports data into an existing table using batch operations
 func (s *Service) importTableData(ctx context.Context, tableName string, data []map[string]any) (int, int, error) {
-	// Get primary key column
+	if len(data) == 0 {
+		return 0, 0, nil
+	}
+
+	// Get primary key column once
 	columns, err := s.adapter.GetTableColumns(ctx, tableName)
 	if err != nil {
 		return 0, 0, err
@@ -1402,39 +1471,158 @@ func (s *Service) importTableData(ctx context.Context, tableName string, data []
 		}
 	}
 
-	inserted := 0
-	updated := 0
-
-	for _, row := range data {
-		// Check if row exists (by primary key)
-		exists := false
-		if pkColumn != "" {
-			if pkValue, ok := row[pkColumn]; ok && pkValue != nil {
-				query := fmt.Sprintf("SELECT 1 FROM %s WHERE %s = '%v' LIMIT 1",
-					common.QuoteIdentifier(tableName),
-					common.QuoteIdentifier(pkColumn),
-					pkValue)
-
-				result, err := s.adapter.ExecuteQuery(ctx, query)
-				if err == nil && len(result.Rows) > 0 {
-					exists = true
+	// Batch-check which PKs already exist (single query instead of N queries)
+	existingPKs := make(map[string]bool)
+	if pkColumn != "" {
+		const checkBatch = 500
+		for i := 0; i < len(data); i += checkBatch {
+			end := i + checkBatch
+			if end > len(data) {
+				end = len(data)
+			}
+			var pkValues []string
+			for _, row := range data[i:end] {
+				if pkValue, ok := row[pkColumn]; ok && pkValue != nil {
+					strVal := fmt.Sprintf("%v", pkValue)
+					escaped := strings.ReplaceAll(strVal, "'", "''")
+					pkValues = append(pkValues, fmt.Sprintf("'%s'", escaped))
+				}
+			}
+			if len(pkValues) == 0 {
+				continue
+			}
+			query := fmt.Sprintf("SELECT %s FROM %s WHERE %s IN (%s)",
+				common.QuoteIdentifier(pkColumn),
+				common.QuoteIdentifier(tableName),
+				common.QuoteIdentifier(pkColumn),
+				strings.Join(pkValues, ","))
+			result, err := s.adapter.ExecuteQuery(ctx, query)
+			if err == nil {
+				for _, row := range result.Rows {
+					if v, ok := row[pkColumn]; ok {
+						existingPKs[fmt.Sprintf("%v", v)] = true
+					}
 				}
 			}
 		}
+	}
 
-		if exists {
-			// Update existing row
-			if err := s.UpdateRow(tableName, row[pkColumn], row); err != nil {
-				continue // Skip errors for individual rows
+	// Split rows into new (batch insert) and existing (update)
+	var newRows []map[string]any
+	var updateRows []map[string]any
+	for _, row := range data {
+		if pkColumn != "" {
+			if pkValue, ok := row[pkColumn]; ok && pkValue != nil {
+				if existingPKs[fmt.Sprintf("%v", pkValue)] {
+					updateRows = append(updateRows, row)
+					continue
+				}
 			}
-			updated++
-		} else {
-			// Insert new row
-			if err := s.InsertRow(tableName, row); err != nil {
-				continue // Skip errors for individual rows
-			}
-			inserted++
 		}
+		newRows = append(newRows, row)
+	}
+
+	inserted := 0
+	updated := 0
+
+	// Batch INSERT new rows (multi-row VALUES)
+	if len(newRows) > 0 {
+		// Collect stable column order from first row
+		var colNames []string
+		for col := range newRows[0] {
+			colNames = append(colNames, col)
+		}
+
+		var quotedCols []string
+		for _, col := range colNames {
+			quotedCols = append(quotedCols, common.QuoteIdentifier(col))
+		}
+		colList := strings.Join(quotedCols, ", ")
+
+		const insertBatch = 200
+		for i := 0; i < len(newRows); i += insertBatch {
+			end := i + insertBatch
+			if end > len(newRows) {
+				end = len(newRows)
+			}
+			batch := newRows[i:end]
+
+			var valueGroups []string
+			for _, row := range batch {
+				var vals []string
+				for _, col := range colNames {
+					v, ok := row[col]
+					if !ok || v == nil {
+						vals = append(vals, "NULL")
+					} else {
+						strVal := fmt.Sprintf("%v", v)
+						escaped := strings.ReplaceAll(strVal, "'", "''")
+						vals = append(vals, fmt.Sprintf("'%s'", escaped))
+					}
+				}
+				valueGroups = append(valueGroups, "("+strings.Join(vals, ", ")+")")
+			}
+
+			query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
+				common.QuoteIdentifier(tableName), colList,
+				strings.Join(valueGroups, ", "))
+
+			if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+				// Fallback: insert one by one
+				for _, row := range batch {
+					var vals []string
+					for _, col := range colNames {
+						v, ok := row[col]
+						if !ok || v == nil {
+							vals = append(vals, "NULL")
+						} else {
+							strVal := fmt.Sprintf("%v", v)
+							escaped := strings.ReplaceAll(strVal, "'", "''")
+							vals = append(vals, fmt.Sprintf("'%s'", escaped))
+						}
+					}
+					single := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
+						common.QuoteIdentifier(tableName), colList,
+						strings.Join(vals, ", "))
+					if err := s.adapter.ExecuteMigration(ctx, single); err != nil {
+						continue
+					}
+					inserted++
+				}
+			} else {
+				inserted += len(batch)
+			}
+		}
+	}
+
+	// Update existing rows (individual updates, but without redundant schema lookups)
+	for _, row := range updateRows {
+		var setClauses []string
+		for col, val := range row {
+			if col == pkColumn {
+				continue
+			}
+			if val == nil {
+				setClauses = append(setClauses, fmt.Sprintf("%s = NULL", common.QuoteIdentifier(col)))
+			} else {
+				strVal := fmt.Sprintf("%v", val)
+				escaped := strings.ReplaceAll(strVal, "'", "''")
+				setClauses = append(setClauses, fmt.Sprintf("%s = '%s'", common.QuoteIdentifier(col), escaped))
+			}
+		}
+		if len(setClauses) == 0 {
+			continue
+		}
+		pkVal := fmt.Sprintf("%v", row[pkColumn])
+		escapedPK := strings.ReplaceAll(pkVal, "'", "''")
+		query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = '%s'",
+			common.QuoteIdentifier(tableName),
+			strings.Join(setClauses, ", "),
+			common.QuoteIdentifier(pkColumn), escapedPK)
+		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+			continue
+		}
+		updated++
 	}
 
 	return inserted, updated, nil
