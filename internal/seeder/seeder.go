@@ -349,15 +349,39 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 	return table
 }
 
+// adaptBatchSize calculates an optimal batch size based on the number of columns.
+// Wider rows (more columns) need smaller batches to avoid oversized INSERT statements.
+func adaptBatchSize(userBatch int, columnCount int) int {
+	if userBatch <= 0 {
+		userBatch = 100
+	}
+
+	// Estimate row size: ~50 bytes per column on average (name + value + formatting)
+	estimatedRowBytes := columnCount * 50
+
+	switch {
+	case estimatedRowBytes > 5000: // very wide tables (100+ columns)
+		if userBatch > 50 {
+			return 50
+		}
+	case estimatedRowBytes > 2000: // wide tables (40+ columns)
+		if userBatch > 100 {
+			return 100
+		}
+	default: // narrow tables
+		if userBatch < 200 {
+			return 200
+		}
+	}
+	return userBatch
+}
+
 func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, withRelations bool) error {
 	color.Cyan("  📝 Seeding %s (%d records)...", table.Name, count)
 
-	batchSize := s.seedConfig.Batch
-	if batchSize <= 0 {
-		batchSize = 100 
-	}
+	batchSize := adaptBatchSize(s.seedConfig.Batch, len(table.Columns))
 
-	var batch []map[string]interface{}
+	batch := make([]map[string]interface{}, 0, batchSize)
 
 	for i := 0; i < count; i++ {
 		record := make(map[string]interface{})
@@ -420,7 +444,7 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 
 	// For small batches or databases that don't support multi-row inserts well, insert one by one
 	if len(records) == 1 || s.config.Database.Provider == "sqlite" || s.config.Database.Provider == "sqlite3" {
-		var ids []interface{}
+		ids := make([]interface{}, 0, len(records))
 		for _, record := range records {
 			id, err := s.insertRecord(ctx, tableName, record, pkColumn)
 			if err != nil {
@@ -435,7 +459,7 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 
 	// Build multi-row INSERT for PostgreSQL/MySQL
 	// Get column order from first record
-	var columns []string
+	columns := make([]string, 0, len(records[0]))
 	for col := range records[0] {
 		if !isValidIdentifier(col) {
 			return nil, fmt.Errorf("invalid column name: %s", col)
@@ -443,9 +467,9 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 		columns = append(columns, col)
 	}
 
-	var allValueStrs []string
+	allValueStrs := make([]string, 0, len(records))
 	for _, record := range records {
-		var valueStrs []string
+		valueStrs := make([]string, 0, len(columns))
 		for _, col := range columns {
 			val := record[col]
 			valueStrs = append(valueStrs, s.formatValue(val))
@@ -473,7 +497,7 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 	}
 
 	// Extract IDs from result
-	var ids []interface{}
+	ids := make([]interface{}, 0, len(records))
 	if result != nil && len(result.Rows) > 0 && pkColumn != "" {
 		for _, row := range result.Rows {
 			if val, ok := row[pkColumn]; ok {
@@ -517,8 +541,8 @@ func (s *Seeder) insertRecord(ctx context.Context, tableName string, record map[
 		return nil, fmt.Errorf("invalid table name: %s", tableName)
 	}
 
-	var columns []string
-	var valueStrs []string
+	columns := make([]string, 0, len(record))
+	valueStrs := make([]string, 0, len(record))
 
 	for col, val := range record {
 		// Validate column name
@@ -575,7 +599,7 @@ func (s *Seeder) insertRecord(ctx context.Context, tableName string, record map[
 func (s *Seeder) truncateTables(ctx context.Context, order []string) error {
 	color.Yellow("🗑️  Truncating tables...")
 
-	var errors []string
+	errors := make([]string, 0, 4)
 
 	// Reverse order for truncation (to respect FK constraints)
 	for i := len(order) - 1; i >= 0; i-- {

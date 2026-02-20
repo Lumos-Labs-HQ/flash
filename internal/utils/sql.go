@@ -51,7 +51,7 @@ func ExtractTableName(sql string) string {
 
 // IsModifyingQuery returns true if the SQL contains INSERT, UPDATE, or DELETE.
 func IsModifyingQuery(sql string) bool {
-	return modifyingQueryRegex.MatchString(strings.ToUpper(sql))
+	return modifyingQueryRegex.MatchString(sql)
 }
 
 func RemoveComments(sql string) string {
@@ -133,7 +133,7 @@ func ExtractSelectColumns(sql string) string {
 				parenDepth--
 			case 'S', 's':
 				if parenDepth == 1 && i+6 <= len(sqlUpper) {
-					if strings.ToUpper(sql[i:i+6]) == "SELECT" {
+					if sqlUpper[i:i+6] == "SELECT" {
 						if (i == 0 || !isAlphaNum(sql[i-1])) &&
 							(i+6 >= len(sql) || !isAlphaNum(sql[i+6])) {
 							return extractColumnsFromSelect(sql, i)
@@ -156,7 +156,7 @@ func ExtractSelectColumns(sql string) string {
 				parenDepth--
 			case 'S', 's':
 				if parenDepth == 0 && i+6 <= len(sqlUpper) {
-					if strings.ToUpper(sql[i:i+6]) == "SELECT" {
+					if sqlUpper[i:i+6] == "SELECT" {
 						if (i == 0 || !isAlphaNum(sql[i-1])) &&
 							(i+6 >= len(sql) || !isAlphaNum(sql[i+6])) {
 							selectPositions = append(selectPositions, i)
@@ -181,6 +181,7 @@ func ExtractSelectColumns(sql string) string {
 }
 
 func extractColumnsFromSelect(sql string, selectIdx int) string {
+	sqlUpper := strings.ToUpper(sql)
 	start := selectIdx + 6
 	for start < len(sql) && (sql[start] == ' ' || sql[start] == '\t' || sql[start] == '\n') {
 		start++
@@ -197,8 +198,7 @@ func extractColumnsFromSelect(sql string, selectIdx int) string {
 			parenDepth--
 		case 'F', 'f':
 			if parenDepth == 0 && i+4 <= len(sql) {
-				potential := strings.ToUpper(sql[i:min(i+4, len(sql))])
-				if potential == "FROM" {
+				if sqlUpper[i:i+4] == "FROM" {
 					if (i == 0 || !isAlphaNum(sql[i-1])) &&
 						(i+4 >= len(sql) || !isAlphaNum(sql[i+4])) {
 						fromIdx = i

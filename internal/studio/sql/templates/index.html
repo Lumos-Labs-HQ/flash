@@ -62,7 +62,7 @@
                 </div>
                 <div class="topbar-right">
                     <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()">
-                        <span class="iconify" data-icon="mdi:filter-outline"></span> Filters
+                        <span class="iconify" data-icon="mdi:filter-outline"></span><span class="btn-text">Filters</span>
                         <span id="filter-count" class="filter-badge" style="display: none;">0</span>
                     </button>
 
@@ -97,9 +97,9 @@
                     </button>
                     <input type="file" id="import-file-input" accept=".json" style="display: none;" onchange="handleImportFile(event)">
 
-                    <button id="delete-selected-btn" class="btn btn-secondary" style="display: none; background: #dc2626; color: #fff;">Delete selected</button>
-                    <button id="save-btn" class="btn btn-primary" style="display: none;">Save changes</button>
-                    <button id="add-btn" class="btn btn-success">Add record</button>
+                    <button id="delete-selected-btn" class="btn btn-secondary" style="display: none; background: #dc2626; color: #fff;"><span class="iconify" data-icon="mdi:delete"></span><span class="btn-text">Delete selected</span></button>
+                    <button id="save-btn" class="btn btn-primary" style="display: none;"><span class="iconify" data-icon="mdi:content-save"></span><span class="btn-text">Save changes</span></button>
+                    <button id="add-btn" class="btn btn-success"><span class="iconify" data-icon="mdi:plus"></span><span class="btn-text">Add record</span></button>
                     <button id="refresh-btn" class="btn btn-secondary"><span class="iconify" data-icon="mdi:refresh"></span></button>
                 </div>
             </div>

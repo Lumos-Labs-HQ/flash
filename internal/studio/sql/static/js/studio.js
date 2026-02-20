@@ -322,7 +322,7 @@ function renderDataGrid(data) {
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th style="width: 50px;"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></th>
+                        <th><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></th>
                         ${orderedCols.map(col => `
                             <th title="${col.name}">
                                 ${col.name}

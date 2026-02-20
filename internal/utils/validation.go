@@ -144,12 +144,12 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 			lines := strings.Split(sql, "\n")
 			lineNum := 1
 			colPos := 1
+			upperTable := strings.ToUpper(tableName)
 
 			for i, line := range lines {
-				if strings.Contains(strings.ToUpper(line), strings.ToUpper(tableName)) {
+				upperLine := strings.ToUpper(line)
+				if strings.Contains(upperLine, upperTable) {
 					lineNum = i + 1
-					upperLine := strings.ToUpper(line)
-					upperTable := strings.ToUpper(tableName)
 					colPos = strings.Index(upperLine, upperTable) + 1
 					break
 				}
@@ -240,7 +240,8 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		sourceFile = "queries"
 	}
 
-	if strings.Contains(strings.ToUpper(sql), "UNION") {
+	sqlUpper := strings.ToUpper(sql)
+	if strings.Contains(sqlUpper, "UNION") {
 		return nil
 	}
 
@@ -426,12 +427,12 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 						lines := strings.Split(sql, "\n")
 						lineNum := 1
 						colPos := 1
+						upperCol := strings.ToUpper(colName)
 
 						for i, line := range lines {
-							if strings.Contains(strings.ToUpper(line), strings.ToUpper(colName)) {
+							upperLine := strings.ToUpper(line)
+							if strings.Contains(upperLine, upperCol) {
 								lineNum = i + 1
-								upperLine := strings.ToUpper(line)
-								upperCol := strings.ToUpper(colName)
 								colPos = strings.Index(upperLine, upperCol) + 1
 								break
 							}

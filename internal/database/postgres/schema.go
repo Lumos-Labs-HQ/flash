@@ -15,7 +15,7 @@ func (p *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, er
 		return nil, err
 	}
 
-	var validTables []string
+	validTables := make([]string, 0, len(tableNames))
 	for _, name := range tableNames {
 		if name != "_flash_migrations" {
 			validTables = append(validTables, name)
@@ -36,7 +36,7 @@ func (p *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, er
 		return nil, err
 	}
 
-	var tables []types.SchemaTable
+	tables := make([]types.SchemaTable, 0, len(validTables))
 	for _, name := range validTables {
 		tables = append(tables, types.SchemaTable{
 			Name:    name,
@@ -72,7 +72,7 @@ func (p *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, erro
 		enumMap[enumName] = append(enumMap[enumName], enumValue)
 	}
 
-	var enums []types.SchemaEnum
+	enums := make([]types.SchemaEnum, 0, len(enumMap))
 	for name, values := range enumMap {
 		enums = append(enums, types.SchemaEnum{
 			Name:   name,
@@ -281,7 +281,7 @@ func (p *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 	}
 	defer rows.Close()
 
-	result := make(map[string][]types.SchemaIndex)
+	result := make(map[string][]types.SchemaIndex, len(tableNames))
 	for rows.Next() {
 		var tableName, indexName, indexDef string
 		if err := rows.Scan(&tableName, &indexName, &indexDef); err != nil {
@@ -321,7 +321,7 @@ func (p *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	}
 	defer rows.Close()
 
-	var tables []string
+	tables := make([]string, 0, 32)
 	for rows.Next() {
 		var tableName string
 		if err := rows.Scan(&tableName); err != nil {
@@ -465,7 +465,7 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
 	}
 
-	var tables []types.SchemaTable
+	tables := make([]types.SchemaTable, 0, len(tableMap))
 	for _, table := range tableMap {
 		tables = append(tables, *table)
 	}

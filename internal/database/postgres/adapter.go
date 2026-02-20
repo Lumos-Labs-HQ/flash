@@ -43,11 +43,11 @@ func (p *Adapter) Connect(ctx context.Context, url string) error {
 
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 
-	config.MaxConns = 2                         
-	config.MinConns = 0                         
-	config.MaxConnLifetime = 15 * time.Minute   
-	config.MaxConnIdleTime = 3 * time.Minute    
-	config.HealthCheckPeriod = 30 * time.Second 
+	config.MaxConns = 3
+	config.MinConns = 0
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
+	config.HealthCheckPeriod = 30 * time.Second
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
@@ -234,14 +234,14 @@ func (p *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.Query
 		columns[i] = string(fd.Name)
 	}
 
-	var results []map[string]interface{}
+	results := make([]map[string]interface{}, 0, 64)
 	for rows.Next() {
 		values, err := rows.Values()
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
-		row := make(map[string]interface{})
+		row := make(map[string]interface{}, len(columns))
 		for i, col := range columns {
 			row[col] = values[i]
 		}

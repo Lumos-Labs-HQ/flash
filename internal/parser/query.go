@@ -421,8 +421,8 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		return err
 	}
 
-	hasJoin := strings.Contains(strings.ToUpper(query.SQL), "JOIN")
-	hasUnion := strings.Contains(strings.ToUpper(query.SQL), "UNION")
+	hasJoin := strings.Contains(sqlUpper, "JOIN")
+	hasUnion := strings.Contains(sqlUpper, "UNION")
 
 	if table != nil && len(query.Columns) > 0 && !hasJoin && !hasUnion {
 		for _, queryCol := range query.Columns {
@@ -457,12 +457,12 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 				lines := strings.Split(query.SQL, "\n")
 				lineNum := 1
 				colPos := 1
+				upperCol := strings.ToUpper(queryCol.Name)
 
 				for i, line := range lines {
-					if strings.Contains(strings.ToUpper(line), strings.ToUpper(queryCol.Name)) {
+					upperLine := strings.ToUpper(line)
+					if strings.Contains(upperLine, upperCol) {
 						lineNum = i + 1
-						upperLine := strings.ToUpper(line)
-						upperCol := strings.ToUpper(queryCol.Name)
 						colPos = strings.Index(upperLine, upperCol) + 1
 						break
 					}
@@ -681,7 +681,8 @@ func (p *QueryParser) inferTypeFromCTE(sql string, cteAlias string, cteColumn st
 		if matched, _ := regexp.MatchString(p.pattern, cteQuery); matched {
 			re := regexp.MustCompile(p.pattern)
 			if subMatches := re.FindStringSubmatch(cteQuery); len(subMatches) > 0 {
-				if strings.Contains(strings.ToUpper(subMatches[0]), "MAX") || strings.Contains(strings.ToUpper(subMatches[0]), "MIN") {
+				upperMatch := strings.ToUpper(subMatches[0])
+				if strings.Contains(upperMatch, "MAX") || strings.Contains(upperMatch, "MIN") {
 					if len(subMatches) > 1 {
 						arg := strings.ToUpper(subMatches[1])
 						if strings.Contains(arg, "CREATED_AT") || strings.Contains(arg, "UPDATED_AT") {

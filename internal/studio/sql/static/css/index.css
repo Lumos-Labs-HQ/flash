@@ -148,14 +148,22 @@
     position: sticky; top: 0; z-index: 50;
 }
 .topbar-left { display: flex; align-items: center; gap: 12px; }
-.topbar-right { display: flex; gap: 8px; }
+.topbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
 .table-name { font-size: 14px; font-weight: 500; }
 .btn { 
-    padding: 6px 12px; border-radius: 4px; border: none; font-size: 12px; 
+    padding: 6px 10px; border-radius: 4px; border: none; font-size: 12px; 
     cursor: pointer; font-weight: 500; transition: all 0.15s; position: relative;
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    white-space: nowrap;
+}
+.btn .iconify {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+.btn-text {
+    margin-left: 2px;
 }
 .btn:hover { opacity: 0.9; transform: translateY(-1px); }
 .btn-primary { background: #4a9eff; color: #fff; }
@@ -284,6 +292,13 @@
     text-overflow: ellipsis;
     min-width: 150px;
 }
+.data-table th:first-child {
+    min-width: 50px;
+    max-width: 50px;
+    width: 50px;
+    padding: 10px 8px;
+    text-align: center;
+}
 .data-table td { 
     padding: 10px 16px; 
     border-bottom: 1px solid #2a2a2a; 
@@ -293,6 +308,13 @@
     text-overflow: ellipsis;
     min-width: 150px;
     max-width: 400px;
+}
+.data-table td:first-child {
+    min-width: 50px;
+    max-width: 50px;
+    width: 50px;
+    padding: 10px 8px;
+    text-align: center;
 }
 .data-table td.cell-editing {
     white-space: normal !important;
@@ -554,12 +576,12 @@
 /* Export/Import action buttons */
 .btn-export,
 .btn-import {
-    padding: 8px 18px;
-    font-size: 13px;
+    padding: 6px 12px;
+    font-size: 12px;
     font-weight: 600;
     border-radius: 6px;
-    gap: 8px;
-    min-width: 110px;
+    gap: 6px;
+    min-width: 90px;
     justify-content: center;
     position: relative;
     overflow: hidden;
@@ -757,4 +779,68 @@
     height: 1px;
     background: #3a3a3a;
     margin: 4px 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .btn-text {
+        display: none;
+    }
+    
+    .btn {
+        padding: 6px 8px;
+        min-width: auto;
+        gap: 0;
+    }
+    
+    .btn-export,
+    .btn-import {
+        padding: 6px 8px;
+        min-width: auto;
+        gap: 0;
+    }
+    
+    .topbar-right {
+        gap: 6px;
+    }
+}
+
+@media (max-width: 768px) {
+    .studio-container {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #2d2d2d;
+        max-height: 200px;
+    }
+    
+    .topbar {
+        padding: 0 8px;
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 48px;
+    }
+    
+    .topbar-left,
+    .topbar-right {
+        gap: 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .left-navbar {
+        width: 50px;
+    }
+    
+    .studio-container {
+        margin-left: 50px;
+    }
+    
+    .filter-panel {
+        min-width: 90vw;
+        right: 5vw;
+    }
 }

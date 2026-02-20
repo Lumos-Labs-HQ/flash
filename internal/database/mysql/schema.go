@@ -15,7 +15,7 @@ func (m *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, er
 		return nil, err
 	}
 
-	var validTables []string
+	validTables := make([]string, 0, len(tableNames))
 	for _, name := range tableNames {
 		if name != "_flash_migrations" {
 			validTables = append(validTables, name)
@@ -36,7 +36,7 @@ func (m *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, er
 		return nil, err
 	}
 
-	var tables []types.SchemaTable
+	tables := make([]types.SchemaTable, 0, len(validTables))
 	for _, name := range validTables {
 		tables = append(tables, types.SchemaTable{
 			Name:    name,
@@ -65,7 +65,7 @@ func (m *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, erro
 	}
 	defer rows.Close()
 
-	var enums []types.SchemaEnum
+	enums := make([]types.SchemaEnum, 0, 8)
 	for rows.Next() {
 		var enumName, columnType string
 		if err := rows.Scan(&enumName, &columnType); err != nil {
@@ -92,8 +92,8 @@ func extractEnumValues(columnType string) []string {
 	values := strings.TrimPrefix(columnType, "enum(")
 	values = strings.TrimSuffix(values, ")")
 
-	var result []string
 	parts := strings.Split(values, ",")
+	result := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		part = strings.Trim(part, "'\"")
@@ -154,7 +154,7 @@ func (m *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 	}
 	defer rows.Close()
 
-	result := make(map[string][]types.SchemaColumn)
+	result := make(map[string][]types.SchemaColumn, len(tableNames))
 	for rows.Next() {
 		var tableName string
 		var column types.SchemaColumn
@@ -296,7 +296,7 @@ func (m *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	}
 	defer rows.Close()
 
-	var tables []string
+	tables := make([]string, 0, 32)
 	for rows.Next() {
 		var tableName string
 		if err := rows.Scan(&tableName); err != nil {
@@ -409,7 +409,7 @@ func (m *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
 	}
 
-	var tables []types.SchemaTable
+	tables := make([]types.SchemaTable, 0, len(tableMap))
 	for _, table := range tableMap {
 		tables = append(tables, *table)
 	}
