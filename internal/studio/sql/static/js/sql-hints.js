@@ -3,32 +3,100 @@ let schemaCache = null;
 let dbProvider = 'sql';
 let schemaLoaded = false;
 
-// All SQL keywords organized by category
-const SQL_KEYWORDS_BY_CATEGORY = {
+// ===== Common SQL keywords (all databases) =====
+const COMMON_KEYWORDS = {
     statements: ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'WITH', 'EXPLAIN', 'ANALYZE'],
-    clauses: ['FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE', 'ILIKE', 'IS', 'AS', 'USING'],
-    ordering: ['ORDER', 'BY', 'ASC', 'DESC', 'NULLS', 'FIRST', 'LAST', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET'],
-    functions: ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'COALESCE', 'NULLIF', 'CAST', 'EXTRACT', 'NOW', 'CURRENT_TIMESTAMP', 'CURRENT_DATE', 'LOWER', 'UPPER', 'TRIM', 'LENGTH', 'SUBSTRING', 'CONCAT', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL', 'ABS', 'DATE_TRUNC', 'TO_CHAR', 'TO_DATE', 'ARRAY_AGG', 'STRING_AGG', 'JSON_AGG', 'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE'],
+    clauses: ['FROM', 'WHERE', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS', 'ON', 'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE', 'IS', 'AS', 'USING'],
+    ordering: ['ORDER', 'BY', 'ASC', 'DESC', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET'],
+    functions: ['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'COALESCE', 'NULLIF', 'CAST', 'LOWER', 'UPPER', 'TRIM', 'LENGTH', 'SUBSTRING', 'CONCAT', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL', 'ABS', 'ROW_NUMBER', 'RANK', 'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE'],
     operators: ['NULL', 'TRUE', 'FALSE', 'ALL', 'ANY', 'SOME', 'DISTINCT', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END'],
     setOps: ['UNION', 'INTERSECT', 'EXCEPT'],
-    insert: ['INTO', 'VALUES', 'RETURNING', 'DEFAULT'],
+    insert: ['INTO', 'VALUES', 'DEFAULT'],
     update: ['SET'],
-    create: ['TABLE', 'INDEX', 'VIEW', 'SCHEMA', 'DATABASE', 'TYPE', 'FUNCTION', 'PROCEDURE', 'TRIGGER', 'SEQUENCE', 'CONSTRAINT', 'PRIMARY', 'FOREIGN', 'KEY', 'REFERENCES', 'UNIQUE', 'CHECK', 'NOT', 'IF'],
-    alter: ['ADD', 'DROP', 'RENAME', 'COLUMN', 'TO', 'MODIFY', 'ALTER'],
-    types: ['INTEGER', 'INT', 'BIGINT', 'SMALLINT', 'SERIAL', 'BIGSERIAL', 'NUMERIC', 'DECIMAL', 'REAL', 'FLOAT', 'DOUBLE', 'PRECISION', 'VARCHAR', 'CHAR', 'TEXT', 'BOOLEAN', 'BOOL', 'DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMPTZ', 'INTERVAL', 'UUID', 'JSON', 'JSONB', 'ARRAY', 'BYTEA'],
+    create: ['TABLE', 'INDEX', 'VIEW', 'SCHEMA', 'DATABASE', 'CONSTRAINT', 'PRIMARY', 'FOREIGN', 'KEY', 'REFERENCES', 'UNIQUE', 'CHECK', 'NOT', 'IF'],
+    alter: ['ADD', 'DROP', 'RENAME', 'COLUMN', 'TO', 'ALTER'],
+    types: ['INTEGER', 'INT', 'BIGINT', 'SMALLINT', 'NUMERIC', 'DECIMAL', 'REAL', 'FLOAT', 'DOUBLE', 'VARCHAR', 'CHAR', 'TEXT', 'BOOLEAN', 'DATE', 'TIME', 'TIMESTAMP'],
     transaction: ['BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'SAVEPOINT'],
     window: ['OVER', 'PARTITION', 'WINDOW', 'ROWS', 'RANGE', 'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW'],
-    other: ['CASCADE', 'RESTRICT', 'NATURAL', 'LATERAL', 'RECURSIVE', 'TEMPORARY', 'TEMP', 'ONLY', 'VERBOSE', 'CONCURRENTLY', 'NOTHING', 'CONFLICT', 'DO', 'EXCLUDED']
+    other: ['CASCADE', 'RESTRICT', 'NATURAL']
 };
 
-// Flatten all keywords
-const ALL_SQL_KEYWORDS = Object.values(SQL_KEYWORDS_BY_CATEGORY).flat();
+// ===== PostgreSQL-specific keywords =====
+const POSTGRES_KEYWORDS = {
+    clauses: ['ILIKE', 'RETURNING', 'LATERAL', 'RECURSIVE'],
+    functions: ['NOW', 'CURRENT_TIMESTAMP', 'CURRENT_DATE', 'EXTRACT', 'DATE_TRUNC', 'TO_CHAR', 'TO_DATE', 'TO_NUMBER', 'ARRAY_AGG', 'STRING_AGG', 'JSON_AGG', 'JSONB_AGG', 'JSON_BUILD_OBJECT', 'JSONB_BUILD_OBJECT', 'GEN_RANDOM_UUID', 'GENERATE_SERIES', 'UNNEST', 'ARRAY_LENGTH'],
+    types: ['SERIAL', 'BIGSERIAL', 'SMALLSERIAL', 'TIMESTAMPTZ', 'INTERVAL', 'UUID', 'JSON', 'JSONB', 'ARRAY', 'BYTEA', 'BOOL', 'PRECISION', 'MONEY', 'INET', 'CIDR', 'MACADDR'],
+    ordering: ['NULLS', 'FIRST', 'LAST'],
+    create: ['TYPE', 'FUNCTION', 'PROCEDURE', 'TRIGGER', 'SEQUENCE', 'EXTENSION', 'MATERIALIZED'],
+    other: ['CONCURRENTLY', 'NOTHING', 'CONFLICT', 'DO', 'EXCLUDED', 'VERBOSE', 'ONLY', 'TEMPORARY', 'TEMP', 'INHERITS', 'TABLESPACE']
+};
+
+// ===== MySQL-specific keywords =====
+const MYSQL_KEYWORDS = {
+    statements: ['SHOW', 'DESCRIBE', 'USE', 'LOAD'],
+    clauses: ['STRAIGHT_JOIN', 'HIGH_PRIORITY', 'LOW_PRIORITY', 'DELAYED', 'IGNORE'],
+    functions: ['NOW', 'CURRENT_TIMESTAMP', 'CURRENT_DATE', 'IFNULL', 'IF', 'GROUP_CONCAT', 'DATE_FORMAT', 'STR_TO_DATE', 'UNIX_TIMESTAMP', 'FROM_UNIXTIME', 'FOUND_ROWS', 'LAST_INSERT_ID', 'UUID', 'CONCAT_WS', 'DATE_ADD', 'DATE_SUB', 'DATEDIFF'],
+    types: ['TINYINT', 'MEDIUMINT', 'DATETIME', 'BLOB', 'TINYBLOB', 'MEDIUMBLOB', 'LONGBLOB', 'TINYTEXT', 'MEDIUMTEXT', 'LONGTEXT', 'ENUM', 'JSON', 'UNSIGNED', 'SIGNED', 'BINARY', 'VARBINARY'],
+    create: ['FUNCTION', 'PROCEDURE', 'TRIGGER', 'EVENT'],
+    alter: ['MODIFY', 'CHANGE'],
+    other: ['AUTO_INCREMENT', 'ENGINE', 'CHARSET', 'CHARACTER', 'COLLATE', 'COMMENT', 'DATABASES', 'TABLES', 'COLUMNS', 'PROCESSLIST', 'STATUS', 'VARIABLES', 'GRANTS', 'DUPLICATE']
+};
+
+// ===== SQLite-specific keywords =====
+const SQLITE_KEYWORDS = {
+    statements: ['VACUUM', 'REINDEX', 'PRAGMA', 'ATTACH', 'DETACH'],
+    clauses: ['GLOB'],
+    functions: ['CURRENT_TIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'TYPEOF', 'TOTAL', 'GROUP_CONCAT', 'SUBSTR', 'INSTR', 'PRINTF', 'UNICODE', 'ZEROBLOB', 'RANDOMBLOB', 'HEX', 'QUOTE', 'LAST_INSERT_ROWID'],
+    types: ['BLOB'],
+    other: ['AUTOINCREMENT', 'ROWID', 'WITHOUT', 'STRICT']
+};
+
+// All keywords combined (used for context detection only)
+const ALL_SQL_KEYWORDS = [
+    ...new Set([
+        ...Object.values(COMMON_KEYWORDS).flat(),
+        ...Object.values(POSTGRES_KEYWORDS).flat(),
+        ...Object.values(MYSQL_KEYWORDS).flat(),
+        ...Object.values(SQLITE_KEYWORDS).flat()
+    ])
+];
+
+/**
+ * Get active keywords for the current database provider
+ */
+function getActiveKeywords() {
+    const common = Object.values(COMMON_KEYWORDS).flat();
+    let extra = [];
+
+    switch (dbProvider) {
+        case 'postgresql':
+        case 'postgres':
+            extra = Object.values(POSTGRES_KEYWORDS).flat();
+            break;
+        case 'mysql':
+            extra = Object.values(MYSQL_KEYWORDS).flat();
+            break;
+        case 'sqlite':
+        case 'sqlite3':
+            extra = Object.values(SQLITE_KEYWORDS).flat();
+            break;
+        default:
+            // Unknown provider - include all
+            extra = [
+                ...Object.values(POSTGRES_KEYWORDS).flat(),
+                ...Object.values(MYSQL_KEYWORDS).flat(),
+                ...Object.values(SQLITE_KEYWORDS).flat()
+            ];
+    }
+
+    return [...new Set([...common, ...extra])];
+}
 
 // What can follow each keyword (grammar rules)
 const NEXT_KEYWORDS = {
     'SELECT': ['DISTINCT', 'ALL', '*', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'CASE', 'COALESCE', 'NULLIF', 'CAST', 'EXISTS', 'NOT'],
     'FROM': [],  // expects table
-    'WHERE': ['NOT', 'EXISTS'],  // expects column or condition
+    'WHERE': ['NOT', 'EXISTS'],
     'AND': ['NOT', 'EXISTS'],
     'OR': ['NOT', 'EXISTS'],
     'JOIN': [],  // expects table
@@ -39,10 +107,10 @@ const NEXT_KEYWORDS = {
     'FULL': ['OUTER', 'JOIN'],
     'CROSS': ['JOIN'],
     'NATURAL': ['JOIN', 'LEFT', 'RIGHT', 'INNER', 'FULL'],
-    'ON': [],  // expects condition
+    'ON': [],
     'ORDER': ['BY'],
     'GROUP': ['BY'],
-    'BY': [],  // expects column
+    'BY': [],
     'HAVING': ['NOT', 'EXISTS', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX'],
     'LIMIT': [],
     'OFFSET': [],
@@ -53,20 +121,20 @@ const NEXT_KEYWORDS = {
     'INTERSECT': ['ALL', 'SELECT'],
     'EXCEPT': ['ALL', 'SELECT'],
     'INSERT': ['INTO'],
-    'INTO': [],  // expects table
+    'INTO': [],
     'VALUES': [],
-    'UPDATE': [],  // expects table
-    'SET': [],  // expects column
+    'UPDATE': [],
+    'SET': [],
     'DELETE': ['FROM'],
-    'CREATE': ['TABLE', 'INDEX', 'UNIQUE', 'VIEW', 'SCHEMA', 'DATABASE', 'TEMPORARY', 'TEMP', 'OR', 'IF', 'TYPE', 'FUNCTION', 'PROCEDURE', 'TRIGGER', 'SEQUENCE'],
-    'DROP': ['TABLE', 'INDEX', 'VIEW', 'SCHEMA', 'DATABASE', 'COLUMN', 'CONSTRAINT', 'IF', 'TYPE', 'FUNCTION', 'PROCEDURE', 'TRIGGER', 'SEQUENCE'],
+    'CREATE': ['TABLE', 'INDEX', 'UNIQUE', 'VIEW', 'SCHEMA', 'DATABASE', 'TEMPORARY', 'TEMP', 'OR', 'IF', 'TYPE', 'FUNCTION', 'PROCEDURE', 'TRIGGER', 'SEQUENCE', 'EXTENSION', 'MATERIALIZED'],
+    'DROP': ['TABLE', 'INDEX', 'VIEW', 'SCHEMA', 'DATABASE', 'COLUMN', 'CONSTRAINT', 'IF', 'TYPE', 'FUNCTION', 'PROCEDURE', 'TRIGGER', 'SEQUENCE', 'EXTENSION'],
     'ALTER': ['TABLE', 'INDEX', 'VIEW', 'SCHEMA', 'DATABASE', 'COLUMN', 'TYPE', 'SEQUENCE'],
-    'TABLE': [],  // expects table name
+    'TABLE': [],
     'ADD': ['COLUMN', 'CONSTRAINT', 'PRIMARY', 'FOREIGN', 'UNIQUE', 'CHECK', 'INDEX', 'IF'],
     'PRIMARY': ['KEY'],
     'FOREIGN': ['KEY'],
     'KEY': ['REFERENCES'],
-    'REFERENCES': [],  // expects table
+    'REFERENCES': [],
     'UNIQUE': ['INDEX'],
     'CONSTRAINT': [],
     'INDEX': ['ON', 'IF', 'CONCURRENTLY'],
@@ -80,7 +148,7 @@ const NEXT_KEYWORDS = {
     'ILIKE': [],
     'EXISTS': [],
     'CASE': ['WHEN'],
-    'WHEN': [],  // expects condition
+    'WHEN': [],
     'THEN': [],
     'ELSE': [],
     'END': ['AS', 'FROM', 'WHERE', 'AND', 'OR', 'ORDER', 'GROUP', 'LIMIT'],
@@ -96,7 +164,7 @@ const NEXT_KEYWORDS = {
     'RETURNING': ['*'],
     'OVER': [],
     'PARTITION': ['BY'],
-    'ON': ['CONFLICT', 'UPDATE', 'DELETE'],
+    'ON CONFLICT': ['DO'],
     'CONFLICT': ['DO'],
     'DO': ['NOTHING', 'UPDATE']
 };
@@ -180,7 +248,7 @@ function smartSqlHint(cm) {
     const prefix = word.toLowerCase();
 
     // Analyze context
-    const context = analyzeContext(cm, cur, line);
+    const context = analyzeContext(cm, cur);
 
     // Build completions
     let completions = [];
@@ -199,16 +267,13 @@ function smartSqlHint(cm) {
 
     // Get completions based on context
     if (context.expectsTable) {
-        // After FROM, JOIN, etc. - show tables first, then keywords
         completions.push(...getTableCompletions(prefix));
         completions.push(...getKeywordCompletions(prefix, context.lastKeyword));
     } else if (context.expectsColumn) {
-        // After SELECT, WHERE, etc. - show columns first, then tables, then keywords
         completions.push(...getColumnCompletions(prefix, context.tables));
         completions.push(...getTableCompletions(prefix));
         completions.push(...getKeywordCompletions(prefix, context.lastKeyword));
     } else {
-        // General context - keywords first, then tables, then columns
         completions.push(...getKeywordCompletions(prefix, context.lastKeyword));
         completions.push(...getTableCompletions(prefix));
         completions.push(...getColumnCompletions(prefix, context.tables));
@@ -220,18 +285,14 @@ function smartSqlHint(cm) {
 /**
  * Analyze the SQL context at cursor position
  */
-function analyzeContext(cm, cur, line) {
+function analyzeContext(cm, cur) {
     const fullText = cm.getValue();
     const cursorOffset = cm.indexFromPos(cur);
     const textBefore = fullText.substring(0, cursorOffset);
 
-    // Extract tables from query
     const tables = extractTables(fullText);
-
-    // Find the last SQL keyword before cursor
     const lastKeyword = findLastKeyword(textBefore);
 
-    // Determine what's expected
     const expectsTable = TABLE_CONTEXT.has(lastKeyword);
     const expectsColumn = COLUMN_CONTEXT.has(lastKeyword);
 
@@ -244,29 +305,24 @@ function analyzeContext(cm, cur, line) {
 }
 
 /**
- * Find the last SQL keyword in text
+ * Find the last SQL keyword in text (uses ALL keywords for context detection)
  */
 function findLastKeyword(text) {
     const upper = text.toUpperCase();
 
-    // Find all keywords and their positions
     let lastKw = '';
     let lastPos = -1;
 
     for (const kw of ALL_SQL_KEYWORDS) {
-        // Use word boundary regex to find keyword
         const regex = new RegExp(`\\b${kw}\\b`, 'gi');
         let match;
         while ((match = regex.exec(upper)) !== null) {
             if (match.index > lastPos) {
-                // Check if there's a non-identifier after this keyword
                 const afterKw = upper.substring(match.index + kw.length);
-                // If only whitespace or nothing after, this is the last context keyword
                 if (/^\s*\w*$/.test(afterKw) || afterKw.length === 0) {
                     lastPos = match.index;
                     lastKw = kw;
                 }
-                // For keywords that establish context even with content after
                 if (TABLE_CONTEXT.has(kw) || COLUMN_CONTEXT.has(kw)) {
                     lastPos = match.index;
                     lastKw = kw;
@@ -311,12 +367,10 @@ function extractTables(queryText) {
 function resolveTableOrAlias(cm, alias) {
     if (!schemaCache) return null;
 
-    // Direct table name
     if (schemaCache[alias]) {
         return alias;
     }
 
-    // Check for alias: "table alias" or "table AS alias"
     const text = cm.getValue();
     const regex = new RegExp(`(\\w+)\\s+(?:AS\\s+)?${alias}\\b`, 'gi');
     const match = regex.exec(text);
@@ -331,15 +385,17 @@ function resolveTableOrAlias(cm, alias) {
 }
 
 /**
- * Get keyword completions
+ * Get keyword completions (filtered by current database provider)
  */
 function getKeywordCompletions(prefix, lastKeyword) {
     const completions = [];
     const added = new Set();
+    const activeSet = new Set(getActiveKeywords());
 
+    // Grammar suggestions first (NEXT_KEYWORDS) - filtered by active provider
     const nextKws = NEXT_KEYWORDS[lastKeyword] || [];
     for (const kw of nextKws) {
-        if (matchesPrefix(kw, prefix) && !added.has(kw)) {
+        if (activeSet.has(kw) && matchesPrefix(kw, prefix) && !added.has(kw)) {
             added.add(kw);
             completions.push({
                 text: kw,
@@ -350,7 +406,8 @@ function getKeywordCompletions(prefix, lastKeyword) {
         }
     }
 
-    for (const kw of ALL_SQL_KEYWORDS) {
+    // Then active keywords only
+    for (const kw of activeSet) {
         if (matchesPrefix(kw, prefix) && !added.has(kw)) {
             added.add(kw);
             completions.push({
@@ -395,7 +452,6 @@ function getColumnCompletions(prefix, tables) {
     const completions = [];
     const seen = new Set();
 
-    // Search in context tables first, then all tables
     const tablesToSearch = tables.length > 0 ? tables : Object.keys(schemaCache);
 
     for (const tableName of tablesToSearch) {
@@ -448,7 +504,7 @@ function getColumnsForTable(tableName, prefix) {
  * Check if text matches prefix (case-insensitive)
  */
 function matchesPrefix(text, prefix) {
-    if (!prefix) return true;  // Empty prefix matches everything
+    if (!prefix) return true;
     return text.toLowerCase().startsWith(prefix.toLowerCase());
 }
 
@@ -496,7 +552,6 @@ function applyKeyword(cm, data, completion) {
     const line = cm.getLine(data.to.line);
     const after = line.substring(data.to.ch);
 
-    // Add space if needed
     const needsSpace = !after.startsWith(' ') && !after.startsWith('(') && !after.startsWith('.');
     cm.replaceRange(text + (needsSpace ? ' ' : ''), data.from, data.to);
 }
@@ -509,7 +564,6 @@ function applyTable(cm, data, completion) {
     const line = cm.getLine(data.to.line);
     const after = line.substring(data.to.ch);
 
-    // Add space after table name
     const needsSpace = !after.startsWith(' ') && !after.startsWith('.');
     cm.replaceRange(text + (needsSpace ? ' ' : ''), data.from, data.to);
 }
@@ -538,17 +592,14 @@ function setupAutoHint(cm) {
     let hintTimeout = null;
 
     cm.on('inputRead', (editor, change) => {
-        // Only trigger on character input or space (for context hints)
         if (change.origin !== '+input') return;
 
         if (hintTimeout) clearTimeout(hintTimeout);
 
-        // Skip if in comment
         const cur = editor.getCursor();
         const token = editor.getTokenAt(cur);
         if (token.type && token.type.includes('comment')) return;
 
-        // Get current word
         const line = editor.getLine(cur.line);
         let start = cur.ch;
         while (start > 0 && /[\w]/.test(line.charAt(start - 1))) {
@@ -556,7 +607,6 @@ function setupAutoHint(cm) {
         }
         const word = line.substring(start, cur.ch);
 
-        // Show hints after typing 1+ character OR after space following a keyword
         const charTyped = change.text[0];
         const shouldShow = word.length >= 1 || (charTyped === ' ' && start === cur.ch);
 
@@ -568,12 +618,11 @@ function setupAutoHint(cm) {
                         completeSingle: false
                     });
                 }
-            }, 30);  // Very fast response
+            }, 30);
         }
     });
 
-    // Also trigger on space after keywords
-    cm.on('keyHandled', (editor, name, event) => {
+    cm.on('keyHandled', (editor, name) => {
         if (name === 'Space') {
             if (hintTimeout) clearTimeout(hintTimeout);
             hintTimeout = setTimeout(() => {
