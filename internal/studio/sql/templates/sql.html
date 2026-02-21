@@ -39,9 +39,9 @@
             <div class="editor-header">
                 <span class="editor-title">SQL Query</span>
                 <div class="editor-actions">
-                    <span class="editor-hint">Ctrl+Enter to run • Ctrl+/ to comment • F5 to execute</span>
+                    <span class="editor-hint" id="editor-hint">Ctrl+Enter to run all • Select lines to run partial</span>
                     <button class="btn btn-secondary" onclick="clearEditor()">Clear</button>
-                    <button class="btn btn-primary" onclick="runQuery()">▶ Run Query</button>
+                    <button class="btn btn-primary" id="run-btn" onclick="runQuery()">▶ Run All</button>
                 </div>
             </div>
             <div class="editor-wrapper">
