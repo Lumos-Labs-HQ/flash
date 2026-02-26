@@ -637,6 +637,245 @@ function setupAutoHint(cm) {
     });
 }
 
+// ===== Dynamic Schema Update from DDL =====
+
+/**
+ * Strip quote characters and lowercase an identifier
+ */
+function unquoteIdentifier(id) {
+    if (!id) return '';
+    id = id.trim();
+    if ((id.startsWith('"') && id.endsWith('"')) ||
+        (id.startsWith('`') && id.endsWith('`'))) {
+        id = id.slice(1, -1);
+    }
+    return id.toLowerCase();
+}
+
+/**
+ * Extract the base SQL type from a full type expression
+ * e.g. "VARCHAR(255) NOT NULL" -> "VARCHAR"
+ */
+function extractBaseType(typeStr) {
+    typeStr = typeStr.trim();
+    const upper = typeStr.toUpperCase();
+
+    // Handle multi-word types
+    const multiWordTypes = [
+        'DOUBLE PRECISION', 'CHARACTER VARYING',
+        'TIMESTAMP WITH', 'TIMESTAMP WITHOUT',
+        'TIME WITH', 'TIME WITHOUT'
+    ];
+    for (const mwt of multiWordTypes) {
+        if (upper.startsWith(mwt)) return mwt;
+    }
+
+    const match = typeStr.match(/^(\w+)/);
+    return match ? match[1].toUpperCase() : typeStr.toUpperCase();
+}
+
+/**
+ * Extract content between balanced parentheses starting at startIndex
+ */
+function extractParenBody(sql, startIndex) {
+    if (sql[startIndex] !== '(') return null;
+    let depth = 0;
+    for (let i = startIndex; i < sql.length; i++) {
+        if (sql[i] === '(') depth++;
+        else if (sql[i] === ')') {
+            depth--;
+            if (depth === 0) return sql.substring(startIndex + 1, i);
+        }
+    }
+    return sql.substring(startIndex + 1);
+}
+
+/**
+ * Split string by commas at the top level (not inside parentheses)
+ */
+function splitTopLevel(str) {
+    const parts = [];
+    let depth = 0;
+    let current = '';
+    for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (ch === '(') depth++;
+        else if (ch === ')') depth--;
+        else if (ch === ',' && depth === 0) {
+            parts.push(current);
+            current = '';
+            continue;
+        }
+        current += ch;
+    }
+    if (current.trim()) parts.push(current);
+    return parts;
+}
+
+/**
+ * Parse column definitions from a CREATE TABLE body
+ */
+function parseColumnDefs(body) {
+    const columns = [];
+    const parts = splitTopLevel(body);
+    const constraintPrefixes = new Set([
+        'PRIMARY', 'FOREIGN', 'CONSTRAINT', 'UNIQUE', 'CHECK', 'INDEX', 'KEY', 'EXCLUDE'
+    ]);
+
+    for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+
+        const firstWord = trimmed.split(/\s+/)[0].toUpperCase();
+        if (constraintPrefixes.has(firstWord)) continue;
+
+        const colMatch = trimmed.match(/^(["`]?[\w]+["`]?)\s+(\S+(?:\s*\([^)]*\))?)/i);
+        if (colMatch) {
+            columns.push({
+                name: unquoteIdentifier(colMatch[1]),
+                type: extractBaseType(colMatch[2])
+            });
+        }
+    }
+    return columns;
+}
+
+// --- DDL Handlers ---
+
+function handleCreateTable(sql) {
+    const match = sql.match(
+        /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(["`]?[\w.]+["`]?)\s*\(/i
+    );
+    if (!match) return;
+
+    const tableName = unquoteIdentifier(match[1]);
+    const parenStart = sql.indexOf('(', match[0].length - 1);
+    const body = extractParenBody(sql, parenStart);
+    if (!body) return;
+
+    const columns = parseColumnDefs(body);
+    schemaCache[tableName] = columns;
+    console.log('[SQL Hints] Schema updated: CREATE TABLE', tableName, '(' + columns.length + ' columns)');
+}
+
+function handleDropTable(sql) {
+    const match = sql.match(
+        /^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(.+?)(?:\s+CASCADE|\s+RESTRICT)?\s*$/i
+    );
+    if (!match) return;
+
+    const tableList = match[1].split(',');
+    for (const t of tableList) {
+        const tableName = unquoteIdentifier(t.trim());
+        if (tableName && schemaCache[tableName]) {
+            delete schemaCache[tableName];
+            console.log('[SQL Hints] Schema updated: DROP TABLE', tableName);
+        }
+    }
+}
+
+function handleAlterAddColumn(tableName, action) {
+    if (!schemaCache[tableName]) schemaCache[tableName] = [];
+
+    const match = action.match(
+        /^ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(["`]?[\w]+["`]?)\s+(\S+(?:\s*\([^)]*\))?)/i
+    );
+    if (!match) return;
+
+    const colName = unquoteIdentifier(match[1]);
+    const colType = extractBaseType(match[2]);
+
+    const exists = schemaCache[tableName].some(c => c.name.toLowerCase() === colName);
+    if (!exists) {
+        schemaCache[tableName].push({ name: colName, type: colType });
+        console.log('[SQL Hints] Schema updated: ADD COLUMN', tableName + '.' + colName, colType);
+    }
+}
+
+function handleAlterDropColumn(tableName, action) {
+    if (!schemaCache[tableName]) return;
+
+    const match = action.match(
+        /^DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(["`]?[\w]+["`]?)/i
+    );
+    if (!match) return;
+
+    const colName = unquoteIdentifier(match[1]);
+    schemaCache[tableName] = schemaCache[tableName].filter(
+        c => c.name.toLowerCase() !== colName
+    );
+    console.log('[SQL Hints] Schema updated: DROP COLUMN', tableName + '.' + colName);
+}
+
+function handleAlterRename(tableName, action) {
+    // Table rename: RENAME TO <new_name>
+    if (/^RENAME\s+TO\s+/i.test(action)) {
+        const match = action.match(/^RENAME\s+TO\s+(["`]?[\w]+["`]?)/i);
+        if (match && schemaCache[tableName]) {
+            const newName = unquoteIdentifier(match[1]);
+            schemaCache[newName] = schemaCache[tableName];
+            delete schemaCache[tableName];
+            console.log('[SQL Hints] Schema updated: RENAME TABLE', tableName, '->', newName);
+        }
+        return;
+    }
+
+    // Column rename: RENAME [COLUMN] <old> TO <new>
+    const colMatch = action.match(
+        /^RENAME\s+(?:COLUMN\s+)?(["`]?[\w]+["`]?)\s+TO\s+(["`]?[\w]+["`]?)/i
+    );
+    if (colMatch && schemaCache[tableName]) {
+        const oldName = unquoteIdentifier(colMatch[1]);
+        const newName = unquoteIdentifier(colMatch[2]);
+        for (const col of schemaCache[tableName]) {
+            if (col.name.toLowerCase() === oldName) {
+                col.name = newName;
+                console.log('[SQL Hints] Schema updated: RENAME COLUMN', tableName + '.' + oldName, '->', newName);
+                break;
+            }
+        }
+    }
+}
+
+function handleAlterTable(sql) {
+    const tableMatch = sql.match(
+        /^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?(["`]?[\w.]+["`]?)\s+(.+)$/i
+    );
+    if (!tableMatch) return;
+
+    const tableName = unquoteIdentifier(tableMatch[1]);
+    const action = tableMatch[2].trim();
+    const upperAction = action.toUpperCase();
+
+    if (upperAction.startsWith('ADD COLUMN') || upperAction.startsWith('ADD ')) {
+        handleAlterAddColumn(tableName, action);
+    } else if (upperAction.startsWith('DROP COLUMN') ||
+               (upperAction.startsWith('DROP ') && !upperAction.startsWith('DROP CONSTRAINT'))) {
+        handleAlterDropColumn(tableName, action);
+    } else if (upperAction.startsWith('RENAME')) {
+        handleAlterRename(tableName, action);
+    }
+}
+
+/**
+ * Update schema cache by parsing a successfully executed DDL query.
+ * No-ops for non-DDL queries.
+ */
+function updateSchemaFromQuery(query) {
+    if (!schemaCache) return;
+
+    const normalized = query.trim().replace(/;\s*$/, '');
+    const upper = normalized.toUpperCase();
+
+    if (upper.startsWith('CREATE TABLE')) {
+        handleCreateTable(normalized);
+    } else if (upper.startsWith('DROP TABLE')) {
+        handleDropTable(normalized);
+    } else if (upper.startsWith('ALTER TABLE')) {
+        handleAlterTable(normalized);
+    }
+}
+
 // Export
 window.SqlHints = {
     loadEditorHints,
@@ -645,5 +884,6 @@ window.SqlHints = {
     isSchemaLoaded,
     smartSqlHint,
     showSmartHint,
-    setupAutoHint
+    setupAutoHint,
+    updateSchemaFromQuery
 };

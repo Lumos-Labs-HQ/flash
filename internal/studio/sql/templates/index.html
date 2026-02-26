@@ -31,9 +31,12 @@
         </a>
     </div>
 
+    <!-- Mobile sidebar backdrop -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
+
     <div class="studio-container">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-title">All Models</div>
                 <button class="sidebar-add-btn" onclick="showCreateTableForm()" title="Create New Table">
@@ -57,6 +60,9 @@
             <!-- Top bar -->
             <div class="topbar">
                 <div class="topbar-left">
+                    <button class="mobile-sidebar-toggle" onclick="toggleMobileSidebar()" title="Models">
+                        <span class="iconify" data-icon="mdi:menu"></span>
+                    </button>
                     <span class="table-name" id="current-table">Select a model</span>
                 <select id="branch-selector" class="branch-selector" onchange="switchBranch(this.value)" style="display: none; margin-left: 16px; padding: 6px 12px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #e0e0e0; font-size: 14px;"><option value="">Loading...</option></select>
                 </div>

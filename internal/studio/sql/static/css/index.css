@@ -781,52 +781,102 @@
     margin: 4px 0;
 }
 
+/* Mobile sidebar toggle button - hidden on desktop */
+.mobile-sidebar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.mobile-sidebar-toggle:hover {
+    background: #3a3a3a;
+    color: #4a9eff;
+}
+.mobile-sidebar-toggle .iconify {
+    font-size: 20px;
+}
+
+/* Mobile sidebar backdrop overlay */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 900;
+}
+.sidebar-backdrop.show {
+    display: block;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
     .btn-text {
         display: none;
     }
-    
+
     .btn {
         padding: 6px 8px;
         min-width: auto;
         gap: 0;
     }
-    
+
     .btn-export,
     .btn-import {
         padding: 6px 8px;
         min-width: auto;
         gap: 0;
     }
-    
+
     .topbar-right {
         gap: 6px;
     }
 }
 
 @media (max-width: 768px) {
-    .studio-container {
-        flex-direction: column;
+    /* Show the mobile toggle button */
+    .mobile-sidebar-toggle {
+        display: flex;
     }
-    
+
+    /* Sidebar becomes a slide-in overlay */
     .sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid #2d2d2d;
-        max-height: 200px;
+        position: fixed;
+        top: 0;
+        left: 60px;
+        bottom: 0;
+        width: 260px;
+        z-index: 950;
+        transform: translateX(-320px);
+        transition: transform 0.25s ease;
+        border-right: 1px solid #2d2d2d;
+        max-height: none;
     }
-    
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
     .topbar {
         padding: 0 8px;
-        flex-wrap: wrap;
-        height: auto;
-        min-height: 48px;
     }
-    
+
     .topbar-left,
     .topbar-right {
         gap: 4px;
+    }
+
+    .filter-panel {
+        min-width: 90vw;
+        right: 2vw;
     }
 }
 
@@ -834,13 +884,12 @@
     .left-navbar {
         width: 50px;
     }
-    
+
     .studio-container {
         margin-left: 50px;
     }
-    
-    .filter-panel {
-        min-width: 90vw;
-        right: 5vw;
+
+    .sidebar {
+        left: 50px;
     }
 }
