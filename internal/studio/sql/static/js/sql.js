@@ -248,6 +248,7 @@ async function runQuery() {
         if (data.success) {
             currentResults = data.data;
             displayResults(data.data, cleanQuery, elapsed, runMode, fromLine, toLine);
+            SqlHints.updateSchemaFromQuery(cleanQuery);
         } else {
             displayError(data.message);
         }
@@ -383,6 +384,7 @@ function displayResults(data, query, elapsed, runMode, fromLine, toLine) {
         : Object.keys(data.rows[0]);
 
     let html = '<table class="results-table"><thead><tr>';
+    html += '<th class="row-num-header">#</th>';
     columns.forEach(col => {
         html += `<th>${escapeHtml(col)}</th>`;
     });
@@ -390,6 +392,7 @@ function displayResults(data, query, elapsed, runMode, fromLine, toLine) {
 
     data.rows.forEach((row, idx) => {
         html += '<tr>';
+        html += `<td class="row-num">${idx + 1}</td>`;
         columns.forEach(col => {
             const value = row[col];
             html += `<td>${formatCellValue(value)}</td>`;

@@ -1,6 +1,21 @@
 let filters = [];
 let currentColumns = [];
 
+// Mobile sidebar toggle
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    sidebar.classList.toggle('mobile-open');
+    backdrop.classList.toggle('show');
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    sidebar.classList.remove('mobile-open');
+    backdrop.classList.remove('show');
+}
+
 // This function just rebuilds the UI to show the active filters
 function restoreFilters(savedFilters) {
     if (!savedFilters || savedFilters.length === 0) return;
@@ -353,6 +368,7 @@ async function executeSQLQuery() {
 
 const originalSelectTable = selectTable;
 selectTable = async function (tableName) {
+    closeMobileSidebar();
     await originalSelectTable(tableName);
     if (state.data && state.data.columns) {
         currentColumns = state.data.columns;
