@@ -38,7 +38,8 @@ Examples:
 		if len(plugins) == 0 {
 			color.Yellow("📦 No plugins installed")
 			fmt.Println()
-			color.Cyan("💡 Install plugins using: flash add-plug <plugin-name>")
+			color.Cyan("💡 The core plugin is auto-installed on first ORM command use.")
+			color.Cyan("   Or install manually: flash add-plug core")
 			fmt.Println()
 			color.White("Available plugins:")
 			for _, name := range plugin.GetAllPlugins() {
@@ -72,8 +73,9 @@ Examples:
 		w.Flush()
 
 		fmt.Println()
-		color.Cyan("💡 Add more plugins: flash add-plug <plugin-name>")
+		color.Cyan("💡 Add plugins: flash add-plug <plugin-name>")
 		color.Cyan("💡 Remove plugins: flash rm-plug <plugin-name>")
+		color.Cyan("💡 Update plugins: flash update")
 		color.Cyan("💡 Check online plugins: flash plugins --online")
 
 		return nil
@@ -109,7 +111,7 @@ func showOnlinePlugins(manager *plugin.Manager) error {
 		fmt.Println("  • The release workflow needs to be configured")
 		fmt.Println("  • Plugin binaries are named differently than expected")
 		fmt.Println()
-		color.Cyan("💡 Build and upload plugins using: make build-plugins")
+		color.Cyan("💡 Build and upload plugins using: make build-plugin-core build-plugin-studio")
 		fmt.Println()
 
 		// Show what plugins are defined locally
@@ -177,7 +179,7 @@ func showOnlinePlugins(manager *plugin.Manager) error {
 			localInfo, _ := manager.GetPluginInfo(ap.Name)
 			fmt.Printf("    Installed Version: %s\n", localInfo.Version)
 			if localInfo.Version != ap.Version {
-				color.Yellow("    → Update available: flash add-plug %s", ap.Name)
+				color.Yellow("    → Update available: flash update")
 			}
 		} else {
 			color.Cyan("    → Install: flash add-plug %s", ap.Name)
@@ -213,6 +215,7 @@ func showLocalPluginMetadata(manager *plugin.Manager) {
 
 	fmt.Println()
 	color.Cyan("💡 Install a plugin: flash add-plug <plugin-name>")
+	color.Cyan("💡 Update all plugins: flash update")
 }
 
 func formatSize(bytes int64) string {
