@@ -283,9 +283,8 @@ flash add-plug <plugin-name>
 ```
 
 **Available plugins:**
-- `core`: Core functionality (init, migrate, gen, apply)
-- `studio`: Web studio interface
-- `all`: All plugins
+- `core`: ORM, migrations, code generation, seeding. Auto-installs on first use.
+- `studio`: Web-based visual database editor. Optional, install when needed.
 
 ### `flash rm-plug`
 
@@ -293,6 +292,30 @@ Remove a plugin.
 
 ```bash
 flash rm-plug <plugin-name>
+```
+
+### `flash update`
+
+Update installed plugins and optionally the flash binary itself.
+
+```bash
+flash update [flags]
+```
+
+**Flags:**
+- `--self`: Update all plugins and the flash binary
+- `--self-only`: Update only the flash binary, leave plugins untouched
+
+**Examples:**
+```bash
+# Update all installed plugins
+flash update
+
+# Update plugins and the flash binary
+flash update --self
+
+# Update only the flash binary
+flash update --self-only
 ```
 
 ## Configuration
