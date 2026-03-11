@@ -19,22 +19,20 @@ var CommandPluginMap = map[string]string{
 	// Seed (part of core)
 	"seed": "core",
 
-	// Studio commands
+	// Studio commands (separate optional plugin)
 	"studio": "studio",
 }
 
 // PluginDescriptions provides descriptions for each plugin
 var PluginDescriptions = map[string]string{
-	"core":   "Complete ORM features (migrations, codegen, export, schema management, seeding)",
-	"studio": "Visual database editor and management interface",
-	"all":    "Complete package with all features (core + studio)",
+	"core":   "Core ORM features — migrations, codegen, export, schema management, seeding (auto-installed on first use)",
+	"studio": "Visual database editor and management interface (optional, install separately)",
 }
 
 // PluginCommands lists all commands provided by each plugin
 var PluginCommands = map[string][]string{
 	"core":   {"init", "migrate", "apply", "down", "status", "pull", "reset", "raw", "branch", "checkout", "gen", "export", "seed"},
 	"studio": {"studio"},
-	"all":    {"init", "migrate", "apply", "down", "status", "pull", "reset", "raw", "branch", "checkout", "gen", "export", "seed", "studio"},
 }
 
 // GetRequiredPlugin returns the plugin name required for a given command
