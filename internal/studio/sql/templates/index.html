@@ -77,7 +77,6 @@
                         <button id="export-btn" class="btn btn-export dropdown-toggle" onclick="toggleDropdown('export-dropdown')">
                             <span class="iconify" data-icon="mdi:download"></span>
                             <span class="btn-text">Export</span>
-                            <span class="btn-spinner"></span>
                         </button>
                         <div id="export-dropdown" class="dropdown-menu">
                             <button class="dropdown-item" onclick="exportDatabase('schema_only')">
@@ -99,7 +98,6 @@
                     <button id="import-btn" class="btn btn-import" onclick="triggerImport()">
                         <span class="iconify" data-icon="mdi:upload"></span>
                         <span class="btn-text">Import</span>
-                        <span class="btn-spinner"></span>
                     </button>
                     <input type="file" id="import-file-input" accept=".json" style="display: none;" onchange="handleImportFile(event)">
 
@@ -175,5 +173,17 @@
     <script src="/static/js/modal.js"></script>
     <script src="/static/js/studio.js"></script>
     <script src="/static/js/index.js"></script>
+
+    <!-- Operation progress overlay (export / import) -->
+    <div class="op-overlay" id="op-overlay">
+        <div class="op-card">
+            <div class="op-card-icon" id="op-icon">⏳</div>
+            <div class="op-card-title" id="op-title">Working…</div>
+            <div class="op-card-status" id="op-status"></div>
+            <div class="op-progress-track">
+                <div class="op-progress-bar indeterminate" id="op-bar"></div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

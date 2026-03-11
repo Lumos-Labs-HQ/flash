@@ -546,6 +546,170 @@ func (m *Manager) getLatestBetaReleaseVersion() (string, error) {
 	return "", fmt.Errorf("no beta releases found")
 }
 
+// EnsureCorePlugin checks if the core plugin is installed and auto-installs it if not.
+// This is called transparently before any core ORM command runs.
+func (m *Manager) EnsureCorePlugin() error {
+	if m.IsPluginInstalled("core") {
+		return nil
+	}
+
+	color.Cyan("⚙️  Core plugin not found — downloading automatically...")
+	fmt.Println()
+
+	if err := m.InstallPlugin("core", "latest"); err != nil {
+		return fmt.Errorf("failed to auto-install core plugin: %w\n\nYou can also run: flash add-plug core", err)
+	}
+
+	fmt.Println()
+	return nil
+}
+
+// UpdatePlugin updates a single installed plugin to the latest version.
+// Pass version="" to use "latest" stable.
+func (m *Manager) UpdatePlugin(name, version string) error {
+	if version == "" {
+		version = "latest"
+	}
+
+	if info, exists := m.registry.Plugins[name]; exists {
+		color.Cyan("🔄 Updating plugin '%s' (current: %s → new: %s)...", name, info.Version, version)
+	} else {
+		// Not installed yet — treat as fresh install
+		color.Cyan("📦 Plugin '%s' is not installed, installing now...", name)
+	}
+
+	// Force re-install by removing the version equality guard inside InstallPlugin:
+	// We temporarily clear the version so InstallPlugin does not short-circuit.
+	if _, exists := m.registry.Plugins[name]; exists {
+		delete(m.registry.Plugins, name)
+	}
+
+	return m.InstallPlugin(name, version)
+}
+
+// UpdateAllPlugins updates every installed plugin and the flash CLI itself.
+func (m *Manager) UpdateAllPlugins(updateSelf bool, currentVersion string) error {
+	installedPlugins := m.ListPlugins()
+
+	if len(installedPlugins) == 0 && !updateSelf {
+		color.Yellow("⚠️  No plugins installed. Nothing to update.")
+		return nil
+	}
+
+	anyError := false
+
+	for _, p := range installedPlugins {
+		color.Cyan("🔄 Updating plugin '%s'...", p.Name)
+		// Clear from registry to force a fresh download
+		delete(m.registry.Plugins, p.Name)
+		if err := m.saveRegistry(); err != nil {
+			color.Red("❌ Failed to save registry before updating '%s': %v", p.Name, err)
+			anyError = true
+			continue
+		}
+
+		if err := m.InstallPlugin(p.Name, "latest"); err != nil {
+			color.Red("❌ Failed to update plugin '%s': %v", p.Name, err)
+			anyError = true
+		} else {
+			color.Green("✅ Plugin '%s' updated successfully!", p.Name)
+		}
+		fmt.Println()
+	}
+
+	if updateSelf {
+		if err := m.UpdateFlashBinary(currentVersion); err != nil {
+			color.Red("❌ Failed to update flash CLI: %v", err)
+			anyError = true
+		}
+	}
+
+	if anyError {
+		return fmt.Errorf("one or more updates failed — check output above")
+	}
+	return nil
+}
+
+// GetLatestFlashVersion returns the latest stable flash CLI version from GitHub.
+func (m *Manager) GetLatestFlashVersion() (string, error) {
+	return m.getLatestStableReleaseVersion()
+}
+
+// UpdateFlashBinary downloads and replaces the running flash CLI binary with the latest release.
+func (m *Manager) UpdateFlashBinary(currentVersion string) error {
+	color.Cyan("🔍 Checking for flash CLI updates...")
+
+	latestTag, err := m.getLatestStableReleaseVersion()
+	if err != nil {
+		return fmt.Errorf("failed to fetch latest flash version: %w", err)
+	}
+
+	latestVersion := strings.TrimPrefix(latestTag, "v")
+	currentClean := strings.TrimPrefix(currentVersion, "v")
+
+	if latestVersion == currentClean {
+		color.Green("✅ flash CLI is already up to date (v%s)", currentClean)
+		return nil
+	}
+
+	color.Cyan("⬆️  Updating flash CLI from v%s → v%s...", currentClean, latestVersion)
+
+	// Determine the binary name for the current platform
+	platform := runtime.GOOS
+	arch := runtime.GOARCH
+	binaryName := fmt.Sprintf("flash-%s-%s", platform, arch)
+	if platform == "windows" {
+		binaryName += ".exe"
+	}
+
+	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s",
+		m.config.DefaultRepo, latestTag, binaryName)
+
+	// Determine path of currently running executable
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to determine current executable path: %w", err)
+	}
+
+	// Download to a temp file first, then atomically replace
+	tmpPath := execPath + ".new"
+	if err := m.downloadFile(downloadURL, tmpPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to download flash CLI update: %w", err)
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := m.validateBinary(tmpPath); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("downloaded flash CLI binary is invalid: %w", err)
+		}
+	}
+
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions on new binary: %w", err)
+	}
+
+	// On Windows we cannot overwrite a running exe directly; rename to .old first
+	if runtime.GOOS == "windows" {
+		oldPath := execPath + ".old"
+		os.Remove(oldPath) // remove stale backup if any
+		if err := os.Rename(execPath, oldPath); err != nil {
+			os.Remove(tmpPath)
+			return fmt.Errorf("failed to back up current binary (you may need to run as admin): %w", err)
+		}
+	}
+
+	if err := os.Rename(tmpPath, execPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace flash binary (you may need elevated permissions): %w", err)
+	}
+
+	color.Green("✅ flash CLI updated to v%s successfully!", latestVersion)
+	color.Cyan("   Restart your terminal or run 'flash --version' to confirm.")
+	return nil
+}
+
 // loadRegistry loads the plugin registry from disk
 func (m *Manager) loadRegistry() error {
 	data, err := os.ReadFile(m.config.RegistryFile)
