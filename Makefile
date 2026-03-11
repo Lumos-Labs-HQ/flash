@@ -101,7 +101,7 @@ build-core:
 
 # Build all plugins
 .PHONY: build-plugins
-build-plugins: build-plugin-core build-plugin-studio build-plugin-all
+build-plugins: build-plugin-core build-plugin-studio
 	@echo "All plugins built successfully!"
 
 # Build 'core' plugin (ORM features without studio)
@@ -124,27 +124,6 @@ build-plugin-core:
 
 	# macOS ARM64
 	cd plugins/core && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags=plugin_core -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-core-darwin-arm64 .
-
-# Build 'all' plugin (complete package: core + studio + seed)
-.PHONY: build-plugin-all
-build-plugin-all:
-	@echo "Building 'all' plugin..."
-	@mkdir -p $(BUILD_DIR)
-
-	# Linux AMD64
-	cd plugins/all && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags=plugin_all -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-linux-amd64 .
-
-	# Linux ARM64
-	cd plugins/all && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -tags=plugin_all -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-linux-arm64 .
-
-	# Windows AMD64
-	cd plugins/all && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags=plugin_all -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-windows-amd64.exe .
-
-	# macOS AMD64
-	cd plugins/all && CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -tags=plugin_all -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-darwin-amd64 .
-
-	# macOS ARM64
-	cd plugins/all && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -tags=plugin_all -ldflags="$(LDFLAGS)" -trimpath -o ../../$(BUILD_DIR)/flash-plugin-all-darwin-arm64 .
 
 # Build studio plugin
 .PHONY: build-plugin-studio
@@ -249,16 +228,24 @@ release: clean build-all
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  all         - Clean and build for all platforms"
-	@echo "  build-all   - Build for multiple platforms"
-	@echo "  compress    - Compress binaries with UPX (requires UPX)"
-	@echo "  install     - Install Linux binary to GOPATH/bin"
-	@echo "  clean       - Clean build artifacts"
-	@echo "  test        - Run tests"
-	@echo "  deps        - Download dependencies"
-	@echo "  fmt         - Format code"
-	@echo "  lint        - Lint code"
-	@echo "  run         - Build and run Linux binary with --help"
-	@echo "  dev-setup   - Setup development environment"
-	@echo "  release     - Create release build"
-	@echo "  help        - Show this help"
+	@echo "  all              - Clean and build for all platforms"
+	@echo "  build-all        - Build flash CLI for multiple platforms"
+	@echo "  build-plugins    - Build core + studio plugins for all platforms"
+	@echo "  build-plugin-core   - Build only the core plugin"
+	@echo "  build-plugin-studio - Build only the studio plugin"
+	@echo "  compress         - Compress binaries with UPX (requires UPX)"
+	@echo "  install          - Install Linux binary to GOPATH/bin"
+	@echo "  clean            - Clean build artifacts"
+	@echo "  test             - Run tests"
+	@echo "  deps             - Download dependencies"
+	@echo "  fmt              - Format code"
+	@echo "  lint             - Lint code"
+	@echo "  run              - Build and run Linux binary with --help"
+	@echo "  dev-setup        - Setup development environment"
+	@echo "  release          - Create release build"
+	@echo "  help             - Show this help"
+	@echo ""
+	@echo "Plugin note: only 'core' and 'studio' plugins exist."
+	@echo "  core is auto-installed on first ORM command use."
+	@echo "  studio must be installed with: flash add-plug studio"
+	@echo "  Both can be updated at once with: flash update"

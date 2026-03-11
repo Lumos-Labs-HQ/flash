@@ -610,33 +610,6 @@
 .btn-import .iconify {
     font-size: 18px;
 }
-.btn-export.loading,
-.btn-import.loading {
-    pointer-events: none;
-    opacity: 0.85;
-}
-.btn-export.loading .btn-text,
-.btn-import.loading .btn-text {
-    visibility: hidden;
-}
-.btn-export.loading .btn-spinner,
-.btn-import.loading .btn-spinner {
-    display: block;
-}
-.btn-spinner {
-    display: none;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 18px;
-    height: 18px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-}
-
 /* Dropdown styles */
 .dropdown {
     position: relative;
@@ -781,52 +754,102 @@
     margin: 4px 0;
 }
 
+/* Mobile sidebar toggle button - hidden on desktop */
+.mobile-sidebar-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    color: #e0e0e0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.mobile-sidebar-toggle:hover {
+    background: #3a3a3a;
+    color: #4a9eff;
+}
+.mobile-sidebar-toggle .iconify {
+    font-size: 20px;
+}
+
+/* Mobile sidebar backdrop overlay */
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 900;
+}
+.sidebar-backdrop.show {
+    display: block;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
     .btn-text {
         display: none;
     }
-    
+
     .btn {
         padding: 6px 8px;
         min-width: auto;
         gap: 0;
     }
-    
+
     .btn-export,
     .btn-import {
         padding: 6px 8px;
         min-width: auto;
         gap: 0;
     }
-    
+
     .topbar-right {
         gap: 6px;
     }
 }
 
 @media (max-width: 768px) {
-    .studio-container {
-        flex-direction: column;
+    /* Show the mobile toggle button */
+    .mobile-sidebar-toggle {
+        display: flex;
     }
-    
+
+    /* Sidebar becomes a slide-in overlay */
     .sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid #2d2d2d;
-        max-height: 200px;
+        position: fixed;
+        top: 0;
+        left: 60px;
+        bottom: 0;
+        width: 260px;
+        z-index: 950;
+        transform: translateX(-320px);
+        transition: transform 0.25s ease;
+        border-right: 1px solid #2d2d2d;
+        max-height: none;
     }
-    
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
     .topbar {
         padding: 0 8px;
-        flex-wrap: wrap;
-        height: auto;
-        min-height: 48px;
     }
-    
+
     .topbar-left,
     .topbar-right {
         gap: 4px;
+    }
+
+    .filter-panel {
+        min-width: 90vw;
+        right: 2vw;
     }
 }
 
@@ -834,13 +857,92 @@
     .left-navbar {
         width: 50px;
     }
-    
+
     .studio-container {
         margin-left: 50px;
     }
-    
-    .filter-panel {
-        min-width: 90vw;
-        right: 5vw;
+
+    .sidebar {
+        left: 50px;
     }
+}
+
+/* ─── Operation Progress Overlay ─────────────────────────────────────────── */
+.op-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 9998;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+.op-overlay.show {
+    display: flex;
+}
+.op-card {
+    background: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 28px 32px;
+    min-width: 320px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    animation: slideUp 0.25s ease;
+    text-align: center;
+}
+.op-card-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+    line-height: 1;
+}
+.op-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 6px;
+}
+.op-card-status {
+    font-size: 13px;
+    color: #aaa;
+    margin-bottom: 20px;
+    min-height: 18px;
+    transition: opacity 0.2s;
+}
+.op-progress-track {
+    height: 6px;
+    background: #2d2d2d;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.op-progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    transition: width 0.35s ease;
+    background: linear-gradient(90deg, #4a9eff, #3d8ae0);
+}
+.op-progress-bar.import {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+.op-progress-bar.indeterminate {
+    width: 40% !important;
+    animation: indeterminate 1.4s ease-in-out infinite;
+}
+@keyframes indeterminate {
+    0%   { transform: translateX(-150%); }
+    100% { transform: translateX(350%); }
+}
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes slideUp {
+    from { transform: translateY(16px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

@@ -17,14 +17,12 @@ var addPluginCmd = &cobra.Command{
 Install a FlashORM plugin to add additional functionality.
 
 Available plugins:
-  • core    - Complete ORM features (migrations, codegen, export, schema management, seeding)
-  • studio  - Visual database editor and management interface
-  • all     - Complete package with all features (core + studio)
+  • core    - Core ORM features (auto-installed on first use, but can be installed manually)
+  • studio  - Visual database editor (optional, install separately)
 
 Examples:
   flash add-plug core             # Install latest stable version
-  flash add-plug studio           # Install studio only
-  flash add-plug all              # Install everything
+  flash add-plug studio           # Install studio plugin
   flash add-plug core@beta        # Install latest beta version
   flash add-plug core@1.0.0       # Install specific version`,
 	Args: cobra.ExactArgs(1),

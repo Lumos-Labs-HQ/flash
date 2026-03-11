@@ -10,6 +10,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
 type Service struct {
@@ -254,7 +255,6 @@ func (s *Service) DeleteRow(tableName, rowID string) error {
 	return s.adapter.ExecuteMigration(s.ctx, query)
 }
 
-
 func (s *Service) getFilteredRowCount(tableName, whereClause string) (int, error) {
 	if whereClause == "" {
 		return s.adapter.GetTableRowCount(s.ctx, tableName)
@@ -388,7 +388,6 @@ func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[str
 		return ""
 	}
 }
-
 
 func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string) ([]map[string]any, error) {
 	var query string
@@ -796,20 +795,27 @@ func (s *Service) GetEditorHints() (map[string]any, error) {
 	}, nil
 }
 
-// sortTablesByDependency sorts tables in topological order based on foreign key dependencies
-func (s *Service) sortTablesByDependency(ctx context.Context, tables []string) ([]string, error) {
+// sortTablesByDependency sorts tables in topological order based on foreign key dependencies.
+// colsByTable is a pre-fetched map of table -> columns; pass nil to fall back to per-table queries.
+func (s *Service) sortTablesByDependency(ctx context.Context, tables []string, colsByTable map[string][]types.SchemaColumn) ([]string, error) {
 	dependencies := make(map[string][]string)
 	for _, t := range tables {
 		dependencies[t] = []string{}
 	}
 
-	// Get foreign key info for each table
+	// Build FK dependencies from cached columns or per-table queries
 	for _, tableName := range tables {
-		columns, err := s.adapter.GetTableColumns(ctx, tableName)
-		if err != nil {
-			continue
+		var cols []types.SchemaColumn
+		if colsByTable != nil {
+			cols = colsByTable[tableName]
+		} else {
+			var err error
+			cols, err = s.adapter.GetTableColumns(ctx, tableName)
+			if err != nil {
+				continue
+			}
 		}
-		for _, col := range columns {
+		for _, col := range cols {
 			if col.ForeignKeyTable != "" {
 				dependencies[tableName] = append(dependencies[tableName], col.ForeignKeyTable)
 			}
@@ -944,22 +950,37 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
 	defer cancel()
 
-	// Get all tables
-	tables, err := s.adapter.GetAllTableNames(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tables: %w", err)
-	}
-
-	// Sort tables by dependency order (tables without FK first)
-	sortedTables, err := s.sortTablesByDependency(ctx, tables)
-	if err != nil {
-		// Fallback to original order if sorting fails
-		sortedTables = tables
-	}
-
 	provider := "sql"
 	if s.cfg != nil {
 		provider = s.cfg.Database.Provider
+	}
+
+	// Fetch the full schema once — avoids N per-table GetTableColumns queries.
+	var tableNames []string
+	var colsByTable map[string][]types.SchemaColumn // may be nil on fallback
+
+	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
+		schemaTables, err := s.adapter.GetCurrentSchema(ctx)
+		if err == nil {
+			colsByTable = make(map[string][]types.SchemaColumn, len(schemaTables))
+			for _, t := range schemaTables {
+				tableNames = append(tableNames, t.Name)
+				colsByTable[t.Name] = t.Columns
+			}
+		}
+	}
+
+	if len(tableNames) == 0 {
+		var err error
+		tableNames, err = s.adapter.GetAllTableNames(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get tables: %w", err)
+		}
+	}
+
+	sortedTables, err := s.sortTablesByDependency(ctx, tableNames, colsByTable)
+	if err != nil {
+		sortedTables = tableNames
 	}
 
 	exportData := &common.ExportData{
@@ -989,16 +1010,18 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 			Name: tableName,
 		}
 
-		// Export schema if needed
 		if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-			schema, err := s.getTableSchema(ctx, tableName)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get schema for table %s: %w", tableName, err)
+			if cols, ok := colsByTable[tableName]; ok {
+				exportTable.Schema = s.buildTableSchemaFromCols(cols)
+			} else {
+				schema, err := s.getTableSchema(ctx, tableName)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get schema for table %s: %w", tableName, err)
+				}
+				exportTable.Schema = schema
 			}
-			exportTable.Schema = schema
 		}
 
-		// Export data if needed
 		if exportType == common.ExportDataOnly || exportType == common.ExportComplete {
 			data, err := s.getAllTableData(ctx, tableName)
 			if err != nil {
@@ -1011,6 +1034,30 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 	}
 
 	return exportData, nil
+}
+
+// buildTableSchemaFromCols builds an ExportTableSchema from pre-fetched column info.
+func (s *Service) buildTableSchemaFromCols(columns []types.SchemaColumn) *common.ExportTableSchema {
+	exportColumns := make([]common.ExportColumn, 0, len(columns))
+	seen := make(map[string]bool, len(columns))
+	for _, col := range columns {
+		if seen[col.Name] {
+			continue
+		}
+		seen[col.Name] = true
+		exportColumns = append(exportColumns, common.ExportColumn{
+			Name:             col.Name,
+			Type:             col.Type,
+			Nullable:         col.Nullable,
+			PrimaryKey:       col.IsPrimary,
+			Default:          col.Default,
+			AutoIncrement:    col.IsAutoIncrement,
+			Unique:           col.IsUnique,
+			ForeignKeyTable:  col.ForeignKeyTable,
+			ForeignKeyColumn: col.ForeignKeyColumn,
+		})
+	}
+	return &common.ExportTableSchema{Columns: exportColumns}
 }
 
 // getTableSchema returns the schema for a table
@@ -1047,37 +1094,28 @@ func (s *Service) getTableSchema(ctx context.Context, tableName string) (*common
 	}, nil
 }
 
-// getAllTableData returns all data from a table
+// getAllTableData returns all data from a table.
 func (s *Service) getAllTableData(ctx context.Context, tableName string) ([]map[string]any, error) {
-	// Get total row count
-	count, err := s.adapter.GetTableRowCount(ctx, tableName)
-	if err != nil {
-		return nil, err
-	}
+	const batchSize = 1000
+	allData := make([]map[string]any, 0, batchSize)
 
-	if count == 0 {
-		return []map[string]any{}, nil
-	}
-
-	// Fetch all data in batches
-	batchSize := 1000
-	allData := make([]map[string]any, 0, count)
-
-	for offset := 0; offset < count; offset += batchSize {
+	for offset := 0; ; offset += batchSize {
 		query := fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d",
 			common.QuoteIdentifier(tableName), batchSize, offset)
 
 		result, err := s.adapter.ExecuteQuery(ctx, query)
 		if err != nil {
-			// Fallback to GetTableData
-			data, err := s.adapter.GetTableData(ctx, tableName)
-			if err != nil {
-				return nil, err
+			if offset == 0 {
+				return s.adapter.GetTableData(ctx, tableName)
 			}
-			return data, nil
+			break
 		}
 
 		allData = append(allData, result.Rows...)
+
+		if len(result.Rows) < batchSize {
+			break
+		}
 	}
 
 	return allData, nil

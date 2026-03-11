@@ -112,6 +112,9 @@ function initializeEditor(mode) {
         link.addEventListener('click', saveSqlState);
     });
 
+    // Update Run button text based on selection
+    editor.on('cursorActivity', updateRunButton);
+
     setupResize();
 }
 
@@ -158,8 +161,49 @@ function navigateHistory(direction) {
     editor.setCursor(editor.lineCount(), 0);
 }
 
+// Update Run button text based on whether text is selected
+function updateRunButton() {
+    const btn = document.getElementById('run-btn');
+    const hint = document.getElementById('editor-hint');
+    const hasSelection = editor.somethingSelected();
+
+    if (hasSelection) {
+        btn.textContent = '▶ Run Selection';
+        hint.textContent = 'Running selected lines only • Ctrl+Enter to run';
+    } else {
+        btn.textContent = '▶ Run All';
+        hint.textContent = 'Ctrl+Enter to run all • Select lines to run partial';
+    }
+}
+
+// Flash-highlight lines that are being executed
+function highlightExecutedLines(fromLine, toLine) {
+    const marks = [];
+    for (let i = fromLine; i <= toLine; i++) {
+        marks.push(editor.addLineClass(i, 'background', 'executing-line'));
+    }
+    setTimeout(() => {
+        marks.forEach((_, i) => {
+            editor.removeLineClass(fromLine + i, 'background', 'executing-line');
+        });
+    }, 600);
+}
+
 async function runQuery() {
-    let query = editor.getSelection() || editor.getValue();
+    const selection = editor.getSelection();
+    const hasSelection = selection && selection.trim().length > 0;
+    let query, fromLine, toLine;
+
+    if (hasSelection) {
+        query = selection;
+        fromLine = editor.getCursor('from').line;
+        toLine = editor.getCursor('to').line;
+    } else {
+        query = editor.getValue();
+        fromLine = 0;
+        toLine = editor.lineCount() - 1;
+    }
+
     query = query.trim();
     if (!query) return;
 
@@ -173,6 +217,9 @@ async function runQuery() {
         return;
     }
 
+    // Flash the lines being executed
+    highlightExecutedLines(fromLine, toLine);
+
     // Add to history
     if (queryHistory[queryHistory.length - 1] !== query) {
         queryHistory.push(query);
@@ -180,7 +227,10 @@ async function runQuery() {
     }
     historyIndex = queryHistory.length;
 
-    document.getElementById('results-info').textContent = 'Executing query...';
+    const runMode = hasSelection ? 'selection' : 'all';
+    document.getElementById('results-info').textContent = hasSelection
+        ? `Executing selection (lines ${fromLine + 1}-${toLine + 1})...`
+        : 'Executing all queries...';
     document.getElementById('results-body').innerHTML = '<div class="empty-state"><div class="spinner"></div><div>Running query...</div></div>';
 
     const startTime = Date.now();
@@ -197,7 +247,8 @@ async function runQuery() {
 
         if (data.success) {
             currentResults = data.data;
-            displayResults(data.data, cleanQuery, elapsed);
+            displayResults(data.data, cleanQuery, elapsed, runMode, fromLine, toLine);
+            SqlHints.updateSchemaFromQuery(cleanQuery);
         } else {
             displayError(data.message);
         }
@@ -284,9 +335,12 @@ function formatCellValue(value) {
     return `<span class="cell-text">${escapeHtml(strValue)}</span>`;
 }
 
-function displayResults(data, query, elapsed) {
+function displayResults(data, query, elapsed, runMode, fromLine, toLine) {
     const resultsBody = document.getElementById('results-body');
     const queryType = getQueryType(query);
+    const modeLabel = runMode === 'selection'
+        ? ` (selection: lines ${fromLine + 1}-${toLine + 1})`
+        : '';
 
     // Handle non-SELECT queries
     if (!data || !data.rows || data.rows.length === 0) {
@@ -309,12 +363,12 @@ function displayResults(data, query, elapsed) {
             default: message = 'Query executed successfully';
         }
 
-        document.getElementById('results-info').textContent = `Query completed in ${elapsed}ms`;
+        document.getElementById('results-info').textContent = `Query completed in ${elapsed}ms${modeLabel}`;
         resultsBody.innerHTML = `
             <div class="success-message">
                 <div class="success-icon">${icon}</div>
                 <div class="success-text">${message}</div>
-                <div class="success-details">Execution time: ${elapsed}ms</div>
+                <div class="success-details">Execution time: ${elapsed}ms${modeLabel}</div>
             </div>
         `;
         document.getElementById('export-btn').style.display = 'none';
@@ -322,7 +376,7 @@ function displayResults(data, query, elapsed) {
     }
 
     const rowCount = data.rows.length;
-    document.getElementById('results-info').textContent = `${rowCount} row${rowCount !== 1 ? 's' : ''} returned in ${elapsed}ms`;
+    document.getElementById('results-info').textContent = `${rowCount} row${rowCount !== 1 ? 's' : ''} returned in ${elapsed}ms${modeLabel}`;
     document.getElementById('export-btn').style.display = 'block';
 
     const columns = data.columns && data.columns.length > 0
@@ -330,7 +384,7 @@ function displayResults(data, query, elapsed) {
         : Object.keys(data.rows[0]);
 
     let html = '<table class="results-table"><thead><tr>';
-    html += '<th class="row-num">#</th>';
+    html += '<th class="row-num-header">#</th>';
     columns.forEach(col => {
         html += `<th>${escapeHtml(col)}</th>`;
     });

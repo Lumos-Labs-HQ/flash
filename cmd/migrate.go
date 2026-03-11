@@ -1,5 +1,5 @@
-//go:build plugin_core || plugin_all || dev
-// +build plugin_core plugin_all dev
+//go:build plugin_core || dev
+// +build plugin_core dev
 
 package cmd
 

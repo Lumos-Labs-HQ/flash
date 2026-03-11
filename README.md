@@ -96,6 +96,7 @@ flash gen
 | `flash export` | Export database |
 | `flash seed` | Seed with fake data |
 | `flash gen` | Generate type-safe code |
+| `flash update` | Update plugins and flash binary |
 
 ## 🗄️ Database Support
 

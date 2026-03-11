@@ -16,7 +16,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "2.3.0"
+	Version = "2.4.0"
 )
 
 func showBanner() {
@@ -91,7 +91,7 @@ func Execute() error {
 		commandName := os.Args[1]
 
 		// Skip if it's a built-in command
-		builtInCommands := []string{"plugins", "add-plug", "rm-plug", "help", "completion", "--help", "-h", "--version", "-v"}
+		builtInCommands := []string{"plugins", "add-plug", "rm-plug", "update", "help", "completion", "--help", "-h", "--version", "-v"}
 		isBuiltIn := false
 		for _, cmd := range builtInCommands {
 			if commandName == cmd {
@@ -109,20 +109,23 @@ func Execute() error {
 					return fmt.Errorf("failed to initialize plugin manager: %w", err)
 				}
 
-				// Check if the exact plugin is installed
+				// Auto-install core plugin on first use
+				if requiredPlugin == "core" {
+					if err := manager.EnsureCorePlugin(); err != nil {
+						return err
+					}
+					return manager.ExecutePlugin("core", os.Args[1:])
+				}
+
+				// For studio, check if installed
 				if manager.IsPluginInstalled(requiredPlugin) {
 					return manager.ExecutePlugin(requiredPlugin, os.Args[1:])
 				}
 
-				if manager.IsPluginInstalled("all") {
-					return manager.ExecutePlugin("all", os.Args[1:])
-				}
-
-				color.Red("❌ Command '%s' requires plugin '%s'", commandName, requiredPlugin)
+				color.Red("❌ Command '%s' requires the '%s' plugin", commandName, requiredPlugin)
 				fmt.Println()
 				color.Cyan("📦 Install it using:")
-				color.Cyan("   flash add-plug %s    # Install only what you need", requiredPlugin)
-				color.Cyan("   flash add-plug all   # Install everything")
+				color.Cyan("   flash add-plug %s", requiredPlugin)
 				return fmt.Errorf("missing required plugin: %s", requiredPlugin)
 			}
 		}
@@ -135,7 +138,7 @@ func Execute() error {
 func checkPluginRequirement(cmd *cobra.Command, args []string) error {
 	commandName := cmd.Name()
 	if commandName == "flash" || commandName == "plugins" || commandName == "add-plug" ||
-		commandName == "rm-plug" || commandName == "help" || commandName == "version" {
+		commandName == "rm-plug" || commandName == "update" || commandName == "help" || commandName == "version" {
 		return nil
 	}
 
@@ -149,19 +152,22 @@ func checkPluginRequirement(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize plugin manager: %w", err)
 	}
 
+	// Auto-install core plugin on first use
+	if requiredPlugin == "core" {
+		if err := manager.EnsureCorePlugin(); err != nil {
+			return err
+		}
+		return manager.ExecutePlugin("core", os.Args[1:])
+	}
+
 	if manager.IsPluginInstalled(requiredPlugin) {
 		return manager.ExecutePlugin(requiredPlugin, os.Args[1:])
 	}
 
-	if manager.IsPluginInstalled("all") {
-		return manager.ExecutePlugin("all", os.Args[1:])
-	}
-
-	color.Red("❌ Command '%s' requires plugin '%s'", commandName, requiredPlugin)
+	color.Red("❌ Command '%s' requires the '%s' plugin", commandName, requiredPlugin)
 	fmt.Println()
 	color.Cyan("📦 Install it using:")
-	color.Cyan("   flash add-plug %s    # Install only what you need", requiredPlugin)
-	color.Cyan("   flash add-plug all   # Install everything")
+	color.Cyan("   flash add-plug %s", requiredPlugin)
 	return fmt.Errorf("missing required plugin: %s", requiredPlugin)
 }
 

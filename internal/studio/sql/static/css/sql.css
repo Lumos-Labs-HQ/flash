@@ -88,7 +88,7 @@
 }
 
 .editor-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     color: #888;
 }
@@ -100,7 +100,7 @@
 }
 
 .editor-hint {
-    font-size: 11px;
+    font-size: 12px;
     color: #666;
     margin-right: 8px;
 }
@@ -119,7 +119,8 @@
 
 .CodeMirror {
     height: 100% !important;
-    font-size: 14px;
+    font-size: 15px;
+    line-height: 1.6;
     background: #1a1a1a !important;
 }
 
@@ -141,27 +142,27 @@
 }
 
 .results-info {
-    font-size: 12px;
+    font-size: 13px;
     color: #888;
 }
 
 .results-body {
     flex: 1;
     overflow: auto;
-    padding: 16px;
+    padding: 0;
 }
 
 .results-table {
-    width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
     background: #1e1e1e;
-    border-radius: 6px;
-    overflow: hidden;
+    border: 1px solid #3a3a3a;
+    table-layout: auto;
 }
 
 .results-table thead {
-    background: #2a2a2a;
+    background: linear-gradient(180deg, #2c2c2c 0%, #242424 100%);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -169,23 +170,40 @@
 
 .results-table th {
     text-align: left;
-    padding: 12px 16px;
-    font-weight: 500;
-    color: #888;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #2d2d2d;
+    padding: 6px 12px;
+    font-weight: 600;
+    color: #b0b0b0;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    border: 1px solid #3a3a3a;
+    white-space: nowrap;
+    user-select: none;
 }
 
 .results-table td {
-    padding: 12px 16px;
-    border-bottom: 1px solid #2a2a2a;
+    padding: 4px 12px;
+    border: 1px solid #2e2e2e;
     color: #e0e0e0;
+    white-space: nowrap;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .results-table tbody tr:hover {
-    background: #252525;
+    background: #1a2a3a;
+}
+
+.results-table tbody tr:nth-child(even) {
+    background: #1b1b1b;
+}
+
+.results-table tbody tr:nth-child(even):hover {
+    background: #1a2a3a;
+}
+
+.results-table tbody tr.selected-row {
+    background: #1e3a5a;
 }
 
 
@@ -325,11 +343,24 @@
 .row-num {
     color: #555 !important;
     font-size: 11px;
-    text-align: center !important;
-    min-width: 40px !important;
-    max-width: 60px !important;
+    text-align: right !important;
+    padding: 4px 8px !important;
+    min-width: 30px !important;
+    max-width: 50px !important;
     background: #1a1a1a !important;
+    border-right: 2px solid #3a3a3a !important;
     user-select: none;
+}
+
+.row-num-header {
+    text-align: center !important;
+    padding: 6px 8px !important;
+    min-width: 30px !important;
+    max-width: 50px !important;
+    background: #252525 !important;
+    border-right: 2px solid #3a3a3a !important;
+    color: #666 !important;
+    font-size: 11px !important;
 }
 
 
@@ -345,9 +376,6 @@
 
 
 @media (max-width: 768px) {
-    .navbar-links { display: none; }
-    .editor-actions { flex-direction: column; gap: 4px; }
-    .btn { padding: 4px 12px; font-size: 11px; }
     .editor-hint { display: none; }
 }
 
@@ -359,7 +387,7 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
     padding: 4px 0 !important;
     font-family: 'JetBrains Mono', monospace !important;
-    font-size: 13px !important;
+    font-size: 14px !important;
     max-height: 300px !important;
     overflow-y: auto !important;
     min-width: 200px !important;
@@ -442,6 +470,17 @@
 
 .CodeMirror-activeline-background {
     background: #222 !important;
+}
+
+/* Execution highlight flash */
+.executing-line {
+    background: rgba(74, 158, 255, 0.15) !important;
+    animation: exec-flash 0.6s ease-out;
+}
+
+@keyframes exec-flash {
+    0% { background: rgba(74, 158, 255, 0.3) !important; }
+    100% { background: rgba(74, 158, 255, 0) !important; }
 }
 
 /* Autocomplete hint types */
