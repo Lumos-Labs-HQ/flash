@@ -1,6 +1,21 @@
 let filters = [];
 let currentColumns = [];
 
+// Mobile sidebar toggle
+function toggleMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    sidebar.classList.toggle('mobile-open');
+    backdrop.classList.toggle('show');
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    sidebar.classList.remove('mobile-open');
+    backdrop.classList.remove('show');
+}
+
 // This function just rebuilds the UI to show the active filters
 function restoreFilters(savedFilters) {
     if (!savedFilters || savedFilters.length === 0) return;
@@ -353,6 +368,7 @@ async function executeSQLQuery() {
 
 const originalSelectTable = selectTable;
 selectTable = async function (tableName) {
+    closeMobileSidebar();
     await originalSelectTable(tableName);
     if (state.data && state.data.columns) {
         currentColumns = state.data.columns;
@@ -450,17 +466,43 @@ document.addEventListener('click', (e) => {
     }
 });
 
+// ── Progress overlay helpers ─────────────────────────────────────────────
+function showOpOverlay(title, status, isImport) {
+    document.getElementById('op-title').textContent = title;
+    document.getElementById('op-icon').textContent = isImport ? '📥' : '📤';
+    setOpStatus(status);
+    const bar = document.getElementById('op-bar');
+    bar.className = 'op-progress-bar indeterminate' + (isImport ? ' import' : '');
+    bar.style.width = '';
+    document.getElementById('op-overlay').classList.add('show');
+}
+function setOpStatus(msg) {
+    document.getElementById('op-status').textContent = msg;
+}
+function setOpProgress(pct, isImport) {
+    const bar = document.getElementById('op-bar');
+    bar.classList.remove('indeterminate');
+    bar.className = 'op-progress-bar' + (isImport ? ' import' : '');
+    bar.style.width = Math.min(100, Math.round(pct)) + '%';
+}
+function hideOpOverlay() {
+    document.getElementById('op-overlay').classList.remove('show');
+}
+
 // Export database
 async function exportDatabase(exportType) {
     // Close dropdown
     document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
 
-    const exportBtn = document.getElementById('export-btn');
-    exportBtn.classList.add('loading');
-    showToast('Exporting database...', 'info');
+    const labelMap = { schema_only: 'Schema', data_only: 'Data', complete: 'Schema + Data' };
+    const label = labelMap[exportType] || exportType;
+    showOpOverlay(`Exporting ${label}`, 'Connecting to database…', false);
 
     try {
+        setOpStatus('Fetching schema and data…');
         const response = await fetch(`/api/export/${exportType}`);
+        setOpProgress(80, false);
+        setOpStatus('Processing response…');
         const responseData = await response.json();
 
         // Check for error response
@@ -469,10 +511,11 @@ async function exportDatabase(exportType) {
             return;
         }
 
-        // Extract the actual export data (unwrap from {success, data} wrapper if present)
         const exportData = responseData.data ? responseData.data : responseData;
 
-        // Create and download JSON file (save only the export data, not the wrapper)
+        setOpProgress(95, false);
+        setOpStatus('Preparing download…');
+
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -486,12 +529,14 @@ async function exportDatabase(exportType) {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        showToast(`Export completed: ${exportType}`, 'success');
+        setOpProgress(100, false);
+        const tableCount = exportData.tables ? exportData.tables.length : 0;
+        showToast(`Export complete — ${tableCount} table${tableCount !== 1 ? 's' : ''} exported`, 'success');
     } catch (err) {
         console.error('Export failed:', err);
         showToast('Export failed: ' + err.message, 'error');
     } finally {
-        exportBtn.classList.remove('loading');
+        setTimeout(hideOpOverlay, 600);
     }
 }
 
@@ -572,23 +617,31 @@ async function handleImportFile(event) {
 
 // Perform the actual import
 async function performImport(importData) {
-    const importBtn = document.getElementById('import-btn');
-    importBtn.classList.add('loading');
-    showToast('Importing database...', 'info');
+    const tableCount = importData.tables ? importData.tables.length : 0;
+    const totalRows = importData.tables
+        ? importData.tables.reduce((s, t) => s + (t.data ? t.data.length : 0), 0)
+        : 0;
+    const rowLabel = totalRows > 0 ? ` · ${totalRows.toLocaleString()} row${totalRows !== 1 ? 's' : ''}` : '';
+    showOpOverlay('Importing Database', `Preparing ${tableCount} table${tableCount !== 1 ? 's' : ''}${rowLabel}…`, true);
 
     try {
+        setOpStatus('Sending data to server…');
         const response = await fetch('/api/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(importData)
         });
 
+        setOpProgress(85, true);
+        setOpStatus('Applying changes…');
         const result = await response.json();
 
         if (!result.success) {
             showToast(result.message || 'Import failed', 'error');
             return;
         }
+
+        setOpProgress(100, true);
 
         // Show import results
         const r = result.result;
@@ -630,6 +683,6 @@ async function performImport(importData) {
         console.error('Import failed:', err);
         showToast('Import failed: ' + err.message, 'error');
     } finally {
-        importBtn.classList.remove('loading');
+        setTimeout(hideOpOverlay, 600);
     }
 }
