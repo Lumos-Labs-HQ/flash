@@ -9,104 +9,51 @@ Flash ORM uses a modular plugin architecture that allows you to install only the
 
 ## Overview
 
-The base Flash ORM CLI is a minimal binary (~5-10 MB) that provides:
+The base Flash ORM CLI is a minimal binary that provides:
 - Version information (`flash --version`)
 - Plugin management (`flash plugins`, `flash add-plug`, `flash rm-plug`)
 - Command metadata and help
-- Automatic plugin requirement detection and delegation
+- Automatic plugin download on first use
 
-All actual ORM functionality is provided through plugins that you install separately.
+All actual ORM functionality is provided through plugins.
 
 ## Available Plugins
 
-### 1. Core Plugin (`core`)
+### Core Plugin (`core`)
 
-**Size:** ~30 MB  
-**Description:** Complete ORM features (migrations, codegen, export, schema management)
-
-**Includes:**
-- `init` - Initialize a new FlashORM project
-- `migrate` - Create new migration files
-- `apply` - Apply pending migrations to database
-- `status` - Check migration status
-- `pull` - Pull current database schema
-- `reset` - Reset database and reapply all migrations
-- `raw` - Execute raw SQL queries or files
-- `branch` - Manage database schema branches
-- `checkout` - Switch between schema branches
-- `gen` - Generate type-safe code (Go, TypeScript, Python)
-- `export` - Export database to JSON, CSV, or SQLite
-
-**Use Case:** Production environments, CI/CD pipelines, developers who prefer CLI workflows
-
-### 2. Studio Plugin (`studio`)
-
-**Size:** ~29 MB  
-**Description:** Visual database editor and management interface
+**Description:** Complete ORM features — migrations, code generation, seeding, schema management, and export.
 
 **Includes:**
-- `studio` - Launch web-based database GUI
-  - View and edit table data
-  - Visual schema editor
-  - SQL query runner
-  - Relationship visualization
+- `init` — Initialize a new FlashORM project
+- `migrate` — Create new migration files
+- `apply` — Apply pending migrations
+- `status` — Check migration status
+- `pull` — Pull current database schema
+- `reset` — Reset database and reapply all migrations
+- `down` — Rollback migrations
+- `raw` — Execute raw SQL queries
+- `branch` — Manage database schema branches
+- `gen` — Generate type-safe code (Go, TypeScript, Python)
+- `export` — Export database to JSON, CSV, or SQLite
+- `seed` — Seed database with realistic fake data
+
+**Auto-install:** The core plugin installs automatically the first time you run any ORM command. You do not need to install it manually.
+
+### Studio Plugin (`studio`)
+
+**Description:** Visual database editor and management interface.
+
+**Includes:**
+- `studio` — Launch the web-based database GUI
+  - Browse and edit table data
+  - Export and import database (Schema Only, Data Only, Complete)
+  - Visual schema viewer with relationship graph
+  - SQL query runner with CSV export
   - Branch management interface
 
-**Use Case:** Developers who prefer visual tools, database administration, rapid prototyping
-
-### 3. All Plugin (`all`)
-
-**Size:** ~30 MB  
-**Description:** Complete package combining core + studio
-
-**Includes:** All commands from both `core` and `studio` plugins
-
-**Use Case:** Full-featured local development, teams using both CLI and GUI workflows
-
-## Installation
-
-### First Time Setup
-
-When you first install FlashORM, you get only the base CLI:
-
+**Install manually** when you need the visual editor:
 ```bash
-# Install via npm (base CLI only)
-npm install -g flashorm
-
-# Or via pip
-pip install flashorm
-
-# Or download binary directly
-curl -sL https://github.com/Lumos-Labs-HQ/flash/releases/latest/download/flash-linux-amd64 -o flash
-chmod +x flash
-```
-
-### Installing Plugins
-
-Install the plugin(s) you need:
-
-```bash
-# Option 1: Core ORM features only (smallest footprint)
-flash add-plug core
-
-# Option 2: Studio only (for GUI-based workflows)
 flash add-plug studio
-
-# Option 3: Everything (most convenient)
-flash add-plug all
-```
-
-### Version-Specific Installation
-
-```bash
-# Install specific version
-flash add-plug core@2.1.11
-
-# Install latest version (default)
-flash add-plug core@latest
-
-# Install beta version
-flash add-plug core@beta
 ```
 
 ## Plugin Management
@@ -117,226 +64,55 @@ flash add-plug core@beta
 flash plugins
 ```
 
-Output:
-```
-Installed Plugins:
-✅ core v2.1.11 - Complete ORM features
-✅ studio v2.1.11 - Visual database editor
+### Install a Plugin
 
-Available Plugins:
-- all v2.1.11 - Complete package (core + studio)
+```bash
+flash add-plug core
+flash add-plug studio
+```
+
+### Remove a Plugin
+
+```bash
+flash rm-plug studio
 ```
 
 ### Update Plugins
 
 ```bash
-# Update all plugins
-flash plugins update
+# Update all installed plugins
+flash update
 
-# Update specific plugin
-flash plugins update core
+# Update plugins and the flash binary
+flash update --self
 
-# Check for updates
-flash plugins outdated
+# Update only the flash binary
+flash update --self-only
 ```
 
-### Remove Plugins
-
-```bash
-# Remove specific plugin
-flash rm-plug studio
-
-# Remove all plugins
-flash rm-plug all
-```
-
-## Plugin Architecture
-
-### Plugin Structure
-
-Each plugin is a self-contained binary with its own dependencies:
-
-```
-~/.flash/plugins/
-├── core/
-│   ├── flash-plugin-core  # Plugin binary
-│   ├── manifest.json      # Plugin metadata
-│   └── checksums.txt      # File integrity
-├── studio/
-│   ├── flash-plugin-studio
-│   ├── manifest.json
-│   └── checksums.txt
-```
-
-### Plugin Manifest
-
-```json
-{
-  "name": "core",
-  "version": "2.1.11",
-  "description": "Complete ORM features",
-  "author": "Lumos Labs",
-  "commands": [
-    "init",
-    "migrate",
-    "apply",
-    "status",
-    "pull",
-    "reset",
-    "raw",
-    "branch",
-    "checkout",
-    "gen",
-    "export"
-  ],
-  "dependencies": [],
-  "platforms": ["linux", "darwin", "windows"],
-  "architectures": ["amd64", "arm64"],
-  "checksums": {
-    "linux-amd64": "abc123...",
-    "darwin-amd64": "def456...",
-    "windows-amd64": "ghi789..."
-  }
-}
-```
-
-### Plugin Loading
+## How Plugin Loading Works
 
 When you run a command, Flash ORM:
 
-1. **Checks if command exists** in base CLI
-2. **If not found**, looks for plugin that provides the command
-3. **Loads plugin binary** and delegates execution
-4. **Passes arguments and environment** to plugin
+1. Checks if the command is built into the base CLI
+2. If not, checks the plugin registry for which plugin provides the command
+3. If the required plugin is not installed, downloads it automatically (core only)
+4. Delegates execution to the plugin binary with your arguments and environment
 
-```bash
-# User runs: flash migrate "add users table"
-# Flash ORM:
-# 1. Command "migrate" not in base CLI
-# 2. Checks plugin registry for "migrate" command
-# 3. Finds "core" plugin provides "migrate"
-# 4. Executes: ~/.flash/plugins/core/flash-plugin-core migrate "add users table"
+## Plugin Storage
+
+Plugins are stored in your home directory:
+
 ```
-
-## Development
-
-### Building Plugins
-
-Plugins are built as separate Go binaries with build tags:
-
-```go
-//go:build plugins
-
-package main
-
-import (
-    "github.com/Lumos-Labs-HQ/flash/cmd"
-)
-
-func main() {
-    // Register plugin-specific commands
-    cmd.RegisterCoreCommands()
-
-    if err := cmd.Execute(); err != nil {
-        // Handle error
-    }
-}
-```
-
-### Plugin Commands
-
-```go
-// cmd/migrate.go
-//go:build plugins
-
-package cmd
-
-import (
-    "github.com/spf13/cobra"
-)
-
-var migrateCmd = &cobra.Command{
-    Use:   "migrate [name]",
-    Short: "Create a new migration",
-    Long:  `Create a new migration file with the specified name.`,
-    RunE: func(cmd *cobra.Command, args []string) error {
-        // Migration logic here
-        return nil
-    },
-}
-
-func init() {
-    rootCmd.AddCommand(migrateCmd)
-}
-```
-
-### Plugin Registry
-
-The plugin registry manages plugin metadata and dependencies:
-
-```go
-type PluginRegistry struct {
-    plugins map[string]*PluginInfo
-}
-
-type PluginInfo struct {
-    Name         string
-    Version      string
-    Commands     []string
-    Dependencies []string
-    Path         string
-    Checksum     string
-}
+~/.flash/plugins/
+├── flash-plugin-core
+├── flash-plugin-studio
+└── registry.json
 ```
 
 ## Distribution
 
-### Plugin Repository
-
-Plugins are distributed through GitHub Releases:
-
-```
-https://github.com/Lumos-Labs-HQ/flash/releases/download/v2.1.11/
-├── flash-linux-amd64.tar.gz          # Base CLI
-├── flash-plugin-core-linux-amd64.tar.gz
-├── flash-plugin-studio-linux-amd64.tar.gz
-├── flash-plugin-all-linux-amd64.tar.gz
-```
-
-### Automatic Downloads
-
-When installing plugins, Flash ORM:
-
-1. **Fetches manifest** from GitHub API
-2. **Determines platform/architecture**
-3. **Downloads appropriate binary**
-4. **Verifies checksum**
-5. **Extracts to plugin directory**
-6. **Updates registry**
-
-### Offline Installation
-
-For air-gapped environments:
-
-```bash
-# Download plugins manually
-curl -L -o core.tar.gz https://github.com/Lumos-Labs-HQ/flash/releases/download/v2.1.11/flash-plugin-core-linux-amd64.tar.gz
-
-# Install from local file
-flash add-plug core --file ./core.tar.gz
-```
-
-## Security
-
-### Plugin Verification
-
-All plugins are verified before installation:
-
-- **Checksum validation** against published manifest
-- **Signature verification** (planned)
-- **Sandbox execution** with limited permissions
-
-### Secure Updates
+Plugins are distributed through GitHub Releases and downloaded automatically when needed. Flash ORM determines your platform and architecture, downloads the appropriate binary, verifies its checksum, and saves it to the plugin directory.
 
 Plugin updates require explicit confirmation:
 
