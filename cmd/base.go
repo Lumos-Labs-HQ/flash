@@ -7,4 +7,5 @@ func RegisterBaseCommands() {
 	rootCmd.AddCommand(pluginsCmd)
 	rootCmd.AddCommand(addPluginCmd)
 	rootCmd.AddCommand(removePluginCmd)
+	rootCmd.AddCommand(updateCmd)
 }

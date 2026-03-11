@@ -42,7 +42,6 @@ jobs:
         GOFLAGS=-tags=dev go mod tidy
         cd plugins/core && GOFLAGS=-tags=plugin_core go mod tidy && cd ../..
         cd plugins/studio && GOFLAGS=-tags=plugin_studio go mod tidy && cd ../..
-        cd plugins/all && GOFLAGS=-tags=plugin_all go mod tidy && cd ../..
 
     - name: Build base CLI binaries
       run: |
@@ -86,17 +85,6 @@ jobs:
         GOOS=windows GOARCH=arm64 go build -tags=plugin_studio -ldflags="-s -w" -o ../../release/flash-plugin-studio-windows-arm64.exe .
         GOOS=darwin GOARCH=amd64 go build -tags=plugin_studio -ldflags="-s -w" -o ../../release/flash-plugin-studio-darwin-amd64 .
         GOOS=darwin GOARCH=arm64 go build -tags=plugin_studio -ldflags="-s -w" -o ../../release/flash-plugin-studio-darwin-arm64 .
-        cd ../..
-
-    - name: Build all-in-one plugin binaries
-      run: |
-        cd plugins/all
-        GOOS=linux GOARCH=amd64 go build -tags=plugin_all -ldflags="-s -w" -o ../../release/flash-plugin-all-linux-amd64 .
-        GOOS=linux GOARCH=arm64 go build -tags=plugin_all -ldflags="-s -w" -o ../../release/flash-plugin-all-linux-arm64 .
-        GOOS=windows GOARCH=amd64 go build -tags=plugin_all -ldflags="-s -w" -o ../../release/flash-plugin-all-windows-amd64.exe .
-        GOOS=windows GOARCH=arm64 go build -tags=plugin_all -ldflags="-s -w" -o ../../release/flash-plugin-all-windows-arm64.exe .
-        GOOS=darwin GOARCH=amd64 go build -tags=plugin_all -ldflags="-s -w" -o ../../release/flash-plugin-all-darwin-amd64 .
-        GOOS=darwin GOARCH=arm64 go build -tags=plugin_all -ldflags="-s -w" -o ../../release/flash-plugin-all-darwin-arm64 .
         cd ../..
 
     - name: Create checksums

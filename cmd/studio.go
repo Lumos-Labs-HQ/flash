@@ -1,5 +1,5 @@
-//go:build plugin_studio || plugin_all || dev
-// +build plugin_studio plugin_all dev
+//go:build plugin_studio || dev
+// +build plugin_studio dev
 
 package cmd
 
