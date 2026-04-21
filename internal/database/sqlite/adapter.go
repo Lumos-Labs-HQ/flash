@@ -9,7 +9,7 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Adapter struct {
@@ -36,9 +36,6 @@ func New() *Adapter {
 
 func (s *Adapter) Connect(ctx context.Context, url string) error {
 	dbPath := strings.TrimPrefix(url, "sqlite://")
-	if !strings.Contains(dbPath, "?") {
-		dbPath += "?cache=shared&_journal_mode=WAL"
-	}
 
 	// Store original path without query parameters
 	s.originalPath = strings.TrimPrefix(url, "sqlite://")
@@ -47,7 +44,7 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 	}
 	s.currentPath = s.originalPath
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite connection: %w", err)
 	}
@@ -56,6 +53,14 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(0)
 	db.SetConnMaxIdleTime(5 * time.Minute)
+
+	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
+		return fmt.Errorf("failed to configure SQLite busy_timeout: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+		// Non-fatal for readonly filesystems or databases that cannot switch mode.
+		_ = err
+	}
 
 	s.db = db
 	return nil
@@ -80,11 +85,8 @@ func (s *Adapter) SwitchDatabase(ctx context.Context, branchFile string) error {
 
 	// Open new database file
 	dbPath := branchFile
-	if !strings.Contains(dbPath, "?") {
-		dbPath += "?cache=shared&_journal_mode=WAL"
-	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to switch to database %s: %w", branchFile, err)
 	}
@@ -93,6 +95,14 @@ func (s *Adapter) SwitchDatabase(ctx context.Context, branchFile string) error {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(0)
 	db.SetConnMaxIdleTime(5 * time.Minute)
+
+	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
+		return fmt.Errorf("failed to configure SQLite busy_timeout: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+		// Non-fatal for readonly filesystems or databases that cannot switch mode.
+		_ = err
+	}
 
 	s.db = db
 	s.currentPath = branchFile
