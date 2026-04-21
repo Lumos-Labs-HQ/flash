@@ -15,7 +15,7 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 func PerformExport(ctx context.Context, adapter database.DatabaseAdapter, exportPath, format string) (string, error) {
@@ -164,7 +164,7 @@ func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data 
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
 	filePath := filepath.Join(exportPath, fmt.Sprintf("export_%s.db", timestamp))
 
-	db, err := sql.Open("sqlite3", filePath)
+	db, err := sql.Open("sqlite", filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create SQLite database: %w", err)
 	}
