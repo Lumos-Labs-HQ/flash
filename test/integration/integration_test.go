@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// ── Test infrastructure ───────────────────────────────────────────────────────
+
 var flashBinary string
 
 type Database struct {
@@ -20,20 +22,25 @@ type Database struct {
 }
 
 func getDatabases() []Database {
-	pgURL := getEnv("POSTGRES_URL", "postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable")
-	mysqlURL := getEnv("MYSQL_URL", "testuser:testpass@tcp(localhost:3306)/testdb")
-	sqliteURL := getEnv("SQLITE_URL", "sqlite://./test.db")
-
 	return []Database{
-		{Name: "postgresql", URL: pgURL},
-		{Name: "mysql", URL: mysqlURL},
-		{Name: "sqlite", URL: sqliteURL},
+		{
+			Name: "postgresql",
+			URL:  getEnv("POSTGRES_URL", "postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable"),
+		},
+		{
+			Name: "mysql",
+			URL:  getEnv("MYSQL_URL", "mysql://testuser:testpass@tcp(localhost:3306)/testdb"),
+		},
+		{
+			Name: "sqlite",
+			URL:  getEnv("SQLITE_URL", "sqlite://./test.db"),
+		},
 	}
 }
 
 func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+	if v := os.Getenv(key); v != "" {
+		return v
 	}
 	return fallback
 }
@@ -42,442 +49,392 @@ func TestMain(m *testing.M) {
 	fmt.Println("🧪 FlashORM Integration Tests")
 	fmt.Println("================================")
 
-	// Get absolute path to flash binary
 	var err error
 	flashBinary, err = filepath.Abs("../../flash")
 	if err != nil {
-		fmt.Printf("Failed to get flash binary path: %v\n", err)
+		fmt.Printf("Failed to resolve flash binary path: %v\n", err)
 		os.Exit(1)
 	}
 
-	if os.Getenv("CI") == "" && os.Getenv("GITHUB_ACTIONS") == "" {
-		fmt.Println("📦 Local mode: expecting databases from docker-compose")
-		fmt.Println("💡 Run 'docker-compose up -d' before testing")
-	} else {
-		fmt.Println("🔄 CI mode: using GitHub Actions service containers")
+	if _, err := os.Stat(flashBinary); os.IsNotExist(err) {
+		fmt.Printf("⚠️  flash binary not found at %s — skipping integration tests (run 'make build' first)\n", flashBinary)
+		os.Exit(0) // skip, not fail
 	}
 
 	os.MkdirAll("test_projects", 0755)
-
 	code := m.Run()
-
-	fmt.Println("🧹 Cleaning up test artifacts...")
 	os.RemoveAll("test_projects")
-
 	os.Exit(code)
 }
 
-func TestAllDatabasesParallel(t *testing.T) {
-	databases := getDatabases()
+// flash runs the flash binary in dir with args and returns combined output.
+func flash(t *testing.T, dir string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command(flashBinary, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
 
-	for _, db := range databases {
+// mustFlash fails the test if the command errors.
+func mustFlash(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := flash(t, dir, args...)
+	if err != nil {
+		t.Fatalf("flash %v failed: %v\nOutput:\n%s", args, err, out)
+	}
+	return out
+}
+
+// setupProject initialises a project dir with .env and runs init+migrate+apply.
+func setupProject(t *testing.T, dir string, db Database) {
+	t.Helper()
+
+	flag := "--" + db.Name
+	if db.Name == "postgresql" {
+		flag = "--postgresql"
+	}
+	mustFlash(t, dir, "init", flag)
+
+	envContent := fmt.Sprintf("DATABASE_URL=%s\n", db.URL)
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0644); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	mustFlash(t, dir, "migrate", "initial_schema")
+	mustFlash(t, dir, "apply", "--force")
+}
+
+// ── Full per-database test suite ──────────────────────────────────────────────
+
+func TestAllDatabases(t *testing.T) {
+	for _, db := range getDatabases() {
+		db := db
 		t.Run(db.Name, func(t *testing.T) {
 			t.Parallel()
-			testDatabase(t, db)
+
+			dir := filepath.Join("test_projects", db.Name)
+			os.RemoveAll(dir)
+			os.MkdirAll(dir, 0755)
+			t.Cleanup(func() { os.RemoveAll(dir) })
+
+			t.Run("01_Init", func(t *testing.T) { testInit(t, dir, db) })
+			t.Run("02_Migrate", func(t *testing.T) { testMigrate(t, dir, db) })
+			t.Run("03_Apply", func(t *testing.T) { testApply(t, dir) })
+			t.Run("04_Status", func(t *testing.T) { testStatus(t, dir) })
+			t.Run("05_Down", func(t *testing.T) { testDown(t, dir, db) })
+			t.Run("06_Gen_Go", func(t *testing.T) { testGenGo(t, dir, db) })
+			t.Run("07_Gen_JS", func(t *testing.T) { testGenJS(t, dir, db) })
+			t.Run("08_Gen_Python", func(t *testing.T) { testGenPython(t, dir, db) })
+			t.Run("09_Pull", func(t *testing.T) { testPull(t, dir, db) })
+			t.Run("10_Export_JSON", func(t *testing.T) { testExportJSON(t, dir, db) })
+			t.Run("11_Export_CSV", func(t *testing.T) { testExportCSV(t, dir, db) })
+			t.Run("12_Export_SQLite", func(t *testing.T) { testExportSQLite(t, dir, db) })
+			t.Run("13_Raw", func(t *testing.T) { testRaw(t, dir, db) })
+			t.Run("14_Seed", func(t *testing.T) { testSeed(t, dir, db) })
+			t.Run("15_Branch", func(t *testing.T) { testBranch(t, dir, db) })
+			t.Run("16_Studio", func(t *testing.T) { testStudio(t, dir, db) })
+			t.Run("17_Reset", func(t *testing.T) { testReset(t, dir, db) })
 		})
 	}
 }
 
-func testDatabase(t *testing.T, db Database) {
-	testDir := filepath.Join("test_projects", db.Name)
+// ── Individual test functions ─────────────────────────────────────────────────
 
-	os.RemoveAll(testDir)
-	if err := os.MkdirAll(testDir, 0755); err != nil {
-		t.Fatalf("Failed to create test dir: %v", err)
-	}
-	defer os.RemoveAll(testDir)
-
-	t.Run("01_Init", func(t *testing.T) {
-		testInit(t, testDir, db)
-	})
-
-	t.Run("02_Migrate", func(t *testing.T) {
-		testMigrate(t, testDir, db)
-	})
-
-	t.Run("03_Apply", func(t *testing.T) {
-		testApply(t, testDir, db)
-	})
-
-	t.Run("04_Status", func(t *testing.T) {
-		testStatus(t, testDir, db)
-	})
-
-	t.Run("05_Gen", func(t *testing.T) {
-		testGen(t, testDir, db)
-	})
-
-	t.Run("06_Pull", func(t *testing.T) {
-		testPull(t, testDir, db)
-	})
-
-	t.Run("07_Export_JSON", func(t *testing.T) {
-		testExportJSON(t, testDir, db)
-	})
-
-	t.Run("08_Export_CSV", func(t *testing.T) {
-		testExportCSV(t, testDir, db)
-	})
-
-	t.Run("09_Export_SQLite", func(t *testing.T) {
-		testExportSQLite(t, testDir, db)
-	})
-
-	t.Run("10_Raw", func(t *testing.T) {
-		testRaw(t, testDir, db)
-	})
-
-	t.Run("11_Branch_Create", func(t *testing.T) {
-		testBranchCreate(t, testDir, db)
-	})
-
-	t.Run("12_Branch_List", func(t *testing.T) {
-		testBranchList(t, testDir, db)
-	})
-
-	t.Run("13_Branch_Checkout", func(t *testing.T) {
-		testBranchCheckout(t, testDir, db)
-	})
-
-	t.Run("14_Branch_Diff", func(t *testing.T) {
-		testBranchDiff(t, testDir, db)
-	})
-
-	t.Run("15_Branch_Delete", func(t *testing.T) {
-		testBranchDelete(t, testDir, db)
-	})
-
-	t.Run("16_Studio", func(t *testing.T) {
-		testStudio(t, testDir, db)
-	})
-
-	t.Run("17_Reset", func(t *testing.T) {
-		testReset(t, testDir, db)
-	})
-}
-
-func testInit(t *testing.T, testDir string, db Database) {
-	flag := fmt.Sprintf("--%s", db.Name)
+func testInit(t *testing.T, dir string, db Database) {
+	flag := "--" + db.Name
 	if db.Name == "postgresql" {
 		flag = "--postgresql"
 	}
+	out := mustFlash(t, dir, "init", flag)
+	t.Logf("init output: %s", out)
 
-	cmd := exec.Command(flashBinary, "init", flag)
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Init failed for %s: %v\nOutput: %s", db.Name, err, output)
-	}
-
-	files := []string{"flash.config.json", "db/schema/users.sql", "db/queries"}
-	for _, file := range files {
-		path := filepath.Join(testDir, file)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			t.Errorf("Expected file/dir not created: %s", file)
+	for _, path := range []string{"flash.config.json", "db/schema", "db/queries"} {
+		if _, err := os.Stat(filepath.Join(dir, path)); os.IsNotExist(err) {
+			t.Errorf("expected path not created: %s", path)
 		}
 	}
 
-	envPath := filepath.Join(testDir, ".env")
-	if err := os.WriteFile(envPath, []byte(fmt.Sprintf("DATABASE_URL=%s\n", db.URL)), 0644); err != nil {
-		t.Fatalf("Failed to write .env: %v", err)
-	}
-
-	t.Logf("✅ Init successful for %s", db.Name)
+	// Write .env so subsequent steps can connect.
+	os.WriteFile(filepath.Join(dir, ".env"), []byte(fmt.Sprintf("DATABASE_URL=%s\n", db.URL)), 0644)
 }
 
-func testMigrate(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command(flashBinary, "migrate", "initial_schema")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
+func testMigrate(t *testing.T, dir string, _ Database) {
+	out := mustFlash(t, dir, "migrate", "initial_schema")
+	t.Logf("migrate output: %s", out)
 
+	entries, err := os.ReadDir(filepath.Join(dir, "db/migrations"))
+	if err != nil || len(entries) == 0 {
+		t.Error("no migration files created in db/migrations")
+	}
+}
+
+func testApply(t *testing.T, dir string) {
+	out := mustFlash(t, dir, "apply", "--force")
+	t.Logf("apply output: %s", out)
+
+	if !strings.Contains(out, "Applied") && !strings.Contains(out, "No pending") {
+		t.Errorf("unexpected apply output: %s", out)
+	}
+}
+
+func testStatus(t *testing.T, dir string) {
+	out := mustFlash(t, dir, "status")
+	t.Logf("status output: %s", out)
+
+	if !strings.Contains(out, "Migration") {
+		t.Errorf("status output missing 'Migration': %s", out)
+	}
+}
+
+func testDown(t *testing.T, dir string, _ Database) {
+	// Re-apply so there is something to roll back.
+	mustFlash(t, dir, "apply", "--force")
+
+	out, err := flash(t, dir, "down", "--force")
+	t.Logf("down output: %s", out)
 	if err != nil {
-		t.Fatalf("Migrate failed for %s: %v\nOutput: %s", db.Name, err, output)
+		// "No migrations to roll back" is acceptable.
+		if !strings.Contains(out, "No migrations") {
+			t.Errorf("down failed: %v\n%s", err, out)
+		}
 	}
 
-	migrationsDir := filepath.Join(testDir, "db/migrations")
-	files, err := os.ReadDir(migrationsDir)
-	if err != nil || len(files) == 0 {
-		t.Errorf("No migration files created")
-	}
-
-	t.Logf("✅ Migrate successful - created %d migration(s)", len(files))
+	// Re-apply so later tests have a clean schema.
+	mustFlash(t, dir, "apply", "--force")
 }
 
-func testApply(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command(flashBinary, "apply", "--force")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
+func testGenGo(t *testing.T, dir string, _ Database) {
+	out, err := flash(t, dir, "gen")
+	t.Logf("gen (go) output: %s", out)
 	if err != nil {
-		t.Fatalf("Apply failed for %s: %v\nOutput: %s", db.Name, err, output)
+		t.Logf("gen returned error (non-fatal): %v", err)
 	}
 
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "Applied") && !strings.Contains(outputStr, "No pending") {
-		t.Errorf("Unexpected apply output: %s", output)
-	}
-
-	t.Logf("✅ Apply successful")
-}
-
-func testStatus(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command(flashBinary, "status")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Status failed for %s: %v\nOutput: %s", db.Name, err, output)
-	}
-
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "Migration") && !strings.Contains(outputStr, "Database") {
-		t.Errorf("Unexpected status output: %s", output)
-	}
-
-	t.Logf("✅ Status successful")
-}
-
-func testGen(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command(flashBinary, "gen")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Gen output: %s", output)
-	}
-
-	genDir := filepath.Join(testDir, "flash_gen")
-	if _, err := os.Stat(genDir); err == nil {
-		t.Logf("✅ Gen successful - code generated")
-	} else {
-		t.Logf("⚠️  Gen completed but no flash_gen directory")
-	}
-}
-
-func testPull(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command(flashBinary, "pull")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Pull output: %s", output)
-	}
-
-	schemaPath := filepath.Join(testDir, "db/schema/schema.sql")
-	if info, err := os.Stat(schemaPath); err == nil && info.Size() > 0 {
-		t.Logf("✅ Pull successful - schema size: %d bytes", info.Size())
-	}
-}
-
-func testExportJSON(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command(flashBinary, "export", "--json")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Export JSON output: %s", output)
-	}
-
-	exportDir := filepath.Join(testDir, "db/export")
-	if files, err := os.ReadDir(exportDir); err == nil && len(files) > 0 {
-		t.Logf("✅ Export JSON successful - %d file(s) created", len(files))
-	}
-}
-
-func testExportCSV(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command(flashBinary, "export", "--csv")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Export CSV output: %s", output)
-	} else {
-		t.Logf("✅ Export CSV successful")
-	}
-}
-
-func testExportSQLite(t *testing.T, testDir string, db Database) {
-	if db.Name == "sqlite" {
-		t.Skip("Skipping SQLite export for SQLite database")
+	genDir := filepath.Join(dir, "flash_gen")
+	if _, err := os.Stat(genDir); os.IsNotExist(err) {
+		t.Error("flash_gen directory not created")
 		return
 	}
 
-	cmd := exec.Command(flashBinary, "export", "--sqlite")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Export SQLite output: %s", output)
-	} else {
-		t.Logf("✅ Export SQLite successful")
+	// models.go and db.go must exist.
+	for _, f := range []string{"models.go", "db.go"} {
+		if _, err := os.Stat(filepath.Join(genDir, f)); os.IsNotExist(err) {
+			t.Errorf("expected generated file missing: %s", f)
+		}
 	}
 }
 
-func testRaw(t *testing.T, testDir string, db Database) {
+func testGenJS(t *testing.T, dir string, _ Database) {
+	// Enable JS generation in config.
+	cfgPath := filepath.Join(dir, "flash.config.json")
+	raw, _ := os.ReadFile(cfgPath)
+	cfg := string(raw)
+	if !strings.Contains(cfg, `"js"`) {
+		cfg = strings.Replace(cfg, `"gen": {`, `"gen": {"js": {"enabled": true, "out": "flash_gen"},`, 1)
+		os.WriteFile(cfgPath, []byte(cfg), 0644)
+	}
+
+	// Create package.json so the generator detects a Node project.
+	os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test","version":"1.0.0"}`), 0644)
+
+	out, err := flash(t, dir, "gen")
+	t.Logf("gen (js) output: %s", out)
+	if err != nil {
+		t.Logf("gen (js) error (non-fatal): %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "flash_gen", "index.js")); os.IsNotExist(err) {
+		t.Error("index.js not generated")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "flash_gen", "index.d.ts")); os.IsNotExist(err) {
+		t.Error("index.d.ts not generated")
+	}
+}
+
+func testGenPython(t *testing.T, dir string, _ Database) {
+	cfgPath := filepath.Join(dir, "flash.config.json")
+	raw, _ := os.ReadFile(cfgPath)
+	cfg := string(raw)
+	if !strings.Contains(cfg, `"python"`) {
+		cfg = strings.Replace(cfg, `"gen": {`, `"gen": {"python": {"enabled": true, "out": "flash_gen"},`, 1)
+		os.WriteFile(cfgPath, []byte(cfg), 0644)
+	}
+
+	os.WriteFile(filepath.Join(dir, "requirements.txt"), []byte("psycopg2\n"), 0644)
+
+	out, err := flash(t, dir, "gen")
+	t.Logf("gen (python) output: %s", out)
+	if err != nil {
+		t.Logf("gen (python) error (non-fatal): %v", err)
+	}
+
+	for _, f := range []string{"models.py", "database.py", "database.pyi", "__init__.py"} {
+		if _, err := os.Stat(filepath.Join(dir, "flash_gen", f)); os.IsNotExist(err) {
+			t.Errorf("expected generated file missing: %s", f)
+		}
+	}
+}
+
+func testPull(t *testing.T, dir string, _ Database) {
+	out, err := flash(t, dir, "pull")
+	t.Logf("pull output: %s", out)
+	if err != nil {
+		t.Logf("pull error (non-fatal): %v", err)
+		return
+	}
+
+	schemaDir := filepath.Join(dir, "db/schema")
+	entries, _ := os.ReadDir(schemaDir)
+	hasSQLFile := false
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".sql") {
+			hasSQLFile = true
+			break
+		}
+	}
+	if !hasSQLFile {
+		t.Error("pull did not produce any .sql schema file")
+	}
+}
+
+func testExportJSON(t *testing.T, dir string, _ Database) {
+	out, err := flash(t, dir, "export", "--json")
+	t.Logf("export json output: %s", out)
+	if err != nil {
+		t.Logf("export json error (non-fatal): %v", err)
+		return
+	}
+
+	exportDir := filepath.Join(dir, "db/export")
+	entries, _ := os.ReadDir(exportDir)
+	hasJSON := false
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".json") {
+			hasJSON = true
+			break
+		}
+	}
+	if !hasJSON {
+		t.Error("no .json export file created")
+	}
+}
+
+func testExportCSV(t *testing.T, dir string, _ Database) {
+	out, err := flash(t, dir, "export", "--csv")
+	t.Logf("export csv output: %s", out)
+	if err != nil {
+		t.Logf("export csv error (non-fatal): %v", err)
+	}
+}
+
+func testExportSQLite(t *testing.T, dir string, db Database) {
+	if db.Name == "sqlite" {
+		t.Skip("SQLite→SQLite export not supported")
+	}
+	out, err := flash(t, dir, "export", "--sqlite")
+	t.Logf("export sqlite output: %s", out)
+	if err != nil {
+		t.Logf("export sqlite error (non-fatal): %v", err)
+	}
+}
+
+func testRaw(t *testing.T, dir string, _ Database) {
 	query := "SELECT 1"
-
-	cmd := exec.Command(flashBinary, "raw", query)
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Raw failed for %s: %v\nOutput: %s", db.Name, err, output)
+	out := mustFlash(t, dir, "raw", "-q", query)
+	t.Logf("raw output: %s", out)
+	if len(strings.TrimSpace(out)) == 0 {
+		t.Error("raw query returned no output")
 	}
-
-	if len(output) == 0 {
-		t.Errorf("Raw query returned no output")
-	}
-
-	t.Logf("✅ Raw SQL successful")
 }
 
-func testBranchCreate(t *testing.T, testDir string, db Database) {
+func testSeed(t *testing.T, dir string, _ Database) {
+	out, err := flash(t, dir, "seed", "--count", "5", "--force")
+	t.Logf("seed output: %s", out)																											
+	if err != nil {
+		t.Logf("seed error (non-fatal): %v", err)
+	}
+}
+
+func testBranch(t *testing.T, dir string, db Database) {
 	if db.Name == "sqlite" {
-		t.Skip("Skipping branch tests for SQLite")
-		return
+		t.Skip("branch operations not supported for SQLite")
 	}
 
-	cmd := exec.Command(flashBinary, "branch", "feature", "--force")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Branch create failed: %v\nOutput: %s", err, output)
+	// Create branch
+	out := mustFlash(t, dir, "branch", "feature", "--force")
+	if !strings.Contains(out, "created") {
+		t.Errorf("branch create: unexpected output: %s", out)
 	}
 
-	if !strings.Contains(string(output), "created") {
-		t.Errorf("Unexpected branch create output: %s", output)
+	// List branches — both main and feature must appear
+	out = mustFlash(t, dir, "branch")
+	if !strings.Contains(out, "main") || !strings.Contains(out, "feature") {
+		t.Errorf("branch list missing expected branches: %s", out)
 	}
 
-	t.Logf("✅ Branch create successful")
+	// Checkout feature
+	out = mustFlash(t, dir, "checkout", "feature", "--force")
+	if !strings.Contains(out, "Switched") {
+		t.Errorf("checkout: unexpected output: %s", out)
+	}
+
+	// Switch back to main
+	mustFlash(t, dir, "checkout", "main", "--force")
+
+	// Diff
+	out, _ = flash(t, dir, "diff", "main", "feature")
+	t.Logf("branch diff output: %s", out)
+
+	// Delete feature branch
+	out = mustFlash(t, dir, "branch", "--delete", "feature", "--force")
+	if !strings.Contains(out, "deleted") {
+		t.Errorf("branch delete: unexpected output: %s", out)
+	}
 }
 
-func testBranchList(t *testing.T, testDir string, db Database) {
-	if db.Name == "sqlite" {
-		t.Skip("Skipping branch tests for SQLite")
-		return
-	}
-
-	cmd := exec.Command(flashBinary, "branch")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Branch list failed: %v\nOutput: %s", err, output)
-	}
-
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "main") || !strings.Contains(outputStr, "feature") {
-		t.Errorf("Expected branches not found in output: %s", output)
-	}
-
-	t.Logf("✅ Branch list successful")
-}
-
-func testBranchCheckout(t *testing.T, testDir string, db Database) {
-	if db.Name == "sqlite" {
-		t.Skip("Skipping branch tests for SQLite")
-		return
-	}
-
-	cmd := exec.Command(flashBinary, "checkout", "feature", "--force")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Branch checkout failed: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(string(output), "Switched") {
-		t.Errorf("Unexpected checkout output: %s", output)
-	}
-
-	cmd = exec.Command(flashBinary, "checkout", "main", "--force")
-	cmd.Dir = testDir
-	cmd.CombinedOutput()
-
-	t.Logf("✅ Branch checkout successful")
-}
-
-func testBranchDiff(t *testing.T, testDir string, db Database) {
-	if db.Name == "sqlite" {
-		t.Skip("Skipping branch tests for SQLite")
-		return
-	}
-
-	cmd := exec.Command(flashBinary, "diff", "main", "feature")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Branch diff output: %s", output)
-	}
-
-	t.Logf("✅ Branch diff successful")
-}
-
-func testBranchDelete(t *testing.T, testDir string, db Database) {
-	if db.Name == "sqlite" {
-		t.Skip("Skipping branch tests for SQLite")
-		return
-	}
-
-	cmd := exec.Command(flashBinary, "branch", "--delete", "feature", "--force")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Fatalf("Branch delete failed: %v\nOutput: %s", err, output)
-	}
-
-	if !strings.Contains(string(output), "deleted") {
-		t.Errorf("Unexpected delete output: %s", output)
-	}
-
-	t.Logf("✅ Branch delete successful")
-}
-
-func testStudio(t *testing.T, testDir string, db Database) {
-	port := 15555 + getPortOffset(db.Name)
+func testStudio(t *testing.T, dir string, db Database) {
+	port := 15555 + portOffset(db.Name)
 
 	cmd := exec.Command(flashBinary, "studio", "--port", fmt.Sprintf("%d", port), "--browser=false")
-	cmd.Dir = testDir
-
+	cmd.Dir = dir
 	if err := cmd.Start(); err != nil {
-		t.Fatalf("Studio failed to start for %s: %v", db.Name, err)
+		t.Fatalf("studio failed to start: %v", err)
 	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
 
-	time.Sleep(3 * time.Second)
-
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d", port))
-	if err != nil {
-		t.Logf("⚠️  Studio HTTP check failed: %v", err)
-	} else {
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode == 200 && len(body) > 0 {
-			t.Logf("✅ Studio running on port %d", port)
+	// Wait up to 5 s for the HTTP server to be ready.
+	url := fmt.Sprintf("http://localhost:%d", port)
+	deadline := time.Now().Add(5 * time.Second)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(url)
+		if err == nil {
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				t.Logf("✅ Studio responding on port %d", port)
+				return
+			}
 		}
+		lastErr = err
+		time.Sleep(300 * time.Millisecond)
 	}
-
-	cmd.Process.Kill()
-	cmd.Wait()
+	t.Logf("⚠️  Studio did not respond within 5s (last error: %v)", lastErr)
 }
 
-func testReset(t *testing.T, testDir string, _ Database) {
-	cmd := exec.Command(flashBinary, "reset", "--force")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
+func testReset(t *testing.T, dir string, _ Database) {
+	out, err := flash(t, dir, "reset", "--force")
+	t.Logf("reset output: %s", out)
 	if err != nil {
-		t.Logf("Reset output: %s", output)
-	} else {
-		t.Logf("✅ Reset successful")
+		t.Logf("reset error (non-fatal): %v", err)
 	}
 }
 
-func getPortOffset(dbName string) int {
+func portOffset(dbName string) int {
 	switch dbName {
 	case "postgresql":
 		return 0

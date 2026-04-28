@@ -1,133 +1,78 @@
 package integration
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestCodeGenerationAllLanguages(t *testing.T) {
-	databases := getDatabases()
-
-	for _, db := range databases {
-		db := db // capture range variable
+// TestCodegen verifies that all three code generators produce the expected files
+// for every supported database provider.
+func TestCodegen(t *testing.T) {
+	for _, db := range getDatabases() {
+		db := db
 		t.Run(db.Name, func(t *testing.T) {
 			t.Parallel()
-			testDir := filepath.Join("test_projects", "codegen_"+db.Name)
-			os.RemoveAll(testDir)
-			os.MkdirAll(testDir, 0755)
-			defer os.RemoveAll(testDir)
 
-			setupCodegenProject(t, testDir, db)
+			dir := filepath.Join("test_projects", "codegen_"+db.Name)
+			os.RemoveAll(dir)
+			os.MkdirAll(dir, 0755)
+			t.Cleanup(func() { os.RemoveAll(dir) })
+
+			setupProject(t, dir, db)
 
 			t.Run("Go", func(t *testing.T) {
-				testGoGeneration(t, testDir, db)
+				out, err := flash(t, dir, "gen")
+				t.Logf("gen go: %s", out)
+				if err != nil {
+					t.Logf("gen go error (non-fatal): %v", err)
+				}
+				for _, f := range []string{"models.go", "db.go"} {
+					if _, err := os.Stat(filepath.Join(dir, "flash_gen", f)); os.IsNotExist(err) {
+						t.Errorf("missing %s", f)
+					}
+				}
 			})
 
 			t.Run("JavaScript", func(t *testing.T) {
-				testJSGeneration(t, testDir, db)
+				// Enable JS gen
+				cfgPath := filepath.Join(dir, "flash.config.json")
+				raw, _ := os.ReadFile(cfgPath)
+				cfg := strings.Replace(string(raw), `"gen": {`, `"gen": {"js": {"enabled": true, "out": "flash_gen"},`, 1)
+				os.WriteFile(cfgPath, []byte(cfg), 0644)
+				os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"t","version":"1.0.0"}`), 0644)
+
+				out, err := flash(t, dir, "gen")
+				t.Logf("gen js: %s", out)
+				if err != nil {
+					t.Logf("gen js error (non-fatal): %v", err)
+				}
+				for _, f := range []string{"index.js", "index.d.ts"} {
+					if _, err := os.Stat(filepath.Join(dir, "flash_gen", f)); os.IsNotExist(err) {
+						t.Errorf("missing %s", f)
+					}
+				}
 			})
 
 			t.Run("Python", func(t *testing.T) {
-				testPythonGeneration(t, testDir, db)
+				cfgPath := filepath.Join(dir, "flash.config.json")
+				raw, _ := os.ReadFile(cfgPath)
+				cfg := strings.Replace(string(raw), `"gen": {`, `"gen": {"python": {"enabled": true, "out": "flash_gen"},`, 1)
+				os.WriteFile(cfgPath, []byte(cfg), 0644)
+				os.WriteFile(filepath.Join(dir, "requirements.txt"), []byte("psycopg2\n"), 0644)
+
+				out, err := flash(t, dir, "gen")
+				t.Logf("gen python: %s", out)
+				if err != nil {
+					t.Logf("gen python error (non-fatal): %v", err)
+				}
+				for _, f := range []string{"models.py", "database.py", "database.pyi", "__init__.py"} {
+					if _, err := os.Stat(filepath.Join(dir, "flash_gen", f)); os.IsNotExist(err) {
+						t.Errorf("missing %s", f)
+					}
+				}
 			})
 		})
-	}
-}
-
-func setupCodegenProject(t *testing.T, testDir string, db Database) {
-	flag := fmt.Sprintf("--%s", db.Name)
-	if db.Name == "postgresql" {
-		flag = "--postgresql"
-	}
-
-	cmd := exec.Command(flashBinary, "init", flag)
-	cmd.Dir = testDir
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-
-	envPath := filepath.Join(testDir, ".env")
-	os.WriteFile(envPath, []byte(fmt.Sprintf("DATABASE_URL=%s\n", db.URL)), 0644)
-
-	cmd = exec.Command(flashBinary, "migrate", "test_schema")
-	cmd.Dir = testDir
-	cmd.Run()
-
-	cmd = exec.Command(flashBinary, "apply", "--force")
-	cmd.Dir = testDir
-	cmd.Run()
-}
-
-func testGoGeneration(t *testing.T, testDir string, db Database) {
-	cmd := exec.Command(flashBinary, "gen")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Go gen output: %s", output)
-	}
-
-	genDir := filepath.Join(testDir, "flash_gen")
-	if _, err := os.Stat(genDir); err == nil {
-		t.Logf("✅ Go code generated")
-	}
-}
-
-func testJSGeneration(t *testing.T, testDir string, db Database) {
-	packageJSON := `{"name": "test", "version": "1.0.0"}`
-	os.WriteFile(filepath.Join(testDir, "package.json"), []byte(packageJSON), 0644)
-
-	configPath := filepath.Join(testDir, "flash.config.json")
-	config, _ := os.ReadFile(configPath)
-	configStr := string(config)
-
-	if !strings.Contains(configStr, `"js"`) {
-		newConfig := strings.Replace(configStr, `"gen": {`, `"gen": {"js": {"enabled": true},`, 1)
-		os.WriteFile(configPath, []byte(newConfig), 0644)
-	}
-
-	cmd := exec.Command(flashBinary, "gen")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("JS gen output: %s", output)
-	}
-
-	genDir := filepath.Join(testDir, "flash_gen")
-	jsFile := filepath.Join(genDir, "database.js")
-	if _, err := os.Stat(jsFile); err == nil {
-		t.Logf("✅ JavaScript code generated")
-	}
-}
-
-func testPythonGeneration(t *testing.T, testDir string, db Database) {
-	os.WriteFile(filepath.Join(testDir, "requirements.txt"), []byte("psycopg2\n"), 0644)
-
-	configPath := filepath.Join(testDir, "flash.config.json")
-	config, _ := os.ReadFile(configPath)
-	configStr := string(config)
-
-	if !strings.Contains(configStr, `"python"`) {
-		newConfig := strings.Replace(configStr, `"gen": {`, `"gen": {"python": {"enabled": true},`, 1)
-		os.WriteFile(configPath, []byte(newConfig), 0644)
-	}
-
-	cmd := exec.Command(flashBinary, "gen")
-	cmd.Dir = testDir
-	output, err := cmd.CombinedOutput()
-
-	if err != nil {
-		t.Logf("Python gen output: %s", output)
-	}
-
-	genDir := filepath.Join(testDir, "flash_gen")
-	pyFile := filepath.Join(genDir, "models.py")
-	if _, err := os.Stat(pyFile); err == nil {
-		t.Logf("✅ Python code generated")
 	}
 }
