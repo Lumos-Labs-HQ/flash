@@ -97,7 +97,13 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 		schemaPath = m.schemaPath
 	}
 
-	diff, err := m.schemaManager.GenerateSchemaDiff(ctx, schemaPath)
+	// Use a local schema snapshot as the source of truth for diffing.
+	// This is the Drizzle-style approach: the snapshot represents the schema
+	// state after the *last generated migration*, so we can diff against it
+	// even if previous migrations haven't been applied to the DB yet.
+	snapshotPath := schema.SnapshotPath(m.migrationsDir)
+
+	diff, err := m.schemaManager.GenerateSchemaDiff(ctx, schemaPath, snapshotPath)
 	if err != nil {
 		return fmt.Errorf("failed to generate schema diff: %w", err)
 	}
@@ -107,27 +113,41 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 
 	var sqlContent string
 	// CRITICAL FIX: Also check for index changes!
-	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && 
+	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
 	   len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
 	   len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
-		sqlContent = m.generateSQLFromDiff(diff, name)
+		sqlContent, _ = m.generateSQLFromDiff(diff, name)
 	}
 
 	if err := os.WriteFile(filepath, []byte(sqlContent), 0644); err != nil {
 		return fmt.Errorf("failed to write migration file: %w", err)
 	}
 
+	// After generating the migration, update the snapshot so the next
+	// generation diffs against this new schema state.
+	targetTables, targetEnums, _, err := m.schemaManager.ParseSchemaPath(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse target schema for snapshot: %w", err)
+	}
+
+	if err := schema.SaveSchemaSnapshot(snapshotPath, targetTables, targetEnums); err != nil {
+		return fmt.Errorf("failed to save schema snapshot: %w", err)
+	}
+
 	fmt.Printf("Generated migration: %s\n", filename)
 	return nil
 }
 
-// generateSQLFromDiff creates SQL from schema differences with both UP and DOWN
-func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) string {
+// generateSQLFromDiff creates SQL from schema differences with both UP and DOWN.
+// It returns the formatted migration file and a bool indicating whether any
+// executable (non-comment) SQL statements were generated.
+func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) (string, bool) {
 	var upStatements []string
 	var downStatements []string
+	hasExecutableSQL := false
 
 	dropTableSQL := func(tableName string) string {
 		switch m.provider {
@@ -155,6 +175,7 @@ BEGIN
     END IF;
 END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		upStatements = append(upStatements, enumSQL)
+		hasExecutableSQL = true
 		// DOWN: Drop enum (escape double quotes for identifier)
 		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", escapedNameDouble)}, downStatements...)
 	}
@@ -164,6 +185,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		sql := m.adapter.GenerateCreateTableSQL(table)
 		if sql != "" {
 			upStatements = append(upStatements, sql)
+			hasExecutableSQL = true
 		}
 
 		for _, index := range table.Indexes {
@@ -173,6 +195,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 			indexSQL := m.adapter.GenerateAddIndexSQL(index)
 			if indexSQL != "" {
 				upStatements = append(upStatements, indexSQL)
+				hasExecutableSQL = true
 			}
 		}
 
@@ -192,6 +215,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 			sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
 			if sql != "" {
 				upStatements = append(upStatements, sql)
+				hasExecutableSQL = true
 				// DOWN: Drop the added column
 				downStatements = append([]string{m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)}, downStatements...)
 			}
@@ -202,8 +226,28 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 			sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)
 			if sql != "" {
 				upStatements = append(upStatements, sql)
+				hasExecutableSQL = true
 				// DOWN: Re-add the dropped column with its original definition
 				downStatements = append([]string{m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)}, downStatements...)
+			}
+		}
+
+		// Modified columns
+		for _, colDiff := range tableDiff.ModifiedColumns {
+			sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
+			if sql != "" {
+				upStatements = append(upStatements, sql)
+				hasExecutableSQL = true
+				// DOWN: Revert to old column definition
+				revertSQL := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.OldColumn, colDiff.NewType)
+				if revertSQL != "" {
+					downStatements = append([]string{revertSQL}, downStatements...)
+				}
+			} else {
+				// Adapter couldn't generate SQL (e.g. SQLite ALTER COLUMN).
+				// Add a comment so the user knows what changed.
+				upStatements = append(upStatements, fmt.Sprintf("-- NOTE: %s on table '%s' (%s)",
+					colDiff.Name, tableDiff.Name, strings.Join(colDiff.Changes, ", ")))
 			}
 		}
 	}
@@ -211,6 +255,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	// UP: Drop tables
 	for _, tableName := range diff.DroppedTables {
 		upStatements = append(upStatements, dropTableSQL(tableName))
+		hasExecutableSQL = true
 		// DOWN: We can't restore dropped tables, add a comment
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped table: %s (data lost)", tableName)}, downStatements...)
 	}
@@ -218,6 +263,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	// UP: Drop enums
 	for _, enumName := range diff.DroppedEnums {
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
+		hasExecutableSQL = true
 		// DOWN: We can't fully restore dropped enums
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
 	}
@@ -226,6 +272,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	// UP: Drop indexes first (before adding new ones that might conflict)
 	for _, index := range diff.DroppedIndexes {
 		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(index))
+		hasExecutableSQL = true
 		// DOWN: We can't fully restore dropped indexes
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", index.Name)}, downStatements...)
 	}
@@ -238,12 +285,13 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		indexSQL := m.adapter.GenerateAddIndexSQL(index)
 		if indexSQL != "" {
 			upStatements = append(upStatements, indexSQL)
+			hasExecutableSQL = true
 			// DOWN: Drop the added index
 			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
 		}
 	}
 
-	return m.formatMigrationFileWithDown(name, upStatements, downStatements)
+	return m.formatMigrationFileWithDown(name, upStatements, downStatements), hasExecutableSQL
 }
 
 func (m *Migrator) generateEmptyMigrationTemplate(name string) string {

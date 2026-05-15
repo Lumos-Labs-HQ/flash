@@ -157,6 +157,11 @@ func (s *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Ti
 
 	rows, err := s.db.QueryContext(ctx, sql, args...)
 	if err != nil {
+		// If the migrations table doesn't exist yet, treat it as "no migrations applied".
+		// This handles fresh databases where _flash_migrations hasn't been created.
+		if strings.Contains(err.Error(), "no such table") {
+			return applied, nil
+		}
 		return nil, err
 	}
 	defer rows.Close()

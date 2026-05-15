@@ -282,10 +282,33 @@ func (sm *SchemaManager) parseSchemaContentWithIndexes(content string) ([]types.
 	return tables, enums, indexes, nil
 }
 
-func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string) (*types.SchemaDiff, error) {
-	currentTables, err := sm.adapter.GetCurrentSchema(ctx)
+func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string, snapshotPath string) (*types.SchemaDiff, error) {
+	var currentTables []types.SchemaTable
+	var currentEnums []types.SchemaEnum
+
+	// 1. Try to load the local schema snapshot first.
+	//    This is the Drizzle-style approach: the snapshot is the source of truth
+	//    for the "current" schema when generating migrations. It stays accurate
+	//    even if previous migrations haven't been applied to the DB yet.
+	snap, err := LoadSchemaSnapshot(snapshotPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current schema: %w", err)
+		// Corrupted snapshot → warn and fall back to DB
+		fmt.Printf("⚠️  Schema snapshot corrupted (%v). Falling back to live database.\n", err)
+	}
+	if snap != nil && err == nil {
+		currentTables = snap.Tables
+		currentEnums = snap.Enums
+	} else {
+		// 2. Snapshot missing or invalid → fall back to live database introspection.
+		currentTables, err = sm.adapter.GetCurrentSchema(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get current schema: %w", err)
+		}
+
+		currentEnums, err = sm.adapter.GetCurrentEnums(ctx)
+		if err != nil {
+			currentEnums = []types.SchemaEnum{}
+		}
 	}
 
 	// Use the new ParseSchemaPath that handles both files and directories
@@ -302,21 +325,15 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	// 	fmt.Printf("  - Index: %s on table %s, columns: %v\n", idx.Name, idx.Table, idx.Columns)
 	// }
 
-	// Get current enums from database
-	currentEnums, err := sm.adapter.GetCurrentEnums(ctx)
-	if err != nil {
-		currentEnums = []types.SchemaEnum{}
-	}
-
 	// Pass both tables and standalone indexes to compareSchemas
 	diff := sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums, targetIndexes)
-	
+
 	// DEBUG: Print diff results
 	// fmt.Printf("DEBUG: Diff has %d new indexes\n", len(diff.NewIndexes))
 	// for _, idx := range diff.NewIndexes {
 	// 	fmt.Printf("  - New index: %s\n", idx.Name)
 	// }
-	
+
 	return diff, nil
 }
 

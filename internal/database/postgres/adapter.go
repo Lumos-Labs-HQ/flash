@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -113,6 +115,12 @@ func (p *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Ti
 		ORDER BY started_at
 	`)
 	if err != nil {
+		// If the migrations table doesn't exist yet, treat it as "no migrations applied".
+		// This handles fresh databases where _flash_migrations hasn't been created.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			return applied, nil
+		}
 		return nil, err
 	}
 	defer rows.Close()

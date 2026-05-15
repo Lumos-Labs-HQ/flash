@@ -148,6 +148,23 @@ func TestValidateTableName_Invalid(t *testing.T) {
 	}
 }
 
+// ── Fresh DB behaviour ──────────────────────────────────────────────────────
+
+func TestSQLiteAdapter_GetAppliedMigrations_FreshDB(t *testing.T) {
+	ctx := context.Background()
+	a := connectMemory(t)
+
+	// On a fresh database, _flash_migrations doesn't exist yet.
+	// GetAppliedMigrations should return an empty map without error.
+	applied, err := a.GetAppliedMigrations(ctx)
+	if err != nil {
+		t.Fatalf("GetAppliedMigrations on fresh DB should not error: %v", err)
+	}
+	if len(applied) != 0 {
+		t.Errorf("expected 0 applied migrations on fresh DB, got %d", len(applied))
+	}
+}
+
 // ── Full lifecycle (in-memory SQLite) ─────────────────────────────────────────
 
 func TestSQLiteAdapter_Lifecycle(t *testing.T) {

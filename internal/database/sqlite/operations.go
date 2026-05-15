@@ -279,6 +279,12 @@ func (s *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN \"%s\";", tableName, columnName)
 }
 
+func (s *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
+	// SQLite does not support ALTER COLUMN TYPE natively.
+	// Column modifications require table recreation, which is too risky to automate here.
+	return ""
+}
+
 func (s *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	unique := ""
 	if index.Unique {

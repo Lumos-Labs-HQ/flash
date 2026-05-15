@@ -3,13 +3,14 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 type Adapter struct {
@@ -179,6 +180,12 @@ func (m *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Ti
 
 	rows, err := m.db.QueryContext(ctx, sql, args...)
 	if err != nil {
+		// If the migrations table doesn't exist yet, treat it as "no migrations applied".
+		// This handles fresh databases where _flash_migrations hasn't been created.
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1146 {
+			return applied, nil
+		}
 		return nil, err
 	}
 	defer rows.Close()

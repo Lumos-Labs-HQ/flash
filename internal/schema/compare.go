@@ -81,10 +81,12 @@ func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable)
 			hasChanges = true
 		} else if !sm.columnsEqual(currentCol, targetCol) {
 			tableDiff.ModifiedColumns = append(tableDiff.ModifiedColumns, types.ColumnDiff{
-				Name:    targetCol.Name,
-				OldType: currentCol.Type,
-				NewType: targetCol.Type,
-				Changes: sm.getColumnChanges(currentCol, targetCol),
+				Name:      targetCol.Name,
+				OldType:   currentCol.Type,
+				NewType:   targetCol.Type,
+				Changes:   sm.getColumnChanges(currentCol, targetCol),
+				OldColumn: currentCol,
+				NewColumn: targetCol,
 			})
 			hasChanges = true
 		}

@@ -93,6 +93,10 @@ func (a *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return ""
 }
 
+func (a *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
+	return ""
+}
+
 func (a *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	return ""
 }

@@ -53,10 +53,12 @@ type TableDiff struct {
 }
 
 type ColumnDiff struct {
-	Name    string
-	OldType string
-	NewType string
-	Changes []string
+	Name      string
+	OldType   string
+	NewType   string
+	Changes   []string
+	OldColumn SchemaColumn
+	NewColumn SchemaColumn
 }
 
 type MigrationConflict struct {

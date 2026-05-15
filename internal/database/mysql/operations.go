@@ -191,6 +191,11 @@ func (m *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN `%s`;", tableName, columnName)
 }
 
+func (m *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
+	// MySQL: MODIFY COLUMN changes type, nullable, default, unique in one statement.
+	return fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s;", tableName, column.Name, m.FormatColumnType(column))
+}
+
 func (m *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	unique := ""
 	if index.Unique {

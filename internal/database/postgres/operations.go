@@ -269,6 +269,15 @@ func (p *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN IF EXISTS \"%s\";", tableName, columnName)
 }
 
+func (p *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
+	// PostgreSQL: ALTER COLUMN TYPE handles the type change.
+	// Other property changes (nullable, default, etc.) are not handled here yet.
+	if column.Type == oldType {
+		return ""
+	}
+	return fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;", tableName, column.Name, column.Type)
+}
+
 func (p *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	unique := ""
 	if index.Unique {
