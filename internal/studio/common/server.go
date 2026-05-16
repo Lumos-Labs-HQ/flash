@@ -42,6 +42,11 @@ func SetupStaticFS(mux *http.ServeMux, studioStaticFS embed.FS) {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Write(commonJS)
 	})
+
+	// Serve CDN assets locally for offline support
+	cdnFS, _ := fs.Sub(CdnFS, "cdn")
+	cdnServer := http.FileServer(http.FS(cdnFS))
+	mux.Handle("GET /cdn/", http.StripPrefix("/cdn/", cdnServer))
 }
 
 // StartServer finds an available port, prints the URL, optionally opens a browser, and starts listening
