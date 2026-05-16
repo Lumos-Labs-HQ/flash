@@ -11,7 +11,7 @@ import (
 
 // inferBSONType infers the MongoDB type from a Go value
 func inferBSONType(value interface{}) string {
-	switch value.(type) {
+	switch v := value.(type) {
 	case string:
 		return "string"
 	case int, int32, int64:
@@ -26,10 +26,18 @@ func inferBSONType(value interface{}) string {
 		return "array"
 	case time.Time:
 		return "date"
+	case primitive.ObjectID:
+		return "ObjectId"
+	case primitive.DateTime:
+		return "date"
+	case primitive.Decimal128:
+		return "decimal"
+	case primitive.Binary:
+		return "binData"
 	case nil:
 		return "null"
 	default:
-		return fmt.Sprintf("%T", value)
+		return fmt.Sprintf("%T", v)
 	}
 }
 
@@ -59,7 +67,8 @@ func convertBSONValue(v interface{}) interface{} {
 	}
 }
 
-// extractBetween extracts a substring between two delimiters
+// extractBetween extracts a substring between two delimiters.
+// DEPRECATED: use extractBetweenBalanced for nested delimiters.
 func extractBetween(str, start, end string) string {
 	startIdx := strings.Index(str, start)
 	if startIdx == -1 {
@@ -75,12 +84,37 @@ func extractBetween(str, start, end string) string {
 	return strings.TrimSpace(str[startIdx:endIdx])
 }
 
+// extractBetweenBalanced extracts a substring between start and end delimiters,
+// respecting nested matching pairs. This correctly handles nested braces/objects.
+func extractBetweenBalanced(str, start, end string) string {
+	startIdx := strings.Index(str, start)
+	if startIdx == -1 {
+		return ""
+	}
+	startIdx += len(start)
+
+	depth := 1
+	for i := startIdx; i < len(str); i++ {
+		if strings.HasPrefix(str[i:], start) {
+			depth++
+			i += len(start) - 1
+		} else if strings.HasPrefix(str[i:], end) {
+			depth--
+			if depth == 0 {
+				return strings.TrimSpace(str[startIdx:i])
+			}
+			i += len(end) - 1
+		}
+	}
+	return ""
+}
+
 // parseObjectID parses a string ID to ObjectID or returns the string as-is
 func parseObjectID(id string) (interface{}, error) {
 	if len(id) == 24 {
 		oid, err := primitive.ObjectIDFromHex(id)
 		if err != nil {
-			return id, nil
+			return nil, fmt.Errorf("invalid ObjectID: %w", err)
 		}
 		return oid, nil
 	}

@@ -98,6 +98,15 @@ func (s *Server) handleGetCollectionData(w http.ResponseWriter, r *http.Request)
 	name := r.PathValue("name")
 	page, _ := strconv.Atoi(common.Query(r, "page", "1"))
 	limit, _ := strconv.Atoi(common.Query(r, "limit", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
 
 	result, err := s.service.GetDocuments(dbName, name, page, limit)
 	if err != nil {
@@ -162,6 +171,15 @@ func (s *Server) handleGetDocuments(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(common.Query(r, "page", "1"))
 	limit, _ := strconv.Atoi(common.Query(r, "limit", "50"))
 	filterStr := common.Query(r, "filter", "")
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 50
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
 
 	var filter bson.M
 	if filterStr != "" {
@@ -395,6 +413,9 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 
 	if req.Limit == 0 {
 		req.Limit = 100
+	}
+	if req.Limit > 1000 {
+		req.Limit = 1000
 	}
 
 	result, err := s.service.Query(name, filter, req.Limit)

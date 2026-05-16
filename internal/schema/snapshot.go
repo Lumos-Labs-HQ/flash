@@ -16,10 +16,11 @@ import (
 // against the *last known schema* instead of the live DB, which solves the
 // "unapplied migration" edge case cleanly.
 type SchemaSnapshot struct {
-	Version     string             `json:"version"`
-	GeneratedAt time.Time          `json:"generated_at"`
+	Version     string              `json:"version"`
+	GeneratedAt time.Time           `json:"generated_at"`
 	Tables      []types.SchemaTable `json:"tables"`
 	Enums       []types.SchemaEnum  `json:"enums"`
+	Indexes     []types.SchemaIndex `json:"indexes"`
 }
 
 const snapshotVersion = "1"
@@ -56,7 +57,7 @@ func LoadSchemaSnapshot(path string) (*SchemaSnapshot, error) {
 }
 
 // SaveSchemaSnapshot writes the given schema state to disk.
-func SaveSchemaSnapshot(path string, tables []types.SchemaTable, enums []types.SchemaEnum) error {
+func SaveSchemaSnapshot(path string, tables []types.SchemaTable, enums []types.SchemaEnum, indexes ...[]types.SchemaIndex) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create snapshot directory: %w", err)
@@ -67,6 +68,9 @@ func SaveSchemaSnapshot(path string, tables []types.SchemaTable, enums []types.S
 		GeneratedAt: time.Now().UTC(),
 		Tables:      tables,
 		Enums:       enums,
+	}
+	if len(indexes) > 0 {
+		snap.Indexes = indexes[0]
 	}
 
 	data, err := json.MarshalIndent(snap, "", "  ")

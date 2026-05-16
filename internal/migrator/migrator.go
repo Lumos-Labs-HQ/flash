@@ -128,12 +128,14 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 
 	// After generating the migration, update the snapshot so the next
 	// generation diffs against this new schema state.
-	targetTables, targetEnums, _, err := m.schemaManager.ParseSchemaPath(schemaPath)
+	targetTables, targetEnums, targetIndexes, err := m.schemaManager.ParseSchemaPath(schemaPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse target schema for snapshot: %w", err)
 	}
 
-	if err := schema.SaveSchemaSnapshot(snapshotPath, targetTables, targetEnums); err != nil {
+	// Include standalone indexes in the snapshot so they are not regenerated
+	// on every subsequent migration.
+	if err := schema.SaveSchemaSnapshot(snapshotPath, targetTables, targetEnums, targetIndexes); err != nil {
 		return fmt.Errorf("failed to save schema snapshot: %w", err)
 	}
 
@@ -168,16 +170,27 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) (str
 		// Escape the enum name for both single-quoted string and double-quoted identifier
 		escapedNameSingle := strings.ReplaceAll(enum.Name, "'", "''")
 		escapedNameDouble := strings.ReplaceAll(enum.Name, "\"", "\"\"")
-		enumSQL := fmt.Sprintf(`DO $$
+
+		// PostgreSQL-specific enum creation with existence guard
+		if m.provider == "postgresql" || m.provider == "postgres" {
+			enumSQL := fmt.Sprintf(`DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '%s') THEN
         CREATE TYPE "%s" AS ENUM (%s);
     END IF;
 END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
-		upStatements = append(upStatements, enumSQL)
-		hasExecutableSQL = true
-		// DOWN: Drop enum (escape double quotes for identifier)
-		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", escapedNameDouble)}, downStatements...)
+			upStatements = append(upStatements, enumSQL)
+			hasExecutableSQL = true
+			// DOWN: Drop enum (escape double quotes for identifier)
+			downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", escapedNameDouble)}, downStatements...)
+		} else if m.provider == "mysql" {
+			// MySQL enums are inline on columns; standalone enum changes should not generate SQL here
+			// because they are handled as column type changes in ModifiedTables.
+			continue
+		} else if m.provider == "sqlite" || m.provider == "sqlite3" {
+			// SQLite does not support user-defined types; skip enum SQL generation
+			continue
+		}
 	}
 
 	// UP: Create new tables and their indexes

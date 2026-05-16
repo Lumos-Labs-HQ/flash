@@ -19,6 +19,7 @@ type Generator struct {
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
 	cache        *gencommon.GenerationCache
+	enumTypeMap  map[string]string // MySQL inline ENUM type -> generated enum name
 }
 
 func New(cfg *config.Config) *Generator {
@@ -41,6 +42,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
+	g.enumTypeMap = g.extractInlineEnums()
 
 	// Compute current checksums for incremental generation
 	schemaHash, err := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
@@ -108,8 +110,11 @@ func (g *Generator) computeConfigChecksum() string {
 }
 
 func (g *Generator) generateModels() error {
-	// Extract inline MySQL ENUMs and add them to schema.Enums
-	enumTypeMap := g.extractInlineEnums()
+	// Ensure inline MySQL ENUMs are extracted (idempotent if already done)
+	if g.enumTypeMap == nil {
+		g.enumTypeMap = g.extractInlineEnums()
+	}
+	enumTypeMap := g.enumTypeMap
 
 	needsTime := false
 	needsSQL := false
@@ -417,7 +422,20 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	code.WriteString(") {\n")
 
 	cleanSQL := strings.TrimSpace(query.SQL)
-	code.WriteString(fmt.Sprintf("\tconst query = `%s`\n", cleanSQL))
+	// Handle backticks in SQL by splitting the raw string literal
+	if strings.Contains(cleanSQL, "`") {
+		parts := strings.Split(cleanSQL, "`")
+		code.WriteString("\tconst query = `")
+		for i, part := range parts {
+			if i > 0 {
+				code.WriteString("` + \"`\" + `")
+			}
+			code.WriteString(part)
+		}
+		code.WriteString("`\n")
+	} else {
+		code.WriteString(fmt.Sprintf("\tconst query = `%s`\n", cleanSQL))
+	}
 
 	isHotQuery := len(query.Params) <= 3 && !strings.Contains(strings.ToUpper(query.SQL), "UNION")
 	stmtKey := fmt.Sprintf("%s_stmt", methodName)
@@ -718,6 +736,15 @@ func (g *Generator) mapParamTypeToGo(paramType string) string {
 }
 
 func (g *Generator) mapColumnTypeToGo(colType string, nullable bool) string {
+	if g.enumTypeMap != nil {
+		if enumName, ok := g.enumTypeMap[strings.ToLower(colType)]; ok {
+			typeName := utils.ToPascalCase(enumName)
+			if nullable {
+				return "sql.NullString"
+			}
+			return typeName
+		}
+	}
 	return g.mapSQLTypeToGo(colType, nullable)
 }
 

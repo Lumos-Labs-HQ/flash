@@ -42,7 +42,8 @@ func (g *Generator) Generate() error {
 
 	// Compute checksums for incremental generation
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
-	configHash := fmt.Sprintf("%x", []byte(g.Config.Gen.Python.Out))
+	configStr := fmt.Sprintf("%s|%s|%v", g.Config.Database.Provider, g.Config.Gen.Python.Out, g.Config.Gen.Python.Async)
+	configHash := fmt.Sprintf("%x", []byte(configStr))
 	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
 
 	queries, err := g.queryParser.Parse(schema)
