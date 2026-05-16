@@ -233,21 +233,30 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		}
 
 		// Modified columns
-		for _, colDiff := range tableDiff.ModifiedColumns {
-			sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
-			if sql != "" {
-				upStatements = append(upStatements, sql)
-				hasExecutableSQL = true
-				// DOWN: Revert to old column definition
-				revertSQL := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.OldColumn, colDiff.NewType)
-				if revertSQL != "" {
-					downStatements = append([]string{revertSQL}, downStatements...)
+		if len(tableDiff.ModifiedColumns) > 0 {
+			if m.provider == "sqlite" || m.provider == "sqlite3" {
+				// SQLite does not support ALTER COLUMN. Recreate the table.
+				recreateSQL := m.generateSQLiteTableRecreateSQL(tableDiff.OldTable, tableDiff.NewTable)
+				if recreateSQL != "" {
+					upStatements = append(upStatements, recreateSQL)
+					hasExecutableSQL = true
+					// DOWN: reverse recreation
+					downRecreate := m.generateSQLiteTableRecreateSQL(tableDiff.NewTable, tableDiff.OldTable)
+					downStatements = append([]string{downRecreate}, downStatements...)
 				}
 			} else {
-				// Adapter couldn't generate SQL (e.g. SQLite ALTER COLUMN).
-				// Add a comment so the user knows what changed.
-				upStatements = append(upStatements, fmt.Sprintf("-- NOTE: %s on table '%s' (%s)",
-					colDiff.Name, tableDiff.Name, strings.Join(colDiff.Changes, ", ")))
+				for _, colDiff := range tableDiff.ModifiedColumns {
+					sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
+					if sql != "" {
+						upStatements = append(upStatements, sql)
+						hasExecutableSQL = true
+						// DOWN: Revert to old column definition
+						revertSQL := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.OldColumn, colDiff.NewType)
+						if revertSQL != "" {
+							downStatements = append([]string{revertSQL}, downStatements...)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -348,6 +357,67 @@ func (m *Migrator) formatMigrationFileWithDown(name string, upStatements []strin
 
 func (m *Migrator) PullSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	return m.adapter.GetCurrentSchema(ctx)
+}
+
+// generateSQLiteTableRecreateSQL generates the multi-statement SQL required to
+// recreate a SQLite table when columns are modified (since SQLite does not
+// support ALTER COLUMN). The pattern is:
+//   1. Create a temporary table with the new schema
+//   2. Copy data from old to new (matching columns only)
+//   3. Drop the old table
+//   4. Rename the temporary table
+//   5. Recreate indexes
+func (m *Migrator) generateSQLiteTableRecreateSQL(oldTable, newTable types.SchemaTable) string {
+	var parts []string
+
+	parts = append(parts, "PRAGMA foreign_keys=OFF;")
+
+	// Create temporary table with the desired schema
+	tempTable := newTable
+	tempTable.Name = newTable.Name + "_new"
+	tempTable.Indexes = nil // Indexes added after rename
+	createSQL := m.adapter.GenerateCreateTableSQL(tempTable)
+	// Replace "IF NOT EXISTS" with plain CREATE for clarity
+	createSQL = strings.Replace(createSQL, "CREATE TABLE IF NOT EXISTS", "CREATE TABLE", 1)
+	parts = append(parts, createSQL)
+
+	// Build list of columns common to both tables for the INSERT
+	oldColMap := make(map[string]bool, len(oldTable.Columns))
+	for _, col := range oldTable.Columns {
+		oldColMap[col.Name] = true
+	}
+	var commonCols []string
+	for _, col := range newTable.Columns {
+		if oldColMap[col.Name] {
+			commonCols = append(commonCols, fmt.Sprintf(`"%s"`, col.Name))
+		}
+	}
+
+	if len(commonCols) > 0 {
+		cols := strings.Join(commonCols, ", ")
+		parts = append(parts, fmt.Sprintf(
+			`INSERT INTO "%s" (%s) SELECT %s FROM "%s";`,
+			tempTable.Name, cols, cols, oldTable.Name,
+		))
+	}
+
+	parts = append(parts, fmt.Sprintf(`DROP TABLE "%s";`, oldTable.Name))
+	parts = append(parts, fmt.Sprintf(`ALTER TABLE "%s" RENAME TO "%s";`, tempTable.Name, newTable.Name))
+
+	// Recreate standalone indexes
+	for _, index := range newTable.Indexes {
+		if strings.HasPrefix(index.Name, "sqlite_") {
+			continue
+		}
+		idxSQL := m.adapter.GenerateAddIndexSQL(index)
+		if idxSQL != "" {
+			parts = append(parts, idxSQL)
+		}
+	}
+
+	parts = append(parts, "PRAGMA foreign_keys=ON;")
+
+	return strings.Join(parts, "\n")
 }
 
 func (m *Migrator) GenerateEmptyMigration(ctx context.Context, name string) error {

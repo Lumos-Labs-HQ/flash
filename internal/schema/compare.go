@@ -71,7 +71,11 @@ func (sm *SchemaManager) tableMapsToSlice(targetMap map[string]types.SchemaTable
 }
 
 func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable) *types.TableDiff {
-	tableDiff := &types.TableDiff{Name: target.Name}
+	tableDiff := &types.TableDiff{
+		Name:     target.Name,
+		OldTable: current,
+		NewTable: target,
+	}
 	currentCols, targetCols := sm.buildColumnMaps(current.Columns, target.Columns)
 	hasChanges := false
 
