@@ -150,7 +150,7 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 		return fmt.Errorf("failed to read migration file: %w", err)
 	}
 
-	checksum := fmt.Sprintf("%x", len(content))
+	checksum := utils.ComputeChecksum(content)
 
 	// Extract only the UP section from the migration
 	upSQL := extractUpSQL(string(content))
@@ -163,8 +163,10 @@ func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration typ
 	return nil
 }
 
-// extractUpSQL extracts only the UP migration SQL from a migration file
-// Migration files may contain both -- +migrate Up and -- +migrate Down sections
+// extractUpSQL extracts only the UP migration SQL from a migration file.
+// Migration files may contain both -- +migrate Up and -- +migrate Down sections.
+// The marker logic is intentionally strict: the line must start with "--" and
+// contain "+migrate Up" (case-insensitive) to be recognized.
 func extractUpSQL(content string) string {
 	lines := strings.Split(content, "\n")
 	var upLines []string
@@ -172,23 +174,20 @@ func extractUpSQL(content string) string {
 	hasMarkers := false
 
 	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		lowerLine := strings.ToLower(trimmedLine)
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
 
-		// Check for +migrate Up marker
-		if strings.Contains(lowerLine, "+migrate up") {
+		// Strict marker detection: line must start with "--" and contain the migrate directive
+		if strings.HasPrefix(trimmed, "--") && strings.Contains(lower, "+migrate up") {
 			inUpSection = true
 			hasMarkers = true
 			continue
 		}
-
-		// Check for +migrate Down marker - stop collecting
-		if strings.Contains(lowerLine, "+migrate down") {
+		if strings.HasPrefix(trimmed, "--") && strings.Contains(lower, "+migrate down") {
 			inUpSection = false
 			continue
 		}
 
-		// If we're in the UP section, collect the line
 		if inUpSection {
 			upLines = append(upLines, line)
 		}
@@ -291,7 +290,9 @@ func (m *Migrator) Reset(ctx context.Context, force bool) error {
 
 	// MySQL requires disabling foreign key checks to drop tables with FK constraints
 	if m.provider == "mysql" {
-		m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 0")
+		if err := m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 0"); err != nil {
+			fmt.Printf("Warning: Failed to disable FK checks: %v\n", err)
+		}
 	}
 
 	for _, table := range tables {
@@ -571,12 +572,13 @@ func (m *Migrator) extractDownSQL(filePath string) string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Check for migrate markers
-		if strings.HasPrefix(trimmed, "-- +migrate Down") {
+		// Check for migrate markers (case-insensitive)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(trimmed, "--") && strings.Contains(lower, "+migrate down") {
 			inDown = true
 			continue
 		}
-		if strings.HasPrefix(trimmed, "-- +migrate Up") {
+		if strings.HasPrefix(trimmed, "--") && strings.Contains(lower, "+migrate up") {
 			inDown = false
 			continue
 		}

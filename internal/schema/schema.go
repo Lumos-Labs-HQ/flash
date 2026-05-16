@@ -285,6 +285,7 @@ func (sm *SchemaManager) parseSchemaContentWithIndexes(content string) ([]types.
 func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string, snapshotPath string) (*types.SchemaDiff, error) {
 	var currentTables []types.SchemaTable
 	var currentEnums []types.SchemaEnum
+	var currentIndexes []types.SchemaIndex
 
 	// 1. Try to load the local schema snapshot first.
 	//    This is the Drizzle-style approach: the snapshot is the source of truth
@@ -298,6 +299,7 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	if snap != nil && err == nil {
 		currentTables = snap.Tables
 		currentEnums = snap.Enums
+		currentIndexes = snap.Indexes
 	} else {
 		// 2. Snapshot missing or invalid → fall back to live database introspection.
 		currentTables, err = sm.adapter.GetCurrentSchema(ctx)
@@ -308,6 +310,10 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 		currentEnums, err = sm.adapter.GetCurrentEnums(ctx)
 		if err != nil {
 			currentEnums = []types.SchemaEnum{}
+		}
+		// Extract indexes from current tables since DB introspection returns them inline
+		for _, table := range currentTables {
+			currentIndexes = append(currentIndexes, table.Indexes...)
 		}
 	}
 

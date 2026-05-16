@@ -201,6 +201,17 @@ func (s *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string)
 }
 
 func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
+	// SQLite does not allow PRAGMA foreign_keys inside a transaction.
+	// Detect and extract PRAGMA foreign_keys statements to run outside the transaction.
+	pragmaOff, pragmaOn, cleanedSQL := extractForeignKeyPragmas(migrationSQL)
+
+	// Execute PRAGMA foreign_keys=OFF before the transaction if present
+	if pragmaOff != "" {
+		if _, err := s.db.ExecContext(ctx, pragmaOff); err != nil {
+			return fmt.Errorf("failed to execute PRAGMA foreign_keys=OFF: %w", err)
+		}
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -216,9 +227,9 @@ func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 		return fmt.Errorf("failed to record migration start: %w", err)
 	}
 
-	// Execute the migration SQL
-	if migrationSQL != "" {
-		statements := common.ParseSQLStatements(migrationSQL)
+	// Execute the migration SQL (without PRAGMA statements)
+	if cleanedSQL != "" {
+		statements := common.ParseSQLStatements(cleanedSQL)
 		for i, stmt := range statements {
 			stmt = strings.TrimSpace(stmt)
 			if stmt == "" {
@@ -240,7 +251,38 @@ func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 		return fmt.Errorf("failed to update migration finish time: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Execute PRAGMA foreign_keys=ON after the transaction if present
+	if pragmaOn != "" {
+		if _, err := s.db.ExecContext(ctx, pragmaOn); err != nil {
+			return fmt.Errorf("failed to execute PRAGMA foreign_keys=ON: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// extractForeignKeyPragmas scans migration SQL for PRAGMA foreign_keys statements
+// and returns them separately from the cleaned SQL.
+func extractForeignKeyPragmas(sql string) (off string, on string, cleaned string) {
+	lines := strings.Split(sql, "\n")
+	var cleanedLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.ToLower(line))
+		if strings.HasPrefix(trimmed, "pragma foreign_keys=off") || strings.HasPrefix(trimmed, "pragma foreign_keys = off") {
+			off = strings.TrimSpace(line)
+			continue
+		}
+		if strings.HasPrefix(trimmed, "pragma foreign_keys=on") || strings.HasPrefix(trimmed, "pragma foreign_keys = on") {
+			on = strings.TrimSpace(line)
+			continue
+		}
+		cleanedLines = append(cleanedLines, line)
+	}
+	return off, on, strings.Join(cleanedLines, "\n")
 }
 
 func (s *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {

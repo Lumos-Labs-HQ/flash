@@ -795,7 +795,9 @@ async function createIndex() {
 
     try {
         const keys = JSON.parse(keysStr);
-        const res = await fetch(`/api/collections/${currentCollection}/indexes`, {
+        const url = new URL(`/api/collections/${currentCollection}/indexes`, window.location.origin);
+        if (currentDatabase) url.searchParams.append('database', currentDatabase);
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keys, unique })
@@ -817,7 +819,9 @@ async function dropIndex(name) {
     if (!confirm(`Drop index "${name}"?`)) return;
 
     try {
-        const res = await fetch(`/api/collections/${currentCollection}/indexes/${name}`, {
+        const url = new URL(`/api/collections/${currentCollection}/indexes/${name}`, window.location.origin);
+        if (currentDatabase) url.searchParams.append('database', currentDatabase);
+        const res = await fetch(url, {
             method: 'DELETE'
         });
 
@@ -977,7 +981,9 @@ async function runAggregation() {
 
         console.log('Running pipeline:', pipeline);
 
-        const res = await fetch(`/api/collections/${currentCollection}/aggregate`, {
+        const url = new URL(`/api/collections/${currentCollection}/aggregate`, window.location.origin);
+        if (currentDatabase) url.searchParams.append('database', currentDatabase);
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(pipeline)

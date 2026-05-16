@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/fs"
 	"os"
@@ -175,4 +176,9 @@ func FilterPendingMigrations(migrations []types.Migration, applied map[string]*t
 		}
 	}
 	return pending
+}
+
+// ComputeChecksum computes a SHA256 checksum of the given content.
+func ComputeChecksum(content []byte) string {
+	return fmt.Sprintf("%x", sha256.Sum256(content))
 }

@@ -207,15 +207,9 @@ async function runQuery() {
     query = query.trim();
     if (!query) return;
 
-    const cleanQuery = query.split('\n')
-        .filter(line => !line.trim().startsWith('--'))
-        .join('\n')
-        .trim();
-
-    if (!cleanQuery) {
-        displayError('No executable SQL found. Remove or bypass comments.');
-        return;
-    }
+    // IMPORTANT: We send the user's query EXACTLY as written.
+    // The backend is responsible for parsing multi-statement SQL if needed.
+    const cleanQuery = query;
 
     // Flash the lines being executed
     highlightExecutedLines(fromLine, toLine);

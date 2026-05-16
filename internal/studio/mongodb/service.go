@@ -123,10 +123,18 @@ func (s *Service) GetDatabases() ([]DatabaseInfo, error) {
 			sizeOnDisk = 0
 		}
 
+		var name string
+		if n, ok := db["name"].(string); ok {
+			name = n
+		}
+		var empty bool
+		if e, ok := db["empty"].(bool); ok {
+			empty = e
+		}
 		databases[i] = DatabaseInfo{
-			Name:       db["name"].(string),
+			Name:       name,
 			SizeOnDisk: sizeOnDisk,
-			Empty:      db["empty"].(bool),
+			Empty:      empty,
 		}
 	}
 
@@ -438,10 +446,19 @@ func (s *Service) GetStats() (*Stats, error) {
 	if dbName, ok := stats["db"].(string); ok {
 		result.DatabaseName = dbName
 	}
-	if dataSize, ok := stats["dataSize"].(int64); ok {
+	// MongoDB dbStats returns numeric values as float64 or int, not int64
+	if dataSize, ok := stats["dataSize"].(float64); ok {
+		result.TotalSize = int64(dataSize)
+	} else if dataSize, ok := stats["dataSize"].(int); ok {
+		result.TotalSize = int64(dataSize)
+	} else if dataSize, ok := stats["dataSize"].(int64); ok {
 		result.TotalSize = dataSize
 	}
-	if objects, ok := stats["objects"].(int64); ok {
+	if objects, ok := stats["objects"].(float64); ok {
+		result.TotalDocuments = int64(objects)
+	} else if objects, ok := stats["objects"].(int); ok {
+		result.TotalDocuments = int64(objects)
+	} else if objects, ok := stats["objects"].(int64); ok {
 		result.TotalDocuments = objects
 	}
 
@@ -467,8 +484,12 @@ func (s *Service) processDocumentTypes(doc map[string]interface{}) {
 	for key, value := range doc {
 		switch v := value.(type) {
 		case string:
-			if objectID, err := primitive.ObjectIDFromHex(v); err == nil && len(v) == 24 {
-				doc[key] = objectID
+			// Try ObjectID first, then RFC3339 date; use else-if to avoid overwriting
+			if len(v) == 24 {
+				if objectID, err := primitive.ObjectIDFromHex(v); err == nil {
+					doc[key] = objectID
+					continue
+				}
 			}
 			if t, err := time.Parse(time.RFC3339, v); err == nil {
 				doc[key] = primitive.NewDateTimeFromTime(t)

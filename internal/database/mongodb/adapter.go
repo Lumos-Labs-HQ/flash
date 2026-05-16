@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,6 +16,7 @@ type Adapter struct {
 	client   *mongo.Client
 	database *mongo.Database
 	dbName   string
+	mu       sync.RWMutex
 }
 
 func New() *Adapter {
@@ -74,11 +76,12 @@ func (a *Adapter) Ping(ctx context.Context) error {
 }
 
 func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
-	if a.database == nil {
+	db := a.currentDB()
+	if db == nil {
 		return nil, fmt.Errorf("database not connected")
 	}
 
-	names, err := a.database.ListCollectionNames(ctx, bson.M{})
+	names, err := db.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list collections: %w", err)
 	}
@@ -94,7 +97,7 @@ func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 }
 
 func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
-	coll := a.database.Collection(tableName)
+	coll := a.currentDB().Collection(tableName)
 
 	cursor, err := coll.Find(ctx, bson.M{}, options.Find().SetLimit(100))
 	if err != nil {
@@ -127,6 +130,9 @@ func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 			}
 		}
 	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error while reading columns: %w", err)
+	}
 
 	for field, count := range fieldCount {
 		fieldNullable[field] = count < totalDocs
@@ -155,7 +161,7 @@ func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 }
 
 func (a *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
-	coll := a.database.Collection(tableName)
+	coll := a.currentDB().Collection(tableName)
 	cursor, err := coll.Find(ctx, bson.M{}, options.Find().SetLimit(1000))
 	if err != nil {
 		return nil, err
@@ -174,11 +180,14 @@ func (a *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[str
 		}
 		results = append(results, converted)
 	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error while reading table data: %w", err)
+	}
 	return results, nil
 }
 
 func (a *Adapter) GetTableRowCount(ctx context.Context, tableName string) (int, error) {
-	coll := a.database.Collection(tableName)
+	coll := a.currentDB().Collection(tableName)
 	count, err := coll.CountDocuments(ctx, bson.M{})
 	return int(count), err
 }
@@ -205,10 +214,10 @@ func (a *Adapter) ExecuteMongoQuery(ctx context.Context, query string) ([]map[st
 	collectionName := parts[0]
 	operation := parts[1]
 
-	coll := a.database.Collection(collectionName)
+	coll := a.currentDB().Collection(collectionName)
 
 	if strings.HasPrefix(operation, "find(") {
-		filterStr := extractBetween(operation, "find(", ")")
+		filterStr := extractBetweenBalanced(operation, "find(", ")")
 		if filterStr == "" {
 			filterStr = "{}"
 		}
@@ -236,6 +245,9 @@ func (a *Adapter) ExecuteMongoQuery(ctx context.Context, query string) ([]map[st
 			}
 			results = append(results, converted)
 		}
+		if err := cursor.Err(); err != nil {
+			return nil, fmt.Errorf("cursor error: %w", err)
+		}
 		return results, nil
 	}
 
@@ -252,7 +264,7 @@ func (a *Adapter) ExecuteMongoQuery(ctx context.Context, query string) ([]map[st
 
 // ListCollections returns all collection names
 func (a *Adapter) ListCollections(ctx context.Context) ([]string, error) {
-	return a.ListCollectionsInDB(ctx, a.dbName)
+	return a.ListCollectionsInDB(ctx, a.currentDBName())
 }
 
 func (a *Adapter) ListCollectionsInDB(ctx context.Context, database string) ([]string, error) {
@@ -274,7 +286,7 @@ func (a *Adapter) ListCollectionsInDB(ctx context.Context, database string) ([]s
 // GetCollectionStats returns statistics for a collection
 func (a *Adapter) GetCollectionStats(ctx context.Context, collection string) (map[string]interface{}, error) {
 	var result bson.M
-	err := a.database.RunCommand(ctx, bson.D{{Key: "collStats", Value: collection}}).Decode(&result)
+	err := a.currentDB().RunCommand(ctx, bson.D{{Key: "collStats", Value: collection}}).Decode(&result)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +300,7 @@ func (a *Adapter) GetCollectionStats(ctx context.Context, collection string) (ma
 
 // FindDocuments finds documents in a collection with pagination
 func (a *Adapter) FindDocuments(ctx context.Context, collection string, filter bson.M, skip, limit int64) ([]map[string]interface{}, error) {
-	return a.FindDocumentsInDB(ctx, a.dbName, collection, filter, skip, limit)
+	return a.FindDocumentsInDB(ctx, a.currentDBName(), collection, filter, skip, limit)
 }
 
 // FindDocumentsInDB finds documents in a specific database and collection with pagination
@@ -315,12 +327,15 @@ func (a *Adapter) FindDocumentsInDB(ctx context.Context, database, collection st
 		}
 		results = append(results, converted)
 	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
 	return results, nil
 }
 
 // CountDocuments counts documents in a collection
 func (a *Adapter) CountDocuments(ctx context.Context, collection string, filter bson.M) (int64, error) {
-	return a.CountDocumentsInDB(ctx, a.dbName, collection, filter)
+	return a.CountDocumentsInDB(ctx, a.currentDBName(), collection, filter)
 }
 
 // CountDocumentsInDB counts documents in a specific database and collection
@@ -333,7 +348,7 @@ func (a *Adapter) CountDocumentsInDB(ctx context.Context, database, collection s
 
 // InsertDocument inserts a document into a collection
 func (a *Adapter) InsertDocument(ctx context.Context, collection string, document interface{}) (string, error) {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	result, err := coll.InsertOne(ctx, document)
 	if err != nil {
 		return "", err
@@ -343,7 +358,7 @@ func (a *Adapter) InsertDocument(ctx context.Context, collection string, documen
 
 // UpdateDocument updates a document in a collection
 func (a *Adapter) UpdateDocument(ctx context.Context, collection string, id string, update interface{}) error {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	objectID, err := parseObjectID(id)
 	if err != nil {
 		return err
@@ -354,7 +369,7 @@ func (a *Adapter) UpdateDocument(ctx context.Context, collection string, id stri
 
 // DeleteDocument deletes a document from a collection
 func (a *Adapter) DeleteDocument(ctx context.Context, collection string, id string) error {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	objectID, err := parseObjectID(id)
 	if err != nil {
 		return err
@@ -365,7 +380,7 @@ func (a *Adapter) DeleteDocument(ctx context.Context, collection string, id stri
 
 // BulkDeleteDocuments deletes multiple documents by IDs using $in operator
 func (a *Adapter) BulkDeleteDocuments(ctx context.Context, collection string, ids []string) (int64, error) {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 
 	objectIDs := make([]interface{}, 0, len(ids))
 	for _, id := range ids {
@@ -384,18 +399,22 @@ func (a *Adapter) BulkDeleteDocuments(ctx context.Context, collection string, id
 }
 
 // CreateCollection creates a new collection
-func (a *Adapter) CreateCollection(ctx context.Context, name string, options interface{}) error {
-	return a.database.CreateCollection(ctx, name)
+func (a *Adapter) CreateCollection(ctx context.Context, name string, opts interface{}) error {
+	var createOpts []*options.CreateCollectionOptions
+	if o, ok := opts.(*options.CreateCollectionOptions); ok && o != nil {
+		createOpts = append(createOpts, o)
+	}
+	return a.currentDB().CreateCollection(ctx, name, createOpts...)
 }
 
 // DropCollection drops a collection
 func (a *Adapter) DropCollection(ctx context.Context, name string) error {
-	return a.database.Collection(name).Drop(ctx)
+	return a.currentDB().Collection(name).Drop(ctx)
 }
 
 // Aggregate runs an aggregation pipeline
 func (a *Adapter) Aggregate(ctx context.Context, collection string, pipeline interface{}) ([]map[string]interface{}, error) {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	cursor, err := coll.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
@@ -414,12 +433,15 @@ func (a *Adapter) Aggregate(ctx context.Context, collection string, pipeline int
 		}
 		results = append(results, converted)
 	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
 	return results, nil
 }
 
 // ListIndexes lists all indexes for a collection
 func (a *Adapter) ListIndexes(ctx context.Context, collection string) ([]map[string]interface{}, error) {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	cursor, err := coll.Indexes().List(ctx)
 	if err != nil {
 		return nil, err
@@ -438,12 +460,15 @@ func (a *Adapter) ListIndexes(ctx context.Context, collection string) ([]map[str
 		}
 		indexes = append(indexes, converted)
 	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
 	return indexes, nil
 }
 
 // CreateIndex creates a new index on a collection
 func (a *Adapter) CreateIndex(ctx context.Context, collection string, keys map[string]interface{}, unique bool) error {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	indexModel := mongo.IndexModel{
 		Keys:    keys,
 		Options: options.Index().SetUnique(unique),
@@ -454,7 +479,7 @@ func (a *Adapter) CreateIndex(ctx context.Context, collection string, keys map[s
 
 // DropIndex drops an index from a collection
 func (a *Adapter) DropIndex(ctx context.Context, collection string, indexName string) error {
-	coll := a.database.Collection(collection)
+	coll := a.currentDB().Collection(collection)
 	_, err := coll.Indexes().DropOne(ctx, indexName)
 	return err
 }
@@ -462,7 +487,7 @@ func (a *Adapter) DropIndex(ctx context.Context, collection string, indexName st
 // GetDatabaseStats returns database statistics
 func (a *Adapter) GetDatabaseStats(ctx context.Context) (map[string]interface{}, error) {
 	var result bson.M
-	err := a.database.RunCommand(ctx, bson.D{{Key: "dbStats", Value: 1}}).Decode(&result)
+	err := a.currentDB().RunCommand(ctx, bson.D{{Key: "dbStats", Value: 1}}).Decode(&result)
 	if err != nil {
 		return nil, err
 	}
@@ -494,9 +519,23 @@ func (a *Adapter) ListDatabases(ctx context.Context) ([]map[string]interface{}, 
 
 // SwitchDatabase switches to a different database
 func (a *Adapter) SwitchDatabase(dbName string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.database = a.client.Database(dbName)
 	a.dbName = dbName
 	return nil
+}
+
+func (a *Adapter) currentDB() *mongo.Database {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.database
+}
+
+func (a *Adapter) currentDBName() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.dbName
 }
 
 // DropDatabase drops a database

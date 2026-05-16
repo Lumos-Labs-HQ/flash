@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -227,6 +228,7 @@ func (c *Config) GetSchemaFiles() ([]string, error) {
 
 	// Sort files for consistent ordering
 	// Files are typically named like: 001_users.sql, 002_posts.sql or users.sql, posts.sql
+	sort.Strings(files)
 	return files, nil
 }
 
