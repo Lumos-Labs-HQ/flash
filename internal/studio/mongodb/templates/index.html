@@ -4,17 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.Title}}</title>
-    <link rel="icon" type="image/png" href="/static/image/logo.png" />
+    <link rel="icon" type="image/webp" href="/common/static/image/logo.webp" />
     <link rel="stylesheet" href="/common/static/css/base.css" />
     <link rel="stylesheet" href="/static/css/mongodb.css" />
-    <script
-      type="module"
-      src="/cdn/ionicons/ionicons.esm.js"
-    ></script>
-    <script
-      nomodule
-      src="/cdn/ionicons/ionicons.js"
-    ></script>
+    <script src="/cdn/iconify/iconify.min.js"></script>
     <script>
       window.DB_CONNECTION_URL = "{{.ConnectionURL}}";
     </script>
@@ -22,7 +15,7 @@
   <body>
     <nav class="top-nav">
       <div class="nav-left">
-        <img src="/static/image/logo.png" alt="Logo" class="nav-logo" />
+        <img src="/common/static/image/logo.webp" alt="Logo" class="nav-logo" />
         <span class="nav-title">MongoDB Studio</span>
       </div>
       <div class="nav-breadcrumb" id="breadcrumb">Select database</div>
@@ -77,7 +70,7 @@
               "
             ></h4>
             <button class="icon-btn" id="refresh-collections-btn" title="Refresh">
-              <ion-icon name="refresh-outline"></ion-icon>
+              <span class="iconify" data-icon="ion:refresh-outline"></span>
             </button>
             <button class="icon-btn" id="add-collection-btn" title="Create">
               <svg
@@ -104,22 +97,22 @@
         <div id="main-view" class="view active">
           <div class="tabs-bar" id="tabs-bar" style="display: none">
             <button class="tab active" data-tab="documents">
-              <ion-icon name="document-text"></ion-icon>Documents
+              <span class="iconify" data-icon="ion:document-text"></span>Documents
             </button>
             <button class="tab" data-tab="schema">
-              <ion-icon name="list"></ion-icon>Schema
+              <span class="iconify" data-icon="ion:list"></span>Schema
             </button>
             <button class="tab" data-tab="indexes">
-              <ion-icon name="layers"></ion-icon>Indexes
+              <span class="iconify" data-icon="ion:layers"></span>Indexes
             </button>
             <button class="tab" data-tab="aggregation">
-              <ion-icon name="git-network-outline"></ion-icon>Aggregation
+              <span class="iconify" data-icon="ion:git-network-outline"></span>Aggregation
             </button>
           </div>
           <div class="toolbar" id="toolbar" style="display: none">
             <div class="toolbar-left">
               <button class="tool-btn" id="select-all-btn" title="Select All">
-                <ion-icon name="checkbox-outline"></ion-icon>
+                <span class="iconify" data-icon="ion:checkbox-outline"></span>
               </button>
               <span id="selection-info" class="info-text"></span>
               <button
@@ -128,13 +121,13 @@
                 style="display: none"
                 title="Delete"
               >
-                <ion-icon name="trash-outline"></ion-icon>
+                <span class="iconify" data-icon="ion:trash-outline"></span>
               </button>
             </div>
             <div class="toolbar-right">
               <input type="text" class="search-input" id="text-search" placeholder="Search in documents..." />
               <button class="tool-btn" id="filter-btn" title="Filter">
-                <ion-icon name="filter-outline"></ion-icon>
+                <span class="iconify" data-icon="ion:filter-outline"></span>
               </button>
               <select class="mini-select" id="page-size">
                 <option value="20">20</option>
@@ -143,11 +136,11 @@
               </select>
               <div class="pager">
                 <button class="tool-btn" id="prev-page" title="Previous">
-                  <ion-icon name="chevron-back-outline"></ion-icon>
+                  <span class="iconify" data-icon="ion:chevron-back-outline"></span>
                 </button>
                 <span id="page-info" class="info-text">1/1</span>
                 <button class="tool-btn" id="next-page" title="Next">
-                  <ion-icon name="chevron-forward-outline"></ion-icon>
+                  <span class="iconify" data-icon="ion:chevron-forward-outline"></span>
                 </button>
               </div>
               <select class="mini-select" id="view-mode">
@@ -155,10 +148,10 @@
                 <option value="table">Table</option>
               </select>
               <button class="tool-btn" id="refresh-docs-btn" title="Refresh">
-                <ion-icon name="refresh-outline"></ion-icon>
+                <span class="iconify" data-icon="ion:refresh-outline"></span>
               </button>
               <button class="tool-btn primary" id="insert-btn" title="Insert">
-                <ion-icon name="add-outline"></ion-icon>
+                <span class="iconify" data-icon="ion:add-outline"></span>
               </button>
             </div>
           </div>
@@ -200,7 +193,7 @@
             <div class="indexes-toolbar">
               <h4>Indexes</h4>
               <button class="btn btn-primary btn-sm" id="create-index-btn">
-                <ion-icon name="add-outline"></ion-icon> Create Index
+                <span class="iconify" data-icon="ion:add-outline"></span> Create Index
               </button>
             </div>
             <table class="data-table" id="indexes-table">
@@ -221,10 +214,10 @@
                 <h4>Aggregation Pipeline</h4>
                 <div class="pipeline-actions">
                   <button class="btn btn-sm" id="add-stage-btn">
-                    <ion-icon name="add-outline"></ion-icon> Add Stage
+                    <span class="iconify" data-icon="ion:add-outline"></span> Add Stage
                   </button>
                   <button class="btn btn-primary btn-sm" id="run-pipeline-btn">
-                    <ion-icon name="play-outline"></ion-icon> Run
+                    <span class="iconify" data-icon="ion:play-outline"></span> Run
                   </button>
                 </div>
               </div>

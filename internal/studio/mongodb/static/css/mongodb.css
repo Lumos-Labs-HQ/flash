@@ -738,7 +738,7 @@
     background: rgba(239, 68, 68, 0.1);
 }
 
-.context-item ion-icon {
+.context-item .iconify {
     font-size: 18px;
 }
 

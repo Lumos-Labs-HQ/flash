@@ -351,7 +351,7 @@ function renderDocs() {
         tableView.style.display = 'none';
         jsonView.style.display = 'none';
         $('#empty-title').textContent = 'No Documents';
-        $('#empty-text').innerHTML = 'This collection is empty<br><button class="btn btn-primary" style="margin-top: 16px;" id="empty-add-btn"><ion-icon name="add-outline"></ion-icon> Add Document</button>';
+        $('#empty-text').innerHTML = 'This collection is empty<br><button class="btn btn-primary" style="margin-top: 16px;" id="empty-add-btn"><span class="iconify" data-icon="ion:add-outline"></span> Add Document</button>';
         const emptyAddBtn = $('#empty-add-btn');
         if (emptyAddBtn) {
             emptyAddBtn.onclick = () => {
@@ -896,13 +896,13 @@ function renderPipeline() {
                 </div>
                 <div class="stage-actions">
                     <button class="action-btn" onclick="moveStage(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Move Up">
-                        <ion-icon name="arrow-up-outline"></ion-icon>
+                        <span class="iconify" data-icon="ion:arrow-up-outline"></span>
                     </button>
                     <button class="action-btn" onclick="moveStage(${index}, 1)" ${index === pipelineStages.length - 1 ? 'disabled' : ''} title="Move Down">
-                        <ion-icon name="arrow-down-outline"></ion-icon>
+                        <span class="iconify" data-icon="ion:arrow-down-outline"></span>
                     </button>
                     <button class="action-btn delete" onclick="removeStage(${stage.id})" title="Remove">
-                        <ion-icon name="trash-outline"></ion-icon>
+                        <span class="iconify" data-icon="ion:trash-outline"></span>
                     </button>
                 </div>
             </div>
@@ -1036,7 +1036,7 @@ function renderDatabases() {
         return `
     <div class="database-item" onclick='selectDatabase(${jsonName})' oncontextmenu='showDbContextMenu(event, ${jsonName})' data-name="${dataName}">
       <div class="item-name">
-        <ion-icon name="server-outline"></ion-icon>
+        <span class="iconify" data-icon="ion:server-outline"></span>
         ${safeName}
       </div>
       <span class="item-count">${formatSize(db.sizeOnDisk || 0)}</span>
@@ -1058,7 +1058,7 @@ function renderCollections() {
         return `
     <div class="collection-item ${isActive ? 'active' : ''}" onclick='selectCollection(${jsonName}, event)' oncontextmenu='showCollContextMenu(event, ${jsonName})' data-name="${dataName}">
       <div class="item-name">
-        <ion-icon name="folder-outline"></ion-icon>
+        <span class="iconify" data-icon="ion:folder-outline"></span>
         ${safeName}
       </div>
       <span class="item-count">${col.document_count || col.count || 0}</span>
@@ -1095,7 +1095,7 @@ function showDbContextMenu(e, dbName) {
     const jsonName = JSON.stringify(dbName);
     menu.innerHTML = `
         <div class="context-item danger" onclick='event.stopPropagation(); deleteDatabase(${jsonName})'>
-            <ion-icon name="trash-outline"></ion-icon> Delete Database
+            <span class="iconify" data-icon="ion:trash-outline"></span> Delete Database
         </div>
     `;
     document.body.appendChild(menu);
@@ -1114,7 +1114,7 @@ function showCollContextMenu(e, collName) {
     const jsonName = JSON.stringify(collName);
     menu.innerHTML = `
         <div class="context-item danger" onclick='event.stopPropagation(); deleteCollection(${jsonName})'>
-            <ion-icon name="trash-outline"></ion-icon> Delete Collection
+            <span class="iconify" data-icon="ion:trash-outline"></span> Delete Collection
         </div>
     `;
     document.body.appendChild(menu);
