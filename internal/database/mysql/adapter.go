@@ -60,7 +60,11 @@ func (m *Adapter) Connect(ctx context.Context, url string) error {
 				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=verify-ca", "tls=true")
 				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=verify-full", "tls=true")
 
-				dsn = fmt.Sprintf("%s@tcp(%s)/%s", credentials, hostPort, dbAndParams)
+				if !strings.HasPrefix(hostPort, "tcp(") && !strings.HasPrefix(hostPort, "unix(") {
+					dsn = fmt.Sprintf("%s@tcp(%s)/%s", credentials, hostPort, dbAndParams)
+				} else {
+					dsn = fmt.Sprintf("%s@%s/%s", credentials, hostPort, dbAndParams)
+				}
 			}
 		}
 	}

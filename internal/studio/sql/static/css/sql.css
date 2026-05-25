@@ -112,16 +112,51 @@
     background: #1a1a1a;
 }
 
-/* Hide textarea before CodeMirror initializes to prevent white flash */
-#sql-editor {
-    display: none;
+/* CM6 editor container - flex-based layout for reliable sizing */
+.editor-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #1a1a1a;
 }
 
-.CodeMirror {
-    height: 100% !important;
+#sql-editor {
+    flex: 1;
+    min-height: 0;
+    font-size: 15px;
+    line-height: 1.6;
+    background: #1a1a1a;
+}
+
+.cm-editor {
+    flex: 1;
+    min-height: 0;
     font-size: 15px;
     line-height: 1.6;
     background: #1a1a1a !important;
+}
+
+/* Ensure text selection works properly */
+.cm-editor, .cm-scroller, .cm-content, .cm-line {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+}
+
+/* Ensure selection layer is on top */
+.cm-selectionLayer {
+    z-index: 100 !important;
+}
+
+/* Native cursor color for dark theme */
+.cm-content {
+    caret-color: #4a9eff !important;
+}
+
+/* Native selection fallback styling */
+.cm-content ::selection {
+    background: #2d4a6e !important;
+    color: inherit !important;
 }
 
 .results-section {
@@ -379,13 +414,12 @@
     .editor-hint { display: none; }
 }
 
-/* CodeMirror hint autocomplete styling */
-.CodeMirror-hints {
+/* CM6 autocomplete tooltip styling */
+.cm-tooltip.cm-tooltip-autocomplete {
     background: #1e1e1e !important;
     border: 1px solid #3a3a3a !important;
     border-radius: 6px !important;
     box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
-    padding: 4px 0 !important;
     font-family: 'JetBrains Mono', monospace !important;
     font-size: 14px !important;
     max-height: 300px !important;
@@ -394,26 +428,30 @@
     z-index: 1000 !important;
 }
 
-.CodeMirror-hint {
+.cm-tooltip-autocomplete ul {
+    padding: 4px 0 !important;
+}
+
+.cm-tooltip-autocomplete li {
     padding: 6px 12px !important;
     color: #e0e0e0 !important;
     cursor: pointer !important;
 }
 
-.CodeMirror-hint:hover,
-.CodeMirror-hint-active {
+.cm-tooltip-autocomplete li:hover,
+.cm-tooltip-autocomplete li[aria-selected="true"] {
     background: #2d4a6e !important;
     color: #fff !important;
 }
 
-/* CodeMirror dialog (search) styling */
-.CodeMirror-dialog {
+/* CM6 search panel styling */
+.cm-panels.cm-panels-top {
     background: #1e1e1e !important;
     border-bottom: 1px solid #3a3a3a !important;
     padding: 8px 12px !important;
 }
 
-.CodeMirror-dialog input {
+.cm-panels input {
     background: #2a2a2a !important;
     border: 1px solid #3a3a3a !important;
     color: #e0e0e0 !important;
@@ -422,53 +460,51 @@
     outline: none !important;
 }
 
-.CodeMirror-dialog input:focus {
+.cm-panels input:focus {
     border-color: #4a9eff !important;
 }
 
-.CodeMirror-dialog-top {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-}
-
-.CodeMirror-search-hint {
-    color: #888;
+.cm-search label,
+.cm-search button {
+    color: #888 !important;
     font-size: 12px;
 }
 
-/* CodeMirror cursor and selection */
-.CodeMirror-cursor {
+/* CM6 cursor and selection */
+.cm-cursor {
     border-left-color: #4a9eff !important;
 }
 
-.CodeMirror-selected {
+.cm-selectionBackground {
     background: #2d4a6e !important;
 }
 
-.CodeMirror-focused .CodeMirror-selected {
+.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
     background: #2d4a6e !important;
 }
 
-/* CodeMirror matching brackets */
-.CodeMirror-matchingbracket {
+/* CM6 matching brackets */
+.cm-matchingBracket {
     color: #ffcb6b !important;
     background: #3a3a3a !important;
     font-weight: bold !important;
 }
 
-/* CodeMirror gutter and line numbers */
-.CodeMirror-gutters {
+/* CM6 gutter and line numbers */
+.cm-gutters {
     background: #1a1a1a !important;
     border-right: 1px solid #2d2d2d !important;
 }
 
-.CodeMirror-linenumber {
+.cm-lineNumbers .cm-gutterElement {
     color: #555 !important;
 }
 
-.CodeMirror-activeline-background {
+.cm-activeLine {
+    background: #222 !important;
+}
+
+.cm-activeLineGutter {
     background: #222 !important;
 }
 
@@ -483,101 +519,69 @@
     100% { background: rgba(74, 158, 255, 0) !important; }
 }
 
-/* Autocomplete hint types */
-.CodeMirror-hint.hint-keyword {
+/* CM6 Autocomplete hint icons */
+.cm-completionIcon {
+    font-size: 10px !important;
+    width: 16px !important;
+    display: inline-block !important;
+    text-align: center !important;
+    padding-right: 8px !important;
+    opacity: 1 !important;
+    box-sizing: content-box !important;
+}
+
+.cm-completionIcon-keyword::after {
+    content: 'K' !important;
+    background: #5a3d7a !important;
     color: #c792ea !important;
-    position: relative;
-    padding-left: 28px !important;
+    border-radius: 3px !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    width: 16px !important;
+    height: 16px !important;
+    line-height: 16px !important;
+    display: inline-block !important;
+    text-align: center !important;
 }
 
-.CodeMirror-hint.hint-keyword::before {
-    content: 'K';
-    position: absolute;
-    left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    background: #5a3d7a;
-    color: #c792ea;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: bold;
-    text-align: center;
-    line-height: 16px;
-}
-
-.CodeMirror-hint.hint-table {
+.cm-completionIcon-table::after {
+    content: 'T' !important;
+    background: #2d4a6e !important;
     color: #82aaff !important;
-    position: relative;
-    padding-left: 28px !important;
+    border-radius: 3px !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    width: 16px !important;
+    height: 16px !important;
+    line-height: 16px !important;
+    display: inline-block !important;
+    text-align: center !important;
 }
 
-.CodeMirror-hint.hint-table::before {
-    content: 'T';
-    position: absolute;
-    left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    background: #2d4a6e;
-    color: #82aaff;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: bold;
-    text-align: center;
-    line-height: 16px;
-}
-
-/* Grammar hint - AI-like suggestions for next keyword */
-.CodeMirror-hint.hint-grammar {
+.cm-completionIcon-grammar::after {
+    content: '→' !important;
+    background: #5a4d2e !important;
     color: #ffcb6b !important;
-    position: relative;
-    padding-left: 28px !important;
-    font-weight: 500;
+    border-radius: 3px !important;
+    font-size: 12px !important;
+    font-weight: bold !important;
+    width: 16px !important;
+    height: 16px !important;
+    line-height: 16px !important;
+    display: inline-block !important;
+    text-align: center !important;
 }
 
-.CodeMirror-hint.hint-grammar::before {
-    content: '→';
-    position: absolute;
-    left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    background: #5a4d2e;
-    color: #ffcb6b;
-    border-radius: 3px;
-    font-size: 12px;
-    font-weight: bold;
-    text-align: center;
-    line-height: 16px;
-}
-
-.CodeMirror-hint.hint-column {
+.cm-completionIcon-column::after {
+    content: 'C' !important;
+    background: #3d5a3d !important;
     color: #c3e88d !important;
-    position: relative;
-    padding-left: 28px !important;
-}
-
-.CodeMirror-hint.hint-column::before {
-    content: 'C';
-    position: absolute;
-    left: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    background: #3d5a3d;
-    color: #c3e88d;
-    border-radius: 3px;
-    font-size: 10px;
-    font-weight: bold;
-    text-align: center;
-    line-height: 16px;
+    border-radius: 3px !important;
+    font-size: 10px !important;
+    font-weight: bold !important;
+    width: 16px !important;
+    height: 16px !important;
+    line-height: 16px !important;
+    display: inline-block !important;
+    text-align: center !important;
 }
