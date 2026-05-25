@@ -26,6 +26,7 @@ type SchemaColumn struct {
 	ForeignKeyTable  string
 	ForeignKeyColumn string
 	OnDeleteAction   string
+	Check            string // CHECK constraint expression
 }
 
 type SchemaIndex struct {
@@ -33,6 +34,7 @@ type SchemaIndex struct {
 	Table   string
 	Columns []string
 	Unique  bool
+	Where   string // Partial index WHERE clause (PostgreSQL)
 }
 
 type SchemaDiff struct {

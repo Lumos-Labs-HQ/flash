@@ -360,7 +360,12 @@ func (s *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.Query
 }
 
 func (s *Adapter) MapColumnType(dbType string) string {
-	if mapped, exists := typeMap[strings.ToLower(dbType)]; exists {
+	dbType = strings.ToLower(strings.TrimSpace(dbType))
+	// Strip size/precision parameters like (255), (10,2) for lookup
+	if idx := strings.Index(dbType, "("); idx > 0 {
+		dbType = dbType[:idx]
+	}
+	if mapped, exists := typeMap[dbType]; exists {
 		return mapped
 	}
 	return strings.ToUpper(dbType)

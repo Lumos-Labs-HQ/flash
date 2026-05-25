@@ -25,7 +25,9 @@ func TestMapColumnType(t *testing.T) {
 	a := New()
 	cases := []struct{ in, want string }{
 		{"varchar", "TEXT"},
+		{"varchar(255)", "TEXT"},
 		{"text", "TEXT"},
+		{"char(50)", "TEXT"},
 		{"int", "INTEGER"},
 		{"integer", "INTEGER"},
 		{"bigint", "INTEGER"},

@@ -194,3 +194,4 @@ func TestGenerateSchemaDiff_DetectsModifiedColumn(t *testing.T) {
 		t.Errorf("expected changes to mention type change, got %v", colDiff.Changes)
 	}
 }
+

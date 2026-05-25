@@ -202,6 +202,8 @@ func (m *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 		unique = "UNIQUE "
 	}
 	columns := "`" + strings.Join(index.Columns, "`, `") + "`"
+	// MySQL does not support WHERE in CREATE INDEX for InnoDB tables.
+	// Partial indexes are a PostgreSQL/SQLite feature.
 	return fmt.Sprintf("CREATE %sINDEX `%s` ON `%s` (%s);", unique, index.Name, index.Table, columns)
 }
 
@@ -239,6 +241,10 @@ func (m *Adapter) FormatColumnType(column types.SchemaColumn) string {
 			}
 		}
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", defaultValue))
+	}
+
+	if column.Check != "" {
+		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}
 
 	return strings.Join(parts, " ")

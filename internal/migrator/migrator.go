@@ -223,40 +223,53 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 
 	// UP: Modify existing tables
 	for _, tableDiff := range diff.ModifiedTables {
-		// Add new columns
-		for _, column := range tableDiff.NewColumns {
-			sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
-			if sql != "" {
-				upStatements = append(upStatements, sql)
-				hasExecutableSQL = true
-				// DOWN: Drop the added column
-				downStatements = append([]string{m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)}, downStatements...)
-			}
-		}
+		needsSQLiteRecreate := (m.provider == "sqlite" || m.provider == "sqlite3") &&
+			len(tableDiff.ModifiedColumns) > 0 &&
+			m.hasSignificantSQLiteModifications(tableDiff)
 
-		// Drop columns
-		for _, column := range tableDiff.DroppedColumns {
-			sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)
-			if sql != "" {
-				upStatements = append(upStatements, sql)
-				hasExecutableSQL = true
-				// DOWN: Re-add the dropped column with its original definition
-				downStatements = append([]string{m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)}, downStatements...)
+		if !needsSQLiteRecreate {
+			// Add new columns
+			for _, column := range tableDiff.NewColumns {
+				sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
+				if sql != "" {
+					upStatements = append(upStatements, sql)
+					hasExecutableSQL = true
+					// DOWN: Drop the added column
+					downStatements = append([]string{m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)}, downStatements...)
+				}
+			}
+
+			// Drop columns
+			for _, column := range tableDiff.DroppedColumns {
+				sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)
+				if sql != "" {
+					upStatements = append(upStatements, sql)
+					hasExecutableSQL = true
+					// DOWN: Re-add the dropped column with its original definition
+					downStatements = append([]string{m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)}, downStatements...)
+				}
 			}
 		}
 
 		// Modified columns
 		if len(tableDiff.ModifiedColumns) > 0 {
 			if m.provider == "sqlite" || m.provider == "sqlite3" {
-				// SQLite does not support ALTER COLUMN. Recreate the table.
-				recreateSQL := m.generateSQLiteTableRecreateSQL(tableDiff.OldTable, tableDiff.NewTable)
-				if recreateSQL != "" {
-					upStatements = append(upStatements, recreateSQL)
-					hasExecutableSQL = true
-					// DOWN: reverse recreation
-					downRecreate := m.generateSQLiteTableRecreateSQL(tableDiff.NewTable, tableDiff.OldTable)
-					downStatements = append([]string{downRecreate}, downStatements...)
+				if needsSQLiteRecreate {
+					// SQLite does not support ALTER COLUMN. Recreate the table.
+					// Table recreation inherently handles added/dropped columns too,
+					// so we skip individual ALTER TABLE statements above when
+					// needsSQLiteRecreate is true.
+					recreateSQL := m.generateSQLiteTableRecreateSQL(tableDiff.OldTable, tableDiff.NewTable)
+					if recreateSQL != "" {
+						upStatements = append(upStatements, recreateSQL)
+						hasExecutableSQL = true
+						// DOWN: reverse recreation
+						downRecreate := m.generateSQLiteTableRecreateSQL(tableDiff.NewTable, tableDiff.OldTable)
+						downStatements = append([]string{downRecreate}, downStatements...)
+					}
 				}
+				// else: cosmetic type changes (e.g. TEXT → VARCHAR(255)) are ignored
+				// for SQLite since they have no semantic effect.
 			} else {
 				for _, colDiff := range tableDiff.ModifiedColumns {
 					sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
@@ -431,6 +444,39 @@ func (m *Migrator) generateSQLiteTableRecreateSQL(oldTable, newTable types.Schem
 	parts = append(parts, "PRAGMA foreign_keys=ON;")
 
 	return strings.Join(parts, "\n")
+}
+
+// hasSignificantSQLiteModifications checks if any ModifiedColumn in the table diff
+// represents a real semantic type change (e.g., TEXT → INTEGER) rather than a
+// cosmetic one (e.g., TEXT → VARCHAR(255)) for SQLite.
+func (m *Migrator) hasSignificantSQLiteModifications(tableDiff types.TableDiff) bool {
+	for _, col := range tableDiff.ModifiedColumns {
+		oldNorm := m.adapter.MapColumnType(col.OldType)
+		newNorm := m.adapter.MapColumnType(col.NewType)
+		if oldNorm != newNorm {
+			return true
+		}
+		// Also check for non-type changes (nullable, default, primary key, etc.)
+		if col.OldColumn.Nullable != col.NewColumn.Nullable {
+			return true
+		}
+		if col.OldColumn.Default != col.NewColumn.Default {
+			return true
+		}
+		if col.OldColumn.IsPrimary != col.NewColumn.IsPrimary {
+			return true
+		}
+		if col.OldColumn.IsUnique != col.NewColumn.IsUnique {
+			return true
+		}
+		if col.OldColumn.ForeignKeyTable != col.NewColumn.ForeignKeyTable {
+			return true
+		}
+		if col.OldColumn.ForeignKeyColumn != col.NewColumn.ForeignKeyColumn {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Migrator) GenerateEmptyMigration(ctx context.Context, name string) error {

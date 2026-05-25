@@ -35,8 +35,14 @@ func (sm *SchemaManager) isCreateIndexStatement(stmt string) bool {
 }
 
 func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaIndex, error) {
-	matches := indexRegex.FindStringSubmatch(stmt)
+	// Extract WHERE clause separately before applying the main regex,
+	// because the WHERE expression may contain parentheses.
+	whereClause := ""
+	if whereMatch := indexWhereRegex.FindStringSubmatch(stmt); len(whereMatch) > 1 {
+		whereClause = strings.TrimSpace(whereMatch[1])
+	}
 
+	matches := indexRegex.FindStringSubmatch(stmt)
 	if len(matches) < 7 {
 		return types.SchemaIndex{}, fmt.Errorf("could not parse CREATE INDEX statement: %s", stmt)
 	}
@@ -75,6 +81,7 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 		Table:   tableName,
 		Columns: columns,
 		Unique:  isUnique,
+		Where:   whereClause,
 	}, nil
 }
 
@@ -343,6 +350,35 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		onDeleteRegex := regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
 		if onDeleteMatches := onDeleteRegex.FindStringSubmatch(colDef); len(onDeleteMatches) >= 2 {
 			column.OnDeleteAction = strings.ToUpper(onDeleteMatches[1])
+		}
+	}
+
+	// Extract CHECK constraint with balanced parentheses
+	checkStart := -1
+	if idx := strings.Index(strings.ToUpper(colDef), "CHECK("); idx != -1 {
+		checkStart = idx
+	} else if idx := strings.Index(strings.ToUpper(colDef), "CHECK ("); idx != -1 {
+		checkStart = idx
+	}
+	if checkStart != -1 {
+		parenIdx := strings.Index(colDef[checkStart:], "(")
+		if parenIdx != -1 {
+			start := checkStart + parenIdx + 1
+			depth := 1
+			end := start
+			for end < len(colDef) && depth > 0 {
+				if colDef[end] == '(' {
+					depth++
+				} else if colDef[end] == ')' {
+					depth--
+				}
+				if depth > 0 {
+					end++
+				}
+			}
+			if depth == 0 {
+				column.Check = strings.TrimSpace(colDef[start:end])
+			}
 		}
 	}
 

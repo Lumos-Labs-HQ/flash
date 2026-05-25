@@ -29,7 +29,11 @@ func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, cur
 		}
 	}
 
-	for _, targetTable := range targetMap {
+	// Iterate over the target slice (not targetMap) to preserve the
+	// topological sort order established by sortTablesByDependencies.
+	// Use targetMap to get the table with standalone indexes merged in.
+	for _, t := range target {
+		targetTable := targetMap[t.Name]
 		if currentTable, exists := currentMap[targetTable.Name]; !exists {
 			diff.NewTables = append(diff.NewTables, targetTable)
 		} else if tableDiff := sm.compareTablesForDiff(currentTable, targetTable); tableDiff != nil {
@@ -126,15 +130,33 @@ func (sm *SchemaManager) buildColumnMaps(current, target []types.SchemaColumn) (
 func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, diff *types.SchemaDiff) {
 	currentIndexes, targetIndexes := sm.buildIndexMaps(current, target)
 
+	// Build sets for fast lookup
+	newTableSet := make(map[string]bool, len(diff.NewTables))
+	for _, t := range diff.NewTables {
+		newTableSet[t.Name] = true
+	}
+	droppedTableSet := make(map[string]bool, len(diff.DroppedTables))
+	for _, name := range diff.DroppedTables {
+		droppedTableSet[name] = true
+	}
+
 	for name, index := range targetIndexes {
 		if _, exists := currentIndexes[name]; !exists {
-			diff.NewIndexes = append(diff.NewIndexes, index)
+			// Skip indexes on newly-created tables; they are created inline
+			// with the table definition and don't need a separate statement.
+			if !newTableSet[index.Table] {
+				diff.NewIndexes = append(diff.NewIndexes, index)
+			}
 		}
 	}
 
 	for name, index := range currentIndexes {
 		if _, exists := targetIndexes[name]; !exists {
-			diff.DroppedIndexes = append(diff.DroppedIndexes, index)
+			// Skip indexes on dropped tables; they are dropped automatically
+			// when the table is dropped.
+			if !droppedTableSet[index.Table] {
+				diff.DroppedIndexes = append(diff.DroppedIndexes, index)
+			}
 		}
 	}
 }

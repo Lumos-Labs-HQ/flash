@@ -72,3 +72,60 @@ func containsAt(s, substr string) bool {
 	}
 	return false
 }
+
+func TestGenerateSQLFromDiff_SQLiteSkipsRedundantAlterTable(t *testing.T) {
+	adapter := sqlite.New()
+	m := &Migrator{
+		adapter:  adapter,
+		provider: "sqlite",
+	}
+
+	diff := &types.SchemaDiff{
+		ModifiedTables: []types.TableDiff{
+			{
+				Name: "users",
+				OldTable: types.SchemaTable{
+					Name: "users",
+					Columns: []types.SchemaColumn{
+						{Name: "id", Type: "INTEGER", IsPrimary: true},
+						{Name: "name", Type: "TEXT", Nullable: false},
+					},
+				},
+				NewTable: types.SchemaTable{
+					Name: "users",
+					Columns: []types.SchemaColumn{
+						{Name: "id", Type: "INTEGER", IsPrimary: true},
+						{Name: "name", Type: "TEXT", Nullable: false},
+						{Name: "is_active", Type: "BOOLEAN", Nullable: false, Default: "1"},
+					},
+				},
+				// ModifiedColumns with a REAL type change (TEXT → INTEGER) triggers table recreation
+				ModifiedColumns: []types.ColumnDiff{
+					{
+						Name:    "name",
+						OldType: "TEXT",
+						NewType: "INTEGER",
+						OldColumn: types.SchemaColumn{Name: "name", Type: "TEXT", Nullable: false},
+						NewColumn: types.SchemaColumn{Name: "name", Type: "INTEGER", Nullable: false},
+					},
+				},
+				// NewColumns would normally trigger ALTER TABLE ADD COLUMN
+				NewColumns: []types.SchemaColumn{
+					{Name: "is_active", Type: "BOOLEAN", Nullable: false, Default: "1"},
+				},
+			},
+		},
+	}
+
+	sql, _ := m.generateSQLFromDiff(diff, "test")
+
+	// Should contain table recreation
+	if !contains(sql, `CREATE TABLE "users_new"`) {
+		t.Error("expected table recreation SQL")
+	}
+
+	// Must NOT contain redundant ALTER TABLE ADD COLUMN since recreation handles it
+	if contains(sql, `ALTER TABLE "users" ADD COLUMN`) {
+		t.Error("migration should NOT contain redundant ALTER TABLE ADD COLUMN when table recreation happens")
+	}
+}

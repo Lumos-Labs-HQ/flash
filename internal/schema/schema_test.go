@@ -387,3 +387,106 @@ func TestSplitColumnDefinitions_NestedParens(t *testing.T) {
 		t.Errorf("parts = %d, want 3: %v", len(parts), parts)
 	}
 }
+
+func TestParseCreateIndex_Partial(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE INDEX idx_orgs_slug ON organizations (slug) WHERE deleted_at IS NULL`
+	idx, err := sm.parseCreateIndexStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if idx.Where != "deleted_at IS NULL" {
+		t.Errorf("where = %q, want 'deleted_at IS NULL'", idx.Where)
+	}
+}
+
+func TestParseColumnDefinition_Check(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE ai_conversations (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		type TEXT NOT NULL CHECK (type IN ('error_assist', 'spec_gen'))
+	);`
+	tables, _, _, err := sm.parseSchemaContentWithIndexes(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(tables))
+	}
+	var typeCol *types.SchemaColumn
+	for i := range tables[0].Columns {
+		if tables[0].Columns[i].Name == "type" {
+			typeCol = &tables[0].Columns[i]
+			break
+		}
+	}
+	if typeCol == nil {
+		t.Fatal("type column not found")
+	}
+	if typeCol.Check != "type IN ('error_assist', 'spec_gen')" {
+		t.Errorf("check = %q, want 'type IN ('error_assist', 'spec_gen')'", typeCol.Check)
+	}
+}
+
+func TestCompareIndexes_SkipsNewTableIndexes(t *testing.T) {
+	sm := newSM()
+	current := []types.SchemaTable{
+		{Name: "users", Columns: []types.SchemaColumn{{Name: "id", Type: "INT", IsPrimary: true}}},
+	}
+	target := []types.SchemaTable{
+		{
+			Name: "posts",
+			Columns: []types.SchemaColumn{
+				{Name: "id", Type: "INT", IsPrimary: true},
+				{Name: "user_id", Type: "INT"},
+			},
+			Indexes: []types.SchemaIndex{
+				{Name: "idx_posts_user", Table: "posts", Columns: []string{"user_id"}},
+			},
+		},
+	}
+
+	diff := sm.compareSchemas(current, target, nil, nil, nil)
+
+	if len(diff.NewTables) != 1 {
+		t.Fatalf("expected 1 new table, got %d", len(diff.NewTables))
+	}
+	if len(diff.NewIndexes) != 0 {
+		t.Errorf("expected 0 new indexes (index belongs to new table), got %d: %v", len(diff.NewIndexes), diff.NewIndexes)
+	}
+}
+
+func TestCompareSchemas_PreservesDependencyOrder(t *testing.T) {
+	sm := newSM()
+	current := []types.SchemaTable{}
+	// In real usage target comes from ParseSchemaPath which sorts by dependencies.
+	// We simulate that pre-sorted order here: users (no deps) before jobs (FK to users).
+	target := []types.SchemaTable{
+		{
+			Name: "users",
+			Columns: []types.SchemaColumn{
+				{Name: "id", Type: "INT", IsPrimary: true},
+			},
+		},
+		{
+			Name: "jobs",
+			Columns: []types.SchemaColumn{
+				{Name: "id", Type: "INT", IsPrimary: true},
+				{Name: "user_id", Type: "INT", ForeignKeyTable: "users", ForeignKeyColumn: "id"},
+			},
+		},
+	}
+
+	diff := sm.compareSchemas(current, target, nil, nil, nil)
+
+	if len(diff.NewTables) != 2 {
+		t.Fatalf("expected 2 new tables, got %d", len(diff.NewTables))
+	}
+	// users should come before jobs because jobs has a FK to users
+	if diff.NewTables[0].Name != "users" {
+		t.Errorf("expected first table to be 'users' (no deps), got %q", diff.NewTables[0].Name)
+	}
+	if diff.NewTables[1].Name != "jobs" {
+		t.Errorf("expected second table to be 'jobs' (depends on users), got %q", diff.NewTables[1].Name)
+	}
+}

@@ -291,7 +291,11 @@ func (s *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 		unique = "UNIQUE "
 	}
 	columns := "\"" + strings.Join(index.Columns, "\", \"") + "\""
-	return fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s);", unique, index.Name, index.Table, columns)
+	sql := fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s)", unique, index.Name, index.Table, columns)
+	if index.Where != "" {
+		sql += fmt.Sprintf(" WHERE %s", index.Where)
+	}
+	return sql + ";"
 }
 
 func (s *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
@@ -319,6 +323,10 @@ func (s *Adapter) FormatColumnType(column types.SchemaColumn) string {
 
 	if column.Default != "" {
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", column.Default))
+	}
+
+	if column.Check != "" {
+		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}
 
 	return strings.Join(parts, " ")
