@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -169,20 +170,50 @@ func (a *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[str
 	}
 	defer cursor.Close(ctx)
 
-	results := make([]map[string]interface{}, 0, 1000)
+	var docs []bson.M
 	for cursor.Next(ctx) {
 		var doc bson.M
 		if err := cursor.Decode(&doc); err != nil {
 			continue
 		}
-		for k, v := range doc {
-			doc[k] = convertBSONValue(v)
-		}
-		results = append(results, doc)
+		docs = append(docs, doc)
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("cursor error while reading table data: %w", err)
 	}
+
+	results := make([]map[string]interface{}, len(docs))
+	var wg sync.WaitGroup
+	numWorkers := runtime.NumCPU()
+	if numWorkers > len(docs) {
+		numWorkers = len(docs)
+	}
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+	chunkSize := (len(docs) + numWorkers - 1) / numWorkers
+	for w := 0; w < numWorkers; w++ {
+		start := w * chunkSize
+		end := start + chunkSize
+		if start >= len(docs) {
+			break
+		}
+		if end > len(docs) {
+			end = len(docs)
+		}
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				doc := docs[i]
+				for k, v := range doc {
+					doc[k] = convertBSONValue(v)
+				}
+				results[i] = doc
+			}
+		}(start, end)
+	}
+	wg.Wait()
 	return results, nil
 }
 
@@ -233,21 +264,31 @@ func (a *Adapter) ExecuteMongoQuery(ctx context.Context, query string) ([]map[st
 		}
 		defer cursor.Close(ctx)
 
-		var results []map[string]interface{}
+		var docs []bson.M
 		for cursor.Next(ctx) {
 			var doc bson.M
 			if err := cursor.Decode(&doc); err != nil {
 				continue
 			}
-			converted := make(map[string]interface{})
-			for k, v := range doc {
-				converted[k] = convertBSONValue(v)
-			}
-			results = append(results, converted)
+			docs = append(docs, doc)
 		}
 		if err := cursor.Err(); err != nil {
 			return nil, fmt.Errorf("cursor error: %w", err)
 		}
+
+		results := make([]map[string]interface{}, len(docs))
+		var wg sync.WaitGroup
+		for i, doc := range docs {
+			wg.Add(1)
+			go func(idx int, d bson.M) {
+				defer wg.Done()
+				for k, v := range d {
+					d[k] = convertBSONValue(v)
+				}
+				results[idx] = d
+			}(i, doc)
+		}
+		wg.Wait()
 		return results, nil
 	}
 
@@ -315,20 +356,52 @@ func (a *Adapter) FindDocumentsInDB(ctx context.Context, database, collection st
 	}
 	defer cursor.Close(ctx)
 
-	results := make([]map[string]interface{}, 0, limit)
+	// Decode all documents first, then convert in parallel
+	var docs []bson.M
 	for cursor.Next(ctx) {
 		var doc bson.M
 		if err := cursor.Decode(&doc); err != nil {
 			continue
 		}
-		for k, v := range doc {
-			doc[k] = convertBSONValue(v)
-		}
-		results = append(results, doc)
+		docs = append(docs, doc)
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
+
+	results := make([]map[string]interface{}, len(docs))
+	var wg sync.WaitGroup
+	numWorkers := runtime.NumCPU()
+	if numWorkers > len(docs) {
+		numWorkers = len(docs)
+	}
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+
+	chunkSize := (len(docs) + numWorkers - 1) / numWorkers
+	for w := 0; w < numWorkers; w++ {
+		start := w * chunkSize
+		end := start + chunkSize
+		if start >= len(docs) {
+			break
+		}
+		if end > len(docs) {
+			end = len(docs)
+		}
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				doc := docs[i]
+				for k, v := range doc {
+					doc[k] = convertBSONValue(v)
+				}
+				results[i] = doc
+			}
+		}(start, end)
+	}
+	wg.Wait()
 	return results, nil
 }
 
@@ -428,21 +501,31 @@ func (a *Adapter) Aggregate(ctx context.Context, collection string, pipeline int
 	}
 	defer cursor.Close(ctx)
 
-	var results []map[string]interface{}
+	var docs []bson.M
 	for cursor.Next(ctx) {
 		var doc bson.M
 		if err := cursor.Decode(&doc); err != nil {
 			continue
 		}
-		converted := make(map[string]interface{})
-		for k, v := range doc {
-			converted[k] = convertBSONValue(v)
-		}
-		results = append(results, converted)
+		docs = append(docs, doc)
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
+
+	results := make([]map[string]interface{}, len(docs))
+	var wg sync.WaitGroup
+	for i, doc := range docs {
+		wg.Add(1)
+		go func(idx int, d bson.M) {
+			defer wg.Done()
+			for k, v := range d {
+				d[k] = convertBSONValue(v)
+			}
+			results[idx] = d
+		}(i, doc)
+	}
+	wg.Wait()
 	return results, nil
 }
 
@@ -455,22 +538,32 @@ func (a *Adapter) ListIndexes(ctx context.Context, collection string) ([]map[str
 	}
 	defer cursor.Close(ctx)
 
-	var indexes []map[string]interface{}
+	var items []bson.M
 	for cursor.Next(ctx) {
 		var index bson.M
 		if err := cursor.Decode(&index); err != nil {
 			continue
 		}
-		converted := make(map[string]interface{})
-		for k, v := range index {
-			converted[k] = convertBSONValue(v)
-		}
-		indexes = append(indexes, converted)
+		items = append(items, index)
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
 	}
-	return indexes, nil
+
+	results := make([]map[string]interface{}, len(items))
+	var wg sync.WaitGroup
+	for i, index := range items {
+		wg.Add(1)
+		go func(idx int, d bson.M) {
+			defer wg.Done()
+			for k, v := range d {
+				d[k] = convertBSONValue(v)
+			}
+			results[idx] = d
+		}(i, index)
+	}
+	wg.Wait()
+	return results, nil
 }
 
 // CreateIndex creates a new index on a collection
