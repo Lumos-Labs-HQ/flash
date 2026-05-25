@@ -2,6 +2,7 @@ package mongodb
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,27 +42,41 @@ func inferBSONType(value interface{}) string {
 	}
 }
 
-// convertBSONValue converts BSON values to standard Go types
+// convertBSONValue converts BSON values to standard Go types in-place for maps/slices
 func convertBSONValue(v interface{}) interface{} {
 	switch val := v.(type) {
 	case bson.M:
-		result := make(map[string]interface{})
+		// Mutate in-place to avoid allocating a new map
 		for k, v := range val {
-			result[k] = convertBSONValue(v)
+			val[k] = convertBSONValue(v)
 		}
-		return result
+		return val
 	case bson.A:
-		result := make([]interface{}, len(val))
+		// Mutate in-place to avoid allocating a new slice
 		for i, v := range val {
-			result[i] = convertBSONValue(v)
+			val[i] = convertBSONValue(v)
 		}
-		return result
+		return val
 	case bson.D:
-		result := make(map[string]interface{})
+		result := make(map[string]interface{}, len(val))
 		for _, elem := range val {
 			result[elem.Key] = convertBSONValue(elem.Value)
 		}
 		return result
+	case primitive.ObjectID:
+		return val.Hex()
+	case primitive.DateTime:
+		return val.Time().UTC().Format(time.RFC3339)
+	case primitive.Decimal128:
+		return val.String()
+	case primitive.Binary:
+		return "<Binary(" + strconv.Itoa(len(val.Data)) + " bytes)>"
+	case string:
+		// Truncate very large strings to prevent massive JSON/HTML rendering
+		if len(val) > 10000 {
+			return val[:10000] + "... (" + strconv.Itoa(len(val)-10000) + " more chars)"
+		}
+		return val
 	default:
 		return v
 	}

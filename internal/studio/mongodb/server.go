@@ -77,6 +77,9 @@ func (s *Server) setupRoutes() {
 	// API Routes - Aggregation
 	s.mux.HandleFunc("POST /api/collections/{name}/aggregate", s.handleAggregate)
 
+	// API Routes - Schema
+	s.mux.HandleFunc("GET /api/collections/{name}/schema", s.handleGetSchema)
+
 	// API Routes - Indexes
 	s.mux.HandleFunc("GET /api/collections/{name}/indexes", s.handleGetIndexes)
 	s.mux.HandleFunc("POST /api/collections/{name}/indexes", s.handleCreateIndex)

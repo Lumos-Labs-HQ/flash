@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
@@ -158,29 +159,31 @@ func (s *Service) GetCollections(database string) ([]CollectionInfo, error) {
 		return nil, err
 	}
 
-	result := make([]CollectionInfo, 0, len(collections))
-	for _, coll := range collections {
-		count, err := mongoAdapter.CountDocumentsInDB(s.ctx, database, coll, bson.M{})
-		if err != nil {
-			result = append(result, CollectionInfo{
-				Name:          coll,
-				DocumentCount: 0,
+	result := make([]CollectionInfo, len(collections))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i, coll := range collections {
+		wg.Add(1)
+		go func(index int, name string) {
+			defer wg.Done()
+			count, err := mongoAdapter.CountDocumentsInDB(s.ctx, database, name, bson.M{})
+			info := CollectionInfo{
+				Name:          name,
+				DocumentCount: count,
 				Size:          0,
 				AvgObjSize:    0,
-			})
-			continue
-		}
-
-		info := CollectionInfo{
-			Name:          coll,
-			DocumentCount: count,
-			Size:          0,
-			AvgObjSize:    0,
-		}
-
-		result = append(result, info)
+			}
+			if err != nil {
+				info.DocumentCount = 0
+			}
+			mu.Lock()
+			result[index] = info
+			mu.Unlock()
+		}(i, coll)
 	}
 
+	wg.Wait()
 	return result, nil
 }
 
@@ -193,6 +196,7 @@ func (s *Service) GetDocumentsWithFilter(database, collection string, page, limi
 	type MongoDocumentReader interface {
 		FindDocumentsInDB(ctx context.Context, database, collection string, filter bson.M, skip, limit int64) ([]map[string]interface{}, error)
 		CountDocumentsInDB(ctx context.Context, database, collection string, filter bson.M) (int64, error)
+		EstimatedDocumentCountInDB(ctx context.Context, database, collection string) (int64, error)
 	}
 
 	mongoAdapter, ok := s.adapter.(MongoDocumentReader)
@@ -205,14 +209,34 @@ func (s *Service) GetDocumentsWithFilter(database, collection string, page, limi
 	}
 
 	skip := int64((page - 1) * limit)
-	documents, err := mongoAdapter.FindDocumentsInDB(s.ctx, database, collection, filter, skip, int64(limit))
-	if err != nil {
-		return nil, err
-	}
 
-	totalCount, err := mongoAdapter.CountDocumentsInDB(s.ctx, database, collection, filter)
-	if err != nil {
-		return nil, err
+	var documents []map[string]interface{}
+	var totalCount int64
+	var docErr, countErr error
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		documents, docErr = mongoAdapter.FindDocumentsInDB(s.ctx, database, collection, filter, skip, int64(limit))
+	}()
+
+	go func() {
+		defer wg.Done()
+		if len(filter) == 0 {
+			totalCount, countErr = mongoAdapter.EstimatedDocumentCountInDB(s.ctx, database, collection)
+		} else {
+			totalCount, countErr = mongoAdapter.CountDocumentsInDB(s.ctx, database, collection, filter)
+		}
+	}()
+
+	wg.Wait()
+
+	if docErr != nil {
+		return nil, docErr
+	}
+	if countErr != nil {
+		return nil, countErr
 	}
 
 	return &DocumentResult{
@@ -479,6 +503,43 @@ func (s *Service) GetCollectionStats(collection string) (map[string]interface{},
 	return mongoAdapter.GetCollectionStats(s.ctx, collection)
 }
 
+// SchemaField represents inferred schema information for a field
+type SchemaField struct {
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Nullable  bool   `json:"nullable"`
+	Frequency int    `json:"frequency"`
+}
+
+// GetCollectionSchema returns inferred schema from a sample of documents
+func (s *Service) GetCollectionSchema(database, collection string) ([]SchemaField, error) {
+	type MongoSchemaReader interface {
+		GetCollectionSchemaInDB(ctx context.Context, database, collection string, sampleSize int) ([]map[string]interface{}, error)
+	}
+
+	mongoAdapter, ok := s.adapter.(MongoSchemaReader)
+	if !ok {
+		return nil, fmt.Errorf("adapter does not support schema inference")
+	}
+
+	// Sample only 10 documents — enough for schema inference, fast even on huge collections
+	adapterFields, err := mongoAdapter.GetCollectionSchemaInDB(s.ctx, database, collection, 10)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]SchemaField, len(adapterFields))
+	for i, f := range adapterFields {
+		result[i] = SchemaField{
+			Name:      getString(f, "name"),
+			Type:      getString(f, "type"),
+			Nullable:  getBool(f, "nullable"),
+			Frequency: getInt(f, "frequency"),
+		}
+	}
+	return result, nil
+}
+
 // processDocumentTypes ensures proper types for MongoDB operations
 func (s *Service) processDocumentTypes(doc map[string]interface{}) {
 	for key, value := range doc {
@@ -504,5 +565,35 @@ func (s *Service) processDocumentTypes(doc map[string]interface{}) {
 				}
 			}
 		}
+	}
+}
+
+
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func getBool(m map[string]interface{}, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
+}
+
+func getInt(m map[string]interface{}, key string) int {
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case int32:
+		return int(v)
+	default:
+		return 0
 	}
 }
