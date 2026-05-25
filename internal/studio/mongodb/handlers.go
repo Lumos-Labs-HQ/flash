@@ -392,6 +392,23 @@ func (s *Server) handleDropIndex(w http.ResponseWriter, r *http.Request) {
 	common.JSONMessage(w, "Index dropped successfully")
 }
 
+// Schema Handler
+func (s *Server) handleGetSchema(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	dbName := r.URL.Query().Get("database")
+	if dbName == "" {
+		common.JSONError(w, http.StatusBadRequest, "database parameter is required")
+		return
+	}
+
+	schema, err := s.service.GetCollectionSchema(dbName, name)
+	if err != nil {
+		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	common.JSON(w, schema)
+}
+
 // Query Handler
 func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")

@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -162,23 +163,22 @@ func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 
 func (a *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
 	coll := a.currentDB().Collection(tableName)
-	cursor, err := coll.Find(ctx, bson.M{}, options.Find().SetLimit(1000))
+	cursor, err := coll.Find(ctx, bson.M{}, options.Find().SetLimit(1000).SetSort(bson.D{{Key: "_id", Value: 1}}))
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
-	var results []map[string]interface{}
+	results := make([]map[string]interface{}, 0, 1000)
 	for cursor.Next(ctx) {
 		var doc bson.M
 		if err := cursor.Decode(&doc); err != nil {
 			continue
 		}
-		converted := make(map[string]interface{})
 		for k, v := range doc {
-			converted[k] = convertBSONValue(v)
+			doc[k] = convertBSONValue(v)
 		}
-		results = append(results, converted)
+		results = append(results, doc)
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("cursor error while reading table data: %w", err)
@@ -307,7 +307,7 @@ func (a *Adapter) FindDocuments(ctx context.Context, collection string, filter b
 func (a *Adapter) FindDocumentsInDB(ctx context.Context, database, collection string, filter bson.M, skip, limit int64) ([]map[string]interface{}, error) {
 	db := a.client.Database(database)
 	coll := db.Collection(collection)
-	opts := options.Find().SetSkip(skip).SetLimit(limit)
+	opts := options.Find().SetSkip(skip).SetLimit(limit).SetSort(bson.D{{Key: "_id", Value: 1}})
 
 	cursor, err := coll.Find(ctx, filter, opts)
 	if err != nil {
@@ -315,17 +315,16 @@ func (a *Adapter) FindDocumentsInDB(ctx context.Context, database, collection st
 	}
 	defer cursor.Close(ctx)
 
-	var results []map[string]interface{}
+	results := make([]map[string]interface{}, 0, limit)
 	for cursor.Next(ctx) {
 		var doc bson.M
 		if err := cursor.Decode(&doc); err != nil {
 			continue
 		}
-		converted := make(map[string]interface{})
 		for k, v := range doc {
-			converted[k] = convertBSONValue(v)
+			doc[k] = convertBSONValue(v)
 		}
-		results = append(results, converted)
+		results = append(results, doc)
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("cursor error: %w", err)
@@ -343,6 +342,14 @@ func (a *Adapter) CountDocumentsInDB(ctx context.Context, database, collection s
 	db := a.client.Database(database)
 	coll := db.Collection(collection)
 	count, err := coll.CountDocuments(ctx, filter)
+	return count, err
+}
+
+// EstimatedDocumentCountInDB returns an estimated count using collection metadata (fast)
+func (a *Adapter) EstimatedDocumentCountInDB(ctx context.Context, database, collection string) (int64, error) {
+	db := a.client.Database(database)
+	coll := db.Collection(collection)
+	count, err := coll.EstimatedDocumentCount(ctx)
 	return count, err
 }
 
@@ -551,4 +558,80 @@ func (a *Adapter) CreateDatabase(ctx context.Context, dbName string) error {
 		return fmt.Errorf("failed to create database: %w", err)
 	}
 	return nil
+}
+
+// GetCollectionSchemaInDB samples documents and returns inferred schema as maps
+func (a *Adapter) GetCollectionSchemaInDB(ctx context.Context, database, collection string, sampleSize int) ([]map[string]interface{}, error) {
+	db := a.client.Database(database)
+	coll := db.Collection(collection)
+
+	// Use aggregation with $sample for efficient random sampling
+	pipeline := mongo.Pipeline{
+		{{Key: "$sample", Value: bson.D{{Key: "size", Value: sampleSize}}}},
+	}
+
+	cursor, err := coll.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	fields := make(map[string]map[string]interface{})
+	totalDocs := 0
+
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		totalDocs++
+
+		for key, value := range doc {
+			if _, ok := fields[key]; !ok {
+				fields[key] = map[string]interface{}{
+					"name":     key,
+					"type":     "",
+					"nullable": false,
+					"count":    0,
+				}
+			}
+			field := fields[key]
+			field["count"] = field["count"].(int) + 1
+			inferredType := inferBSONType(value)
+			currentType := field["type"].(string)
+			if currentType == "" {
+				field["type"] = inferredType
+			} else if currentType != inferredType && !strings.Contains(currentType, inferredType) {
+				field["type"] = currentType + " | " + inferredType
+			}
+			if value == nil {
+				field["nullable"] = true
+			}
+		}
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("cursor error: %w", err)
+	}
+
+	result := make([]map[string]interface{}, 0, len(fields))
+	for _, field := range fields {
+		count := field["count"].(int)
+		if count < totalDocs {
+			field["nullable"] = true
+		}
+		if totalDocs > 0 {
+			field["frequency"] = (count * 100) / totalDocs
+		} else {
+			field["frequency"] = 0
+		}
+		delete(field, "count")
+		result = append(result, field)
+	}
+
+	// Sort by name for consistent output
+	sort.Slice(result, func(i, j int) bool {
+		return result[i]["name"].(string) < result[j]["name"].(string)
+	})
+
+	return result, nil
 }
