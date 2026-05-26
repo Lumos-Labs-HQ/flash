@@ -108,7 +108,24 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 	w.WriteString("class Queries:\n")
 	w.WriteString("    def __init__(self, db):\n")
 	w.WriteString("        self.db = db\n")
-	w.WriteString("        self._stmts = {}\n\n")
+	w.WriteString("        self._stmts = {}\n")
+	
+	isAsync := g.Config.Gen.Python.Async
+	provider := g.Config.Database.Provider
+	if isAsync && provider == "mysql" {
+		w.WriteString("\n")
+		w.WriteString("    def _get_conn(self):\n")
+		w.WriteString("        import contextlib\n")
+		w.WriteString("        @contextlib.asynccontextmanager\n")
+		w.WriteString("        async def _manager():\n")
+		w.WriteString("            if hasattr(self.db, 'acquire'):\n")
+			w.WriteString("                async with self.db.acquire() as conn:\n")
+			w.WriteString("                    yield conn\n")
+			w.WriteString("            else:\n")
+			w.WriteString("                yield self.db\n")
+			w.WriteString("        return _manager()\n")
+	}
+	w.WriteString("\n")
 
 	for _, query := range fileQueries {
 		g.generateQueryMethod(w, query)

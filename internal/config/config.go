@@ -35,12 +35,14 @@ type Gen struct {
 }
 
 type GoGen struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool   `json:"enabled,omitempty"`
+	Driver  string `json:"driver,omitempty"` // "database/sql" (default) or "pgx"
 }
 
 type JSGen struct {
 	Enabled bool   `json:"enabled,omitempty"`
 	Out     string `json:"out,omitempty"`
+	Driver  string `json:"driver,omitempty"` // "pg" (default) or "postgres"
 }
 
 type PythonGen struct {
