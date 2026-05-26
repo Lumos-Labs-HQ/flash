@@ -106,26 +106,64 @@ flash gen
 
 ## Configuration
 
-### flash.config.json
+### flash.toml
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "js": {
-      "enabled": true,
-      "out": "flash_gen"
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.js]
+enabled = true
+out = "flash_gen"
+driver = "pg"
+```
+
+### Driver Selection
+
+Flash ORM supports multiple JavaScript/TypeScript database drivers:
+
+| Driver | Package | Description | Database |
+|--------|---------|-------------|----------|
+| `pg` | `pg` | node-postgres (default) | PostgreSQL |
+| `postgres` | `postgres` | porsager/postgres | PostgreSQL |
+| `mysql2` | `mysql2` | Promise-based MySQL | MySQL |
+| `better-sqlite3` | `better-sqlite3` | Synchronous SQLite | SQLite |
+| `bun:sqlite` | Built-in | Bun's native SQLite | SQLite |
+
+**Example configurations:**
+
+```toml
+# PostgreSQL with pg (default)
+[gen.js]
+enabled = true
+driver = "pg"
+
+# PostgreSQL with postgres driver
+[gen.js]
+enabled = true
+driver = "postgres"
+
+# MySQL
+[gen.js]
+enabled = true
+driver = "mysql2"
+
+# SQLite with better-sqlite3
+[gen.js]
+enabled = true
+driver = "better-sqlite3"
+
+# SQLite with Bun
+[gen.js]
+enabled = true
+driver = "bun:sqlite"
 ```
 
 ### TypeScript Configuration
@@ -772,7 +810,7 @@ myproject/
 ├── dist/                # Compiled output
 ├── package.json
 ├── tsconfig.json
-└── flash.config.json
+└── flash.toml
 ```
 
 ### Error Handling

@@ -24,14 +24,19 @@ FlashORM provides specialized studio interfaces for different database types:
 :::
 
 ```bash
-# SQL Studio (default) - for PostgreSQL, MySQL, SQLite
+# SQL Studio (default) - loads from flash.toml
 flash studio
 
-# MongoDB Studio - visual management only
-flash studio mongodb --url "mongodb://localhost:27017/mydb"
+# Auto-detect from URL protocol
+flash studio "postgres://localhost:5432/mydb"
+flash studio "mysql://localhost:3306/mydb"
+flash studio "sqlite:///path/to/db.sqlite"
 
-# Redis Studio - visual management only
-flash studio redis --url "redis://localhost:6379"
+# MongoDB Studio - auto-detected from mongodb:// URL
+flash studio "mongodb://localhost:27017/mydb"
+
+# Redis Studio - auto-detected from redis:// URL
+flash studio "redis://localhost:6379"
 ```
 
 ## Table of Contents
@@ -74,11 +79,11 @@ FlashORM Studio is a visual database management interface that provides:
 ### Launching Studio
 
 ```bash
-# Launch with current database
+# Launch with current database (from config)
 flash studio
 
-# Launch with specific database
-flash studio --db "postgres://user:pass@localhost:5432/mydb"
+# Launch with specific database URL
+flash studio "postgres://user:pass@localhost:5432/mydb"
 
 # Launch with custom port
 flash studio --port 3001
@@ -96,7 +101,7 @@ flash studio --no-browser
 
 2. **Open in Browser**: Automatically opens at `http://localhost:3000`
 
-3. **Connect to Database**: Studio auto-detects your database from `flash.config.json`
+3. **Connect to Database**: Studio auto-detects your database from `flash.toml`
 
 4. **Start Exploring**: Browse tables, view data, run queries
 
@@ -279,19 +284,17 @@ Since Flash ORM supports Git-like branching for databases:
 
 ### Configuration
 
-```json
-// flash.config.json
-{
-  "studio": {
-    "port": 3000,
-    "host": "localhost",
-    "readOnly": false,
-    "auth": {
-      "enabled": false,
-      "users": []
-    }
-  }
-}
+```toml
+# flash.toml
+
+[studio]
+port = 3000
+host = "localhost"
+readOnly = false
+
+[studio.auth]
+enabled = false
+users = []
 ```
 
 ## Advanced Features

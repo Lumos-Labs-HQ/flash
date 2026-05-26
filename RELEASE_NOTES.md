@@ -2,6 +2,78 @@
 
 ## Version 2.4.0 — Latest Release
 
+### Seed Command Rewrite
+
+The seed command has been completely rewritten for production use:
+
+- **Automatic FK handling** — Foreign key relationships are now handled automatically. The `--relations` flag has been removed; relations are always resolved via dependency graph + ID tracking.
+- **Simplified flags** — Removed `--relations`, `--batch`, and `--no-transaction`. Added `--dry-run` (preview without inserting) and `--exclude` (skip tables).
+- **MySQL ID extraction fixed** — MySQL now correctly extracts inserted IDs via `SELECT LAST_INSERT_ID()`, making FK relationships work on MySQL.
+- **Self-referencing FKs fixed** — Tables with `parent_id` referencing themselves (e.g., comment threads, category trees) now work correctly.
+- **SQLite multi-row inserts** — SQLite now uses fast multi-row inserts when ID tracking isn't needed.
+- **Smart batching** — Tables referenced by FKs use single-row inserts (to capture IDs). Unreferenced tables use multi-row for speed.
+- **Schema-qualified names** — `public.users:100` parsing fixed with `strings.LastIndex`.
+- **All SQL types supported** — BIGINT, SMALLINT, TINYINT, NUMERIC, REAL, DOUBLE, JSONB, ARRAY, ENUM, BYTEA, BLOB, TIME, TIMESTAMPTZ, CHAR, MEDIUMINT, YEAR all generate correct values.
+- **RFC 4122 UUID v4** — UUID generator is now standards-compliant.
+- **Coordinated timestamps** — When a table has both `created_at` and `updated_at`, `updated_at` is always >= `created_at`.
+- **20+ new column patterns** — username, password, token, slug, bio, metadata, lat/lng, ip, color, gender, role, locale, currency, country, dob, age, percent, is_/has_/can_ booleans, sort_order, version, priority, progress, hash, ref_code.
+- **Word-boundary pattern matching** — Prevents false positives (e.g., `message` no longer matches `age`). Longest-keyword wins for specificity.
+- **ENUM parsing** — Extracts values from `ENUM('a','b')` type definitions and picks randomly.
+- **Column def parsing fix** — `DECIMAL(10, 2) NOT NULL` no longer loses the `NOT NULL` constraint due to comma splitting.
+
+### Multi-Driver Matrix
+
+Code generation now supports multiple database drivers per language:
+
+**Go**
+- `database/sql` (default) — Standard library, works with all SQL databases
+- `pgx` — jackc/pgx/v5 for PostgreSQL (connection pool, native types, better performance)
+
+**JavaScript / TypeScript**
+- `pg` (default) — node-postgres for PostgreSQL
+- `postgres` — porsager/postgres (tagged template literals, lightweight)
+- `mysql2` — MySQL driver
+- `better-sqlite3` — Synchronous SQLite driver
+- `bun:sqlite` — Bun's native SQLite driver
+
+**Python**
+- PostgreSQL: `asyncpg` (default async) / `psycopg3` (sync or async)
+- MySQL: `aiomysql` (default async) / `pymysql` (sync)
+- SQLite: `aiosqlite` (default async) / `sqlite3` (sync)
+
+Configure via `flash.toml`:
+
+```toml
+[gen.go]
+enabled = true
+driver = "pgx"
+
+[gen.js]
+enabled = true
+driver = "postgres"
+
+[gen.python]
+enabled = true
+driver = "psycopg3"
+async = true
+```
+
+### Documentation Overhaul
+
+- **New Examples section** — Complete examples for every feature:
+  - End-to-end workflows for Go, TypeScript, and Python
+  - Every CLI command with all flags and real-world patterns
+  - Common schema patterns (blog, e-commerce, social, SaaS, audit logging)
+  - SQL query patterns (CRUD, relationships, aggregation, search, JSON, window functions)
+  - Seeding patterns with generated data reference tables
+- **Updated CLI Reference** — Corrected seed command flags, added all examples.
+- **Updated Seeding docs** — Removed outdated flags, added dry-run and exclude examples.
+- **Enhanced Architecture docs** — Added seeding pipeline, plugin system, complete data flow diagrams, and multi-driver matrix.
+- **Updated Configuration Reference** — Documented all supported drivers per language.
+- **Updated Language Guides** — Added driver selection sections for Go, TypeScript, and Python.
+- **Better VitePress navigation** — Added Examples to top nav and sidebar.
+
+
 ### Plugin System
 
 The plugin architecture has been redesigned:

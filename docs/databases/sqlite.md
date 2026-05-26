@@ -84,21 +84,19 @@ DATABASE_URL=sqlite://./data.db?_journal_mode=WAL&_foreign_keys=on&_synchronous=
 
 ### SQLite-Specific Config
 
-```json
-// flash.config.json
-{
-  "database": {
-    "provider": "sqlite",
-    "url_env": "DATABASE_URL",
-    "sqlite": {
-      "journal_mode": "WAL",
-      "synchronous": "NORMAL",
-      "foreign_keys": true,
-      "cache_size": -64000,
-      "temp_store": "memory"
-    }
-  }
-}
+```toml
+# flash.toml
+
+[database]
+provider = "sqlite"
+url_env = "DATABASE_URL"
+
+[database.sqlite]
+journal_mode = "WAL"
+synchronous = "NORMAL"
+foreign_keys = true
+cache_size = -64000
+temp_store = "memory"
 ```
 
 ## Data Types

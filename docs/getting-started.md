@@ -61,7 +61,7 @@ The `flash init` command creates the following structure:
 
 ```
 your-project/
-├── flash.config.json    # Configuration file
+├── flash.toml    # Configuration file
 ├── db/
 │   ├── schema/          # SQL schema files
 │   │   └── schema.sql   # Your database schema

@@ -34,7 +34,7 @@ A comprehensive web-based Redis management interface with advanced features:
 
 ```bash
 # Launch Redis Studio
-flash studio redis --url "redis://localhost:6379"
+flash studio "redis://localhost:6379"
 ```
 
 ### 🍃 MongoDB Studio Improvements
@@ -255,7 +255,7 @@ Download from [GitHub Releases](https://github.com/Lumos-Labs-HQ/flash/releases)
 
 ### From v1.x to v2.x
 
-1. **Update Configuration**: Convert `flash.config.json` to v2 format
+1. **Update Configuration**: Convert `flash.toml` to v2 format
 2. **Reinstall CLI**: Use new plugin system
 3. **Regenerate Code**: Run `flash gen` to update generated files
 4. **Test Migrations**: Verify migration compatibility
