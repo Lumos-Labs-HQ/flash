@@ -15,17 +15,19 @@ import (
 
 var seedCmd = &cobra.Command{
 	Use:   "seed [tables...]",
-	Short: "Generate and insert random test data",
+	Short: "Generate and insert fake test data",
 	Long: `
-Generate and insert random test data into database tables.
+Generate realistic fake data and insert it into your database tables.
+Foreign key relationships are handled automatically.
 
 Examples:
   flash seed                          # Seed all tables with 10 records each
   flash seed --count 100              # Seed all tables with 100 records each
   flash seed users                    # Seed only 'users' table
   flash seed users posts --count 50   # Seed specific tables with 50 records
-  flash seed --relations              # Include foreign key relationships
-  flash seed --truncate --count 100   # Clear tables before seeding
+  flash seed --truncate               # Clear tables before seeding
+  flash seed --exclude logs,sessions  # Skip specific tables
+  flash seed --dry-run                # Preview without inserting
   flash seed users:100 posts:500      # Custom count per table`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -38,68 +40,50 @@ Examples:
 			return fmt.Errorf("invalid config: %w", err)
 		}
 
-		// Parse flags with proper error handling
-		count, err := cmd.Flags().GetInt("count")
-		if err != nil {
-			return fmt.Errorf("invalid count flag: %w", err)
-		}
-		relations, err := cmd.Flags().GetBool("relations")
-		if err != nil {
-			return fmt.Errorf("invalid relations flag: %w", err)
-		}
-		truncate, err := cmd.Flags().GetBool("truncate")
-		if err != nil {
-			return fmt.Errorf("invalid truncate flag: %w", err)
-		}
-		batch, err := cmd.Flags().GetInt("batch")
-		if err != nil {
-			return fmt.Errorf("invalid batch flag: %w", err)
-		}
-		force, err := cmd.Flags().GetBool("force")
-		if err != nil {
-			return fmt.Errorf("invalid force flag: %w", err)
-		}
-		noTransaction, err := cmd.Flags().GetBool("no-transaction")
-		if err != nil {
-			return fmt.Errorf("invalid no-transaction flag: %w", err)
-		}
+		count, _ := cmd.Flags().GetInt("count")
+		truncate, _ := cmd.Flags().GetBool("truncate")
+		force, _ := cmd.Flags().GetBool("force")
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		excludeRaw, _ := cmd.Flags().GetString("exclude")
 
-		// Parse table-specific counts
 		tableCounts := make(map[string]int)
 		var specificTables []string
 
 		for _, arg := range args {
-			if strings.Contains(arg, ":") {
-				parts := strings.Split(arg, ":")
-				if len(parts) == 2 {
-					table := parts[0]
-					tableCount, err := strconv.Atoi(parts[1])
-					if err != nil {
-						return fmt.Errorf("invalid count for table %s: %s", table, parts[1])
-					}
-					tableCounts[table] = tableCount
+			// Use LastIndex to handle schema-qualified names like public.users:100
+			if idx := strings.LastIndex(arg, ":"); idx > 0 {
+				table := arg[:idx]
+				if n, err := strconv.Atoi(arg[idx+1:]); err == nil {
+					tableCounts[table] = n
 					specificTables = append(specificTables, table)
+					continue
 				}
-			} else {
-				specificTables = append(specificTables, arg)
 			}
+			specificTables = append(specificTables, arg)
 		}
 
-		// If specific tables provided without counts, use default count
 		for _, table := range specificTables {
 			if _, exists := tableCounts[table]; !exists {
 				tableCounts[table] = count
 			}
 		}
 
+		var exclude []string
+		if excludeRaw != "" {
+			for _, e := range strings.Split(excludeRaw, ",") {
+				if e = strings.TrimSpace(e); e != "" {
+					exclude = append(exclude, e)
+				}
+			}
+		}
+
 		seedConfig := seeder.SeedConfig{
-			Count:         count,
-			Tables:        tableCounts,
-			Relations:     relations,
-			Truncate:      truncate,
-			Batch:         batch,
-			Force:         force,
-			NoTransaction: noTransaction,
+			Count:    count,
+			Tables:   tableCounts,
+			Truncate: truncate,
+			Force:    force,
+			DryRun:   dryRun,
+			Exclude:  exclude,
 		}
 
 		ctx := cmd.Context()
@@ -114,10 +98,9 @@ Examples:
 }
 
 func init() {
-	seedCmd.Flags().IntP("count", "c", 10, "Number of records to generate per table")
-	seedCmd.Flags().BoolP("relations", "r", false, "Include foreign key relationships")
+	seedCmd.Flags().IntP("count", "c", 10, "Records per table")
 	seedCmd.Flags().BoolP("truncate", "t", false, "Truncate tables before seeding")
-	seedCmd.Flags().IntP("batch", "b", 100, "Batch size for inserts")
-	seedCmd.Flags().BoolP("force", "f", false, "Skip confirmations and continue on errors")
-	seedCmd.Flags().Bool("no-transaction", false, "Disable transaction wrapping (each batch commits separately)")
+	seedCmd.Flags().BoolP("force", "f", false, "Skip confirmations")
+	seedCmd.Flags().BoolP("dry-run", "d", false, "Preview data without inserting")
+	seedCmd.Flags().StringP("exclude", "x", "", "Comma-separated tables to skip")
 }
