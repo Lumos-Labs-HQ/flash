@@ -1,13 +1,14 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/BurntSushi/toml"
 )
 
 // ConfigFile is the path to the config file, set by the cmd package from --config flag.
@@ -22,54 +23,68 @@ var (
 )
 
 type Config struct {
-	Version        string   `json:"version"`
-	SchemaPath     string   `json:"schema_path"` // Deprecated: use SchemaDir instead
-	SchemaDir      string   `json:"schema_dir"`  // New: folder containing .sql schema files
-	Queries        string   `json:"queries"`
-	MigrationsPath string   `json:"migrations_path"`
-	ExportPath     string   `json:"export_path"`
-	Database       Database `json:"database"`
-	Gen            Gen      `json:"gen"`
+	Version        string   `toml:"version"`
+	SchemaPath     string   `toml:"schema_path"` // Deprecated: use SchemaDir instead
+	SchemaDir      string   `toml:"schema_dir"`  // New: folder containing .sql schema files
+	Queries        string   `toml:"queries"`
+	MigrationsPath string   `toml:"migrations_path"`
+	ExportPath     string   `toml:"export_path"`
+	Database       Database `toml:"database"`
+	Gen            Gen      `toml:"gen"`
 }
 
 type Database struct {
-	Provider string `json:"provider"`
-	URLEnv   string `json:"url_env"`
+	Provider string `toml:"provider"`
+	URLEnv   string `toml:"url_env"`
 }
 
 type Gen struct {
-	Go     GoGen     `json:"go,omitempty"`
-	JS     JSGen     `json:"js,omitempty"`
-	Python PythonGen `json:"python,omitempty"`
+	Go     GoGen     `toml:"go"`
+	JS     JSGen     `toml:"js"`
+	Python PythonGen `toml:"python"`
 }
 
 type GoGen struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Driver  string `json:"driver,omitempty"` // "database/sql" (default) or "pgx"
+	Enabled bool   `toml:"enabled"`
+	Driver  string `toml:"driver"` // "database/sql" (default) or "pgx"
 }
 
 type JSGen struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Out     string `json:"out,omitempty"`
-	Driver  string `json:"driver,omitempty"` // "pg" (default) or "postgres"
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Driver  string `toml:"driver"` // "pg" (default) or "postgres"
 }
 
 type PythonGen struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Out     string `json:"out,omitempty"`
-	Async   bool   `json:"async,omitempty"` // true = async (default), false = sync
-	Driver  string `json:"driver,omitempty"` // database-specific driver
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Async   bool   `toml:"async"`  // true = async (default), false = sync
+	Driver  string `toml:"driver"` // database-specific driver
 }
 
-// pythonRaw is used to detect whether "async" was explicitly set in the JSON.
-type pythonRaw struct {
-	Async *bool `json:"async"`
+// rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
+type rawPythonGen struct {
+	Enabled bool  `toml:"enabled"`
+	Out     string `toml:"out"`
+	Async   *bool  `toml:"async"` // nil = not present in TOML
+	Driver  string `toml:"driver"`
 }
-type genRaw struct {
-	Python pythonRaw `json:"python"`
+
+type rawGen struct {
+	Go     GoGen        `toml:"go"`
+	JS     JSGen        `toml:"js"`
+	Python rawPythonGen `toml:"python"`
 }
-type configRaw struct {
-	Gen genRaw `json:"gen"`
+
+type rawConfig struct {
+	Version        string   `toml:"version"`
+	SchemaPath     string   `toml:"schema_path"`
+	SchemaDir      string   `toml:"schema_dir"`
+	Queries        string   `toml:"queries"`
+	MigrationsPath string   `toml:"migrations_path"`
+	ExportPath     string   `toml:"export_path"`
+	Database       Database `toml:"database"`
+	Gen            rawGen   `toml:"gen"`
 }
 
 // Load reads and returns the config, with in-memory caching keyed by file path
@@ -78,7 +93,7 @@ type configRaw struct {
 func Load() (*Config, error) {
 	path := ConfigFile
 	if path == "" {
-		path = "flash.config.json"
+		path = "flash.toml"
 	}
 
 	// Resolve to absolute path for reliable cache keying
@@ -131,7 +146,7 @@ func loadUncached() (*Config, error) {
 
 	path := ConfigFile
 	if path == "" {
-		path = "flash.config.json"
+		path = "flash.toml"
 	}
 
 	data, err := os.ReadFile(path)
@@ -141,14 +156,27 @@ func loadUncached() (*Config, error) {
 
 	pythonAsyncSet := false
 	if data != nil {
-		cleanData := StripJSONComments(data)
-		if err := json.Unmarshal(cleanData, &cfg); err != nil {
+		var raw rawConfig
+		if err := toml.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf("failed to parse config: %w", err)
 		}
-		// Check if python.async was explicitly set
-		var raw configRaw
-		json.Unmarshal(cleanData, &raw)
-		pythonAsyncSet = raw.Gen.Python.Async != nil
+		// Copy raw values into the main config struct
+		cfg.Version = raw.Version
+		cfg.SchemaPath = raw.SchemaPath
+		cfg.SchemaDir = raw.SchemaDir
+		cfg.Queries = raw.Queries
+		cfg.MigrationsPath = raw.MigrationsPath
+		cfg.ExportPath = raw.ExportPath
+		cfg.Database = raw.Database
+		cfg.Gen.Go = raw.Gen.Go
+		cfg.Gen.JS = raw.Gen.JS
+		cfg.Gen.Python.Enabled = raw.Gen.Python.Enabled
+		cfg.Gen.Python.Out = raw.Gen.Python.Out
+		cfg.Gen.Python.Driver = raw.Gen.Python.Driver
+		if raw.Gen.Python.Async != nil {
+			cfg.Gen.Python.Async = *raw.Gen.Python.Async
+			pythonAsyncSet = true
+		}
 	}
 
 	// Set defaults
@@ -302,45 +330,4 @@ func (c *Config) GetSchemaFiles() ([]string, error) {
 func (c *Config) IsNodeProject() bool {
 	_, err := os.Stat("package.json")
 	return err == nil
-}
-
-
-
-// StripJSONComments removes // line comments from JSON data so users can
-// include comments in flash.config.json for documentation purposes.
-func StripJSONComments(data []byte) []byte {
-	var result []byte
-	inString := false
-	for i := 0; i < len(data); i++ {
-		ch := data[i]
-		if ch == '"' {
-			// Check if escaped
-			escapeCount := 0
-			for j := i - 1; j >= 0 && data[j] == '\\'; j-- {
-				escapeCount++
-			}
-			if escapeCount%2 == 0 {
-				inString = !inString
-			}
-			result = append(result, ch)
-			continue
-		}
-		if inString {
-			result = append(result, ch)
-			continue
-		}
-		if ch == '/' && i+1 < len(data) && data[i+1] == '/' {
-			// Skip until end of line
-			for i < len(data) && data[i] != '\n' {
-				i++
-			}
-			// Keep the newline to preserve line numbers
-			if i < len(data) {
-				result = append(result, '\n')
-			}
-			continue
-		}
-		result = append(result, ch)
-	}
-	return result
 }

@@ -37,10 +37,13 @@ func TestCodegen(t *testing.T) {
 
 			t.Run("JavaScript", func(t *testing.T) {
 				// Enable JS gen
-				cfgPath := filepath.Join(dir, "flash.config.json")
+				cfgPath := filepath.Join(dir, "flash.toml")
 				raw, _ := os.ReadFile(cfgPath)
-				cfg := strings.Replace(string(raw), `"gen": {`, `"gen": {"js": {"enabled": true, "out": "flash_gen"},`, 1)
-				os.WriteFile(cfgPath, []byte(cfg), 0644)
+				cfg := string(raw)
+				if !strings.Contains(cfg, `[gen.js]`) {
+					cfg += "\n[gen.js]\nenabled = true\nout = \"flash_gen\"\n"
+					os.WriteFile(cfgPath, []byte(cfg), 0644)
+				}
 				os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"t","version":"1.0.0"}`), 0644)
 
 				out, err := flash(t, dir, "gen")
@@ -56,10 +59,13 @@ func TestCodegen(t *testing.T) {
 			})
 
 			t.Run("Python", func(t *testing.T) {
-				cfgPath := filepath.Join(dir, "flash.config.json")
+				cfgPath := filepath.Join(dir, "flash.toml")
 				raw, _ := os.ReadFile(cfgPath)
-				cfg := strings.Replace(string(raw), `"gen": {`, `"gen": {"python": {"enabled": true, "out": "flash_gen"},`, 1)
-				os.WriteFile(cfgPath, []byte(cfg), 0644)
+				cfg := string(raw)
+				if !strings.Contains(cfg, `[gen.python]`) {
+					cfg += "\n[gen.python]\nenabled = true\nout = \"flash_gen\"\nasync = true\n"
+					os.WriteFile(cfgPath, []byte(cfg), 0644)
+				}
 				os.WriteFile(filepath.Join(dir, "requirements.txt"), []byte("psycopg2\n"), 0644)
 
 				out, err := flash(t, dir, "gen")

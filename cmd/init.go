@@ -1,198 +1,150 @@
-//go:build plugin_core || dev
-// +build plugin_core dev
-
 package cmd
 
 import (
 	"fmt"
 	"os"
-	"strings"
+	"path/filepath"
 
-	"github.com/Lumos-Labs-HQ/flash/template"
 	"github.com/spf13/cobra"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	tmpl "github.com/Lumos-Labs-HQ/flash/template"
 )
-
-var (
-	sqliteFlag     bool
-	postgresqlFlag bool
-	mysqlFlag      bool
-)
-
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize a new FlashORM project",
-	Long:  `Initialize a new FlashORM project with database migrations and code generation configuration.`,
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		dbType := template.PostgreSQL
-		flagCount := 0
-
-		if sqliteFlag {
-			dbType = template.SQLite
-			flagCount++
-		}
-		if postgresqlFlag {
-			dbType = template.PostgreSQL
-			flagCount++
-		}
-		if mysqlFlag {
-			dbType = template.MySQL
-			flagCount++
-		}
-
-		if flagCount > 1 {
-			return fmt.Errorf("please specify only one database type (--sqlite, --postgresql, or --mysql)")
-		}
-
-		return initializeProject(dbType)
-	},
-}
 
 func init() {
-	// Command is registered by plugin executors, not the base CLI
+	rootCmd.AddCommand(initCmd)
 
-	initCmd.Flags().BoolVar(&sqliteFlag, "sqlite", false, "Initialize project for SQLite database")
-	initCmd.Flags().BoolVar(&postgresqlFlag, "postgresql", false, "Initialize project for PostgreSQL database")
-	initCmd.Flags().BoolVar(&mysqlFlag, "mysql", false, "Initialize project for MySQL database")
+	initCmd.Flags().Bool("sqlite", false, "Initialize project for SQLite database")
+	initCmd.Flags().Bool("postgresql", false, "Initialize project for PostgreSQL database")
+	initCmd.Flags().Bool("postgres", false, "Initialize project for PostgreSQL database (alias)")
+	initCmd.Flags().Bool("mysql", false, "Initialize project for MySQL database")
 }
 
-func initializeProject(dbType template.DatabaseType) error {
-	// Detect project type
-	isNodeProject := false
-	isPythonProject := false
+var initCmd = &cobra.Command{
+	Use:   "init [project-name]",
+	Short: "Initialize a new Flash project",
+	Long:  "Initialize a new Flash project with the necessary directory structure and configuration files.",
+	Args:  cobra.MaximumNArgs(1),
+	Run:   runInit,
+}
 
-	if _, err := os.Stat("package.json"); err == nil {
-		isNodeProject = true
+func runInit(cmd *cobra.Command, args []string) {
+	projectName := ""
+	if len(args) > 0 {
+		projectName = args[0]
 	}
 
-	if _, err := os.Stat("requirements.txt"); err == nil {
-		isPythonProject = true
-	} else if _, err := os.Stat("pyproject.toml"); err == nil {
-		isPythonProject = true
+	dbType := tmpl.PostgreSQL
+	flagCount := 0
+
+	if cmd.Flags().Changed("sqlite") {
+		dbType = tmpl.SQLite
+		flagCount++
+	}
+	if cmd.Flags().Changed("postgresql") || cmd.Flags().Changed("postgres") {
+		dbType = tmpl.PostgreSQL
+		flagCount++
+	}
+	if cmd.Flags().Changed("mysql") {
+		dbType = tmpl.MySQL
+		flagCount++
 	}
 
-	tmpl := template.NewProjectTemplate(dbType, isNodeProject, isPythonProject)
+	if flagCount > 1 {
+		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, or --mysql)")
+		os.Exit(1)
+	}
 
-	directories := tmpl.GetDirectoryStructure()
-	for _, dir := range directories {
+	projectTemplate := tmpl.NewProjectTemplate(dbType, isNodeProject(), isPythonProject())
+	initializeProject(projectName, projectTemplate)
+}
+
+func isNodeProject() bool {
+	_, err := os.Stat("package.json")
+	return err == nil
+}
+
+func isPythonProject() bool {
+	for _, file := range []string{"requirements.txt", "pyproject.toml", "setup.py"} {
+		if _, err := os.Stat(file); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate) {
+	dirs := projectTemplate.GetDirectoryStructure()
+	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", dir, err)
+			os.Exit(1)
 		}
 	}
 
 	files := map[string]string{
-		"flash.config.json": tmpl.GetFlashORMConfig(),
+		"flash.toml":          projectTemplate.GetFlashORMConfig(),
+		"db/schema/schema.sql": projectTemplate.GetSchema(),
+		"db/queries/users.sql": projectTemplate.GetQueries(),
 	}
 
-	// Check if any .sql files exist in db/schema directory
-	schemaExists := false
-	if entries, err := os.ReadDir("db/schema"); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
-				schemaExists = true
-				break
+	if _, err := os.Stat(".env"); os.IsNotExist(err) {
+		files[".env"] = projectTemplate.GetEnvTemplate()
+	}
+
+	if projectName != "" {
+		if err := os.MkdirAll(projectName, 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating project directory: %v\n", err)
+			os.Exit(1)
+		}
+		for fileName := range files {
+			files[filepath.Join(projectName, fileName)] = files[fileName]
+			delete(files, fileName)
+		}
+	}
+
+	for fileName, content := range files {
+		dir := filepath.Dir(fileName)
+		if dir != "." && dir != "" {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				fmt.Fprintf(os.Stderr, "Error creating directory %s: %v\n", dir, err)
+				os.Exit(1)
 			}
 		}
-	}
-	if !schemaExists {
-		files["db/schema/users.sql"] = tmpl.GetSchema()
-	}
-
-	if _, err := os.Stat("db/queries/users.sql"); os.IsNotExist(err) {
-		files["db/queries/users.sql"] = tmpl.GetQueries()
-	}
-
-	for filePath, content := range files {
-		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to create file %s: %w", filePath, err)
+		if err := os.WriteFile(fileName, []byte(content), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating file %s: %v\n", fileName, err)
+			os.Exit(1)
 		}
 	}
 
-	// Handle .env file separately to preserve existing variables
-	envCreated := false
-	if err := handleEnvFile(tmpl.GetEnvTemplate()); err != nil {
-		return fmt.Errorf("failed to handle .env file: %w", err)
+	fmt.Println("Flash project initialized successfully!")
+	fmt.Println()
+	fmt.Println("Created files and directories:")
+	fmt.Println("  flash.toml")
+	fmt.Println("  db/schema/schema.sql")
+	fmt.Println("  db/queries/users.sql")
+	if _, err := os.Stat(".env"); os.IsNotExist(err) {
+		fmt.Println("  .env")
+	}
+
+	if projectName != "" {
+		fmt.Printf("\nProject created in directory: %s\n", projectName)
+		fmt.Printf("  cd %s\n", projectName)
+	}
+
+	fmt.Println("\nNext steps:")
+	fmt.Println("  1. Update .env with your database URL")
+	fmt.Println("  2. Run 'flash apply' to create the database tables")
+	fmt.Println("  3. Run 'flash generate' to generate the code")
+	fmt.Println("  4. Run 'flash studio' to open the database studio")
+
+	// Write a first-run marker so docs can guide the user
+	if projectName != "" {
+		os.WriteFile(filepath.Join(projectName, ".flash"), []byte("new=true\n"), 0644)
 	} else {
-		envCreated = true
-	}
-	_ = envCreated
-
-	projectType := "Go"
-	if isNodeProject {
-		projectType = "Node.js"
-	} else if isPythonProject {
-		projectType = "Python"
+		os.WriteFile(".flash", []byte("new=true\n"), 0644)
 	}
 
-	fmt.Printf("✅ Successfully initialized FlashORM project for %s with %s database support\n", projectType, dbType)
-	fmt.Println()
-	fmt.Println("📁 Project structure created:")
-	for _, dir := range directories {
-		fmt.Printf("   %s/\n", dir)
-	}
-	fmt.Println()
-	fmt.Println("📝 Configuration file created:")
-	fmt.Println("   flash.config.json")
-
-	if isNodeProject {
-		fmt.Println()
-		fmt.Println("🟢 Node.js project detected!")
-		fmt.Println("   JavaScript code generation is enabled")
-		fmt.Println("   Run 'flash gen' to generate type-safe JS code")
-	}
-
-	if isPythonProject {
-		fmt.Println()
-		fmt.Println("🐍 Python project detected!")
-		fmt.Println("   Python code generation is enabled")
-		fmt.Println("   Run 'Flash gen' to generate type-safe Python code")
-	}
-
-	if os.Getenv("DATABASE_URL") != "" {
-		fmt.Println()
-		fmt.Println("ℹ️  Using existing DATABASE_URL from environment")
-	}
-
-	if schemaExists {
-		fmt.Println("ℹ️  Skipped schema files (db/schema already has .sql files)")
-	}
-
-	if _, err := os.Stat("db/queries/users.sql"); err == nil {
-		fmt.Println("ℹ️  Skipped db/queries/users.sql (already exists)")
-	}
-
-	fmt.Println()
-	fmt.Printf("🚀 Next steps:\n")
-	fmt.Printf("   flash migrate \"create users\"  # Create migrations\n")
-	fmt.Printf("   flash apply                    # Apply migrations\n")
-	fmt.Printf("   flash gen                      # Generate code\n")
-
-	return nil
-}
-
-func handleEnvFile(defaultEnvContent string) error {
-	envPath := ".env"
-
-	// Check if .env file exists
-	existingContent, err := os.ReadFile(envPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return os.WriteFile(envPath, []byte(defaultEnvContent), 0644)
-		}
-		return err
-	}
-
-	existingStr := string(existingContent)
-	if strings.Contains(existingStr, "DATABASE_URL") {
-		return nil
-	}
-
-	// Append DATABASE_URL to existing .env
-	if len(existingStr) > 0 && !strings.HasSuffix(existingStr, "\n") {
-		existingStr += "\n"
-	}
-
-	existingStr += "\n# Added by FlashORM\n" + defaultEnvContent
-
-	return os.WriteFile(envPath, []byte(existingStr), 0644)
+	// Reset config cache so subsequent commands pick up the new config
+	config.ResetConfigCache()
 }
