@@ -120,10 +120,12 @@ func TestAllDatabases(t *testing.T) {
 			os.RemoveAll(dir)
 			os.MkdirAll(dir, 0755)
 			t.Cleanup(func() {
-				os.RemoveAll(dir)
+				// Reset the shared database BEFORE removing the project directory,
+				// because flash needs to chdir into it to read config.
 				if out, err := flash(t, dir, "reset", "--force"); err != nil {
 					t.Logf("cleanup reset error: %v\n%s", err, out)
 				}
+				os.RemoveAll(dir)
 			})
 
 			t.Run("01_Init", func(t *testing.T) { testInit(t, dir, db) })

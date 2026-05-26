@@ -60,12 +60,23 @@ func (p *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, erro
 }
 
 func (p *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
+	// Exclude indexes backed by PRIMARY KEY or UNIQUE constraints.
+	// These cannot be dropped independently and cause errors like:
+	// "cannot drop index users_pkey because constraint users_pkey on table users requires it"
 	query := `
 		SELECT 
-			indexname,
-			indexdef
-		FROM pg_indexes
-		WHERE tablename = $1 AND schemaname = 'public'
+			i.indexname,
+			i.indexdef
+		FROM pg_indexes i
+		WHERE i.tablename = $1 AND i.schemaname = 'public'
+		  AND i.indexname NOT IN (
+			  SELECT c.relname
+			  FROM pg_constraint pc
+			  JOIN pg_class c ON c.oid = pc.conindid
+			  JOIN pg_namespace n ON n.oid = c.relnamespace
+			  WHERE pc.contype IN ('p', 'u')
+			    AND n.nspname = 'public'
+		  )
 	`
 
 	rows, err := p.pool.Query(ctx, query, tableName)
@@ -319,10 +330,21 @@ func (p *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 		return make(map[string][]types.SchemaIndex), nil
 	}
 
+	// Exclude indexes backed by PRIMARY KEY or UNIQUE constraints.
+	// These cannot be dropped independently and cause errors like:
+	// "cannot drop index users_pkey because constraint users_pkey on table users requires it"
 	query := `
-		SELECT indexname, tablename, indexdef
-		FROM pg_indexes
-		WHERE tablename = ANY($1) AND schemaname = 'public'
+		SELECT i.indexname, i.tablename, i.indexdef
+		FROM pg_indexes i
+		WHERE i.tablename = ANY($1) AND i.schemaname = 'public'
+		  AND i.indexname NOT IN (
+			  SELECT c.relname
+			  FROM pg_constraint pc
+			  JOIN pg_class c ON c.oid = pc.conindid
+			  JOIN pg_namespace n ON n.oid = c.relnamespace
+			  WHERE pc.contype IN ('p', 'u')
+			    AND n.nspname = 'public'
+		  )
 	`
 
 	rows, err := p.pool.Query(ctx, query, tableNames)
