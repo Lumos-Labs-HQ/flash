@@ -115,7 +115,6 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 	methodName := utils.Uncapitalize(query.Name)
 	sql := g.convertSQL(query.SQL)
 	sql = strings.ReplaceAll(sql, "`", "\\`")
-	sql = strings.ReplaceAll(sql, "${", "\\${")
 
 	paramNames := make([]string, len(query.Params))
 	for i, param := range query.Params {
@@ -131,6 +130,13 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 	isHotQuery := isSingleColumn && query.Cmd == ":one" && len(query.Params) <= 2
 
 	w.WriteString(fmt.Sprintf("  async %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
+
+	// postgres driver (porsager/postgres) uses tagged template literals
+	if g.Config.Gen.JS.Driver == "postgres" {
+		g.generatePostgresDriverExecution(w, sql, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+		w.WriteString("  }\n\n")
+		return
+	}
 
 	w.WriteString(fmt.Sprintf("    let stmt = this._stmts.get('%s');\n", methodName))
 	w.WriteString("    if (!stmt) {\n")
@@ -228,6 +234,41 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 		}
 	} else {
 		w.WriteString("    return r[0].affectedRows;\n")
+	}
+}
+
+func (g *Generator) generatePostgresDriverExecution(w *strings.Builder, sql string, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
+	// Convert $N placeholders to ${paramName} for tagged template literals
+	templateSQL := sql
+	for i, name := range paramNames {
+		templateSQL = strings.ReplaceAll(templateSQL, fmt.Sprintf("$%d", i+1), "${"+name+"}")
+	}
+
+	w.WriteString(fmt.Sprintf("    const r = await this.db`%s`;\n", templateSQL))
+
+	if hasColumns {
+		if cmd == ":one" {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r[0] ? r[0].%s : null;\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r[0] || null;\n")
+			}
+		} else {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r.map(row => row.%s);\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r;\n")
+			}
+		}
+	} else {
+		switch cmd {
+		case ":one":
+			w.WriteString("    return r[0] || null;\n")
+		case ":many":
+			w.WriteString("    return r;\n")
+		default:
+			w.WriteString("    return r.count;\n")
+		}
 	}
 }
 
@@ -380,7 +421,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	w.WriteString("/**\n")
 	w.WriteString(" * Create a new database client\n")
-	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, mysql2.Pool, or better-sqlite3 instance)\n")
+	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, or better-sqlite3 instance)\n")
 	w.WriteString(" * @returns {Queries}\n")
 	w.WriteString(" */\n")
 	w.WriteString("function New(db) {\n")

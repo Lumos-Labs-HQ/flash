@@ -141,7 +141,24 @@ func (g *Generator) generateQueries(queries []*parser.Query) error {
 		w.WriteString("class Queries:\n")
 		w.WriteString("    def __init__(self, db):\n")
 		w.WriteString("        self.db = db\n")
-		w.WriteString("        self._stmts = {}\n\n")
+		w.WriteString("        self._stmts = {}\n")
+		
+		isAsync := g.Config.Gen.Python.Async
+		provider := g.Config.Database.Provider
+		if isAsync && provider == "mysql" {
+			w.WriteString("\n")
+			w.WriteString("    def _get_conn(self):\n")
+			w.WriteString("        import contextlib\n")
+			w.WriteString("        @contextlib.asynccontextmanager\n")
+			w.WriteString("        async def _manager():\n")
+			w.WriteString("            if hasattr(self.db, 'acquire'):\n")
+			w.WriteString("                async with self.db.acquire() as conn:\n")
+			w.WriteString("                    yield conn\n")
+			w.WriteString("            else:\n")
+			w.WriteString("                yield self.db\n")
+			w.WriteString("        return _manager()\n")
+		}
+		w.WriteString("\n")
 
 		for _, query := range fileQueries {
 			g.generateQueryMethod(&w, query)
@@ -299,7 +316,7 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 	isAsync := g.Config.Gen.Python.Async
 	
 	if isAsync {
-		w.WriteString("        async with self.db.acquire() as conn:\n")
+		w.WriteString("        async with self._get_conn() as conn:\n")
 		w.WriteString("            async with conn.cursor() as cursor:\n")
 	} else {
 		w.WriteString("        with self.db.cursor() as cursor:\n")
@@ -336,7 +353,6 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 			w.WriteString(fmt.Sprintf("%s    return result['%s'] if result else None\n", indent, query.Columns[0].Name))
 		} else {
 			w.WriteString(fmt.Sprintf("%s    if result:\n", indent))
-			// Convert to dict if needed (works with any cursor type)
 			w.WriteString(fmt.Sprintf("%s        row_dict = dict(result) if hasattr(result, 'keys') else {desc[0]: result[i] for i, desc in enumerate(cursor.description)}\n", indent))
 			if needsResultClass {
 				w.WriteString(fmt.Sprintf("%s        return %s._make_fast(row_dict)\n", indent, returnType))
@@ -361,6 +377,14 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 			} else {
 				w.WriteString(fmt.Sprintf("%s    return rows\n", indent))
 			}
+		}
+	case ":execresult":
+		if isAsync {
+			w.WriteString("                await conn.commit()\n")
+			w.WriteString("                return cursor.lastrowid\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    self.db.commit()\n", indent))
+			w.WriteString(fmt.Sprintf("%s    return cursor.lastrowid\n", indent))
 		}
 	default:
 		if isAsync {
@@ -572,12 +596,17 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 	}
 
 	switch {
+	case strings.HasPrefix(sqlTypeLower, "enum("):
+		values := parseMySQLEnumValues(sqlType)
+		pyType = "Literal[" + strings.Join(values, ", ") + "]"
 	case strings.Contains(sqlTypeLower, "[]"): // Array type
 		if strings.Contains(sqlTypeLower, "int") {
 			pyType = "List[int]"
 		} else {
 			pyType = "List[str]"
 		}
+	case strings.Contains(sqlTypeLower, "tinyint(1)"):
+		pyType = "bool"
 	case strings.Contains(sqlTypeLower, "bigint"), strings.Contains(sqlTypeLower, "int8"):
 		pyType = "int"
 	case strings.Contains(sqlTypeLower, "int"), strings.Contains(sqlTypeLower, "serial"), strings.Contains(sqlTypeLower, "smallint"):
@@ -835,9 +864,10 @@ func (g *Generator) generateBatchMethod(w *strings.Builder, query *parser.Query)
 		}
 	case "mysql":
 		if isAsync {
-			w.WriteString("        async with self.db.cursor() as cursor:\n")
-			w.WriteString("            await cursor.executemany(stmt, records)\n")
-			w.WriteString("            return cursor.rowcount\n")
+			w.WriteString("        async with self._get_conn() as conn:\n")
+			w.WriteString("            async with conn.cursor() as cursor:\n")
+			w.WriteString("                await cursor.executemany(stmt, records)\n")
+			w.WriteString("                return cursor.rowcount\n")
 		} else {
 			w.WriteString("        with self.db.cursor() as cursor:\n")
 			w.WriteString("            cursor.executemany(stmt, records)\n")
@@ -853,4 +883,32 @@ func (g *Generator) generateBatchMethod(w *strings.Builder, query *parser.Query)
 	}
 
 	w.WriteString("\n")
+}
+
+// parseMySQLEnumValues extracts quoted values from MySQL ENUM('a', 'b') syntax
+func parseMySQLEnumValues(sqlType string) []string {
+	start := strings.Index(sqlType, "(")
+	end := strings.LastIndex(sqlType, ")")
+	if start == -1 || end == -1 || end <= start {
+		return nil
+	}
+	inner := sqlType[start+1 : end]
+	var values []string
+	var current strings.Builder
+	inQuote := false
+	quoteChar := rune(0)
+	for _, ch := range inner {
+		if !inQuote && (ch == '\'' || ch == '"') {
+			inQuote = true
+			quoteChar = ch
+			current.Reset()
+		} else if inQuote && ch == quoteChar {
+			inQuote = false
+			values = append(values, fmt.Sprintf("'%s'", current.String()))
+			current.Reset()
+		} else if inQuote {
+			current.WriteRune(ch)
+		}
+	}
+	return values
 }
