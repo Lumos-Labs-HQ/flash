@@ -1,11 +1,10 @@
 package template
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/BurntSushi/toml"
 )
 
 // ── NewProjectTemplate / DatabaseType constants ───────────────────────────────
@@ -41,14 +40,13 @@ func TestValidateDatabaseType(t *testing.T) {
 
 // ── GetFlashORMConfig ─────────────────────────────────────────────────────────
 
-func TestGetFlashORMConfig_ValidJSON(t *testing.T) {
+func TestGetFlashORMConfig_ValidTOML(t *testing.T) {
 	for _, db := range []DatabaseType{PostgreSQL, MySQL, SQLite} {
 		pt := NewProjectTemplate(db, false, false)
 		cfg := pt.GetFlashORMConfig()
 		var parsed map[string]interface{}
-		cleanCfg := config.StripJSONComments([]byte(cfg))
-		if err := json.Unmarshal(cleanCfg, &parsed); err != nil {
-			t.Errorf("GetFlashORMConfig(%s) invalid JSON: %v\n%s", db, err, cfg)
+		if err := toml.Unmarshal([]byte(cfg), &parsed); err != nil {
+			t.Errorf("GetFlashORMConfig(%s) invalid TOML: %v\n%s", db, err, cfg)
 		}
 	}
 }
@@ -71,7 +69,7 @@ func TestGetFlashORMConfig_CorrectProvider(t *testing.T) {
 func TestGetFlashORMConfig_GoGen(t *testing.T) {
 	pt := NewProjectTemplate(PostgreSQL, false, false)
 	cfg := pt.GetFlashORMConfig()
-	if !strings.Contains(cfg, `"go"`) {
+	if !strings.Contains(cfg, `[gen.go]`) {
 		t.Errorf("Go project config missing go gen section: %s", cfg)
 	}
 }
@@ -79,7 +77,7 @@ func TestGetFlashORMConfig_GoGen(t *testing.T) {
 func TestGetFlashORMConfig_JSGen(t *testing.T) {
 	pt := NewProjectTemplate(PostgreSQL, true, false)
 	cfg := pt.GetFlashORMConfig()
-	if !strings.Contains(cfg, `"js"`) {
+	if !strings.Contains(cfg, `[gen.js]`) {
 		t.Errorf("Node project config missing js gen section: %s", cfg)
 	}
 }
@@ -87,7 +85,7 @@ func TestGetFlashORMConfig_JSGen(t *testing.T) {
 func TestGetFlashORMConfig_PythonGen(t *testing.T) {
 	pt := NewProjectTemplate(PostgreSQL, false, true)
 	cfg := pt.GetFlashORMConfig()
-	if !strings.Contains(cfg, `"python"`) {
+	if !strings.Contains(cfg, `[gen.python]`) {
 		t.Errorf("Python project config missing python gen section: %s", cfg)
 	}
 }

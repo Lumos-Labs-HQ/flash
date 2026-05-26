@@ -29,7 +29,7 @@ func getDatabases() []Database {
 		},
 		{
 			Name: "mysql",
-			URL:  getEnv("MYSQL_URL", "mysql://testuser:testpass@tcp(localhost:3306)/testdb"),
+			URL:  getEnv("MYSQL_URL", "mysql://testuser:testpass@localhost:3306/testdb"),
 		},
 		{
 			Name: "sqlite",
@@ -149,7 +149,7 @@ func testInit(t *testing.T, dir string, db Database) {
 	out := mustFlash(t, dir, "init", flag)
 	t.Logf("init output: %s", out)
 
-	for _, path := range []string{"flash.config.json", "db/schema", "db/queries"} {
+	for _, path := range []string{"flash.toml", "db/schema", "db/queries"} {
 		if _, err := os.Stat(filepath.Join(dir, path)); os.IsNotExist(err) {
 			t.Errorf("expected path not created: %s", path)
 		}
@@ -227,11 +227,11 @@ func testGenGo(t *testing.T, dir string, _ Database) {
 
 func testGenJS(t *testing.T, dir string, _ Database) {
 	// Enable JS generation in config.
-	cfgPath := filepath.Join(dir, "flash.config.json")
+	cfgPath := filepath.Join(dir, "flash.toml")
 	raw, _ := os.ReadFile(cfgPath)
 	cfg := string(raw)
-	if !strings.Contains(cfg, `"js"`) {
-		cfg = strings.Replace(cfg, `"gen": {`, `"gen": {"js": {"enabled": true, "out": "flash_gen"},`, 1)
+	if !strings.Contains(cfg, `[gen.js]`) {
+		cfg += "\n[gen.js]\nenabled = true\nout = \"flash_gen\"\n"
 		os.WriteFile(cfgPath, []byte(cfg), 0644)
 	}
 
@@ -253,11 +253,11 @@ func testGenJS(t *testing.T, dir string, _ Database) {
 }
 
 func testGenPython(t *testing.T, dir string, _ Database) {
-	cfgPath := filepath.Join(dir, "flash.config.json")
+	cfgPath := filepath.Join(dir, "flash.toml")
 	raw, _ := os.ReadFile(cfgPath)
 	cfg := string(raw)
-	if !strings.Contains(cfg, `"python"`) {
-		cfg = strings.Replace(cfg, `"gen": {`, `"gen": {"python": {"enabled": true, "out": "flash_gen"},`, 1)
+	if !strings.Contains(cfg, `[gen.python]`) {
+		cfg += "\n[gen.python]\nenabled = true\nout = \"flash_gen\"\nasync = true\n"
 		os.WriteFile(cfgPath, []byte(cfg), 0644)
 	}
 

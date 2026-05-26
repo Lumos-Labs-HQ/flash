@@ -79,43 +79,21 @@ func NewProjectTemplate(dbType DatabaseType, isNodeProject bool, isPythonProject
 func (pt *ProjectTemplate) GetFlashORMConfig() string {
 	cfg := dbConfigs[pt.DatabaseType]
 
-	var genSection string
+	config := pt.getDriverHeaderComment() + "\n"
+	config += "version = \"2\"\n"
+	config += "schema_dir = \"db/schema\"\n"
+	config += "queries = \"db/queries/\"\n"
+	config += "migrations_path = \"db/migrations\"\n"
+	config += "export_path = \"db/export\"\n\n"
 
-	if pt.IsNodeProject {
-		genSection = pt.getJSGenSection()
-	} else if pt.IsPythonProject {
-		genSection = pt.getPythonGenSection()
-	} else {
-		genSection = pt.getGoGenSection()
-	}
+	config += "[database]\n"
+	config += fmt.Sprintf("provider = \"%s\"\n", cfg.provider)
+	config += "url_env = \"DATABASE_URL\"\n"
 
-	driverHeader := pt.getDriverHeaderComment()
-	configParts := []string{
-		`  "version": "2"`,
-		`  "schema_dir": "db/schema"`,
-		`  "queries": "db/queries/"`,
-		`  "migrations_path": "db/migrations"`,
-		`  "export_path": "db/export"`,
-		fmt.Sprintf(`  "database": {
-    "provider": "%s",
-    "url_env": "DATABASE_URL"
-  }`, cfg.provider),
-	}
-
+	genSection := pt.getGenSection()
 	if genSection != "" {
-		configParts = append(configParts, genSection)
+		config += "\n" + genSection
 	}
-
-	config := driverHeader + "\n{\n"
-	for i, part := range configParts {
-		config += part
-		if i < len(configParts)-1 {
-			config += ",\n"
-		} else {
-			config += "\n"
-		}
-	}
-	config += "}"
 
 	return config
 }
@@ -185,52 +163,43 @@ func ValidateDatabaseType(dbType string) DatabaseType {
 	return PostgreSQL
 }
 
-
-func (pt *ProjectTemplate) getGoGenSection() string {
-	return `  "gen": {
-    "go": {
-      "enabled": true
-    }
-  }`
-}
-
-func (pt *ProjectTemplate) getJSGenSection() string {
-	return `  "gen": {
-    "js": {
-      "enabled": true
-    }
-  }`
-}
-
-func (pt *ProjectTemplate) getPythonGenSection() string {
-	return `  "gen": {
-    "python": {
-      "enabled": true
-    }
-  }`
+func (pt *ProjectTemplate) getGenSection() string {
+	if pt.IsNodeProject {
+		return `[gen.js]
+enabled = true
+out = "flash_gen"`
+	}
+	if pt.IsPythonProject {
+		return `[gen.python]
+enabled = true
+out = "flash_gen"
+async = true`
+	}
+	return `[gen.go]
+enabled = true`
 }
 
 func (pt *ProjectTemplate) getDriverHeaderComment() string {
 	switch pt.DatabaseType {
 	case PostgreSQL:
-		return `// FlashORM — PostgreSQL Drivers
-//   Go:     "pgx" (native) | "database/sql" (lib/pq)
-//   JS:     "pg" (node-postgres) | "postgres" (porsager/postgres)
-//   Python: "psycopg3" | "asyncpg"
-// Add "driver": "<name>" inside the gen block below.`
+		return `# FlashORM — PostgreSQL Drivers
+#   Go:     "pgx" (native) | "database/sql" (lib/pq)
+#   JS:     "pg" (node-postgres) | "postgres" (porsager/postgres)
+#   Python: "psycopg3" | "asyncpg"
+# Add driver = "<name>" inside the [gen.*] block below.`
 	case MySQL:
-		return `// FlashORM — MySQL Drivers
-//   Go:     "database/sql" (go-sql-driver/mysql)
-//   JS:     "mysql2" | "serverless-mysql"
-//   Python: "pymysql" (sync) | "asyncmy" (async)
-// Add "driver": "<name>" inside the gen block below.`
+		return `# FlashORM — MySQL Drivers
+#   Go:     "database/sql" (go-sql-driver/mysql)
+#   JS:     "mysql2" | "serverless-mysql"
+#   Python: "pymysql" (sync) | "asyncmy" (async)
+# Add driver = "<name>" inside the [gen.*] block below.`
 	case SQLite:
-		return `// FlashORM — SQLite Drivers
-//   Go:     "database/sql" (mattn/go-sqlite3, modernc.org/sqlite)
-//   JS:     "better-sqlite3" | "bun:sqlite"
-//   Python: "sqlite3" (sync) | "aiosqlite" (async)
-// Add "driver": "<name>" inside the gen block below.`
+		return `# FlashORM — SQLite Drivers
+#   Go:     "database/sql" (mattn/go-sqlite3, modernc.org/sqlite)
+#   JS:     "better-sqlite3" | "bun:sqlite"
+#   Python: "sqlite3" (sync) | "aiosqlite" (async)
+# Add driver = "<name>" inside the [gen.*] block below.`
 	default:
-		return `// FlashORM — See docs for available drivers per database.`
+		return `# FlashORM — See docs for available drivers per database.`
 	}
 }

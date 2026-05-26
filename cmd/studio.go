@@ -25,7 +25,7 @@ Similar to Prisma Studio, it provides an intuitive UI for managing your data.
 The studio will start a local web server and open in your default browser.
 
 Pass a database or Redis URL as a positional argument to auto-detect and launch
-the appropriate studio. If no URL is given, the studio loads from flash.config.json.
+the appropriate studio. If no URL is given, the studio loads from flash.toml.
 
 Examples:
   flash studio

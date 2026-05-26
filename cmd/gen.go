@@ -23,7 +23,7 @@ Automatically detects project type and generates appropriate code:
 - Node.js projects: Generate JavaScript code with type annotations
 - Python projects: Generate Python code with type hints
 
-Configuration is read from flash.config.json`,
+Configuration is read from flash.toml`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()

@@ -8,7 +8,7 @@ import (
 
 func writeConfig(t *testing.T, dir, content string) string {
 	t.Helper()
-	path := filepath.Join(dir, "flash.config.json")
+	path := filepath.Join(dir, "flash.toml")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -51,14 +51,18 @@ func TestLoad_ExplicitValues(t *testing.T) {
 	defer os.Chdir(orig)
 	ResetConfigCache()
 
-	writeConfig(t, dir, `{
-		"version": "2",
-		"schema_dir": "custom/schema",
-		"queries": "custom/queries/",
-		"migrations_path": "custom/migrations",
-		"database": {"provider": "mysql", "url_env": "MYSQL_URL"},
-		"gen": {"go": {"enabled": true}}
-	}`)
+	writeConfig(t, dir, `version = "2"
+schema_dir = "custom/schema"
+queries = "custom/queries/"
+migrations_path = "custom/migrations"
+
+[database]
+provider = "mysql"
+url_env = "MYSQL_URL"
+
+[gen.go]
+enabled = true
+`)
 
 	cfg, err := Load()
 	if err != nil {
@@ -82,7 +86,9 @@ func TestLoad_PythonAsyncDefaultsTrue(t *testing.T) {
 	defer os.Chdir(orig)
 	ResetConfigCache()
 
-	writeConfig(t, dir, `{"gen": {"python": {"enabled": true}}}`)
+	writeConfig(t, dir, `[gen.python]
+enabled = true
+`)
 
 	cfg, err := Load()
 	if err != nil {
@@ -100,7 +106,10 @@ func TestLoad_PythonAsyncExplicitFalse(t *testing.T) {
 	defer os.Chdir(orig)
 	ResetConfigCache()
 
-	writeConfig(t, dir, `{"gen": {"python": {"enabled": true, "async": false}}}`)
+	writeConfig(t, dir, `[gen.python]
+enabled = true
+async = false
+`)
 
 	cfg, err := Load()
 	if err != nil {
@@ -118,7 +127,7 @@ func TestLoad_LegacySchemaPath(t *testing.T) {
 	defer os.Chdir(orig)
 	ResetConfigCache()
 
-	writeConfig(t, dir, `{"schema_path": "db/schema/schema.sql"}`)
+	writeConfig(t, dir, `schema_path = "db/schema/schema.sql"`)
 
 	cfg, err := Load()
 	if err != nil {
