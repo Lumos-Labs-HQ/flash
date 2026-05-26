@@ -18,7 +18,12 @@ func TestCodegen(t *testing.T) {
 			dir := filepath.Join("test_projects", "codegen_"+db.Name)
 			os.RemoveAll(dir)
 			os.MkdirAll(dir, 0755)
-			t.Cleanup(func() { os.RemoveAll(dir) })
+			t.Cleanup(func() {
+				os.RemoveAll(dir)
+				if out, err := flash(t, dir, "reset", "--force"); err != nil {
+					t.Logf("cleanup reset error: %v\n%s", err, out)
+				}
+			})
 
 			setupProject(t, dir, db)
 

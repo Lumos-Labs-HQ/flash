@@ -30,6 +30,7 @@ var typeMap = map[string]string{
 	"date": "DATE", "time": "TIME", "numeric": "NUMERIC", "decimal": "NUMERIC",
 	"real": "REAL", "float4": "REAL", "double precision": "DOUBLE PRECISION", "float8": "DOUBLE PRECISION",
 	"uuid": "UUID", "json": "JSON", "jsonb": "JSONB",
+	"serial": "INTEGER", "bigserial": "BIGINT", "smallserial": "SMALLINT",
 }
 
 func New() *Adapter {

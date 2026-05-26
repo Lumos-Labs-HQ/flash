@@ -1,6 +1,6 @@
 # FlashORM Release Notes
 
-## Version 2.4.0 — Latest Release
+## Version 2.4.1 — Latest Release
 
 ### Seed Command Rewrite
 

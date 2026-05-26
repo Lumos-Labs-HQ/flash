@@ -101,7 +101,10 @@ func setupProject(t *testing.T, dir string, db Database) {
 		t.Fatalf("write .env: %v", err)
 	}
 
-	mustFlash(t, dir, "migrate", "initial_schema")
+	// Use a unique migration name per test to avoid timestamp collisions
+	// when multiple tests call migrate within the same second.
+	migrationName := filepath.Base(dir) + "_schema"
+	mustFlash(t, dir, "migrate", migrationName)
 	mustFlash(t, dir, "apply", "--force")
 }
 
@@ -116,7 +119,12 @@ func TestAllDatabases(t *testing.T) {
 			dir := filepath.Join("test_projects", db.Name)
 			os.RemoveAll(dir)
 			os.MkdirAll(dir, 0755)
-			t.Cleanup(func() { os.RemoveAll(dir) })
+			t.Cleanup(func() {
+				os.RemoveAll(dir)
+				if out, err := flash(t, dir, "reset", "--force"); err != nil {
+					t.Logf("cleanup reset error: %v\n%s", err, out)
+				}
+			})
 
 			t.Run("01_Init", func(t *testing.T) { testInit(t, dir, db) })
 			t.Run("02_Migrate", func(t *testing.T) { testMigrate(t, dir, db) })
@@ -160,7 +168,8 @@ func testInit(t *testing.T, dir string, db Database) {
 }
 
 func testMigrate(t *testing.T, dir string, _ Database) {
-	out := mustFlash(t, dir, "migrate", "initial_schema")
+	migrationName := filepath.Base(dir) + "_schema"
+	out := mustFlash(t, dir, "migrate", migrationName)
 	t.Logf("migrate output: %s", out)
 
 	entries, err := os.ReadDir(filepath.Join(dir, "db/migrations"))
