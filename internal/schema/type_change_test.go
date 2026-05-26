@@ -105,9 +105,9 @@ func TestCosmeticTypeDiff_SQLite(t *testing.T) {
 	}
 	mod := diff.ModifiedTables[0]
 
-	// Cosmetic type differences ARE detected at the diff level (exact string comparison)
-	if len(mod.ModifiedColumns) != 4 {
-		t.Fatalf("expected 4 cosmetic modified columns at diff level, got %d", len(mod.ModifiedColumns))
+	// Cosmetic type differences (e.g. TEXT vs VARCHAR(255) in SQLite) are normalized
+	if len(mod.ModifiedColumns) != 0 {
+		t.Fatalf("expected 0 cosmetic modified columns at diff level, got %d", len(mod.ModifiedColumns))
 	}
 
 	// But only the truly new column should appear in NewColumns

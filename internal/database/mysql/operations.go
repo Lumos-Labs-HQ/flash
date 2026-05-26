@@ -193,7 +193,8 @@ func (m *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 
 func (m *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
 	// MySQL: MODIFY COLUMN changes type, nullable, default, unique in one statement.
-	return fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s;", tableName, column.Name, m.FormatColumnType(column))
+	colDef := m.formatColumnTypeInternal(column, true)
+	return fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s;", tableName, column.Name, colDef)
 }
 
 func (m *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
@@ -212,12 +213,19 @@ func (m *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
 }
 
 func (m *Adapter) FormatColumnType(column types.SchemaColumn) string {
+	return m.formatColumnTypeInternal(column, false)
+}
+
+// formatColumnTypeInternal builds the column type string. When forAlter is true,
+func (m *Adapter) formatColumnTypeInternal(column types.SchemaColumn, forAlter bool) string {
 	var parts []string
 	columnType := m.convertTypeToMySQL(column.Type)
 	parts = append(parts, columnType)
 
 	if column.IsPrimary {
-		parts = append(parts, "PRIMARY KEY")
+		if !forAlter {
+			parts = append(parts, "PRIMARY KEY")
+		}
 		if strings.Contains(strings.ToUpper(columnType), "INT") {
 			parts = append(parts, "AUTO_INCREMENT")
 		}

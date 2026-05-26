@@ -207,9 +207,20 @@ func (sm *SchemaManager) buildIndexMaps(current, target []types.SchemaTable) (ma
 
 // Comparison helpers
 func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
+	// Normalize types through the adapter's type map so that equivalent
+	aTypeNorm := a.Type
+	bTypeNorm := b.Type
+	if sm.adapter != nil {
+		aTypeNorm = sm.adapter.MapColumnType(a.Type)
+		bTypeNorm = sm.adapter.MapColumnType(b.Type)
+	}
+
+	aNullable := a.Nullable && !a.IsPrimary
+	bNullable := b.Nullable && !b.IsPrimary
+
 	return a.Name == b.Name &&
-		a.Type == b.Type &&
-		a.Nullable == b.Nullable &&
+		aTypeNorm == bTypeNorm &&
+		aNullable == bNullable &&
 		a.Default == b.Default &&
 		a.IsPrimary == b.IsPrimary &&
 		a.IsUnique == b.IsUnique &&

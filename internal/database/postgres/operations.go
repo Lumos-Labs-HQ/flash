@@ -275,7 +275,12 @@ func (p *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaCo
 	if column.Type == oldType {
 		return ""
 	}
-	return fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;", tableName, column.Name, column.Type)
+	// SERIAL is a pseudo-type macro only valid in CREATE TABLE.
+	newType := column.Type
+	if strings.EqualFold(newType, "SERIAL") {
+		newType = "INTEGER"
+	}
+	return fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;", tableName, column.Name, newType)
 }
 
 func (p *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
