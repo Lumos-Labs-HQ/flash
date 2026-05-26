@@ -13,8 +13,13 @@ import (
 	"github.com/fatih/color"
 )
 
-// validIdentifier validates SQL identifiers (table/column names) to prevent SQL injection
-var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+// Package-level pre-compiled regexes to avoid recompilation on every parse.
+var (
+	validIdentifier      = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+	createTableRegex     = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["']?(\w+)["']?\s*\(([\s\S]*?)\);`)
+	seederFKRegex        = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(["']?(\w+)["']?\)\s*REFERENCES\s+["']?(\w+)["']?\s*\(["']?(\w+)["']?\)`)
+	seederRefRegex       = regexp.MustCompile(`(?i)REFERENCES\s+["']?(\w+)["']?\s*\(["']?(\w+)["']?\)`)
+)
 
 type Seeder struct {
 	config      *config.Config
@@ -52,7 +57,6 @@ func NewSeeder(cfg *config.Config) (*Seeder, error) {
 	}, nil
 }
 
-// isValidIdentifier checks if a string is a valid SQL identifier
 func isValidIdentifier(name string) bool {
 	return validIdentifier.MatchString(name)
 }
@@ -172,7 +176,6 @@ func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
 	return nil
 }
 
-// beginTransaction starts a new database transaction
 func (s *Seeder) beginTransaction(ctx context.Context) error {
 	var query string
 	switch s.config.Database.Provider {
@@ -185,19 +188,16 @@ func (s *Seeder) beginTransaction(ctx context.Context) error {
 	return err
 }
 
-// commitTransaction commits the current transaction
 func (s *Seeder) commitTransaction(ctx context.Context) error {
 	_, err := s.adapter.ExecuteQuery(ctx, "COMMIT")
 	return err
 }
 
-// rollbackTransaction rolls back the current transaction
 func (s *Seeder) rollbackTransaction(ctx context.Context) error {
 	_, err := s.adapter.ExecuteQuery(ctx, "ROLLBACK")
 	return err
 }
 
-// validateForeignKeys checks that all FK references can be satisfied
 func (s *Seeder) validateForeignKeys(tables map[string]*TableInfo, order []string) error {
 	orderIndex := make(map[string]int)
 	for i, name := range order {
@@ -230,7 +230,6 @@ func (s *Seeder) parseSchema() (map[string]*TableInfo, error) {
 	}
 
 	tables := make(map[string]*TableInfo)
-	createTableRegex := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["']?(\w+)["']?\s*\(([\s\S]*?)\);`)
 
 	for _, file := range schemaFiles {
 		content, err := s.readFile(file)
@@ -264,7 +263,6 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 	}
 
 	lines := strings.Split(body, ",")
-	fkRegex := regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(["']?(\w+)["']?\)\s*REFERENCES\s+["']?(\w+)["']?\s*\(["']?(\w+)["']?\)`)
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -275,7 +273,7 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 		lineUpper := strings.ToUpper(line)
 
 		// Check for foreign key constraint
-		if fkMatch := fkRegex.FindStringSubmatch(line); fkMatch != nil {
+		if fkMatch := seederFKRegex.FindStringSubmatch(line); fkMatch != nil {
 			fk := ForeignKey{
 				Column:    fkMatch[1],
 				RefTable:  fkMatch[2],
@@ -316,8 +314,7 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 
 		// Check for inline REFERENCES
 		if strings.Contains(lineUpper, "REFERENCES") {
-			refRegex := regexp.MustCompile(`(?i)REFERENCES\s+["']?(\w+)["']?\s*\(["']?(\w+)["']?\)`)
-			if refMatch := refRegex.FindStringSubmatch(line); refMatch != nil {
+			if refMatch := seederRefRegex.FindStringSubmatch(line); refMatch != nil {
 				col.IsFK = true
 				col.FKTable = refMatch[1]
 				col.FKColumn = refMatch[2]
@@ -349,8 +346,7 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 	return table
 }
 
-// adaptBatchSize calculates an optimal batch size based on the number of columns.
-// Wider rows (more columns) need smaller batches to avoid oversized INSERT statements.
+// adaptBatchSize clamps batch size based on column count to keep INSERT sizes reasonable.
 func adaptBatchSize(userBatch int, columnCount int) int {
 	if userBatch <= 0 {
 		userBatch = 100
@@ -431,7 +427,6 @@ func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, wit
 	return nil
 }
 
-// insertBatch inserts multiple records in a single statement (when possible)
 func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []map[string]interface{}, pkColumn string) ([]interface{}, error) {
 	if len(records) == 0 {
 		return nil, nil
@@ -509,7 +504,6 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 	return ids, nil
 }
 
-// formatValue formats a value for SQL insertion
 func (s *Seeder) formatValue(val interface{}) string {
 	if val == nil {
 		return "NULL"
@@ -627,7 +621,7 @@ func (s *Seeder) truncateTables(ctx context.Context, order []string) error {
 			_, err = s.adapter.ExecuteQuery(ctx, query)
 			if err == nil {
 				resetQuery := fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name='%s'", tableName)
-				s.adapter.ExecuteQuery(ctx, resetQuery) 
+				s.adapter.ExecuteQuery(ctx, resetQuery)
 			}
 		default:
 			query = fmt.Sprintf("DELETE FROM %s", tableName)

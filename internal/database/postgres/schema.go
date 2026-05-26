@@ -10,54 +10,34 @@ import (
 )
 
 func (p *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error) {
-	tableNames, err := p.GetAllTableNames(ctx)
+	tables, err := p.PullCompleteSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	validTables := make([]string, 0, len(tableNames))
-	for _, name := range tableNames {
-		if name != "_flash_migrations" {
-			validTables = append(validTables, name)
+	// Fetch indexes for each table
+	for i := range tables {
+		indexes, err := p.GetTableIndexes(ctx, tables[i].Name)
+		if err != nil {
+			continue
 		}
+		tables[i].Indexes = indexes
 	}
 
-	if len(validTables) == 0 {
-		return []types.SchemaTable{}, nil
-	}
-
-	allColumns, err := p.GetAllTablesColumns(ctx, validTables)
-	if err != nil {
-		return nil, err
-	}
-
-	allIndexes, err := p.GetAllTablesIndexes(ctx, validTables)
-	if err != nil {
-		return nil, err
-	}
-
-	tables := make([]types.SchemaTable, 0, len(validTables))
-	for _, name := range validTables {
-		tables = append(tables, types.SchemaTable{
-			Name:    name,
-			Columns: allColumns[name],
-			Indexes: allIndexes[name],
-		})
-	}
 	return tables, nil
 }
 
 func (p *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, error) {
-	rows, err := p.pool.Query(ctx, `
-		SELECT 
-			t.typname as enum_name,
-			e.enumlabel as enum_value
+	query := `
+		SELECT t.typname as enum_name, e.enumlabel as enum_value
 		FROM pg_type t
 		JOIN pg_enum e ON t.oid = e.enumtypid
-		JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-		WHERE n.nspname = 'public'
+		JOIN pg_namespace n ON t.typnamespace = n.oid
+		WHERE t.typtype = 'e' AND n.nspname = 'public'
 		ORDER BY t.typname, e.enumsortorder
-	`)
+	`
+
+	rows, err := p.pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -67,20 +47,99 @@ func (p *Adapter) GetCurrentEnums(ctx context.Context) ([]types.SchemaEnum, erro
 	for rows.Next() {
 		var enumName, enumValue string
 		if err := rows.Scan(&enumName, &enumValue); err != nil {
-			return nil, err
+			continue
 		}
 		enumMap[enumName] = append(enumMap[enumName], enumValue)
 	}
 
 	enums := make([]types.SchemaEnum, 0, len(enumMap))
 	for name, values := range enumMap {
-		enums = append(enums, types.SchemaEnum{
-			Name:   name,
-			Values: values,
-		})
+		enums = append(enums, types.SchemaEnum{Name: name, Values: values})
+	}
+	return enums, nil
+}
+
+func (p *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
+	query := `
+		SELECT 
+			indexname,
+			indexdef
+		FROM pg_indexes
+		WHERE tablename = $1 AND schemaname = 'public'
+	`
+
+	rows, err := p.pool.Query(ctx, query, tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes []types.SchemaIndex
+	for rows.Next() {
+		var indexName, indexDef string
+		if err := rows.Scan(&indexName, &indexDef); err != nil {
+			continue
+		}
+
+		index := types.SchemaIndex{
+			Name:  indexName,
+			Table: tableName,
+		}
+
+		// Parse index definition
+		if strings.Contains(indexDef, "UNIQUE") {
+			index.Unique = true
+		}
+
+		// Extract column names from index definition
+		if idx := strings.Index(indexDef, "("); idx != -1 {
+			colsStr := indexDef[idx+1:]
+			if endIdx := strings.LastIndex(colsStr, ")"); endIdx != -1 {
+				colsStr = colsStr[:endIdx]
+			}
+			cols := strings.Split(colsStr, ",")
+			for _, col := range cols {
+				col = strings.TrimSpace(col)
+				if strings.HasSuffix(col, " DESC") {
+					col = strings.TrimSuffix(col, " DESC")
+				} else if strings.HasSuffix(col, " ASC") {
+					col = strings.TrimSuffix(col, " ASC")
+				}
+				if col != "" {
+					index.Columns = append(index.Columns, col)
+				}
+			}
+		}
+
+		indexes = append(indexes, index)
 	}
 
-	return enums, nil
+	return indexes, nil
+}
+
+func (p *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
+	query := `
+		SELECT tablename 
+		FROM pg_tables 
+		WHERE schemaname = 'public' 
+			AND tablename NOT LIKE '_flash_%'
+		ORDER BY tablename`
+
+	rows, err := p.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			continue
+		}
+		tables = append(tables, name)
+	}
+	return tables, nil
 }
 
 func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) (map[string][]types.SchemaColumn, error) {
@@ -88,9 +147,8 @@ func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 		return make(map[string][]types.SchemaColumn), nil
 	}
 
-	// MASSIVE OPTIMIZATION: Split the 7-way JOIN monster query
-	// Old query had 3 nested subqueries scanning information_schema repeatedly
-	// New approach: 2 simple queries + merge in Go = 70% faster!
+	// Split the single large information_schema query into two simpler ones
+	// and merge results in Go to reduce repeated scans.
 
 	// Query 1: Get basic column info (fast, no joins)
 	// Check both current_schema() and 'public' for robustness (handles branch schemas)
@@ -208,44 +266,46 @@ func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 			  AND ns.nspname IN (current_schema(), 'public')
 			  AND con.contype IN ('p', 'u')
 		)
-		SELECT table_name, column_name, 'FOREIGN KEY' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action
-		FROM fk_columns
+		SELECT table_name, column_name, 'PK' as constraint_type, NULL as foreign_table_name, NULL as foreign_column_name, NULL as on_delete_action
+		FROM pk_uk_columns WHERE constraint_type = 'PRIMARY KEY'
 		UNION ALL
-		SELECT table_name, column_name, constraint_type, NULL, NULL, NULL
-		FROM pk_uk_columns
+		SELECT table_name, column_name, 'UQ' as constraint_type, NULL, NULL, NULL
+		FROM pk_uk_columns WHERE constraint_type = 'UNIQUE'
+		UNION ALL
+		SELECT table_name, column_name, 'FK' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action
+		FROM fk_columns
 	`
 
-	constraintRows, err := p.pool.Query(ctx, constraintsQuery, tableNames)
+	conRows, err := p.pool.Query(ctx, constraintsQuery, tableNames)
 	if err != nil {
 		return nil, err
 	}
-	defer constraintRows.Close()
+	defer conRows.Close()
 
-	// Apply constraints to columns
-	for constraintRows.Next() {
+	for conRows.Next() {
 		var tableName, columnName, constraintType string
-		var fkTable, fkColumn, onDelete sql.NullString
+		var foreignTable, foreignColumn, onDeleteAction sql.NullString
 
-		err := constraintRows.Scan(&tableName, &columnName, &constraintType, &fkTable, &fkColumn, &onDelete)
+		err := conRows.Scan(&tableName, &columnName, &constraintType, &foreignTable, &foreignColumn, &onDeleteAction)
 		if err != nil {
 			continue
 		}
 
-		if colPtr, exists := columnIndex[tableName][columnName]; exists {
-			switch constraintType {
-			case "PRIMARY KEY":
-				colPtr.IsPrimary = true
-			case "UNIQUE":
-				colPtr.IsUnique = true
-			case "FOREIGN KEY":
-				if fkTable.Valid {
-					colPtr.ForeignKeyTable = fkTable.String
-				}
-				if fkColumn.Valid {
-					colPtr.ForeignKeyColumn = fkColumn.String
-				}
-				if onDelete.Valid {
-					colPtr.OnDeleteAction = onDelete.String
+		if colMap, exists := columnIndex[tableName]; exists {
+			if col, exists := colMap[columnName]; exists {
+				switch constraintType {
+				case "PK":
+					col.IsPrimary = true
+				case "UQ":
+					col.IsUnique = true
+				case "FK":
+					if foreignTable.Valid && foreignColumn.Valid {
+						col.ForeignKeyTable = foreignTable.String
+						col.ForeignKeyColumn = foreignColumn.String
+						if onDeleteAction.Valid {
+							col.OnDeleteAction = onDeleteAction.String
+						}
+					}
 				}
 			}
 		}
@@ -259,20 +319,10 @@ func (p *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 		return make(map[string][]types.SchemaIndex), nil
 	}
 
-	// PERFORMANCE OPTIMIZATION: Use LEFT JOIN instead of subquery
-	// The subquery was uncorrelated and ran for every row
-	// LEFT JOIN is much faster (50-80% improvement on large DBs)
-	// Check both current_schema() and 'public' for robustness (handles branch schemas)
 	query := `
-		SELECT DISTINCT ON (p.tablename, p.indexname) p.tablename, p.indexname, p.indexdef
-		FROM pg_indexes p
-		LEFT JOIN pg_constraint c
-			ON p.indexname = c.conname
-			AND c.contype IN ('u', 'p')
-		WHERE p.tablename = ANY($1)
-		  AND p.schemaname IN (current_schema(), 'public')
-		  AND c.conname IS NULL
-		ORDER BY p.tablename, p.indexname, p.schemaname
+		SELECT indexname, tablename, indexdef
+		FROM pg_indexes
+		WHERE tablename = ANY($1) AND schemaname = 'public'
 	`
 
 	rows, err := p.pool.Query(ctx, query, tableNames)
@@ -281,24 +331,37 @@ func (p *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 	}
 	defer rows.Close()
 
-	result := make(map[string][]types.SchemaIndex, len(tableNames))
+	result := make(map[string][]types.SchemaIndex)
 	for rows.Next() {
-		var tableName, indexName, indexDef string
-		if err := rows.Scan(&tableName, &indexName, &indexDef); err != nil {
+		var indexName, tableName, indexDef string
+		if err := rows.Scan(&indexName, &tableName, &indexDef); err != nil {
 			continue
 		}
 
 		index := types.SchemaIndex{
-			Name:   indexName,
-			Table:  tableName,
-			Unique: strings.Contains(strings.ToUpper(indexDef), "UNIQUE"),
+			Name:  indexName,
+			Table: tableName,
 		}
 
-		if start := strings.Index(indexDef, "("); start != -1 {
-			if end := strings.Index(indexDef[start:], ")"); end != -1 {
-				columnsStr := indexDef[start+1 : start+end]
-				for _, col := range strings.Split(columnsStr, ",") {
-					index.Columns = append(index.Columns, strings.TrimSpace(col))
+		if strings.Contains(indexDef, "UNIQUE") {
+			index.Unique = true
+		}
+
+		if idx := strings.Index(indexDef, "("); idx != -1 {
+			colsStr := indexDef[idx+1:]
+			if endIdx := strings.LastIndex(colsStr, ")"); endIdx != -1 {
+				colsStr = colsStr[:endIdx]
+			}
+			cols := strings.Split(colsStr, ",")
+			for _, col := range cols {
+				col = strings.TrimSpace(col)
+				if strings.HasSuffix(col, " DESC") {
+					col = strings.TrimSuffix(col, " DESC")
+				} else if strings.HasSuffix(col, " ASC") {
+					col = strings.TrimSuffix(col, " ASC")
+				}
+				if col != "" {
+					index.Columns = append(index.Columns, col)
 				}
 			}
 		}
@@ -309,30 +372,6 @@ func (p *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 	return result, nil
 }
 
-func (p *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
-	// Check both current_schema() and 'public' for robustness (handles branch schemas)
-	rows, err := p.pool.Query(ctx, `
-		SELECT DISTINCT table_name FROM information_schema.tables
-		WHERE table_schema IN (current_schema(), 'public') AND table_type = 'BASE TABLE'
-		ORDER BY table_name
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	tables := make([]string, 0, 32)
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			continue
-		}
-		tables = append(tables, tableName)
-	}
-	return tables, nil
-}
-
-// GetTableColumns - Compatibility stub, delegates to batch version
 func (p *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
 	allColumns, err := p.GetAllTablesColumns(ctx, []string{tableName})
 	if err != nil {
@@ -341,93 +380,58 @@ func (p *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 	return allColumns[tableName], nil
 }
 
-// GetTableIndexes - Compatibility stub, delegates to batch version
-func (p *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {
-	allIndexes, err := p.GetAllTablesIndexes(ctx, []string{tableName})
-	if err != nil {
-		return nil, err
-	}
-	return allIndexes[tableName], nil
-}
-
-// PullCompleteSchema returns complete schema excluding internal tables
+// PullCompleteSchema returns all tables and columns in the database.
+// It uses a two-query approach (columns + constraints) for speed.
 func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
-	query := `
-	SELECT 
-		c.table_name,
-		c.column_name,
-		c.udt_name,
-		c.is_nullable,
-		c.column_default,
-		c.character_maximum_length,
-		c.numeric_precision,
-		c.numeric_scale,
-		c.ordinal_position,
-		CASE WHEN pk.column_name IS NOT NULL THEN 'PRIMARY KEY' ELSE NULL END as is_primary,
-		CASE WHEN uq.column_name IS NOT NULL THEN 'UNIQUE' ELSE NULL END as is_unique,
-		fk.foreign_table_name,
-		fk.foreign_column_name,
-		fk.delete_rule
-	FROM information_schema.columns c
-	LEFT JOIN (
-		SELECT kcu.table_name, kcu.column_name
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu 
-			ON tc.constraint_name = kcu.constraint_name 
-			AND tc.table_schema = kcu.table_schema
-		WHERE tc.constraint_type = 'PRIMARY KEY' AND tc.table_schema = 'public'
-	) pk ON c.table_name = pk.table_name AND c.column_name = pk.column_name
-	LEFT JOIN (
-		SELECT kcu.table_name, kcu.column_name
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu 
-			ON tc.constraint_name = kcu.constraint_name 
-			AND tc.table_schema = kcu.table_schema
-		WHERE tc.constraint_type = 'UNIQUE' AND tc.table_schema = 'public'
-	) uq ON c.table_name = uq.table_name AND c.column_name = uq.column_name
-	LEFT JOIN (
-		SELECT 
-			kcu.table_name, 
-			kcu.column_name,
-			ccu.table_name AS foreign_table_name,
-			ccu.column_name AS foreign_column_name,
-			rc.delete_rule
-		FROM information_schema.table_constraints tc
-		JOIN information_schema.key_column_usage kcu 
-			ON tc.constraint_name = kcu.constraint_name 
-			AND tc.table_schema = kcu.table_schema
-		JOIN information_schema.constraint_column_usage ccu 
-			ON tc.constraint_name = ccu.constraint_name 
-			AND tc.table_schema = ccu.table_schema
-		JOIN information_schema.referential_constraints rc 
-			ON tc.constraint_name = rc.constraint_name 
-			AND tc.table_schema = rc.constraint_schema
-		WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public'
-	) fk ON c.table_name = fk.table_name AND c.column_name = fk.column_name
-	WHERE c.table_schema = 'public' 
-		AND c.table_name NOT LIKE '_flash_%'
-	ORDER BY c.table_name, c.ordinal_position`
-
-	rows, err := p.pool.Query(ctx, query)
+	// Step 1: Get all table names
+	tableNames, err := p.GetAllTableNames(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query schema: %w", err)
+		return nil, fmt.Errorf("failed to get table names: %w", err)
+	}
+
+	if len(tableNames) == 0 {
+		return []types.SchemaTable{}, nil
+	}
+
+	// Step 2: Get basic column info (fast, no joins)
+	columnsQuery := `
+		SELECT DISTINCT ON (c.table_name, c.column_name)
+			c.table_name,
+			c.column_name,
+			c.udt_name,
+			c.is_nullable,
+			c.column_default,
+			c.character_maximum_length,
+			c.numeric_precision,
+			c.numeric_scale,
+			c.ordinal_position
+		FROM information_schema.columns c
+		WHERE c.table_name = ANY($1)
+		  AND c.table_schema IN (current_schema(), 'public')
+		ORDER BY c.table_name, c.column_name, c.table_schema
+	`
+
+	rows, err := p.pool.Query(ctx, columnsQuery, tableNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query columns: %w", err)
 	}
 	defer rows.Close()
 
 	tableMap := make(map[string]*types.SchemaTable)
-	columnsSeen := make(map[string]map[string]bool)
+	columnIndex := make(map[string]map[string]*types.SchemaColumn)
 
 	for rows.Next() {
 		var tableName, columnName, udtName, isNullable string
-		var ordinalPosition int
-		var columnDefault, isPrimary, isUnique, foreignTable, foreignColumn, deleteRule sql.NullString
+		var columnDefault sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
+		var ordinalPosition int
 
-		err := rows.Scan(&tableName, &columnName, &udtName, &isNullable, &columnDefault,
-			&charMaxLength, &numericPrecision, &numericScale, &ordinalPosition, &isPrimary, &isUnique,
-			&foreignTable, &foreignColumn, &deleteRule)
+		err := rows.Scan(
+			&tableName, &columnName, &udtName, &isNullable, &columnDefault,
+			&charMaxLength, &numericPrecision, &numericScale, &ordinalPosition,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
+			return nil, fmt.Errorf("failed to scan column: %w", err)
 		}
 
 		if _, exists := tableMap[tableName]; !exists {
@@ -435,42 +439,149 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 				Name:    tableName,
 				Columns: []types.SchemaColumn{},
 			}
-			columnsSeen[tableName] = make(map[string]bool)
+			columnIndex[tableName] = make(map[string]*types.SchemaColumn)
 		}
 
-		if columnsSeen[tableName][columnName] {
-			continue
-		}
-		columnsSeen[tableName][columnName] = true
-
-		columnType := p.formatPullColumnType(udtName, charMaxLength, numericPrecision, numericScale, columnDefault.String, isPrimary.Valid)
+		columnType := p.formatPullColumnType(udtName, charMaxLength, numericPrecision, numericScale, columnDefault.String, false)
 
 		column := types.SchemaColumn{
-			Name:      columnName,
-			Type:      columnType,
-			Nullable:  isNullable == "YES",
-			Default:   p.formatDefaultValue(columnDefault.String),
-			IsPrimary: isPrimary.Valid,
-			IsUnique:  isUnique.Valid,
-		}
-
-		if foreignTable.Valid && foreignColumn.Valid {
-			column.ForeignKeyTable = foreignTable.String
-			column.ForeignKeyColumn = foreignColumn.String
-			if deleteRule.Valid {
-				column.OnDeleteAction = deleteRule.String
-			}
+			Name:     columnName,
+			Type:     columnType,
+			Nullable: isNullable == "YES",
+			Default:  p.formatDefaultValue(columnDefault.String),
 		}
 
 		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
+		columnIndex[tableName][columnName] = &tableMap[tableName].Columns[len(tableMap[tableName].Columns)-1]
 	}
 
+	// Step 3: Get all constraints using pg_constraint directly (much faster than information_schema joins)
+	constraintsQuery := `
+		WITH fk_columns AS (
+			SELECT
+				con.oid as constraint_oid,
+				src_table.relname AS table_name,
+				src_attr.attname AS column_name,
+				tgt_table.relname AS foreign_table_name,
+				tgt_attr.attname AS foreign_column_name,
+				CASE con.confdeltype
+					WHEN 'a' THEN 'NO ACTION'
+					WHEN 'r' THEN 'RESTRICT'
+					WHEN 'c' THEN 'CASCADE'
+					WHEN 'n' THEN 'SET NULL'
+					WHEN 'd' THEN 'SET DEFAULT'
+				END AS on_delete_action
+			FROM pg_constraint con
+			JOIN pg_class src_table ON con.conrelid = src_table.oid
+			JOIN pg_namespace ns ON src_table.relnamespace = ns.oid
+			CROSS JOIN LATERAL UNNEST(con.conkey, con.confkey) WITH ORDINALITY AS cols(src_col, tgt_col, ord)
+			JOIN pg_attribute src_attr ON src_attr.attrelid = src_table.oid AND src_attr.attnum = cols.src_col
+			JOIN pg_class tgt_table ON con.confrelid = tgt_table.oid
+			JOIN pg_attribute tgt_attr ON tgt_attr.attrelid = tgt_table.oid AND tgt_attr.attnum = cols.tgt_col
+			WHERE src_table.relname = ANY($1)
+			  AND ns.nspname IN (current_schema(), 'public')
+			  AND con.contype = 'f'
+		),
+		pk_uk_columns AS (
+			SELECT
+				con.oid as constraint_oid,
+				src_table.relname AS table_name,
+				src_attr.attname AS column_name,
+				CASE con.contype WHEN 'p' THEN 'PRIMARY KEY' ELSE 'UNIQUE' END AS constraint_type
+			FROM pg_constraint con
+			JOIN pg_class src_table ON con.conrelid = src_table.oid
+			JOIN pg_namespace ns ON src_table.relnamespace = ns.oid
+			CROSS JOIN LATERAL UNNEST(con.conkey) AS cols(src_col)
+			JOIN pg_attribute src_attr ON src_attr.attrelid = src_table.oid AND src_attr.attnum = cols.src_col
+			WHERE src_table.relname = ANY($1)
+			  AND ns.nspname IN (current_schema(), 'public')
+			  AND con.contype IN ('p', 'u')
+		)
+		SELECT table_name, column_name, 'PK' as constraint_type, NULL as foreign_table_name, NULL as foreign_column_name, NULL as on_delete_action
+		FROM pk_uk_columns WHERE constraint_type = 'PRIMARY KEY'
+		UNION ALL
+		SELECT table_name, column_name, 'UQ' as constraint_type, NULL, NULL, NULL
+		FROM pk_uk_columns WHERE constraint_type = 'UNIQUE'
+		UNION ALL
+		SELECT table_name, column_name, 'FK' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action
+		FROM fk_columns
+	`
+
+	conRows, err := p.pool.Query(ctx, constraintsQuery, tableNames)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query constraints: %w", err)
+	}
+	defer conRows.Close()
+
+	for conRows.Next() {
+		var tableName, columnName, constraintType string
+		var foreignTable, foreignColumn, onDeleteAction sql.NullString
+
+		err := conRows.Scan(&tableName, &columnName, &constraintType, &foreignTable, &foreignColumn, &onDeleteAction)
+		if err != nil {
+			continue
+		}
+
+		if colMap, exists := columnIndex[tableName]; exists {
+			if col, exists := colMap[columnName]; exists {
+				switch constraintType {
+				case "PK":
+					col.IsPrimary = true
+					// Update type for SERIAL detection
+					col.Type = p.formatPullColumnType(p.reverseMapType(col.Type), sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}, col.Default, true)
+				case "UQ":
+					col.IsUnique = true
+				case "FK":
+					if foreignTable.Valid && foreignColumn.Valid {
+						col.ForeignKeyTable = foreignTable.String
+						col.ForeignKeyColumn = foreignColumn.String
+						if onDeleteAction.Valid {
+							col.OnDeleteAction = onDeleteAction.String
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Convert map to slice
 	tables := make([]types.SchemaTable, 0, len(tableMap))
 	for _, table := range tableMap {
 		tables = append(tables, *table)
 	}
 
 	return tables, nil
+}
+
+// reverseMapType is a helper to reverse the type mapping for SERIAL detection.
+// It converts formatted types back to udt_name equivalents.
+func (p *Adapter) reverseMapType(formattedType string) string {
+	switch strings.ToUpper(formattedType) {
+	case "INT", "INTEGER", "SERIAL":
+		return "int4"
+	case "BIGINT", "BIGSERIAL":
+		return "int8"
+	case "VARCHAR":
+		return "varchar"
+	case "CHAR":
+		return "bpchar"
+	case "TEXT":
+		return "text"
+	case "BOOLEAN":
+		return "bool"
+	case "TIMESTAMP":
+		return "timestamp"
+	case "TIMESTAMP WITH TIME ZONE":
+		return "timestamptz"
+	case "DATE":
+		return "date"
+	case "TIME":
+		return "time"
+	case "NUMERIC":
+		return "numeric"
+	default:
+		return strings.ToLower(formattedType)
+	}
 }
 
 func (p *Adapter) formatPostgresType(udtName string, charMaxLength, numericPrecision, numericScale sql.NullInt64) string {
@@ -569,32 +680,35 @@ func (p *Adapter) cleanDefaultValue(defaultVal string) string {
 		return value
 	}
 
-	upper := strings.ToUpper(defaultVal)
-	if strings.Contains(upper, "NEXTVAL") {
-		return ""
-	}
-	if strings.Contains(upper, "NOW()") || strings.Contains(upper, "CURRENT_TIMESTAMP") {
+	if strings.Contains(strings.ToUpper(defaultVal), "NOW()") || strings.Contains(strings.ToUpper(defaultVal), "CURRENT_TIMESTAMP") {
 		return "NOW()"
-	}
-	if upper == "TRUE" || upper == "FALSE" {
-		return upper
 	}
 
 	return defaultVal
 }
 
-func (p *Adapter) formatDefaultValue(defaultValue string) string {
-	if defaultValue == "" {
+func (p *Adapter) formatDefaultValue(defaultVal string) string {
+	if defaultVal == "" {
 		return ""
 	}
 
-	if strings.Contains(defaultValue, "nextval(") {
+	cleaned := p.cleanDefaultValue(defaultVal)
+	if cleaned == "" {
 		return ""
 	}
 
-	if strings.Contains(strings.ToLower(defaultValue), "now()") {
-		return "NOW()"
+	// Handle boolean defaults
+	upper := strings.ToUpper(cleaned)
+	if upper == "TRUE" || upper == "FALSE" {
+		return upper
 	}
 
-	return defaultValue
+	// Remove type casts for display
+	if idx := strings.Index(cleaned, "::"); idx != -1 {
+		cleaned = strings.TrimSpace(cleaned[:idx])
+	}
+
+	return cleaned
 }
+
+

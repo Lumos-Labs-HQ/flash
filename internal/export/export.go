@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +37,7 @@ func PerformExport(ctx context.Context, adapter database.DatabaseAdapter, export
 		Comment:   "Database export",
 	}
 
-	// FIX: Parallel fetch with goroutines for 60-80% performance gain
+	// Fetch table data in parallel.
 	type tableResult struct {
 		name string
 		data []map[string]interface{}
@@ -132,7 +133,7 @@ func exportToCSV(data types.BackupData, exportPath string) (string, error) {
 
 		writer := csv.NewWriter(file)
 
-		// FIX: Sort headers for consistent ordering
+		// Sort headers for deterministic CSV output.
 		headers := make([]string, 0, len(rows[0]))
 		for key := range rows[0] {
 			headers = append(headers, key)
@@ -176,7 +177,7 @@ func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data 
 			continue
 		}
 
-		// FIX: Sort columns for consistent ordering
+		// Sort columns for deterministic SQLite schema.
 		columns := make([]string, 0, len(rows[0]))
 		for key := range rows[0] {
 			columns = append(columns, key)
@@ -204,30 +205,13 @@ func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data 
 }
 
 func buildColumnDefs(columns []string) string {
-	var defs []string
-	for _, col := range columns {
-		defs = append(defs, fmt.Sprintf("%s TEXT", col))
+	defs := make([]string, len(columns))
+	for i, col := range columns {
+		defs[i] = fmt.Sprintf("%s TEXT", col)
 	}
-	result := ""
-	for i, def := range defs {
-		if i > 0 {
-			result += ", "
-		}
-		result += def
-	}
-	return result
+	return strings.Join(defs, ", ")
 }
 
 func buildInsertSQL(table string, columns []string) string {
-	placeholders := ""
-	colNames := ""
-	for i, col := range columns {
-		if i > 0 {
-			placeholders += ", "
-			colNames += ", "
-		}
-		placeholders += "?"
-		colNames += col
-	}
-	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", table, colNames, placeholders)
+	return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", table, strings.Join(columns, ", "), strings.Repeat("?, ", len(columns)-1)+"?")
 }

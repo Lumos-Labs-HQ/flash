@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -78,7 +77,7 @@ var checkoutCmd = &cobra.Command{
 			}
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 		if err := manager.SwitchBranch(ctx, branchName); err != nil {
 			return fmt.Errorf("failed to switch branch: %w", err)
 		}
@@ -108,7 +107,7 @@ func handleCreateBranch(manager *branch.Manager, branchName string, cmd *cobra.C
 
 	color.Cyan("Creating branch '%s'...", branchName)
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	if err := manager.CreateBranch(ctx, branchName); err != nil {
 		return fmt.Errorf("failed to create branch: %w", err)
 	}
@@ -140,7 +139,7 @@ func handleDeleteBranch(manager *branch.Manager, branchName string, cmd *cobra.C
 		}
 	}
 
-	ctx := context.Background()
+	ctx := cmd.Context()
 	if err := manager.DeleteBranch(ctx, branchName); err != nil {
 		return fmt.Errorf("failed to delete branch: %w", err)
 	}
@@ -212,7 +211,7 @@ var branchDiffCmd = &cobra.Command{
 		}
 		defer manager.Close()
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 		diff, err := manager.GetSchemaDiff(ctx, branch1, branch2)
 		if err != nil {
 			return fmt.Errorf("failed to get schema diff: %w", err)

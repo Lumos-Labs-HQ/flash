@@ -223,23 +223,25 @@ func (s *Service) smartUpdateSchema(schemaDir string, existingFiles map[string]s
 		}
 	}
 
+	// Build reverse map: fileName -> []tableName for O(1) file lookup
+	fileToTables := make(map[string][]string)
+	for tableName, fileName := range existingTables {
+		fileToTables[fileName] = append(fileToTables[fileName], tableName)
+	}
+
 	// Track which files need updating
 	fileUpdates := make(map[string]string)
 
 	// Track tables that exist in files but NOT in the database (dropped tables)
 	droppedTables := make(map[string]string) // tableName -> fileName
 
-	// Process each existing file
+	// Process each existing file — O(files + tables) instead of O(files × tables)
 	for fileName, content := range existingFiles {
 		updatedContent := content
 		fileChanged := false
 
 		// Find all tables in this file and update them
-		for tableName, tableFileName := range existingTables {
-			if tableFileName != fileName {
-				continue
-			}
-
+		for _, tableName := range fileToTables[fileName] {
 			if dbTable, exists := dbTableMap[tableName]; exists {
 				// Table exists in DB - check if it needs updating
 				newTableSQL := s.generateTableSQLClean(dbTable, dbIndexes[tableName])

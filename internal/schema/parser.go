@@ -8,7 +8,14 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
-// SQL Parsing helpers
+// Package-level pre-compiled regexes for column/constraint parsing.
+var (
+	parserFKRegex          = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
+	parserReferencesRegex  = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
+	parserOnDeleteRegex    = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
+	parserDefaultRegex     = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
+)
+
 func (sm *SchemaManager) cleanSQL(sql string) string {
 	sql = commentRegex.ReplaceAllString(sql, "")
 	return strings.TrimSpace(whitespaceRegex.ReplaceAllString(sql, " "))
@@ -90,7 +97,6 @@ func (sm *SchemaManager) isCreateTypeStatement(stmt string) bool {
 }
 
 func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum, error) {
-	// Match: CREATE TYPE enum_name AS ENUM ('value1', 'value2', ...)
 	matches := enumRegex.FindStringSubmatch(stmt)
 
 	if len(matches) < 4 {
@@ -199,8 +205,7 @@ func (sm *SchemaManager) parseColumnDefinitionsAndConstraints(columnDefs string)
 }
 
 func (sm *SchemaManager) parseForeignKeyConstraint(constraint string) *foreignKeyConstraint {
-	fkRegex := regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
-	matches := fkRegex.FindStringSubmatch(constraint)
+	matches := parserFKRegex.FindStringSubmatch(constraint)
 
 	if len(matches) >= 4 {
 		fk := &foreignKeyConstraint{
@@ -342,13 +347,11 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		}
 	}
 
-	referencesRegex := regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
-	if matches := referencesRegex.FindStringSubmatch(colDef); len(matches) >= 3 {
+	if matches := parserReferencesRegex.FindStringSubmatch(colDef); len(matches) >= 3 {
 		column.ForeignKeyTable = matches[1]
 		column.ForeignKeyColumn = matches[2]
 
-		onDeleteRegex := regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
-		if onDeleteMatches := onDeleteRegex.FindStringSubmatch(colDef); len(onDeleteMatches) >= 2 {
+		if onDeleteMatches := parserOnDeleteRegex.FindStringSubmatch(colDef); len(onDeleteMatches) >= 2 {
 			column.OnDeleteAction = strings.ToUpper(onDeleteMatches[1])
 		}
 	}
@@ -382,8 +385,7 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		}
 	}
 
-	defaultRegex := regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
-	if matches := defaultRegex.FindStringSubmatch(colDef); len(matches) > 1 {
+	if matches := parserDefaultRegex.FindStringSubmatch(colDef); len(matches) > 1 {
 		column.Default = matches[1]
 	}
 }

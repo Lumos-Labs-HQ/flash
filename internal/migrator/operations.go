@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
@@ -100,11 +101,21 @@ func (m *Migrator) handleResetAndApply(ctx context.Context) error {
 		return fmt.Errorf("failed to get table names: %w", err)
 	}
 
+	// Parallel drop for independent tables (FK checks disabled for MySQL, CASCADE for PostgreSQL)
+	var dropWg sync.WaitGroup
+	var dropMu sync.Mutex
 	for _, table := range tables {
-		if err := m.adapter.DropTable(ctx, table); err != nil {
-			fmt.Printf("Warning: Failed to drop table %s: %v\n", table, err)
-		}
+		dropWg.Add(1)
+		go func(t string) {
+			defer dropWg.Done()
+			if err := m.adapter.DropTable(ctx, t); err != nil {
+				dropMu.Lock()
+				fmt.Printf("Warning: Failed to drop table %s: %v\n", t, err)
+				dropMu.Unlock()
+			}
+		}(table)
 	}
+	dropWg.Wait()
 
 	if err := m.createMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("failed to recreate migrations table: %w", err)
@@ -143,9 +154,30 @@ func (m *Migrator) applyMigrations(ctx context.Context, migrations []types.Migra
 	return nil
 }
 
+// getMigrationContent reads migration file with in-memory caching
+func (m *Migrator) getMigrationContent(filePath string) ([]byte, error) {
+	if m.fileCache == nil {
+		m.fileCache = make(map[string][]byte)
+	}
+	if content, ok := m.fileCache[filePath]; ok {
+		return content, nil
+	}
+	// Also check conflict utils cache
+	if cached, ok := m.conflictUtils.GetCachedContent(filePath); ok {
+		m.fileCache[filePath] = cached
+		return cached, nil
+	}
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	m.fileCache[filePath] = content
+	return content, nil
+}
+
 // applySingleMigrationSafely applies migration and records it in a single transaction
 func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration types.Migration) error {
-	content, err := os.ReadFile(migration.FilePath)
+	content, err := m.getMigrationContent(migration.FilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read migration file: %w", err)
 	}
@@ -382,17 +414,14 @@ func (m *Migrator) Status(ctx context.Context) error {
 		fmt.Printf("%-16s  %-30s  %-10s  %s\n", migrationID, migrationName, status, timestamp)
 	}
 
-	// Check for orphaned migrations in database
+	// Check for orphaned migrations in database — O(N+M) with map
+	migrationFileSet := make(map[string]struct{}, len(migrations))
+	for _, migration := range migrations {
+		migrationFileSet[migration.ID] = struct{}{}
+	}
 	orphanedCount := 0
 	for id := range applied {
-		found := false
-		for _, migration := range migrations {
-			if migration.ID == id {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if _, found := migrationFileSet[id]; !found {
 			orphanedCount++
 		}
 	}
@@ -560,7 +589,7 @@ func (m *Migrator) Down(ctx context.Context, targetMigrationID string, steps int
 
 // extractDownSQL extracts the DOWN section from a migration file
 func (m *Migrator) extractDownSQL(filePath string) string {
-	content, err := os.ReadFile(filePath)
+	content, err := m.getMigrationContent(filePath)
 	if err != nil {
 		return ""
 	}

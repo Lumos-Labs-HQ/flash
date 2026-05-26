@@ -4,9 +4,7 @@ import (
 	"regexp"
 )
 
-// PERFORMANCE OPTIMIZATION: Pre-compile all regexes at package initialization
-// Regex compilation is expensive (~50-100µs each) and was happening on EVERY parse
-// Pre-compiling saves 5-10ms per migration generation
+// Pre-compile regexes once at init to avoid recompilation on every parse.
 
 var (
 	// Table and type parsing

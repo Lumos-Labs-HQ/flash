@@ -32,11 +32,23 @@ type FakeData struct {
 	Categories   []string `json:"categories"`
 }
 
+type patternEntry struct {
+	keywords  []string
+	generator func() interface{}
+}
+
+// typeEntry maps a normalized SQL type to its generator.
+type typeEntry struct {
+	match     string
+	generator func() interface{}
+}
+
 type DataGenerator struct {
-	rand     *rand.Rand
-	counter  int
-	fakeData *FakeData
-	patterns map[string]func() interface{}
+	rand         *rand.Rand
+	counter      int
+	fakeData     *FakeData
+	patternList  []patternEntry
+	typeList     []typeEntry
 }
 
 func NewDataGenerator() (*DataGenerator, error) {
@@ -50,48 +62,78 @@ func NewDataGenerator() (*DataGenerator, error) {
 		fakeData: &data,
 	}
 	g.initPatterns()
+	g.initTypeList()
 	return g, nil
 }
 
 func (g *DataGenerator) initPatterns() {
-	g.patterns = map[string]func() interface{}{
+	rawPatterns := map[string]func() interface{}{
 		// Security - Documents always NULL
 		"document|doc|file|attachment|pdf|upload": func() interface{} { return nil },
-		
+
 		// Media
 		"image|img|photo|picture|thumbnail|banner": g.randomFrom(g.fakeData.ImageUrls, "https://picsum.photos/400/300"),
 		"avatar|profile_pic|profile_image":         g.randomFrom(g.fakeData.AvatarUrls, "https://i.pravatar.cc/150"),
-		
+
 		// Identity
 		"first_name|firstname": g.randomFrom(g.fakeData.FirstNames, "John"),
 		"last_name|lastname":   g.randomFrom(g.fakeData.LastNames, "Doe"),
 		"email":                g.generateEmail,
 		"name":                 g.generateFullName,
-		
+
 		// Content
 		"title":              g.randomFrom(g.fakeData.Titles, "Sample Title"),
 		"description":        g.randomFrom(g.fakeData.Paragraphs, "Sample description"),
 		"content|body":       g.randomFrom(g.fakeData.Paragraphs, "Sample content"),
 		"phone":              g.generatePhone,
 		"url|link|website":   g.generateURL,
-		
+
 		// Location
 		"address":     g.generateAddress,
 		"city":        g.randomFrom(g.fakeData.Cities, "New York"),
 		"state":       g.randomFrom(g.fakeData.States, "California"),
 		"zip|postal":  g.generateZip,
-		
+
 		// Business
 		"company|organization": g.randomFrom(g.fakeData.Companies, "Tech Company Inc"),
 		"product":              g.randomFrom(g.fakeData.Products, "Product"),
 		"tag":                  g.randomFrom(g.fakeData.Tags, "tag"),
 		"status":               g.randomFrom(g.fakeData.Statuses, "active"),
 		"category":             g.randomFrom(g.fakeData.Categories, "General"),
-		
+
 		// Numeric
 		"price|amount|cost":    func() interface{} { return float64(g.rand.Intn(100000)) / 100.0 },
 		"quantity|count":       func() interface{} { return g.rand.Intn(100) + 1 },
 		"rating|score":         func() interface{} { return g.rand.Intn(5) + 1 },
+	}
+
+	// Pre-split pattern keys once to avoid repeated strings.Split on every column
+	g.patternList = make([]patternEntry, 0, len(rawPatterns))
+	for pattern, generator := range rawPatterns {
+		g.patternList = append(g.patternList, patternEntry{
+			keywords:  strings.Split(pattern, "|"),
+			generator: generator,
+		})
+	}
+}
+
+func (g *DataGenerator) initTypeList() {
+	// Pre-build type matchers to avoid allocating a map on every Generate() call
+	g.typeList = []typeEntry{
+		{"INT", func() interface{} { return g.rand.Intn(1000000) + 1 }},
+		{"SERIAL", func() interface{} { return g.rand.Intn(1000000) + 1 }},
+		{"VARCHAR", func() interface{} { return g.randomSentence() }},
+		{"TEXT", func() interface{} { return g.randomSentence() }},
+		{"BOOL", func() interface{} { return g.rand.Intn(2) == 1 }},
+		{"TIMESTAMP", func() interface{} { return time.Now().AddDate(0, 0, -g.rand.Intn(365)) }},
+		{"DATETIME", func() interface{} { return time.Now().AddDate(0, 0, -g.rand.Intn(365)) }},
+		{"DATE", func() interface{} { return time.Now().AddDate(0, 0, -g.rand.Intn(365)).Format("2006-01-02") }},
+		{"DECIMAL", func() interface{} { return float64(g.rand.Intn(100000)) / 100.0 }},
+		{"FLOAT", func() interface{} { return float64(g.rand.Intn(100000)) / 100.0 }},
+		{"UUID", func() interface{} {
+			return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", g.rand.Uint32(), g.rand.Uint32()&0xffff, g.rand.Uint32()&0xffff, g.rand.Uint32()&0xffff, g.rand.Uint64()&0xffffffffffff)
+		}},
+		{"JSON", func() interface{} { return `{"generated": true}` }},
 	}
 }
 
@@ -101,10 +143,10 @@ func (g *DataGenerator) GenerateForColumn(colName, colType string, nullable bool
 	}
 
 	colLower := strings.ToLower(colName)
-	for pattern, generator := range g.patterns {
-		for _, keyword := range strings.Split(pattern, "|") {
+	for _, entry := range g.patternList {
+		for _, keyword := range entry.keywords {
 			if strings.Contains(colLower, keyword) {
-				return generator()
+				return entry.generator()
 			}
 		}
 	}
@@ -118,28 +160,13 @@ func (g *DataGenerator) Generate(colType string, nullable bool) interface{} {
 	}
 
 	typeUpper := strings.ToUpper(strings.Split(colType, "(")[0])
-	
-	typeMap := map[string]func() interface{}{
-		"INT":       func() interface{} { return g.rand.Intn(1000000) + 1 },
-		"SERIAL":    func() interface{} { return g.rand.Intn(1000000) + 1 },
-		"VARCHAR":   func() interface{} { return g.randomSentence() },
-		"TEXT":      func() interface{} { return g.randomSentence() },
-		"BOOL":      func() interface{} { return g.rand.Intn(2) == 1 },
-		"TIMESTAMP": func() interface{} { return time.Now().AddDate(0, 0, -g.rand.Intn(365)) },
-		"DATETIME":  func() interface{} { return time.Now().AddDate(0, 0, -g.rand.Intn(365)) },
-		"DATE":      func() interface{} { return time.Now().AddDate(0, 0, -g.rand.Intn(365)).Format("2006-01-02") },
-		"DECIMAL":   func() interface{} { return float64(g.rand.Intn(100000)) / 100.0 },
-		"FLOAT":     func() interface{} { return float64(g.rand.Intn(100000)) / 100.0 },
-		"UUID":      func() interface{} { return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", g.rand.Uint32(), g.rand.Uint32()&0xffff, g.rand.Uint32()&0xffff, g.rand.Uint32()&0xffff, g.rand.Uint64()&0xffffffffffff) },
-		"JSON":      func() interface{} { return `{"generated": true}` },
-	}
 
-	for t, gen := range typeMap {
-		if strings.Contains(typeUpper, t) {
-			return gen()
+	for _, entry := range g.typeList {
+		if strings.Contains(typeUpper, entry.match) {
+			return entry.generator()
 		}
 	}
-	
+
 	return g.randomSentence()
 }
 

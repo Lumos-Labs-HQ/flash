@@ -25,6 +25,7 @@ type Migrator struct {
 	fileUtils     *utils.FileUtils
 	inputUtils    *utils.InputUtils
 	conflictUtils *utils.ConflictUtils
+	fileCache     map[string][]byte // In-memory cache for migration file contents
 }
 
 func NewMigrator(cfg *config.Config) (*Migrator, error) {
@@ -97,10 +98,8 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 		schemaPath = m.schemaPath
 	}
 
-	// Use a local schema snapshot as the source of truth for diffing.
-	// This is the Drizzle-style approach: the snapshot represents the schema
-	// state after the *last generated migration*, so we can diff against it
-	// even if previous migrations haven't been applied to the DB yet.
+	// Use the local schema snapshot for diffing so we can generate migrations
+	// even when previous ones haven't been applied yet.
 	snapshotPath := schema.SnapshotPath(m.migrationsDir)
 
 	diff, err := m.schemaManager.GenerateSchemaDiff(ctx, schemaPath, snapshotPath)
@@ -112,7 +111,7 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	filepath := filepath.Join(m.migrationsDir, filename)
 
 	var sqlContent string
-	// CRITICAL FIX: Also check for index changes!
+	// Check for index changes too, not just tables and enums.
 	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
 	   len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
 	   len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
@@ -303,8 +302,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
 	}
 
-	// CRITICAL FIX: Add standalone index changes!
-	// UP: Drop indexes first (before adding new ones that might conflict)
+	// Handle standalone index changes (drop first to avoid conflicts).
 	for _, index := range diff.DroppedIndexes {
 		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(index))
 		hasExecutableSQL = true

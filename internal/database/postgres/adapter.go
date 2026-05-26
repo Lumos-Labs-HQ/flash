@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -45,7 +46,10 @@ func (p *Adapter) Connect(ctx context.Context, url string) error {
 
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 
-	config.MaxConns = 3
+	config.MaxConns = int32(runtime.GOMAXPROCS(0) * 2)
+	if config.MaxConns < 4 {
+		config.MaxConns = 4
+	}
 	config.MinConns = 0
 	config.MaxConnLifetime = 30 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute

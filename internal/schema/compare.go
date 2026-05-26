@@ -162,7 +162,7 @@ func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, dif
 }
 
 func (sm *SchemaManager) compareEnums(current, target []types.SchemaEnum, diff *types.SchemaDiff) {
-	// PERFORMANCE: Pre-allocate maps
+	// Pre-allocate maps for efficiency.
 	currentMap := make(map[string]types.SchemaEnum, len(current))
 	targetMap := make(map[string]types.SchemaEnum, len(target))
 

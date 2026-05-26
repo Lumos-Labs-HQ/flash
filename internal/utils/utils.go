@@ -16,9 +16,11 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
+// Pre-compiled regex for migration conflict detection
+var alterTableAddColumnRegex = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+["\'\x60]?(\w+)["\'\x60]?\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?["\'\x60]?(\w+)["\'\x60]?\s+.*?NOT\s+NULL.*?(?:;|$)`)
+
 type FileUtils struct{}
 
-// LoadMigrationsFromDir loads migration files from a directory
 func (f *FileUtils) LoadMigrationsFromDir(migrationsDir string) ([]types.Migration, error) {
 	migrations := make([]types.Migration, 0, 32) // Pre-allocate with reasonable capacity
 
@@ -47,7 +49,6 @@ func (f *FileUtils) LoadMigrationsFromDir(migrationsDir string) ([]types.Migrati
 	return migrations, nil
 }
 
-// GenerateMigrationFilename creates a timestamped migration filename
 func (f *FileUtils) GenerateMigrationFilename(name string) string {
 	timestamp := time.Now().Format("20060102150405")
 	cleanName := strings.ReplaceAll(name, " ", "_")
@@ -56,7 +57,6 @@ func (f *FileUtils) GenerateMigrationFilename(name string) string {
 
 type InputUtils struct{}
 
-// GetUserChoice prompts user for choice from valid options
 func (i *InputUtils) GetUserChoice(validOptions []string, prompt string, force bool) string {
 	if force {
 		return validOptions[0]
@@ -77,7 +77,6 @@ func (i *InputUtils) GetUserChoice(validOptions []string, prompt string, force b
 	}
 }
 
-// AskConfirmation asks user for yes/no confirmation
 func (i *InputUtils) AskConfirmation(message string, force bool) bool {
 	if force {
 		return true
@@ -88,14 +87,37 @@ func (i *InputUtils) AskConfirmation(message string, force bool) bool {
 	return strings.ToLower(response) == "y" || strings.ToLower(response) == "yes"
 }
 
-// ConflictUtils - Migration conflict detection and handling
-type ConflictUtils struct{}
+type ConflictUtils struct {
+	fileCache map[string][]byte
+}
 
-// DetectMigrationConflicts checks for potential conflicts in migration content
+func (c *ConflictUtils) getMigrationContent(filePath string) ([]byte, error) {
+	if c.fileCache == nil {
+		c.fileCache = make(map[string][]byte)
+	}
+	if content, ok := c.fileCache[filePath]; ok {
+		return content, nil
+	}
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	c.fileCache[filePath] = content
+	return content, nil
+}
+
+func (c *ConflictUtils) GetCachedContent(filePath string) ([]byte, bool) {
+	if c.fileCache == nil {
+		return nil, false
+	}
+	content, ok := c.fileCache[filePath]
+	return content, ok
+}
+
 func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration types.Migration, adapter interface{}) ([]types.MigrationConflict, error) {
 	var conflicts []types.MigrationConflict
 
-	content, err := os.ReadFile(migration.FilePath)
+	content, err := c.getMigrationContent(migration.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read migration file: %w", err)
 	}
@@ -103,8 +125,7 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 	migrationContent := string(content)
 
 	// Check for ALTER TABLE ADD COLUMN NOT NULL without DEFAULT
-	addColumnRegex := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+["\'\x60]?(\w+)["\'\x60]?\s+ADD\s+(?:COLUMN\s+)?(?:IF\s+NOT\s+EXISTS\s+)?["\'\x60]?(\w+)["\'\x60]?\s+.*?NOT\s+NULL.*?(?:;|$)`)
-	matches := addColumnRegex.FindAllStringSubmatch(migrationContent, -1)
+	matches := alterTableAddColumnRegex.FindAllStringSubmatch(migrationContent, -1)
 
 	for _, match := range matches {
 		if len(match) >= 3 {
@@ -138,36 +159,34 @@ func (c *ConflictUtils) DetectMigrationConflicts(ctx context.Context, migration 
 	return conflicts, nil
 }
 
-// tableHasData checks if a table exists and has data
 func (c *ConflictUtils) tableHasData(ctx context.Context, adapter interface{}, tableName string) bool {
 	type tableChecker interface {
 		CheckTableExists(ctx context.Context, tableName string) (bool, error)
-		GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error)
+		GetTableRowCount(ctx context.Context, tableName string) (int, error)
 	}
 
 	checker, ok := adapter.(tableChecker)
 	if !ok {
-		return true 
+		return true
 	}
 
 	// Check if table exists
 	exists, err := checker.CheckTableExists(ctx, tableName)
 	if err != nil || !exists {
-		return false 
+		return false
 	}
 
-	// Check if table has data
-	data, err := checker.GetTableData(ctx, tableName)
+	// Check if table has data using COUNT(*) — O(1) vs O(N) for GetTableData
+	count, err := checker.GetTableRowCount(ctx, tableName)
 	if err != nil {
-		return true 
+		return true
 	}
 
-	return len(data) > 0 
+	return count > 0
 }
 
 type SQLUtils struct{}
 
-// FilterPendingMigrations returns migrations that haven't been applied
 func FilterPendingMigrations(migrations []types.Migration, applied map[string]*time.Time) []types.Migration {
 	var pending []types.Migration
 	for _, migration := range migrations {
@@ -178,47 +197,7 @@ func FilterPendingMigrations(migrations []types.Migration, applied map[string]*t
 	return pending
 }
 
-// ComputeChecksum computes a SHA256 checksum of the given content.
 func ComputeChecksum(content []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
 
-
-// StripJSONComments removes // line comments from JSON data so users can
-// include comments in flash.config.json for documentation purposes.
-func StripJSONComments(data []byte) []byte {
-	var result []byte
-	inString := false
-	for i := 0; i < len(data); i++ {
-		ch := data[i]
-		if ch == '"' {
-			// Check if escaped
-			escapeCount := 0
-			for j := i - 1; j >= 0 && data[j] == '\\'; j-- {
-				escapeCount++
-			}
-			if escapeCount%2 == 0 {
-				inString = !inString
-			}
-			result = append(result, ch)
-			continue
-		}
-		if inString {
-			result = append(result, ch)
-			continue
-		}
-		if ch == '/' && i+1 < len(data) && data[i+1] == '/' {
-			// Skip until end of line
-			for i < len(data) && data[i] != '\n' {
-				i++
-			}
-			// Keep the newline to preserve line numbers
-			if i < len(data) {
-				result = append(result, '\n')
-			}
-			continue
-		}
-		result = append(result, ch)
-	}
-	return result
-}

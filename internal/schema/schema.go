@@ -139,14 +139,21 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 	var sorted []types.SchemaTable
 	inDegree := make(map[string]int)
 
-	// CRITICAL: Initialize in-degree for ALL tables first (even those with no FKs)
+	// Build reverse adjacency list: dependents[dep] = []tables that depend on dep
+	// This avoids O(T×D) inner scan during the sort loop
+	dependents := make(map[string][]string)
+
+	// Ensure every table has an entry so tables with no FKs are still processed.
 	for _, table := range tables {
 		inDegree[table.Name] = 0
 	}
 
-	// Calculate in-degree: how many tables each table depends on
+	// Calculate in-degree and build reverse adjacency list
 	for tableName, deps := range dependencies {
 		inDegree[tableName] = len(deps)
+		for _, dep := range deps {
+			dependents[dep] = append(dependents[dep], tableName)
+		}
 	}
 
 	// Find all tables with no dependencies (in-degree = 0)
@@ -168,21 +175,16 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 			sorted = append(sorted, *table)
 		}
 
-		// Find tables that depend on this one and reduce their in-degree
-		for depTableName, deps := range dependencies {
-			for _, dep := range deps {
-				if dep == tableName {
-					inDegree[depTableName]--
-					if inDegree[depTableName] == 0 {
-						// Insert in sorted position to maintain determinism
-						insertPos := 0
-						for insertPos < len(queue) && queue[insertPos] < depTableName {
-							insertPos++
-						}
-						queue = append(queue[:insertPos], append([]string{depTableName}, queue[insertPos:]...)...)
-					}
-					break
+		// Reduce in-degree for all tables that depend on this one — O(1) lookup via reverse adjacency
+		for _, depTableName := range dependents[tableName] {
+			inDegree[depTableName]--
+			if inDegree[depTableName] == 0 {
+				// Insert in sorted position to maintain determinism
+				insertPos := 0
+				for insertPos < len(queue) && queue[insertPos] < depTableName {
+					insertPos++
 				}
+				queue = append(queue[:insertPos], append([]string{depTableName}, queue[insertPos:]...)...)
 			}
 		}
 	}
@@ -287,10 +289,7 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	var currentEnums []types.SchemaEnum
 	var currentIndexes []types.SchemaIndex
 
-	// 1. Try to load the local schema snapshot first.
-	//    This is the Drizzle-style approach: the snapshot is the source of truth
-	//    for the "current" schema when generating migrations. It stays accurate
-	//    even if previous migrations haven't been applied to the DB yet.
+	// 1. Prefer the local schema snapshot (accurate even when migrations are pending).
 	snap, err := LoadSchemaSnapshot(snapshotPath)
 	if err != nil {
 		// Corrupted snapshot → warn and fall back to DB
@@ -318,27 +317,14 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	}
 
 	// Use the new ParseSchemaPath that handles both files and directories
-	// CRITICAL: Don't discard targetIndexes! They contain standalone CREATE INDEX statements
+	// Standalone CREATE INDEX statements are kept separate from table definitions.
 	targetTables, targetEnums, targetIndexes, err := sm.ParseSchemaPath(targetSchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target schema: %w", err)
 	}
 
-	// DEBUG: Print what was parsed
-	// fmt.Printf("DEBUG: Parsed %d tables from schema file\n", len(targetTables))
-	// fmt.Printf("DEBUG: Parsed %d standalone indexes from schema file\n", len(targetIndexes))
-	// for _, idx := range targetIndexes {
-	// 	fmt.Printf("  - Index: %s on table %s, columns: %v\n", idx.Name, idx.Table, idx.Columns)
-	// }
-
 	// Pass both tables and standalone indexes to compareSchemas
 	diff := sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums, targetIndexes)
-
-	// DEBUG: Print diff results
-	// fmt.Printf("DEBUG: Diff has %d new indexes\n", len(diff.NewIndexes))
-	// for _, idx := range diff.NewIndexes {
-	// 	fmt.Printf("  - New index: %s\n", idx.Name)
-	// }
 
 	return diff, nil
 }

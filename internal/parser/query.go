@@ -232,7 +232,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
-	// CRITICAL: If table is referenced but not found, return error
+	// Return an error when a referenced table is missing from the schema.
 	if tableName != "" && table == nil {
 		availableTables := make([]string, len(schema.Tables))
 		for i, t := range schema.Tables {
@@ -260,7 +260,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	query.Params = make([]*Param, paramCount)
 	usedParamNames := make(map[string]int)
 
-	// CRITICAL: Validate INSERT/UPDATE columns exist in schema before proceeding
+	// Validate INSERT/UPDATE columns exist in the schema.
 	if table != nil {
 		sqlUpper := strings.ToUpper(query.SQL)
 		if strings.Contains(sqlUpper, "INSERT INTO") {

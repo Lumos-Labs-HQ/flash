@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,10 +12,6 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/seeder"
 	"github.com/spf13/cobra"
 )
-
-func GetSeedCommand() *cobra.Command {
-	return seedCmd
-}
 
 var seedCmd = &cobra.Command{
 	Use:   "seed [tables...]",
@@ -107,7 +102,7 @@ Examples:
 			NoTransaction: noTransaction,
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 		s, err := seeder.NewSeeder(cfg)
 		if err != nil {
 			return fmt.Errorf("failed to create seeder: %w", err)

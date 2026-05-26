@@ -20,6 +20,7 @@ func TestLoad_Defaults(t *testing.T) {
 	orig, _ := os.Getwd()
 	os.Chdir(dir)
 	defer os.Chdir(orig)
+	ResetConfigCache()
 
 	// No config file — all defaults should apply.
 	cfg, err := Load()
@@ -48,6 +49,7 @@ func TestLoad_ExplicitValues(t *testing.T) {
 	orig, _ := os.Getwd()
 	os.Chdir(dir)
 	defer os.Chdir(orig)
+	ResetConfigCache()
 
 	writeConfig(t, dir, `{
 		"version": "2",
@@ -78,6 +80,7 @@ func TestLoad_PythonAsyncDefaultsTrue(t *testing.T) {
 	orig, _ := os.Getwd()
 	os.Chdir(dir)
 	defer os.Chdir(orig)
+	ResetConfigCache()
 
 	writeConfig(t, dir, `{"gen": {"python": {"enabled": true}}}`)
 
@@ -95,6 +98,7 @@ func TestLoad_PythonAsyncExplicitFalse(t *testing.T) {
 	orig, _ := os.Getwd()
 	os.Chdir(dir)
 	defer os.Chdir(orig)
+	ResetConfigCache()
 
 	writeConfig(t, dir, `{"gen": {"python": {"enabled": true, "async": false}}}`)
 
@@ -112,6 +116,7 @@ func TestLoad_LegacySchemaPath(t *testing.T) {
 	orig, _ := os.Getwd()
 	os.Chdir(dir)
 	defer os.Chdir(orig)
+	ResetConfigCache()
 
 	writeConfig(t, dir, `{"schema_path": "db/schema/schema.sql"}`)
 

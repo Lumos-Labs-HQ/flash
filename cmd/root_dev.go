@@ -93,7 +93,6 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./flash.config.json)")
 	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.Flags().BoolP("version", "v", false, "Show CLI version")
 }
 

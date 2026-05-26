@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -49,7 +48,7 @@ Examples:
 			format = "json"
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		adapter := database.NewAdapter(cfg.Database.Provider)
 

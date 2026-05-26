@@ -7,10 +7,19 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // ConfigFile is the path to the config file, set by the cmd package from --config flag.
 var ConfigFile string
+
+var (
+	configCacheMu    sync.Mutex
+	configCache      *Config
+	configCacheErr   error
+	configCachePath  string
+	configCacheMtime int64
+)
 
 type Config struct {
 	Version        string   `json:"version"`
@@ -63,7 +72,61 @@ type configRaw struct {
 	Gen genRaw `json:"gen"`
 }
 
+// Load reads and returns the config, with in-memory caching keyed by file path
+// and modification time. This avoids redundant disk I/O when Load() is called
+// multiple times within a single command invocation.
 func Load() (*Config, error) {
+	path := ConfigFile
+	if path == "" {
+		path = "flash.config.json"
+	}
+
+	// Resolve to absolute path for reliable cache keying
+	if absPath, err := filepath.Abs(path); err == nil {
+		path = absPath
+	}
+
+	// Check file mod time for cache invalidation
+	var mtime int64
+	if fi, err := os.Stat(path); err == nil {
+		mtime = fi.ModTime().UnixNano()
+	}
+
+	configCacheMu.Lock()
+	defer configCacheMu.Unlock()
+
+	if configCache != nil && configCachePath == path && configCacheMtime == mtime && configCacheErr == nil {
+		// Return a shallow copy so callers can't mutate the cache
+		cfg := *configCache
+		return &cfg, nil
+	}
+
+	cfg, err := loadUncached()
+	configCache = cfg
+	configCacheErr = err
+	configCachePath = path
+	configCacheMtime = mtime
+	if err != nil {
+		return nil, err
+	}
+	// Return a copy so callers can't mutate the cache
+	copyCfg := *cfg
+	return &copyCfg, nil
+}
+
+// ResetConfigCache clears the in-memory config cache. It is intended for tests
+// that need to reload config from a different file or working directory.
+func ResetConfigCache() {
+	configCacheMu.Lock()
+	defer configCacheMu.Unlock()
+	configCache = nil
+	configCacheErr = nil
+	configCachePath = ""
+	configCacheMtime = 0
+}
+
+// loadUncached performs the actual config loading without caching.
+func loadUncached() (*Config, error) {
 	var cfg Config
 
 	path := ConfigFile
