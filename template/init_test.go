@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
 )
 
 // ── NewProjectTemplate / DatabaseType constants ───────────────────────────────
@@ -44,7 +46,8 @@ func TestGetFlashORMConfig_ValidJSON(t *testing.T) {
 		pt := NewProjectTemplate(db, false, false)
 		cfg := pt.GetFlashORMConfig()
 		var parsed map[string]interface{}
-		if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
+		cleanCfg := config.StripJSONComments([]byte(cfg))
+		if err := json.Unmarshal(cleanCfg, &parsed); err != nil {
 			t.Errorf("GetFlashORMConfig(%s) invalid JSON: %v\n%s", db, err, cfg)
 		}
 	}

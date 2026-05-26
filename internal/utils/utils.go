@@ -182,3 +182,43 @@ func FilterPendingMigrations(migrations []types.Migration, applied map[string]*t
 func ComputeChecksum(content []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
+
+
+// StripJSONComments removes // line comments from JSON data so users can
+// include comments in flash.config.json for documentation purposes.
+func StripJSONComments(data []byte) []byte {
+	var result []byte
+	inString := false
+	for i := 0; i < len(data); i++ {
+		ch := data[i]
+		if ch == '"' {
+			// Check if escaped
+			escapeCount := 0
+			for j := i - 1; j >= 0 && data[j] == '\\'; j-- {
+				escapeCount++
+			}
+			if escapeCount%2 == 0 {
+				inString = !inString
+			}
+			result = append(result, ch)
+			continue
+		}
+		if inString {
+			result = append(result, ch)
+			continue
+		}
+		if ch == '/' && i+1 < len(data) && data[i+1] == '/' {
+			// Skip until end of line
+			for i < len(data) && data[i] != '\n' {
+				i++
+			}
+			// Keep the newline to preserve line numbers
+			if i < len(data) {
+				result = append(result, '\n')
+			}
+			continue
+		}
+		result = append(result, ch)
+	}
+	return result
+}
