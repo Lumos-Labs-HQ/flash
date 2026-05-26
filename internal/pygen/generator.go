@@ -42,7 +42,7 @@ func (g *Generator) Generate() error {
 
 	// Compute checksums for incremental generation
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
-	configStr := fmt.Sprintf("%s|%s|%v", g.Config.Database.Provider, g.Config.Gen.Python.Out, g.Config.Gen.Python.Async)
+	configStr := fmt.Sprintf("%s|%s|%v|%s", g.Config.Database.Provider, g.Config.Gen.Python.Out, g.Config.Gen.Python.Async, g.Config.Gen.Python.Driver)
 	configHash := fmt.Sprintf("%x", []byte(configStr))
 	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
 
@@ -218,13 +218,26 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	w.WriteString("        stmt = self._stmts[_key]\n")
 
 	provider := g.Config.Database.Provider
+	driver := g.Config.Gen.Python.Driver
 	switch provider {
 	case "sqlite", "sqlite3":
-		g.generateSQLiteExecution(w, paramNames, query)
+		if driver == "sqlite3" {
+			g.generateSQLite3Execution(w, paramNames, query)
+		} else {
+			g.generateSQLiteExecution(w, paramNames, query)
+		}
 	case "mysql":
-		g.generateMySQLExecution(w, paramNames, query)
+		if driver == "pymysql" {
+			g.generatePyMySQLExecution(w, paramNames, query)
+		} else {
+			g.generateMySQLExecution(w, paramNames, query)
+		}
 	default:
-		g.generatePostgreSQLExecution(w, paramNames, query)
+		if driver == "psycopg3" {
+			g.generatePsycopg3Execution(w, paramNames, query)
+		} else {
+			g.generatePostgreSQLExecution(w, paramNames, query)
+		}
 	}
 
 	w.WriteString("\n")
@@ -464,6 +477,104 @@ func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []str
 	}
 }
 
+func (g *Generator) generateSQLite3Execution(w *strings.Builder, paramNames []string, query *parser.Query) {
+	saved := g.Config.Gen.Python.Async
+	defer func() { g.Config.Gen.Python.Async = saved }()
+	g.Config.Gen.Python.Async = false
+	g.generateSQLiteExecution(w, paramNames, query)
+}
+
+func (g *Generator) generatePyMySQLExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
+	saved := g.Config.Gen.Python.Async
+	defer func() { g.Config.Gen.Python.Async = saved }()
+	g.Config.Gen.Python.Async = false
+	g.generateMySQLExecution(w, paramNames, query)
+}
+
+func (g *Generator) generatePsycopg3Execution(w *strings.Builder, paramNames []string, query *parser.Query) {
+	returnType := utils.ToPascalCase(query.Name) + "Row"
+	isSingleColumn := len(query.Columns) == 1
+	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
+	needsResultClass := g.needsResultClass(query)
+	isAsync := g.Config.Gen.Python.Async
+
+	if isAsync {
+		w.WriteString("        async with self.db.cursor() as cur:\n")
+	} else {
+		w.WriteString("        with self.db.cursor() as cur:\n")
+	}
+
+	indent := "            "
+	if !isAsync {
+		indent = "        "
+	}
+
+	if len(paramNames) > 0 {
+		if isAsync {
+			w.WriteString(fmt.Sprintf("            await cur.execute(stmt, (%s,))\n", strings.Join(paramNames, ", ")))
+		} else {
+			w.WriteString(fmt.Sprintf("%s    cur.execute(stmt, (%s,))\n", indent, strings.Join(paramNames, ", ")))
+		}
+	} else {
+		if isAsync {
+			w.WriteString("            await cur.execute(stmt)\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    cur.execute(stmt)\n", indent))
+		}
+	}
+
+	switch query.Cmd {
+	case ":one":
+		if isAsync {
+			w.WriteString("            result = await cur.fetchone()\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    result = cur.fetchone()\n", indent))
+		}
+
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("%s    return result['%s'] if result else None\n", indent, query.Columns[0].Name))
+		} else {
+			w.WriteString(fmt.Sprintf("%s    if result:\n", indent))
+			w.WriteString(fmt.Sprintf("%s        row_dict = dict(result) if hasattr(result, 'keys') else {desc[0]: result[i] for i, desc in enumerate(cur.description)}\n", indent))
+			if needsResultClass {
+				w.WriteString(fmt.Sprintf("%s        return %s._make_fast(row_dict)\n", indent, returnType))
+			} else {
+				w.WriteString(fmt.Sprintf("%s        return row_dict\n", indent))
+			}
+			w.WriteString(fmt.Sprintf("%s    return None\n", indent))
+		}
+	case ":many":
+		if isAsync {
+			w.WriteString("            result = await cur.fetchall()\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    result = cur.fetchall()\n", indent))
+		}
+
+		if isSingleNonWildcard {
+			w.WriteString(fmt.Sprintf("%s    return [row['%s'] for row in result]\n", indent, query.Columns[0].Name))
+		} else {
+			w.WriteString(fmt.Sprintf("%s    rows = [dict(row) if hasattr(row, 'keys') else {cur.description[i][0]: row[i] for i in range(len(row))} for row in result]\n", indent))
+			if needsResultClass {
+				w.WriteString(fmt.Sprintf("%s    return [%s._make_fast(row) for row in rows]\n", indent, returnType))
+			} else {
+				w.WriteString(fmt.Sprintf("%s    return rows\n", indent))
+			}
+		}
+	case ":execresult":
+		if isAsync {
+			w.WriteString("            return cur.rowcount\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    return cur.rowcount\n", indent))
+		}
+	default:
+		if isAsync {
+			w.WriteString("            return cur.rowcount\n")
+		} else {
+			w.WriteString(fmt.Sprintf("%s    return cur.rowcount\n", indent))
+		}
+	}
+}
+
 func (g *Generator) generateDatabase(queries []*parser.Query) error {
 	// Get unique source files
 	sourceFiles := make(map[string]bool)
@@ -530,7 +641,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 	w.WriteString("    Create a new database client.\n")
 	w.WriteString("    \n")
 	w.WriteString("    Args:\n")
-	w.WriteString("        db: Database connection (asyncpg.Pool, aiomysql.Pool, or aiosqlite connection)\n")
+	w.WriteString("        db: Database connection (asyncpg.Pool, psycopg3 Connection, aiomysql.Pool, PyMySQL connection, aiosqlite connection, or sqlite3 connection)\n")
 	w.WriteString("    \n")
 	w.WriteString("    Returns:\n")
 	w.WriteString("        Queries: An instance of the Queries class\n")
@@ -554,6 +665,16 @@ func (g *Generator) generateInit() error {
 
 func (g *Generator) convertSQL(sql string) string {
 	provider := g.Config.Database.Provider
+	driver := g.Config.Gen.Python.Driver
+
+	if driver == "psycopg3" {
+		// psycopg3 uses %s placeholders
+		for i := 20; i >= 1; i-- {
+			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "%s")
+		}
+		return sql
+	}
+
 	switch provider {
 	case "mysql":
 		// MySQL uses %s placeholders for Python's cursor.execute
@@ -843,7 +964,11 @@ func (g *Generator) generateBatchMethod(w *strings.Builder, query *parser.Query)
 	sql = strings.ReplaceAll(sql, "\"", "\\\"")
 
 	isAsync := g.Config.Gen.Python.Async
-	
+	driver := g.Config.Gen.Python.Driver
+	if driver == "pymysql" || driver == "sqlite3" {
+		isAsync = false
+	}
+
 	if isAsync {
 		w.WriteString(fmt.Sprintf("    async def %s(self, records: List[tuple]) -> int:\n", methodName))
 	} else {
@@ -874,12 +999,24 @@ func (g *Generator) generateBatchMethod(w *strings.Builder, query *parser.Query)
 			w.WriteString("            return cursor.rowcount\n")
 		}
 	default: // PostgreSQL
-		if isAsync {
-			w.WriteString("        await self.db.executemany(stmt, records)\n")
+		if driver == "psycopg3" {
+			if isAsync {
+				w.WriteString("        async with self.db.cursor() as cur:\n")
+				w.WriteString("            await cur.executemany(stmt, records)\n")
+				w.WriteString("            return cur.rowcount\n")
+			} else {
+				w.WriteString("        with self.db.cursor() as cur:\n")
+				w.WriteString("            cur.executemany(stmt, records)\n")
+				w.WriteString("            return cur.rowcount\n")
+			}
 		} else {
-			w.WriteString("        self.db.executemany(stmt, records)\n")
+			if isAsync {
+				w.WriteString("        await self.db.executemany(stmt, records)\n")
+			} else {
+				w.WriteString("        self.db.executemany(stmt, records)\n")
+			}
+			w.WriteString("        return len(records)\n")
 		}
-		w.WriteString("        return len(records)\n")
 	}
 
 	w.WriteString("\n")

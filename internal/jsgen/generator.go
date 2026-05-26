@@ -129,10 +129,20 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 	isSingleColumn := len(query.Columns) == 1 && query.Columns[0].Name != "*"
 	isHotQuery := isSingleColumn && query.Cmd == ":one" && len(query.Params) <= 2
 
-	w.WriteString(fmt.Sprintf("  async %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
+	driver := g.Config.Gen.JS.Driver
+	isAsync := true
+	if driver == "better-sqlite3" || driver == "bun:sqlite" {
+		isAsync = false
+	}
+
+	if isAsync {
+		w.WriteString(fmt.Sprintf("  async %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
+	} else {
+		w.WriteString(fmt.Sprintf("  %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
+	}
 
 	// postgres driver (porsager/postgres) uses tagged template literals
-	if g.Config.Gen.JS.Driver == "postgres" {
+	if driver == "postgres" {
 		g.generatePostgresDriverExecution(w, sql, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 		w.WriteString("  }\n\n")
 		return
@@ -158,7 +168,11 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 	case "sqlite", "sqlite3":
 		g.generateSQLiteExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 	case "mysql":
-		g.generateMySQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+		if driver == "mysql2" {
+			g.generateMySQL2Execution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+		} else {
+			g.generateMySQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+		}
 	default:
 		g.generatePostgreSQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns, isHotQuery)
 	}
@@ -234,6 +248,33 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 		}
 	} else {
 		w.WriteString("    return r[0].affectedRows;\n")
+	}
+}
+
+func (g *Generator) generateMySQL2Execution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
+	w.WriteString("    const sql = typeof stmt === 'string' ? stmt : stmt.text;\n")
+	if len(paramNames) > 0 {
+		w.WriteString("    const [rows] = await this.db.query(sql, [" + strings.Join(paramNames, ", ") + "]);\n")
+	} else {
+		w.WriteString("    const [rows] = await this.db.query(sql);\n")
+	}
+
+	if hasColumns {
+		if cmd == ":one" {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return rows[0] ? rows[0].%s : null;\n", columns[0].Name))
+			} else {
+				w.WriteString("    return rows[0] || null;\n")
+			}
+		} else {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return rows.map(row => row.%s);\n", columns[0].Name))
+			} else {
+				w.WriteString("    return rows;\n")
+			}
+		}
+	} else {
+		w.WriteString("    return rows.affectedRows;\n")
 	}
 }
 
@@ -421,7 +462,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	w.WriteString("/**\n")
 	w.WriteString(" * Create a new database client\n")
-	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, or better-sqlite3 instance)\n")
+	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
 	w.WriteString(" * @returns {Queries}\n")
 	w.WriteString(" */\n")
 	w.WriteString("function New(db) {\n")
@@ -587,13 +628,30 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 			returnType = utils.Capitalize(query.Name) + "Result"
 		}
 
+		isAsyncJS := true
+		if g.Config.Gen.JS.Driver == "better-sqlite3" || g.Config.Gen.JS.Driver == "bun:sqlite" {
+			isAsyncJS = false
+		}
+
 		switch query.Cmd {
 		case ":one":
-			returnType = fmt.Sprintf("Promise<%s | null>", returnType)
+			if isAsyncJS {
+				returnType = fmt.Sprintf("Promise<%s | null>", returnType)
+			} else {
+				returnType = fmt.Sprintf("%s | null", returnType)
+			}
 		case ":many":
-			returnType = fmt.Sprintf("Promise<%s[]>", returnType)
+			if isAsyncJS {
+				returnType = fmt.Sprintf("Promise<%s[]>", returnType)
+			} else {
+				returnType = fmt.Sprintf("%s[]", returnType)
+			}
 		default:
-			returnType = "Promise<number>"
+			if isAsyncJS {
+				returnType = "Promise<number>"
+			} else {
+				returnType = "number"
+			}
 		}
 
 		w.WriteString(fmt.Sprintf("  %s(%s): %s;\n", methodName, strings.Join(params, ", "), returnType))

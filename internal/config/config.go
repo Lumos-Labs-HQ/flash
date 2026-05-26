@@ -49,6 +49,7 @@ type PythonGen struct {
 	Enabled bool   `json:"enabled,omitempty"`
 	Out     string `json:"out,omitempty"`
 	Async   bool   `json:"async,omitempty"` // true = async (default), false = sync
+	Driver  string `json:"driver,omitempty"` // database-specific driver
 }
 
 // pythonRaw is used to detect whether "async" was explicitly set in the JSON.
@@ -77,12 +78,13 @@ func Load() (*Config, error) {
 
 	pythonAsyncSet := false
 	if data != nil {
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		cleanData := StripJSONComments(data)
+		if err := json.Unmarshal(cleanData, &cfg); err != nil {
 			return nil, fmt.Errorf("failed to parse config: %w", err)
 		}
 		// Check if python.async was explicitly set
 		var raw configRaw
-		json.Unmarshal(data, &raw)
+		json.Unmarshal(cleanData, &raw)
 		pythonAsyncSet = raw.Gen.Python.Async != nil
 	}
 
@@ -237,4 +239,45 @@ func (c *Config) GetSchemaFiles() ([]string, error) {
 func (c *Config) IsNodeProject() bool {
 	_, err := os.Stat("package.json")
 	return err == nil
+}
+
+
+
+// StripJSONComments removes // line comments from JSON data so users can
+// include comments in flash.config.json for documentation purposes.
+func StripJSONComments(data []byte) []byte {
+	var result []byte
+	inString := false
+	for i := 0; i < len(data); i++ {
+		ch := data[i]
+		if ch == '"' {
+			// Check if escaped
+			escapeCount := 0
+			for j := i - 1; j >= 0 && data[j] == '\\'; j-- {
+				escapeCount++
+			}
+			if escapeCount%2 == 0 {
+				inString = !inString
+			}
+			result = append(result, ch)
+			continue
+		}
+		if inString {
+			result = append(result, ch)
+			continue
+		}
+		if ch == '/' && i+1 < len(data) && data[i+1] == '/' {
+			// Skip until end of line
+			for i < len(data) && data[i] != '\n' {
+				i++
+			}
+			// Keep the newline to preserve line numbers
+			if i < len(data) {
+				result = append(result, '\n')
+			}
+			continue
+		}
+		result = append(result, ch)
+	}
+	return result
 }

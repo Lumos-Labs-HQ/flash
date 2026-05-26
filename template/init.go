@@ -82,25 +82,14 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
 	var genSection string
 
 	if pt.IsNodeProject {
-		genSection = `  "gen": {
-    "js": {
-      "enabled": true
-    }
-  }`
+		genSection = pt.getJSGenSection()
 	} else if pt.IsPythonProject {
-		genSection = `  "gen": {
-    "python": {
-      "enabled": true
-    }
-  }`
+		genSection = pt.getPythonGenSection()
 	} else {
-		genSection = `  "gen": {
-    "go": {
-      "enabled": true
-    }
-  }`
+		genSection = pt.getGoGenSection()
 	}
 
+	driverHeader := pt.getDriverHeaderComment()
 	configParts := []string{
 		`  "version": "2"`,
 		`  "schema_dir": "db/schema"`,
@@ -117,7 +106,7 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
 		configParts = append(configParts, genSection)
 	}
 
-	config := "{\n"
+	config := driverHeader + "\n{\n"
 	for i, part := range configParts {
 		config += part
 		if i < len(configParts)-1 {
@@ -194,4 +183,54 @@ func ValidateDatabaseType(dbType string) DatabaseType {
 		return dt
 	}
 	return PostgreSQL
+}
+
+
+func (pt *ProjectTemplate) getGoGenSection() string {
+	return `  "gen": {
+    "go": {
+      "enabled": true
+    }
+  }`
+}
+
+func (pt *ProjectTemplate) getJSGenSection() string {
+	return `  "gen": {
+    "js": {
+      "enabled": true
+    }
+  }`
+}
+
+func (pt *ProjectTemplate) getPythonGenSection() string {
+	return `  "gen": {
+    "python": {
+      "enabled": true
+    }
+  }`
+}
+
+func (pt *ProjectTemplate) getDriverHeaderComment() string {
+	switch pt.DatabaseType {
+	case PostgreSQL:
+		return `// FlashORM — PostgreSQL Drivers
+//   Go:     "pgx" (native) | "database/sql" (lib/pq)
+//   JS:     "pg" (node-postgres) | "postgres" (porsager/postgres)
+//   Python: "psycopg3" | "asyncpg"
+// Add "driver": "<name>" inside the gen block below.`
+	case MySQL:
+		return `// FlashORM — MySQL Drivers
+//   Go:     "database/sql" (go-sql-driver/mysql)
+//   JS:     "mysql2" | "serverless-mysql"
+//   Python: "pymysql" (sync) | "asyncmy" (async)
+// Add "driver": "<name>" inside the gen block below.`
+	case SQLite:
+		return `// FlashORM — SQLite Drivers
+//   Go:     "database/sql" (mattn/go-sqlite3, modernc.org/sqlite)
+//   JS:     "better-sqlite3" | "bun:sqlite"
+//   Python: "sqlite3" (sync) | "aiosqlite" (async)
+// Add "driver": "<name>" inside the gen block below.`
+	default:
+		return `// FlashORM — See docs for available drivers per database.`
+	}
 }
