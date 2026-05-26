@@ -47,7 +47,7 @@ This creates:
 
 ```
 your-project/
-├── flash.config.json
+├── flash.toml
 ├── .env
 └── db/
     ├── schema/
@@ -320,27 +320,22 @@ flash <command> --help
 
 ## ⚙️ Configuration
 
-**flash.config.json**
+**flash.toml**
 
-```json
-{
-  "version": "2",
-  "schema_path": "db/schema/schema.sql",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    
-    "python": {
-      "enabled": true,
-      "async": false
-    }
-  }
-}
+```toml
+version = "2"
+schema_path = "db/schema/schema.sql"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.python]
+enabled = true
+async = false
 ```
 
 **Python Generation Options:**

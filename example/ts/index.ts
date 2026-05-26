@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { New } from './flash_gen/database';
+import { New } from './flash_gen';
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/FlashORM_test';
 

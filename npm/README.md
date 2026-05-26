@@ -59,7 +59,7 @@ This creates:
 
 ```
 your-project/
-├── flash.config.json
+├── flash.toml
 ├── .env
 └── db/
     ├── schema/
@@ -344,25 +344,21 @@ flash <command> --help
 
 ## ⚙️ Configuration
 
-**flash.config.json**
+**flash.toml**
 
-```json
-{
-  "version": "2",
-  "schema_path": "db/schema/schema.sql",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "js": {
-      "enabled": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.js]
+enabled = true
 ```
 
 ## 🎨 PostgreSQL ENUM Support

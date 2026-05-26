@@ -24,7 +24,7 @@ class Queries {
 
 /**
  * Create a new database client
- * @param {Object} db - Database connection (pg.Pool, mysql2.Pool, or better-sqlite3 instance)
+ * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)
  * @returns {Queries}
  */
 function New(db) {
