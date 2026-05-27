@@ -91,41 +91,43 @@ func (p *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]type
 		if err := rows.Scan(&indexName, &indexDef); err != nil {
 			continue
 		}
-
-		index := types.SchemaIndex{
-			Name:  indexName,
-			Table: tableName,
-		}
-
-		// Parse index definition
-		if strings.Contains(indexDef, "UNIQUE") {
-			index.Unique = true
-		}
-
-		// Extract column names from index definition
-		if idx := strings.Index(indexDef, "("); idx != -1 {
-			colsStr := indexDef[idx+1:]
-			if endIdx := strings.LastIndex(colsStr, ")"); endIdx != -1 {
-				colsStr = colsStr[:endIdx]
-			}
-			cols := strings.Split(colsStr, ",")
-			for _, col := range cols {
-				col = strings.TrimSpace(col)
-				if strings.HasSuffix(col, " DESC") {
-					col = strings.TrimSuffix(col, " DESC")
-				} else if strings.HasSuffix(col, " ASC") {
-					col = strings.TrimSuffix(col, " ASC")
-				}
-				if col != "" {
-					index.Columns = append(index.Columns, col)
-				}
-			}
-		}
-
-		indexes = append(indexes, index)
+		indexes = append(indexes, p.parseIndexDef(indexName, tableName, indexDef))
 	}
 
 	return indexes, nil
+}
+
+// parseIndexDef extracts structured index info from a PostgreSQL indexdef string.
+func (p *Adapter) parseIndexDef(indexName, tableName, indexDef string) types.SchemaIndex {
+	index := types.SchemaIndex{
+		Name:  indexName,
+		Table: tableName,
+	}
+
+	if strings.Contains(indexDef, "UNIQUE") {
+		index.Unique = true
+	}
+
+	if idx := strings.Index(indexDef, "("); idx != -1 {
+		colsStr := indexDef[idx+1:]
+		if endIdx := strings.LastIndex(colsStr, ")"); endIdx != -1 {
+			colsStr = colsStr[:endIdx]
+		}
+		cols := strings.Split(colsStr, ",")
+		for _, col := range cols {
+			col = strings.TrimSpace(col)
+			if strings.HasSuffix(col, " DESC") {
+				col = strings.TrimSuffix(col, " DESC")
+			} else if strings.HasSuffix(col, " ASC") {
+				col = strings.TrimSuffix(col, " ASC")
+			}
+			if col != "" {
+				index.Columns = append(index.Columns, col)
+			}
+		}
+	}
+
+	return index
 }
 
 func (p *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
