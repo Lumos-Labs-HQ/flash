@@ -154,6 +154,8 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) (str
 		switch m.provider {
 		case "sqlite", "sqlite3":
 			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
+		case "mysql":
+			return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
 		default:
 			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\" CASCADE;", tableName)
 		}

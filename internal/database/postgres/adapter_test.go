@@ -173,6 +173,74 @@ func TestGenerateAddIndexSQL_NonUnique(t *testing.T) {
 	}
 }
 
+// ── GenerateAlterColumnSQL ────────────────────────────────────────────────────
+
+func TestGenerateAlterColumnSQL_NeverEmitsSerial(t *testing.T) {
+	a := newAdapter()
+	col := types.SchemaColumn{Name: "id", Type: "SERIAL", IsPrimary: true}
+	sql := a.GenerateAlterColumnSQL("users", col, "INTEGER")
+	// SERIAL is a pseudo-type macro only valid in CREATE TABLE.
+	// ALTER TABLE ... TYPE SERIAL is invalid SQL.
+	if strings.Contains(sql, "SERIAL") {
+		t.Errorf("GenerateAlterColumnSQL must NOT contain SERIAL, got %q", sql)
+	}
+	if !strings.Contains(sql, "TYPE INTEGER") {
+		t.Errorf("GenerateAlterColumnSQL should use INTEGER instead of SERIAL, got %q", sql)
+	}
+}
+
+func TestGenerateAlterColumnSQL_NormalTypeChange(t *testing.T) {
+	a := newAdapter()
+	col := types.SchemaColumn{Name: "name", Type: "VARCHAR(255)", Nullable: false}
+	sql := a.GenerateAlterColumnSQL("users", col, "TEXT")
+	if !strings.Contains(sql, `ALTER TABLE "users"`) {
+		t.Errorf("GenerateAlterColumnSQL missing ALTER TABLE, got %q", sql)
+	}
+	if !strings.Contains(sql, `TYPE VARCHAR(255)`) {
+		t.Errorf("GenerateAlterColumnSQL missing TYPE, got %q", sql)
+	}
+}
+
+func TestGenerateAlterColumnSQL_SameTypeReturnsEmpty(t *testing.T) {
+	a := newAdapter()
+	col := types.SchemaColumn{Name: "age", Type: "INTEGER", Nullable: false}
+	sql := a.GenerateAlterColumnSQL("users", col, "INTEGER")
+	if sql != "" {
+		t.Errorf("GenerateAlterColumnSQL should return empty when type unchanged, got %q", sql)
+	}
+}
+
+// ── MapColumnType serial types ─────────────────────────────────────────────────
+
+func TestMapColumnType_SerialTypes(t *testing.T) {
+	a := newAdapter()
+	cases := []struct{ in, want string }{
+		{"serial", "INTEGER"},
+		{"bigserial", "BIGINT"},
+		{"smallserial", "SMALLINT"},
+		{"integer", "INTEGER"},
+		{"int4", "INTEGER"},
+		{"bigint", "BIGINT"},
+		{"int8", "BIGINT"},
+		{"smallint", "SMALLINT"},
+		{"int2", "SMALLINT"},
+		{"real", "REAL"},
+		{"float4", "REAL"},
+		{"double precision", "DOUBLE PRECISION"},
+		{"float8", "DOUBLE PRECISION"},
+		{"numeric", "NUMERIC"},
+		{"decimal", "NUMERIC"},
+		{"timestamp without time zone", "TIMESTAMP"},
+		{"timestamp", "TIMESTAMP"},
+	}
+	for _, c := range cases {
+		got := a.MapColumnType(c.in)
+		if got != c.want {
+			t.Errorf("MapColumnType(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 // ── GenerateDropIndexSQL ──────────────────────────────────────────────────────
 
 func TestGenerateDropIndexSQL(t *testing.T) {
