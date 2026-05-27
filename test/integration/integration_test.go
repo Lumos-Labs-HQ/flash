@@ -101,8 +101,12 @@ func setupProject(t *testing.T, dir string, db Database) {
 		t.Fatalf("write .env: %v", err)
 	}
 
+	// Reset any leftover tables from previous test runs before generating
+	if out, err := flash(t, dir, "reset", "--force"); err != nil {
+		t.Logf("pre-setup reset: %v\n%s", err, out)
+	}
+
 	// Use a unique migration name per test to avoid timestamp collisions
-	// when multiple tests call migrate within the same second.
 	migrationName := filepath.Base(dir) + "_schema"
 	mustFlash(t, dir, "migrate", migrationName)
 	mustFlash(t, dir, "apply", "--force")
@@ -393,8 +397,8 @@ func testBranch(t *testing.T, dir string, db Database) {
 	// Switch back to main
 	mustFlash(t, dir, "checkout", "main", "--force")
 
-	// Diff
-	out, _ = flash(t, dir, "diff", "main", "feature")
+	// Diff between branches
+	out, _ = flash(t, dir, "branch", "diff", "main", "feature")
 	t.Logf("branch diff output: %s", out)
 
 	// Delete feature branch
