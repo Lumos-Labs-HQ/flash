@@ -114,7 +114,7 @@ flash gen
 
 ```bash
 flash studio
-flash studio --db "postgres://user:pass@localhost:5432/mydb"
+flash studio "postgres://user:pass@localhost:5432/mydb"
 ```
 
 Features: Schema designer, data browser, relationship visualization, auto-migration creation
@@ -124,8 +124,8 @@ Features: Schema designer, data browser, relationship visualization, auto-migrat
 Visual management interface for MongoDB (no ORM features).
 
 ```bash
-flash studio --db "mongodb://localhost:27017/mydb"
-flash studio --db "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
+flash studio "mongodb://localhost:27017/mydb"
+flash studio "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
 ```
 
 Features: Collection browser, document editor, query interface, bulk operations
@@ -135,8 +135,8 @@ Features: Collection browser, document editor, query interface, bulk operations
 Visual management interface for Redis (no ORM features).
 
 ```bash
-flash studio --redis "redis://localhost:6379"
-flash studio --redis "redis://:password@localhost:6379"
+flash studio "redis://localhost:6379"
+flash studio "redis://:password@localhost:6379"
 ```
 
 Features: Key browser, CLI terminal, memory analysis, Lua scripting, Pub/Sub, ACL management

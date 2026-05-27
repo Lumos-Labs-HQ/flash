@@ -229,7 +229,7 @@ flash studio
 flash studio --port 3000
 
 # Connect to any database directly
-flash studio --db "postgresql://user:pass@localhost:5432/mydb"
+flash studio "postgresql://user:pass@localhost:5432/mydb"
 
 # Launch without opening browser
 flash studio --browser=false
