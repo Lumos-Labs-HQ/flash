@@ -161,22 +161,24 @@ Smart data generation based on column names (email, name, phone, etc.)
 
 ## 🔧 Configuration
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "go": { "enabled": true },
-    "js": { "enabled": true },
-    "python": { "enabled": true }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true
+
+[gen.js]
+enabled = true
+
+[gen.python]
+enabled = true
 ```
 
 ## 📤 Export System

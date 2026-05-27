@@ -286,19 +286,17 @@ flash export --format sqlite --output tests/test.db
 
 ## Export Configuration
 
-### flash.config.json
+### flash.toml
 
-```json
-{
-  "export": {
-    "default_format": "json",
-    "output_dir": "db/export",
-    "compress": true,
-    "parallel": true,
-    "batch_size": 1000,
-    "exclude_tables": ["_flash_migrations", "sessions"]
-  }
-}
+```toml
+
+[export]
+default_format = "json"
+output_dir = "db/export"
+compress = true
+parallel = true
+batch_size = 1000
+exclude_tables = ['_flash_migrations', 'sessions']
 ```
 
 ### Environment Variables

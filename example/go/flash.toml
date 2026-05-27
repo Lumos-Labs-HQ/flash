@@ -1,0 +1,17 @@
+# FlashORM — PostgreSQL Drivers
+#   Go:     "pgx" (native) | "database/sql" (lib/pq)
+#   JS:     "pg" (node-postgres) | "postgres" (porsager/postgres)
+#   Python: "psycopg3" | "asyncpg"
+# Add driver = "<name>" inside the [gen.*] block below.
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true

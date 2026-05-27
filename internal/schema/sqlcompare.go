@@ -8,6 +8,15 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
+// Pre-compiled regexes used by SQLComparator.
+var (
+	sqlCompareCreateTableRegex = regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\);`)
+	sqlCompareUpdateTableRegex = regexp.MustCompile(`(?m)^(\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(((?:[^)]|\([^)]*\))*)\);)`)
+	sqlCompareTypeRegex        = regexp.MustCompile(`^\s*\w+\s+([A-Za-z_]+(?:\([^)]*\))?)`)
+	sqlCompareDefaultRegex     = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+(?:\([^)]*\))?)`)
+	sqlCompareRefRegex         = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(\w+(?:\s+\w+)?))?`)
+)
+
 type SQLComparator struct{}
 
 func NewSQLComparator() *SQLComparator {
@@ -28,14 +37,13 @@ func (sc *SQLComparator) CompareWithDatabase(existingSQL string, dbTables []type
 	return true, updatedSQL
 }
 
-// parseSQL extracts table structures from SQL, completely ignoring commented sections
+// parseSQL extracts table structures from SQL, skipping commented sections.
 func (sc *SQLComparator) parseSQL(sql string) map[string]*TableStructure {
 	tables := make(map[string]*TableStructure)
 
 	cleanSQL := sc.removeAllComments(sql)
 
-	createTableRegex := regexp.MustCompile(`(?is)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\);`)
-	matches := createTableRegex.FindAllStringSubmatch(cleanSQL, -1)
+	matches := sqlCompareCreateTableRegex.FindAllStringSubmatch(cleanSQL, -1)
 
 	for _, match := range matches {
 		if len(match) >= 3 {
@@ -57,7 +65,6 @@ func (sc *SQLComparator) parseSQL(sql string) map[string]*TableStructure {
 	return tables
 }
 
-// removeAllComments removes all commented lines from SQL
 func (sc *SQLComparator) removeAllComments(sql string) string {
 	lines := strings.Split(sql, "\n")
 	var cleanLines []string
@@ -98,7 +105,6 @@ func (sc *SQLComparator) parseColumnsWithOrder(columnsDef string) (map[string]*C
 	return columns, columnOrder
 }
 
-// parseColumn parses individual column definition
 func (sc *SQLComparator) parseColumn(def string) *ColumnStructure {
 	parts := strings.Fields(def)
 	if len(parts) < 2 {
@@ -120,7 +126,7 @@ func (sc *SQLComparator) extractProperties(def string) map[string]string {
 	defUpper := strings.ToUpper(def)
 
 	// Extract type from original def (not uppercased) to preserve enum case
-	if typeMatch := regexp.MustCompile(`^\s*\w+\s+([A-Za-z_]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(typeMatch) > 1 {
+	if typeMatch := sqlCompareTypeRegex.FindStringSubmatch(def); len(typeMatch) > 1 {
 		props["TYPE"] = sc.normalizeType(typeMatch[1])
 	}
 
@@ -138,11 +144,11 @@ func (sc *SQLComparator) extractProperties(def string) map[string]string {
 		props["NULLABLE"] = "true"
 	}
 
-	if defaultMatch := regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+(?:\([^)]*\))?)`).FindStringSubmatch(def); len(defaultMatch) > 1 {
+	if defaultMatch := sqlCompareDefaultRegex.FindStringSubmatch(def); len(defaultMatch) > 1 {
 		props["DEFAULT"] = sc.normalizeDefault(defaultMatch[1])
 	}
 
-	if refMatch := regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(\w+(?:\s+\w+)?))?`).FindStringSubmatch(def); len(refMatch) > 2 {
+	if refMatch := sqlCompareRefRegex.FindStringSubmatch(def); len(refMatch) > 2 {
 		fkRef := strings.ToLower(refMatch[1]) + "." + strings.ToLower(refMatch[2])
 		if len(refMatch) > 3 && refMatch[3] != "" {
 			fkRef += ":" + strings.ToUpper(strings.TrimSpace(refMatch[3]))
@@ -210,7 +216,6 @@ func (sc *SQLComparator) normalizeDBTables(dbTables []types.SchemaTable) map[str
 	return tables
 }
 
-// areEqual compares two table structures
 func (sc *SQLComparator) areEqual(existing, db map[string]*TableStructure) bool {
 	if len(existing) != len(db) {
 		return false
@@ -230,7 +235,6 @@ func (sc *SQLComparator) areEqual(existing, db map[string]*TableStructure) bool 
 	return true
 }
 
-// areTablesEqual compares individual tables
 func (sc *SQLComparator) areTablesEqual(existing, db *TableStructure) bool {
 	if len(existing.Columns) != len(db.Columns) {
 		return false
@@ -250,7 +254,6 @@ func (sc *SQLComparator) areTablesEqual(existing, db *TableStructure) bool {
 	return true
 }
 
-// areColumnsEqual compares column properties
 func (sc *SQLComparator) areColumnsEqual(existing, db *ColumnStructure) bool {
 	for key, dbValue := range db.Properties {
 		existingValue, exists := existing.Properties[key]
@@ -284,14 +287,12 @@ func (sc *SQLComparator) generateUpdatedSQL(originalSQL string, existing, db map
 	return sc.updateExistingSQL(originalSQL, existing, db)
 }
 
-// only non-commented CREATE TABLE statements
+// updateExistingSQL replaces non-commented CREATE TABLE blocks.
 func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[string]*TableStructure) string {
 	result := originalSQL
 
-	createTableRegex := regexp.MustCompile(`(?m)^(\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(((?:[^)]|\([^)]*\))*)\);)`)
-
-	result = createTableRegex.ReplaceAllStringFunc(result, func(match string) string {
-		submatches := createTableRegex.FindStringSubmatch(match)
+	result = sqlCompareUpdateTableRegex.ReplaceAllStringFunc(result, func(match string) string {
+		submatches := sqlCompareUpdateTableRegex.FindStringSubmatch(match)
 		if len(submatches) < 4 {
 			return match
 		}
@@ -324,7 +325,6 @@ func (sc *SQLComparator) updateExistingSQL(originalSQL string, existing, db map[
 	return result
 }
 
-// generateCleanSQL generates clean SQL from database structure preserving order
 func (sc *SQLComparator) generateCleanSQL(tables map[string]*TableStructure) string {
 	var result strings.Builder
 
@@ -350,9 +350,6 @@ func (sc *SQLComparator) generateCleanSQL(tables map[string]*TableStructure) str
 func (sc *SQLComparator) generateTableSQL(table *TableStructure) string {
 	var result strings.Builder
 
-	// result.WriteString("-- ")
-	// result.WriteString(strings.Title(table.Name))
-	// result.WriteString(" table\n")
 	result.WriteString("CREATE TABLE IF NOT EXISTS ")
 	result.WriteString(table.Name)
 	result.WriteString(" (\n")
@@ -380,7 +377,6 @@ func (sc *SQLComparator) generateTableSQL(table *TableStructure) string {
 	return result.String()
 }
 
-// generateColumnSQL generates SQL for a column
 func (sc *SQLComparator) generateColumnSQL(col *ColumnStructure) string {
 	var parts []string
 

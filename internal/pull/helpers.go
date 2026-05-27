@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// Pre-compiled regexes used by the pull service.
+var (
+	whitespaceRegex = regexp.MustCompile(`\s+`)
+	indexPattern    = regexp.MustCompile(`(?i)^\s*(CREATE\s+(?:UNIQUE\s+)?INDEX\s+[^;]+;)`)
+)
+
 // extractTableSQL extracts the CREATE TABLE statement for a specific table from content
 func (s *Service) extractTableSQL(content, tableName string) string {
 	startPattern := fmt.Sprintf(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'\x60]?%s["'\x60]?\s*\(`, regexp.QuoteMeta(tableName))
@@ -47,7 +53,6 @@ func (s *Service) extractTableSQL(content, tableName string) string {
 
 	// Also capture any CREATE INDEX statements that follow
 	remaining := content[endPos:]
-	indexPattern := regexp.MustCompile(`(?i)^\s*(CREATE\s+(?:UNIQUE\s+)?INDEX\s+[^;]+;)`)
 	for {
 		match := indexPattern.FindStringSubmatch(remaining)
 		if match == nil {
@@ -73,7 +78,7 @@ func (s *Service) replaceTableInContent(content, tableName, newTableSQL string) 
 func (s *Service) compareTableSQL(sql1, sql2 string) bool {
 	normalize := func(sql string) string {
 		sql = strings.ToLower(sql)
-		sql = regexp.MustCompile(`\s+`).ReplaceAllString(sql, " ")
+		sql = whitespaceRegex.ReplaceAllString(sql, " ")
 		sql = strings.TrimSpace(sql)
 		return sql
 	}

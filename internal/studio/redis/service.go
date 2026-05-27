@@ -149,14 +149,27 @@ func (s *Service) GetKeys(pattern string, cursor uint64, count int64) (*KeysResu
 
 	sort.Strings(keys)
 
+	// Batch TYPE and TTL using Pipeline to avoid N+1 round-trips
+	pipe := s.client.Pipeline()
+	typeCmds := make([]*redis.StatusCmd, len(keys))
+	ttlCmds := make([]*redis.DurationCmd, len(keys))
+	for i, key := range keys {
+		typeCmds[i] = pipe.Type(s.ctx, key)
+		ttlCmds[i] = pipe.TTL(s.ctx, key)
+	}
+	_, err = pipe.Exec(s.ctx)
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+
 	keyInfos := make([]KeyInfo, 0, len(keys))
-	for _, key := range keys {
-		keyType, err := s.client.Type(s.ctx, key).Result()
+	for i, key := range keys {
+		keyType, err := typeCmds[i].Result()
 		if err != nil {
 			continue
 		}
 
-		ttl, err := s.client.TTL(s.ctx, key).Result()
+		ttl, err := ttlCmds[i].Result()
 		ttlSeconds := int64(-1)
 		if err == nil {
 			switch ttl {
@@ -264,6 +277,34 @@ func (s *Service) GetKey(key string) (*KeyInfo, error) {
 		}
 		keyInfo.Value = val
 		keyInfo.Size = int64(len(val))
+
+	case "bitmap":
+		// Bitmap: return bitcount and bitfield info
+		bitcount, _ := s.client.BitCount(s.ctx, key, nil).Result()
+		keyInfo.Value = map[string]interface{}{"bitcount": bitcount}
+		keyInfo.Size = bitcount
+
+	case "hyperloglog":
+		// HyperLogLog: return approximate count
+		count, _ := s.client.PFCount(s.ctx, key).Result()
+		keyInfo.Value = map[string]interface{}{"approx_count": count}
+		keyInfo.Size = count
+
+	case "geo", "geospatial":
+		// Geospatial: return members with positions
+		positions, _ := s.client.GeoPos(s.ctx, key, "*").Result()
+		keyInfo.Value = positions
+		keyInfo.Size = int64(len(positions))
+
+	case "ReJSON-RL", "ReJSON", "json":
+		// RedisJSON: attempt JSON.GET
+		jsonVal, err := s.client.JSONGet(s.ctx, key, "$").Result()
+		if err != nil {
+			keyInfo.Value = fmt.Sprintf("JSON value (module required): %v", err)
+		} else {
+			keyInfo.Value = jsonVal
+			keyInfo.Size = int64(len(jsonVal))
+		}
 
 	default:
 		keyInfo.Value = fmt.Sprintf("Unsupported type: %s", keyType)
@@ -682,12 +723,35 @@ func (s *Service) GetMemoryStats(pattern string, limit int) ([]MemoryInfo, map[s
 	memoryInfos := make([]MemoryInfo, 0, len(keys))
 	typeStats := make(map[string]int64)
 
-	for _, key := range keys {
-		info, err := s.GetKeyMemory(key)
+	// Batch memory usage with pipeline
+	memPipe := s.client.Pipeline()
+	memCmds := make([]*redis.IntCmd, len(keys))
+	for i, key := range keys {
+		memCmds[i] = memPipe.MemoryUsage(s.ctx, key)
+	}
+	_, _ = memPipe.Exec(s.ctx)
+
+	for i, key := range keys {
+		keyType, err := s.client.Type(s.ctx, key).Result()
 		if err != nil {
 			continue
 		}
-		memoryInfos = append(memoryInfos, *info)
+		ttl, _ := s.client.TTL(s.ctx, key).Result()
+		ttlSeconds := int64(-1)
+		if ttl >= 0 {
+			ttlSeconds = int64(ttl.Seconds())
+		}
+		memoryUsed, _ := memCmds[i].Result()
+		if memoryUsed == 0 {
+			memoryUsed = 0
+		}
+		info := MemoryInfo{
+			Key:        key,
+			Type:       keyType,
+			MemoryUsed: memoryUsed,
+			TTL:        ttlSeconds,
+		}
+		memoryInfos = append(memoryInfos, info)
 		typeStats[info.Type] += info.MemoryUsed
 	}
 

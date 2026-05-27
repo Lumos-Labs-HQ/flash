@@ -541,11 +541,50 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	return map[string]any{"nodes": nodes, "edges": edges, "enums": enums}, nil
 }
 
+// stripSQLComments removes leading SQL comments (-- line comments and /* block comments */)
+// so that query type detection works correctly even when queries start with comments.
+func stripSQLComments(query string) string {
+	query = strings.TrimSpace(query)
+	for {
+		if strings.HasPrefix(query, "--") {
+			idx := strings.Index(query, "\n")
+			if idx >= 0 {
+				query = strings.TrimSpace(query[idx+1:])
+			} else {
+				return ""
+			}
+			continue
+		}
+		if strings.HasPrefix(query, "#") {
+			idx := strings.Index(query, "\n")
+			if idx >= 0 {
+				query = strings.TrimSpace(query[idx+1:])
+			} else {
+				return ""
+			}
+			continue
+		}
+		if strings.HasPrefix(query, "/*") {
+			idx := strings.Index(query, "*/")
+			if idx >= 0 {
+				query = strings.TrimSpace(query[idx+2:])
+			} else {
+				return ""
+			}
+			continue
+		}
+		break
+	}
+	return query
+}
+
 func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 	s.ensureCorrectSchema()
 	query = strings.TrimSpace(query)
 
-	queryUpper := strings.ToUpper(query)
+	// Strip leading comments to detect the actual query type
+	queryForDetection := stripSQLComments(query)
+	queryUpper := strings.ToUpper(queryForDetection)
 
 	// Detect query type more comprehensively
 	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||

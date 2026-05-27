@@ -25,6 +25,7 @@ type Migrator struct {
 	fileUtils     *utils.FileUtils
 	inputUtils    *utils.InputUtils
 	conflictUtils *utils.ConflictUtils
+	fileCache     map[string][]byte // In-memory cache for migration file contents
 }
 
 func NewMigrator(cfg *config.Config) (*Migrator, error) {
@@ -97,7 +98,11 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 		schemaPath = m.schemaPath
 	}
 
-	diff, err := m.schemaManager.GenerateSchemaDiff(ctx, schemaPath)
+	// Use the local schema snapshot for diffing so we can generate migrations
+	// even when previous ones haven't been applied yet.
+	snapshotPath := schema.SnapshotPath(m.migrationsDir)
+
+	diff, err := m.schemaManager.GenerateSchemaDiff(ctx, schemaPath, snapshotPath)
 	if err != nil {
 		return fmt.Errorf("failed to generate schema diff: %w", err)
 	}
@@ -106,33 +111,51 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	filepath := filepath.Join(m.migrationsDir, filename)
 
 	var sqlContent string
-	// CRITICAL FIX: Also check for index changes!
-	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 && 
+	// Check for index changes too, not just tables and enums.
+	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
 	   len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
 	   len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
-		sqlContent = m.generateSQLFromDiff(diff, name)
+		sqlContent, _ = m.generateSQLFromDiff(diff, name)
 	}
 
 	if err := os.WriteFile(filepath, []byte(sqlContent), 0644); err != nil {
 		return fmt.Errorf("failed to write migration file: %w", err)
 	}
 
+	// After generating the migration, update the snapshot so the next
+	// generation diffs against this new schema state.
+	targetTables, targetEnums, targetIndexes, err := m.schemaManager.ParseSchemaPath(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse target schema for snapshot: %w", err)
+	}
+
+	// Include standalone indexes in the snapshot so they are not regenerated
+	// on every subsequent migration.
+	if err := schema.SaveSchemaSnapshot(snapshotPath, targetTables, targetEnums, targetIndexes); err != nil {
+		return fmt.Errorf("failed to save schema snapshot: %w", err)
+	}
+
 	fmt.Printf("Generated migration: %s\n", filename)
 	return nil
 }
 
-// generateSQLFromDiff creates SQL from schema differences with both UP and DOWN
-func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) string {
+// generateSQLFromDiff creates SQL from schema differences with both UP and DOWN.
+// It returns the formatted migration file and a bool indicating whether any
+// executable (non-comment) SQL statements were generated.
+func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) (string, bool) {
 	var upStatements []string
 	var downStatements []string
+	hasExecutableSQL := false
 
 	dropTableSQL := func(tableName string) string {
 		switch m.provider {
 		case "sqlite", "sqlite3":
 			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
+		case "mysql":
+			return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
 		default:
 			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\" CASCADE;", tableName)
 		}
@@ -148,15 +171,27 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) stri
 		// Escape the enum name for both single-quoted string and double-quoted identifier
 		escapedNameSingle := strings.ReplaceAll(enum.Name, "'", "''")
 		escapedNameDouble := strings.ReplaceAll(enum.Name, "\"", "\"\"")
-		enumSQL := fmt.Sprintf(`DO $$
+
+		// PostgreSQL-specific enum creation with existence guard
+		if m.provider == "postgresql" || m.provider == "postgres" {
+			enumSQL := fmt.Sprintf(`DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '%s') THEN
         CREATE TYPE "%s" AS ENUM (%s);
     END IF;
 END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
-		upStatements = append(upStatements, enumSQL)
-		// DOWN: Drop enum (escape double quotes for identifier)
-		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", escapedNameDouble)}, downStatements...)
+			upStatements = append(upStatements, enumSQL)
+			hasExecutableSQL = true
+			// DOWN: Drop enum (escape double quotes for identifier)
+			downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", escapedNameDouble)}, downStatements...)
+		} else if m.provider == "mysql" {
+			// MySQL enums are inline on columns; standalone enum changes should not generate SQL here
+			// because they are handled as column type changes in ModifiedTables.
+			continue
+		} else if m.provider == "sqlite" || m.provider == "sqlite3" {
+			// SQLite does not support user-defined types; skip enum SQL generation
+			continue
+		}
 	}
 
 	// UP: Create new tables and their indexes
@@ -164,6 +199,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		sql := m.adapter.GenerateCreateTableSQL(table)
 		if sql != "" {
 			upStatements = append(upStatements, sql)
+			hasExecutableSQL = true
 		}
 
 		for _, index := range table.Indexes {
@@ -173,6 +209,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 			indexSQL := m.adapter.GenerateAddIndexSQL(index)
 			if indexSQL != "" {
 				upStatements = append(upStatements, indexSQL)
+				hasExecutableSQL = true
 			}
 		}
 
@@ -187,23 +224,66 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 
 	// UP: Modify existing tables
 	for _, tableDiff := range diff.ModifiedTables {
-		// Add new columns
-		for _, column := range tableDiff.NewColumns {
-			sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
-			if sql != "" {
-				upStatements = append(upStatements, sql)
-				// DOWN: Drop the added column
-				downStatements = append([]string{m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)}, downStatements...)
+		needsSQLiteRecreate := (m.provider == "sqlite" || m.provider == "sqlite3") &&
+			len(tableDiff.ModifiedColumns) > 0 &&
+			m.hasSignificantSQLiteModifications(tableDiff)
+
+		if !needsSQLiteRecreate {
+			// Add new columns
+			for _, column := range tableDiff.NewColumns {
+				sql := m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)
+				if sql != "" {
+					upStatements = append(upStatements, sql)
+					hasExecutableSQL = true
+					// DOWN: Drop the added column
+					downStatements = append([]string{m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)}, downStatements...)
+				}
+			}
+
+			// Drop columns
+			for _, column := range tableDiff.DroppedColumns {
+				sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)
+				if sql != "" {
+					upStatements = append(upStatements, sql)
+					hasExecutableSQL = true
+					// DOWN: Re-add the dropped column with its original definition
+					downStatements = append([]string{m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)}, downStatements...)
+				}
 			}
 		}
 
-		// Drop columns
-		for _, column := range tableDiff.DroppedColumns {
-			sql := m.adapter.GenerateDropColumnSQL(tableDiff.Name, column.Name)
-			if sql != "" {
-				upStatements = append(upStatements, sql)
-				// DOWN: Re-add the dropped column with its original definition
-				downStatements = append([]string{m.adapter.GenerateAddColumnSQL(tableDiff.Name, column)}, downStatements...)
+		// Modified columns
+		if len(tableDiff.ModifiedColumns) > 0 {
+			if m.provider == "sqlite" || m.provider == "sqlite3" {
+				if needsSQLiteRecreate {
+					// SQLite does not support ALTER COLUMN. Recreate the table.
+					// Table recreation inherently handles added/dropped columns too,
+					// so we skip individual ALTER TABLE statements above when
+					// needsSQLiteRecreate is true.
+					recreateSQL := m.generateSQLiteTableRecreateSQL(tableDiff.OldTable, tableDiff.NewTable)
+					if recreateSQL != "" {
+						upStatements = append(upStatements, recreateSQL)
+						hasExecutableSQL = true
+						// DOWN: reverse recreation
+						downRecreate := m.generateSQLiteTableRecreateSQL(tableDiff.NewTable, tableDiff.OldTable)
+						downStatements = append([]string{downRecreate}, downStatements...)
+					}
+				}
+				// else: cosmetic type changes (e.g. TEXT → VARCHAR(255)) are ignored
+				// for SQLite since they have no semantic effect.
+			} else {
+				for _, colDiff := range tableDiff.ModifiedColumns {
+					sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
+					if sql != "" {
+						upStatements = append(upStatements, sql)
+						hasExecutableSQL = true
+						// DOWN: Revert to old column definition
+						revertSQL := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.OldColumn, colDiff.NewType)
+						if revertSQL != "" {
+							downStatements = append([]string{revertSQL}, downStatements...)
+						}
+					}
+				}
 			}
 		}
 	}
@@ -211,6 +291,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	// UP: Drop tables
 	for _, tableName := range diff.DroppedTables {
 		upStatements = append(upStatements, dropTableSQL(tableName))
+		hasExecutableSQL = true
 		// DOWN: We can't restore dropped tables, add a comment
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped table: %s (data lost)", tableName)}, downStatements...)
 	}
@@ -218,14 +299,15 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	// UP: Drop enums
 	for _, enumName := range diff.DroppedEnums {
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
+		hasExecutableSQL = true
 		// DOWN: We can't fully restore dropped enums
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
 	}
 
-	// CRITICAL FIX: Add standalone index changes!
-	// UP: Drop indexes first (before adding new ones that might conflict)
+	// Handle standalone index changes (drop first to avoid conflicts).
 	for _, index := range diff.DroppedIndexes {
 		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(index))
+		hasExecutableSQL = true
 		// DOWN: We can't fully restore dropped indexes
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", index.Name)}, downStatements...)
 	}
@@ -238,12 +320,13 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		indexSQL := m.adapter.GenerateAddIndexSQL(index)
 		if indexSQL != "" {
 			upStatements = append(upStatements, indexSQL)
+			hasExecutableSQL = true
 			// DOWN: Drop the added index
 			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
 		}
 	}
 
-	return m.formatMigrationFileWithDown(name, upStatements, downStatements)
+	return m.formatMigrationFileWithDown(name, upStatements, downStatements), hasExecutableSQL
 }
 
 func (m *Migrator) generateEmptyMigrationTemplate(name string) string {
@@ -300,6 +383,100 @@ func (m *Migrator) formatMigrationFileWithDown(name string, upStatements []strin
 
 func (m *Migrator) PullSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	return m.adapter.GetCurrentSchema(ctx)
+}
+
+// generateSQLiteTableRecreateSQL generates the multi-statement SQL required to
+// recreate a SQLite table when columns are modified (since SQLite does not
+// support ALTER COLUMN). The pattern is:
+//   1. Create a temporary table with the new schema
+//   2. Copy data from old to new (matching columns only)
+//   3. Drop the old table
+//   4. Rename the temporary table
+//   5. Recreate indexes
+func (m *Migrator) generateSQLiteTableRecreateSQL(oldTable, newTable types.SchemaTable) string {
+	var parts []string
+
+	parts = append(parts, "PRAGMA foreign_keys=OFF;")
+
+	// Create temporary table with the desired schema
+	tempTable := newTable
+	tempTable.Name = newTable.Name + "_new"
+	tempTable.Indexes = nil // Indexes added after rename
+	createSQL := m.adapter.GenerateCreateTableSQL(tempTable)
+	// Replace "IF NOT EXISTS" with plain CREATE for clarity
+	createSQL = strings.Replace(createSQL, "CREATE TABLE IF NOT EXISTS", "CREATE TABLE", 1)
+	parts = append(parts, createSQL)
+
+	// Build list of columns common to both tables for the INSERT
+	oldColMap := make(map[string]bool, len(oldTable.Columns))
+	for _, col := range oldTable.Columns {
+		oldColMap[col.Name] = true
+	}
+	var commonCols []string
+	for _, col := range newTable.Columns {
+		if oldColMap[col.Name] {
+			commonCols = append(commonCols, fmt.Sprintf(`"%s"`, col.Name))
+		}
+	}
+
+	if len(commonCols) > 0 {
+		cols := strings.Join(commonCols, ", ")
+		parts = append(parts, fmt.Sprintf(
+			`INSERT INTO "%s" (%s) SELECT %s FROM "%s";`,
+			tempTable.Name, cols, cols, oldTable.Name,
+		))
+	}
+
+	parts = append(parts, fmt.Sprintf(`DROP TABLE "%s";`, oldTable.Name))
+	parts = append(parts, fmt.Sprintf(`ALTER TABLE "%s" RENAME TO "%s";`, tempTable.Name, newTable.Name))
+
+	// Recreate standalone indexes
+	for _, index := range newTable.Indexes {
+		if strings.HasPrefix(index.Name, "sqlite_") {
+			continue
+		}
+		idxSQL := m.adapter.GenerateAddIndexSQL(index)
+		if idxSQL != "" {
+			parts = append(parts, idxSQL)
+		}
+	}
+
+	parts = append(parts, "PRAGMA foreign_keys=ON;")
+
+	return strings.Join(parts, "\n")
+}
+
+// hasSignificantSQLiteModifications checks if any ModifiedColumn in the table diff
+// represents a real semantic type change (e.g., TEXT → INTEGER) rather than a
+// cosmetic one (e.g., TEXT → VARCHAR(255)) for SQLite.
+func (m *Migrator) hasSignificantSQLiteModifications(tableDiff types.TableDiff) bool {
+	for _, col := range tableDiff.ModifiedColumns {
+		oldNorm := m.adapter.MapColumnType(col.OldType)
+		newNorm := m.adapter.MapColumnType(col.NewType)
+		if oldNorm != newNorm {
+			return true
+		}
+		// Also check for non-type changes (nullable, default, primary key, etc.)
+		if col.OldColumn.Nullable != col.NewColumn.Nullable {
+			return true
+		}
+		if col.OldColumn.Default != col.NewColumn.Default {
+			return true
+		}
+		if col.OldColumn.IsPrimary != col.NewColumn.IsPrimary {
+			return true
+		}
+		if col.OldColumn.IsUnique != col.NewColumn.IsUnique {
+			return true
+		}
+		if col.OldColumn.ForeignKeyTable != col.NewColumn.ForeignKeyTable {
+			return true
+		}
+		if col.OldColumn.ForeignKeyColumn != col.NewColumn.ForeignKeyColumn {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Migrator) GenerateEmptyMigration(ctx context.Context, name string) error {

@@ -28,17 +28,17 @@ FlashORM includes a powerful Redis management interface inspired by Upstash, pro
 ## Quick Start
 
 ```bash
-# Start Redis Studio
-flash studio redis --url "redis://localhost:6379"
+# Start Redis Studio (auto-detected from redis:// URL)
+flash studio "redis://localhost:6379"
 
 # With password
-flash studio redis --url "redis://:password@localhost:6379"
+flash studio "redis://:password@localhost:6379"
 
 # Custom port
-flash studio redis --url "redis://localhost:6379" --port 3000
+flash studio "redis://localhost:6379" --port 3000
 
 # Open without browser auto-launch
-flash studio redis --url "redis://localhost:6379" --no-browser
+flash studio "redis://localhost:6379" --no-browser
 ```
 
 ## Key Browser
@@ -337,25 +337,25 @@ Clear all keys from the current database:
 ### Local Redis
 
 ```bash
-flash studio redis --url "redis://localhost:6379"
+flash studio ""redis://localhost:6379"
 ```
 
 ### Remote Redis with Authentication
 
 ```bash
-flash studio redis --url "redis://user:password@redis.example.com:6379"
+flash studio ""redis://user:password@redis.example.com:6379"
 ```
 
 ### Redis with TLS/SSL
 
 ```bash
-flash studio redis --url "rediss://user:pass@redis.example.com:6379"
+flash studio ""rediss://user:pass@redis.example.com:6379"
 ```
 
 ### Specific Database
 
 ```bash
-flash studio redis --url "redis://localhost:6379/1"
+flash studio ""redis://localhost:6379/1"
 ```
 
 ## Keyboard Shortcuts

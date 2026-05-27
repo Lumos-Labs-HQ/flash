@@ -130,7 +130,7 @@ flash gen
 flash add-plug studio
 
 # Launch studio with direct DB connection
-flash studio --db "postgresql://user:pass@localhost:5432/mydb"
+flash studio "postgresql://user:pass@localhost:5432/mydb"
 
 # Or use config file
 flash studio

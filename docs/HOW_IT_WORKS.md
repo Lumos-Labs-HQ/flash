@@ -69,8 +69,7 @@ Built using the [Cobra](https://github.com/spf13/cobra) framework, the CLI layer
 Uses [Viper](https://github.com/spf13/viper) for configuration management:
 
 ```go
-type Config struct {
-    SchemaPath     string   `json:"schema_path"`
+type Config struct     SchemaPath     string   `json:"schema_path"`
     QueriesPath    string   `json:"queries"`
     MigrationsPath string   `json:"migrations_path"`
     ExportPath     string   `json:"export_path"`
@@ -78,12 +77,10 @@ type Config struct {
     Gen            Gen      `json:"gen"`
 }
 
-type Gen struct {
-    JS JSConfig `json:"js"`
+type Gen struct     JS JSConfig `json:"js"`
 }
 
-type JSConfig struct {
-    Enabled bool   `json:"enabled"`
+type JSConfig struct     Enabled bool   `json:"enabled"`
     Out     string `json:"out"`
 }
 ```
@@ -100,8 +97,7 @@ type JSConfig struct {
 The adapter pattern enables multi-database support through a common interface:
 
 ```go
-type DatabaseAdapter interface {
-    Connect(ctx context.Context, url string) error
+type DatabaseAdapter interface     Connect(ctx context.Context, url string) error
     Close() error
     Ping(ctx context.Context) error
     
@@ -162,8 +158,7 @@ Handles schema parsing, validation, and diff generation:
 
 **Schema Diff Generation:**
 ```go
-type SchemaDiff struct {
-    NewTables      []SchemaTable
+type SchemaDiff struct     NewTables      []SchemaTable
     DroppedTables  []string
     ModifiedTables []TableDiff
     NewIndexes     []SchemaIndex
@@ -182,16 +177,13 @@ Multi-format export system with the following features:
 
 **Export Structure (JSON):**
 ```json
-{
   "timestamp": "2025-10-21 14:00:07",
   "version": "1.0",
   "comment": "Database export",
-  "tables": {
-    "users": [
+  "tables":     "users": [
       {"id": 1, "name": "John", "email": "john@example.com"}
     ]
-  }
-}
+  
 ```
 
 **Export Triggers:**
@@ -218,8 +210,7 @@ Multi-format export system with the following features:
 
 **Type Mapping:**
 ```go
-var pgTypeMap = map[string]string{
-    "character varying": "VARCHAR",
+var pgTypeMap = map[string]string    "character varying": "VARCHAR",
     "timestamp with time zone": "TIMESTAMP WITH TIME ZONE",
     "jsonb": "JSONB",
     "uuid": "UUID",
@@ -294,20 +285,15 @@ graph TD
 Each migration runs in its own transaction with automatic rollback on failure:
 
 ```go
-func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-    tx, err := p.pool.Begin(ctx)
-    if err != nil {
-        return fmt.Errorf("failed to begin transaction: %w", err)
+func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL string) error     tx, err := p.pool.Begin(ctx)
+    if err != nil         return fmt.Errorf("failed to begin transaction: %w", err)
     }
     defer tx.Rollback(ctx) // Auto-rollback on error
 
     statements := p.parseSQLStatements(migrationSQL)
     
-    for _, stmt := range statements {
-        if _, err := tx.Exec(ctx, stmt); err != nil {
-            return fmt.Errorf("failed to execute statement: %w", err)
-        }
-    }
+    for _, stmt := range statements         if _, err := tx.Exec(ctx, stmt); err != nil             return fmt.Errorf("failed to execute statement: %w", err)
+        
     
     return tx.Commit(ctx)
 }
@@ -323,9 +309,7 @@ func (p *PostgresAdapter) ExecuteMigration(ctx context.Context, migrationSQL str
 
 **Error Recovery:**
 ```go
-func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration types.Migration) error {
-    if err := m.adapter.ExecuteMigration(ctx, content); err != nil {
-        fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
+func (m *Migrator) applySingleMigrationSafely(ctx context.Context, migration types.Migration) error     if err := m.adapter.ExecuteMigration(ctx, content); err != nil         fmt.Printf("❌ Failed at migration: %s\n", migration.ID)
         fmt.Printf("   Error: %v\n", err)
         fmt.Println("   Transaction rolled back. Fix the error and run 'flash apply' again.")
         return err
@@ -372,8 +356,7 @@ FlashORM includes a custom SQL parser that handles:
 ### Schema Diff Algorithm
 
 ```go
-func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string) (*types.SchemaDiff, error) {
-    // 1. Parse target schema from file
+func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string) (*types.SchemaDiff, error)     // 1. Parse target schema from file
     targetTables, err := sm.ParseSchemaFile(targetSchemaPath)
     
     // 2. Get current database schema
@@ -472,23 +455,15 @@ CREATE TYPE user_role AS ENUM ('admin', 'user', 'guest');
 
 **Parsed Output:**
 ```go
-Schema{
-    Tables: []*Table{
-        {
-            Name: "users",
-            Columns: []*Column{
-                {Name: "id", Type: "SERIAL", Nullable: false},
+Schema    Tables: []*Table                    Name: "users",
+            Columns: []*Column                {Name: "id", Type: "SERIAL", Nullable: false},
                 {Name: "name", Type: "VARCHAR(255)", Nullable: false},
                 {Name: "email", Type: "VARCHAR(255)", Nullable: false},
                 {Name: "role", Type: "user_role", Nullable: true},
-                {Name: "created_at", Type: "TIMESTAMP WITH TIME ZONE", Nullable: false},
-            },
-        },
-    },
-    Enums: []*Enum{
-        {Name: "user_role", Values: []string{"admin", "user", "guest"}},
-    },
-}
+                {Name: "created_at", Type: "TIMESTAMP WITH TIME ZONE", Nullable: false,
+        ,
+    Enums: []*Enum        {Name: "user_role", Values: []string{"admin", "user", "guest",
+    
 ```
 
 **Performance Optimizations:**
@@ -536,8 +511,7 @@ DELETE FROM users WHERE id = $1;
 **Query Analysis Steps:**
 
 ```go
-func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
-    // 1. Extract table name from FROM, INSERT, UPDATE, DELETE
+func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error     // 1. Extract table name from FROM, INSERT, UPDATE, DELETE
     tableName := extractTableName(query.SQL)
     
     // 2. Find table in schema
@@ -547,15 +521,12 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
     paramCount := countParameters(query.SQL)
     
     // 4. Infer parameter types using TypeInferrer
-    for i := 0; i < paramCount; i++ {
-        paramName := inferrer.InferParamName(query.SQL, i+1)
+    for i := 0; i < paramCount; i++         paramName := inferrer.InferParamName(query.SQL, i+1)
         paramType := inferrer.InferParamType(query.SQL, i+1, table, paramName)
-        query.Params[i] = &Param{Name: paramName, Type: paramType}
-    }
+        query.Params[i] = &Param{Name: paramName, Type: paramType
     
     // 5. Extract return columns from SELECT or RETURNING
-    if isSelectQuery || hasReturning {
-        query.Columns = extractColumns(query.SQL, table)
+    if isSelectQuery || hasReturning         query.Columns = extractColumns(query.SQL, table)
     }
     
     // 6. Validate table and column references
@@ -599,13 +570,11 @@ The parser validates SQL queries against the schema:
 
 ```go
 // Validate table exists
-if err := utils.ValidateTableReferences(query.SQL, schema, sourceFile); err != nil {
-    return err
+if err := utils.ValidateTableReferences(query.SQL, schema, sourceFile); err != nil     return err
 }
 
 // Validate columns exist in table
-if err := utils.ValidateColumnReferences(query.SQL, schema, sourceFile); err != nil {
-    return err
+if err := utils.ValidateColumnReferences(query.SQL, schema, sourceFile); err != nil     return err
 }
 
 // Error format: "db\queries\users.sql:5:12: column "invalid" does not exist in table "users""
@@ -630,13 +599,11 @@ The type inferrer uses pattern matching to determine parameter types from SQL co
 Type inference results are cached for performance:
 
 ```go
-type TypeInferrer struct {
-    cache map[string]string // "tableName:paramIndex:paramName" → "TYPE"
+type TypeInferrer struct     cache map[string]string // "tableName:paramIndex:paramName" → "TYPE"
 }
 
 cacheKey := fmt.Sprintf("%s:%d:%s", table.Name, paramIndex, paramName)
-if cached, ok := ti.cache[cacheKey]; ok {
-    return cached
+if cached, ok := ti.cache[cacheKey]; ok     return cached
 }
 ```
 
@@ -673,22 +640,19 @@ SELECT * FROM users GROUP BY role HAVING count(*) > $1;
 ```go
 // WHERE clause pattern
 wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
-if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
-    columnName := match[1]
+if match := whereRe.FindStringSubmatch(sql); len(match) > 1     columnName := match[1]
     return findColumnType(table, columnName)
 }
 
 // INSERT pattern
 insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
-if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
-    colNames := strings.Split(match[1], ",")
+if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1     colNames := strings.Split(match[1], ",")
     columnName := strings.TrimSpace(colNames[paramIndex-1])
     return findColumnType(table, columnName)
 }
 
 // LIMIT/OFFSET pattern
-if matched, _ := regexp.MatchString(`(?i)LIMIT\s+\$%d`, paramIndex, sql); matched {
-    return "INTEGER"
+if matched, _ := regexp.MatchString(`(?i)LIMIT\s+\$%d`, paramIndex, sql); matched     return "INTEGER"
 }
 ```
 
@@ -767,19 +731,16 @@ This regex-based approach keeps FlashORM lightweight and fast while providing ro
 
 **JSON Export:**
 ```json
-{
   "timestamp": "2025-10-21 14:00:07",
   "version": "1.0",
   "comment": "Database export",
-  "tables": {
-    "users": [
+  "tables":     "users": [
       {"id": 1, "name": "Alice", "email": "alice@example.com"}
     ],
     "posts": [
       {"id": 1, "user_id": 1, "title": "Hello World", "content": "..."}
     ]
-  }
-}
+  
 ```
 
 **CSV Export:**
@@ -813,38 +774,40 @@ flash export --sqlite
 
 1. Command-line flags (`--config`)
 2. Environment variables
-3. Local config file (`./flash.config.json`)
+3. Local config file (`./flash.toml`)
 4. Default values
 
 ### Environment Variable Support
 
 ```bash
 # Database connection
-"url_env": "DATABASE_URL"
+url_env = "DATABASE_URL"
 
 # Override config paths
-"migrations_path": "db/migrations",
-"schema_path": "db/schema/schema.sql",
+migrations_path = "db/migrations",
+schema_path = "db/schema/schema.sql",
 ```
 
 ### Configuration Structure
 
 ```json
-{
-  "version": "2",
-  "schema_path": "db/schema/schema.sql",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
+  version = "2",
+  schema_path = "db/schema/schema.sql",
+  queries = "db/queries/",
+  migrations_path = "db/migrations",
+  export_path = "db/export",
+  [database]
+    provider = "postgresql",
+    url_env = "DATABASE_URL"
   },
-  "gen": {
-    "js": {
-      "enabled": true,
-    }
-  }
+  [gen.go]
+enabled = true
+
+    [gen.js]
+enabled = true
+
+      enabled = true,
+    
 }
 ```
 
@@ -855,26 +818,26 @@ flash export --sqlite
 The template system generates database-specific configurations:
 
 ```go
-type ProjectTemplate struct {
-    DatabaseType DatabaseType
+type ProjectTemplate struct     DatabaseType DatabaseType
 }
 
-func (pt *ProjectTemplate) GetFlashORMConfig() string {
-    return fmt.Sprintf(`{
-  "version": "2",
-  "schema_path": "db/schema/schema.sql",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "%s",
-    "url_env": "DATABASE_URL"
+func (pt *ProjectTemplate) GetFlashORMConfig() string     return fmt.Sprintf(`  version = "2",
+  schema_path = "db/schema/schema.sql",
+  queries = "db/queries/",
+  migrations_path = "db/migrations",
+  export_path = "db/export",
+  [database]
+    provider = "%s",
+    url_env = "DATABASE_URL"
   },
-  "gen": {
-    "js": {
-      "enabled": false
-    }
-  }
+  [gen.go]
+enabled = true
+
+    [gen.js]
+enabled = true
+
+      enabled = false
+    
 }`, pt.DatabaseType)
 }
 ```
@@ -901,13 +864,10 @@ FlashORM automatically detects project type and generates appropriate code:
 FlashORM uses Go's standard error handling with context:
 
 ```go
-func (m *Migrator) Apply(ctx context.Context, migrationName, schemaPath string) error {
-    if err := m.validateMigrations(ctx); err != nil {
-        return fmt.Errorf("migration validation failed: %w", err)
+func (m *Migrator) Apply(ctx context.Context, migrationName, schemaPath string) error     if err := m.validateMigrations(ctx); err != nil         return fmt.Errorf("migration validation failed: %w", err)
     }
     
-    if err := m.applyMigrations(ctx); err != nil {
-        return fmt.Errorf("failed to apply migrations: %w", err)
+    if err := m.applyMigrations(ctx); err != nil         return fmt.Errorf("failed to apply migrations: %w", err)
     }
     
     return nil
@@ -963,19 +923,16 @@ FlashORM includes a custom Go code generator that creates type-safe database cod
 **Generated Output:**
 ```go
 // flash_gen/models.go
-type Users struct {
-    ID        sql.NullInt32  `json:"id"`
+type Users struct     ID        sql.NullInt32  `json:"id"`
     Name      string         `json:"name"`
     Email     string         `json:"email"`
     CreatedAt time.Time      `json:"created_at"`
 }
 
-type Queries struct {
-    db *sql.DB
+type Queries struct     db *sql.DB
 }
 
-func (q *Queries) GetUser(ctx context.Context, id int32) (*Users, error) {
-    // Generated implementation
+func (q *Queries) GetUser(ctx context.Context, id int32) (*Users, error)     // Generated implementation
 }
 ```
 
@@ -1000,8 +957,7 @@ FlashORM includes a custom JavaScript/TypeScript code generator for Node.js proj
 
 **Type Mapping:**
 ```go
-var sqlToTSTypeMap = map[string]string{
-    "SERIAL":                      "number",
+var sqlToTSTypeMap = map[string]string    "SERIAL":                      "number",
     "INTEGER":                     "number",
     "BIGINT":                      "number",
     "VARCHAR":                     "string",
@@ -1024,14 +980,12 @@ flash_gen/
 **Query Method Generation:**
 ```javascript
 // Generated query method
-async getUser(id) {
-  const query = 'SELECT * FROM users WHERE id = $1';
+async getUser(id)   const query = 'SELECT * FROM users WHERE id = $1';
   const result = await this.db.query(query, [id]);
   return result.rows[0] || null;
 }
 
-async listUsers() {
-  const query = 'SELECT * FROM users ORDER BY created_at DESC';
+async listUsers()   const query = 'SELECT * FROM users ORDER BY created_at DESC';
   const result = await this.db.query(query);
   return result.rows;
 }
@@ -1039,16 +993,14 @@ async listUsers() {
 
 **TypeScript Definitions:**
 ```typescript
-export interface Users {
-  id: number | null;
+export interface Users   id: number | null;
   name: string;
   email: string;
   created_at: Date;
   updated_at: Date;
 }
 
-export class Queries {
-  constructor(db: any);
+export class Queries   constructor(db: any);
   getUser(id: number): Promise<Users | null>;
   createUser(name: string, email: string): Promise<Users | null>;
 }
@@ -1059,8 +1011,7 @@ export class Queries {
 // PostgreSQL ENUM to TypeScript union type
 export type UserRole = 'admin' | 'user' | 'guest';
 
-export interface Users {
-  id: number | null;
+export interface Users   id: number | null;
   role: UserRole;
 }
 ```
@@ -1122,14 +1073,12 @@ flashorm/
 const platform = process.platform;  // 'darwin', 'linux', 'win32'
 const arch = process.arch;          // 'x64', 'arm64'
 
-const platformMap = {
-  'darwin': 'darwin',
+const platformMap =   'darwin': 'darwin',
   'linux': 'linux',
   'win32': 'windows'
 };
 
-const archMap = {
-  'x64': 'amd64',
+const archMap =   'x64': 'amd64',
   'arm64': 'arm64'
 };
 
@@ -1139,24 +1088,18 @@ const downloadUrl = `https://github.com/Lumos-Labs-HQ/flash/releases/download/v$
 
 **Binary Download:**
 ```javascript
-https.get(downloadUrl, (response) => {
-  if (response.statusCode === 302) {
-    // Follow redirect
-    https.get(response.headers.location, (redirectResponse) => {
-      redirectResponse.pipe(file);
+https.get(downloadUrl, (response) =>   if (response.statusCode === 302)     // Follow redirect
+    https.get(response.headers.location, (redirectResponse) =>       redirectResponse.pipe(file);
     });
-  } else {
-    response.pipe(file);
-  }
-});
+  } else     response.pipe(file);
+  );
 ```
 
 **CLI Wrapper:**
 ```javascript
 // bin/flash.js - Spawns the downloaded binary
 const binaryPath = path.join(__dirname, binaryName);
-const child = spawn(binaryPath, process.argv.slice(2), {
-  stdio: 'inherit'
+const child = spawn(binaryPath, process.argv.slice(2),   stdio: 'inherit'
 });
 ```
 
@@ -1181,7 +1124,7 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN 
 ```
 
 ## FlashORM Studio Architecture
@@ -1204,19 +1147,16 @@ Flash Studio provides web-based database management interfaces built with Go Fib
 
 **Server Initialization:**
 ```go
-func NewServer(cfg *config.Config, port int) *Server {
-    adapter := database.NewAdapter(cfg.Database.Provider)
+func NewServer(cfg *config.Config, port int) *Server     adapter := database.NewAdapter(cfg.Database.Provider)
     
     dbURL, _ := cfg.GetDatabaseURL()
     adapter.Connect(context.Background(), dbURL)
     
     engine := html.NewFileSystem(http.FS(TemplatesFS), ".html")
-    app := fiber.New(fiber.Config{
-        Views: engine,
+    app := fiber.New(fiber.Config        Views: engine,
     })
     
-    server := &Server{
-        app:     app,
+    server := &Server        app:     app,
         service: NewService(adapter),
         port:    port,
     }
@@ -1243,25 +1183,20 @@ func NewServer(cfg *config.Config, port int) *Server {
 
 **Key Methods:**
 ```go
-func (s *Service) GetTables() ([]TableInfo, error) {
-    tables, _ := s.adapter.GetAllTableNames(s.ctx)
+func (s *Service) GetTables() ([]TableInfo, error)     tables, _ := s.adapter.GetAllTableNames(s.ctx)
     
     // Batch query optimization - single query for all counts
     tableCounts, _ := s.adapter.GetAllTableRowCounts(s.ctx, tables)
     
-    for _, table := range tables {
-        result = append(result, TableInfo{
-            Name:     table,
+    for _, table := range tables         result = append(result, TableInfo            Name:     table,
             RowCount: tableCounts[table],
         })
     }
     return result, nil
 }
 
-func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
-    // Transaction-based batch update
-    for _, change := range changes {
-        query := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE %s = $2", 
+func (s *Service) SaveChanges(tableName string, changes []RowChange) error     // Transaction-based batch update
+    for _, change := range changes         query := fmt.Sprintf("UPDATE %s SET %s = $1 WHERE %s = $2", 
             tableName, change.Column, pkColumn)
         s.adapter.ExecuteMigration(s.ctx, query)
     }
@@ -1286,29 +1221,23 @@ func (s *Service) SaveChanges(tableName string, changes []RowChange) error {
 
 **Query Execution Flow:**
 ```go
-func (s *Service) ExecuteSQL(query string) (*SQLResult, error) {
-    query = strings.TrimSpace(query)
+func (s *Service) ExecuteSQL(query string) (*SQLResult, error)     query = strings.TrimSpace(query)
     
     // Detect query type
     isSelect := strings.HasPrefix(strings.ToUpper(query), "SELECT")
     
-    if isSelect {
-        // Execute SELECT query
+    if isSelect         // Execute SELECT query
         result, err := s.adapter.ExecuteQuery(s.ctx, query)
-        return &SQLResult{
-            Columns: result.Columns,
+        return &SQLResult            Columns: result.Columns,
             Rows:    result.Rows,
             Success: true,
         }, nil
-    } else {
-        // Execute DML/DDL in transaction
+    } else         // Execute DML/DDL in transaction
         err := s.adapter.ExecuteMigration(s.ctx, query)
-        return &SQLResult{
-            Success: true,
+        return &SQLResult            Success: true,
             Message: "Query executed successfully",
         }, nil
-    }
-}
+    
 ```
 
 **Features:**
@@ -1359,8 +1288,7 @@ internal/studio/mongodb/
 
 **MongoDB Connection:**
 ```go
-func NewServer(connectionString string, port int) (*Server, error) {
-    // Parse connection string
+func NewServer(connectionString string, port int) (*Server, error)     // Parse connection string
     clientOptions := options.Client().ApplyURI(connectionString)
     
     // Connect to MongoDB
@@ -1369,8 +1297,7 @@ func NewServer(connectionString string, port int) (*Server, error) {
     // Extract database name from URI
     dbName := extractDatabaseName(connectionString)
     
-    return &Server{
-        client:   client,
+    return &Server        client:   client,
         database: client.Database(dbName),
         port:     port,
     }, nil
@@ -1393,14 +1320,11 @@ func NewServer(connectionString string, port int) (*Server, error) {
 
 **1. Collection Browser**
 ```go
-func (s *Service) GetCollections() ([]CollectionInfo, error) {
-    names, _ := s.database.ListCollectionNames(s.ctx, bson.M{})
+func (s *Service) GetCollections() ([]CollectionInfo, error)     names, _ := s.database.ListCollectionNames(s.ctx, bson.M{})
     
     var collections []CollectionInfo
-    for _, name := range names {
-        count, _ := s.database.Collection(name).CountDocuments(s.ctx, bson.M{})
-        collections = append(collections, CollectionInfo{
-            Name:  name,
+    for _, name := range names         count, _ := s.database.Collection(name).CountDocuments(s.ctx, bson.M{})
+        collections = append(collections, CollectionInfo            Name:  name,
             Count: count,
         })
     }
@@ -1416,8 +1340,7 @@ func (s *Service) GetCollections() ([]CollectionInfo, error) {
 
 **3. Inline Document Editing**
 ```go
-func (s *Service) UpdateDocument(collection, id string, update bson.M) error {
-    objectID, _ := primitive.ObjectIDFromHex(id)
+func (s *Service) UpdateDocument(collection, id string, update bson.M) error     objectID, _ := primitive.ObjectIDFromHex(id)
     
     _, err := s.database.Collection(collection).UpdateOne(
         s.ctx,
@@ -1430,8 +1353,7 @@ func (s *Service) UpdateDocument(collection, id string, update bson.M) error {
 
 **4. Query Filtering**
 ```go
-func (s *Service) GetDocuments(collection string, filter bson.M, limit int) ([]bson.M, error) {
-    cursor, _ := s.database.Collection(collection).Find(
+func (s *Service) GetDocuments(collection string, filter bson.M, limit int) ([]bson.M, error)     cursor, _ := s.database.Collection(collection).Find(
         s.ctx,
         filter,
         options.Find().SetLimit(int64(limit)),
@@ -1482,8 +1404,7 @@ internal/studio/redis/
 
 **Redis Connection:**
 ```go
-func NewServer(connectionString string, port int) (*Server, error) {
-    // Parse Redis URL
+func NewServer(connectionString string, port int) (*Server, error)     // Parse Redis URL
     opt, err := redis.ParseURL(connectionString)
     
     // Create Redis client
@@ -1492,8 +1413,7 @@ func NewServer(connectionString string, port int) (*Server, error) {
     // Test connection
     _, err = client.Ping(ctx).Result()
     
-    return &Server{
-        client: client,
+    return &Server        client: client,
         port:   port,
     }, nil
 }
@@ -1516,16 +1436,13 @@ func NewServer(connectionString string, port int) (*Server, error) {
 
 **1. Key Browser with Type Detection**
 ```go
-func (s *Service) GetKeys(pattern string) ([]KeyInfo, error) {
-    keys, _ := s.client.Keys(s.ctx, pattern).Result()
+func (s *Service) GetKeys(pattern string) ([]KeyInfo, error)     keys, _ := s.client.Keys(s.ctx, pattern).Result()
     
     var keyInfos []KeyInfo
-    for _, key := range keys {
-        keyType, _ := s.client.Type(s.ctx, key).Result()
+    for _, key := range keys         keyType, _ := s.client.Type(s.ctx, key).Result()
         ttl, _ := s.client.TTL(s.ctx, key).Result()
         
-        keyInfos = append(keyInfos, KeyInfo{
-            Key:  key,
+        keyInfos = append(keyInfos, KeyInfo            Key:  key,
             Type: keyType,
             TTL:  ttl,
         })
@@ -1536,12 +1453,10 @@ func (s *Service) GetKeys(pattern string) ([]KeyInfo, error) {
 
 **2. Multi-Type Value Retrieval**
 ```go
-func (s *Service) GetKeyValue(key string) (*KeyValue, error) {
-    keyType, _ := s.client.Type(s.ctx, key).Result()
+func (s *Service) GetKeyValue(key string) (*KeyValue, error)     keyType, _ := s.client.Type(s.ctx, key).Result()
     
     var value interface{}
-    switch keyType {
-    case "string":
+    switch keyType     case "string":
         value, _ = s.client.Get(s.ctx, key).Result()
     case "list":
         value, _ = s.client.LRange(s.ctx, key, 0, -1).Result()
@@ -1562,8 +1477,7 @@ func (s *Service) GetKeyValue(key string) (*KeyValue, error) {
 The CLI executes any Redis command directly:
 
 ```go
-func (s *Service) ExecuteCLI(command string) *CLIResult {
-    start := time.Now()
+func (s *Service) ExecuteCLI(command string) *CLIResult     start := time.Now()
     result := &CLIResult{Command: command}
     
     // Parse command into parts
@@ -1574,42 +1488,34 @@ func (s *Service) ExecuteCLI(command string) *CLIResult {
     for i, p := range parts { args[i] = p }
     
     res, err := s.client.Do(s.ctx, args...).Result()
-    if err != nil {
-        result.Error = err.Error()
-    } else {
-        result.Result = formatResult(res)
+    if err != nil         result.Error = err.Error()
+    } else         result.Result = formatResult(res)
     }
     
     result.Duration = time.Since(start).String()
     return result
 }
 
-func formatResult(result interface{}) interface{} {
-    switch v := result.(type) {
-    case []interface{}:
+func formatResult(result interface{}) interface{}     switch v := result.(type)     case []interface{}:
         formatted := make([]interface{}, len(v))
-        for i, item := range v {
-            formatted[i] = formatResult(item)
+        for i, item := range v             formatted[i] = formatResult(item)
         }
         return formatted
     case []byte:
         return string(v)
     case map[interface{}]interface{}:
         formatted := make(map[string]interface{})
-        for key, val := range v {
-            formatted[fmt.Sprintf("%v", key)] = formatResult(val)
+        for key, val := range v             formatted[fmt.Sprintf("%v", key)] = formatResult(val)
         }
         return formatted
     default:
         return fmt.Sprintf("%v", v)
-    }
-}
+    
 ```
 
 **4. Database Selection**
 ```go
-func (s *Service) SelectDB(db int) error {
-    // Create new client with selected database
+func (s *Service) SelectDB(db int) error     // Create new client with selected database
     opt := s.client.Options()
     opt.DB = db
     
@@ -1621,8 +1527,7 @@ func (s *Service) SelectDB(db int) error {
 
 **5. Purge Database**
 ```go
-func (s *Service) FlushDB() error {
-    return s.client.FlushDB(s.ctx).Err()
+func (s *Service) FlushDB() error     return s.client.FlushDB(s.ctx).Err()
 }
 ```
 
@@ -1630,14 +1535,11 @@ func (s *Service) FlushDB() error {
 
 **Inline Terminal Implementation:**
 ```javascript
-class RedisTerminal {
-    constructor() {
-        this.history = [];
+class RedisTerminal     constructor()         this.history = [];
         this.historyIndex = -1;
     }
     
-    createInputLine() {
-        const line = document.createElement('div');
+    createInputLine()         const line = document.createElement('div');
         line.className = 'terminal-line';
         line.innerHTML = `
             <span class="terminal-prompt">redis&gt;</span>
@@ -1646,13 +1548,11 @@ class RedisTerminal {
         return line;
     }
     
-    async executeCommand(command) {
-        // Add to history
+    async executeCommand(command)         // Add to history
         this.history.push(command);
         
         // Send to server
-        const response = await fetch('/api/cli', {
-            method: 'POST',
+        const response = await fetch('/api/cli',             method: 'POST',
             body: JSON.stringify({ command })
         });
         
@@ -1660,44 +1560,35 @@ class RedisTerminal {
         this.displayResult(result);
     }
     
-    displayResult(result) {
-        if (result.error) {
-            this.addLine(`(error) ${result.error}`, 'error');
-        } else {
-            this.formatRedisOutput(result.result);
-        }
-    }
+    displayResult(result)         if (result.error)             this.addLine(`(error) ${result.error}`, 'error');
+        } else             this.formatRedisOutput(result.result);
+        
 }
 ```
 
 **Terminal Styling:**
 ```css
-.terminal {
-    background: #0d0d0d;
+.terminal     background: #0d0d0d;
     font-family: 'JetBrains Mono', monospace;
     padding: 16px;
     height: 100%;
     overflow-y: auto;
 }
 
-.terminal-prompt {
-    color: #10b981;
+.terminal-prompt     color: #10b981;
     margin-right: 8px;
 }
 
-.terminal-input {
-    color: #fff;
+.terminal-input     color: #fff;
     outline: none;
     caret-color: #10b981;
 }
 
-.terminal-output {
-    color: #d4d4d4;
+.terminal-output     color: #d4d4d4;
     white-space: pre-wrap;
 }
 
-.terminal-error {
-    color: #ef4444;
+.terminal-error     color: #ef4444;
 }
 ```
 
@@ -1717,33 +1608,26 @@ User Input → Auto-Detection → SQL Parsing → Execution → Formatted Output
 
 **Auto-Detection Logic:**
 ```go
-func RunRaw(cmd *cobra.Command, args []string, queryFlag bool, fileFlag bool) error {
-    input := args[0]
+func RunRaw(cmd *cobra.Command, args []string, queryFlag bool, fileFlag bool) error     input := args[0]
     var sqlContent string
     var isFile bool
     
-    if queryFlag {
-        // Force query mode
+    if queryFlag         // Force query mode
         sqlContent = input
         isFile = false
-    } else if fileFlag {
-        // Force file mode
+    } else if fileFlag         // Force file mode
         content, _ := os.ReadFile(input)
         sqlContent = string(content)
         isFile = true
-    } else {
-        // Auto-detect
-        if _, err := os.Stat(input); err == nil {
-            // File exists
+    } else         // Auto-detect
+        if _, err := os.Stat(input); err == nil             // File exists
             content, _ := os.ReadFile(input)
             sqlContent = string(content)
             isFile = true
-        } else {
-            // Treat as query
+        } else             // Treat as query
             sqlContent = input
             isFile = false
-        }
-    }
+        
     
     return executeSQL(sqlContent, isFile)
 }
@@ -1775,17 +1659,13 @@ isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
 
 **Multi-Statement Files:**
 ```go
-func splitSQLStatements(content string) []string {
-    var statements []string
+func splitSQLStatements(content string) []string     var statements []string
     
     parts := strings.Split(content, ";")
     
-    for _, part := range parts {
-        statement := strings.TrimSpace(part)
-        if statement != "" && !strings.HasPrefix(statement, "--") {
-            statements = append(statements, statement)
-        }
-    }
+    for _, part := range parts         statement := strings.TrimSpace(part)
+        if statement != "" && !strings.HasPrefix(statement, "--")             statements = append(statements, statement)
+        
     
     return statements
 }
@@ -1795,20 +1675,14 @@ func splitSQLStatements(content string) []string {
 
 **Table Display:**
 ```go
-func displayResultsTable(columns []string, rows []map[string]interface{}) {
-    // Calculate column widths
+func displayResultsTable(columns []string, rows []map[string]interface{})     // Calculate column widths
     colWidths := make(map[string]int)
-    for _, col := range columns {
-        colWidths[col] = len(col)
+    for _, col := range columns         colWidths[col] = len(col)
     }
     
-    for _, row := range rows {
-        for _, col := range columns {
-            val := formatValue(row[col])
-            if len(val) > colWidths[col] {
-                colWidths[col] = len(val)
-            }
-        }
+    for _, row := range rows         for _, col := range columns             val := formatValue(row[col])
+            if len(val) > colWidths[col]                 colWidths[col] = len(val)
+            
     }
     
     // Draw table with box-drawing characters
@@ -1841,12 +1715,10 @@ func displayResultsTable(columns []string, rows []map[string]interface{}) {
 
 **DML Execution:**
 ```go
-for i, statement := range statements {
-    fmt.Printf("⚡ Executing statement %d...\n", i+1)
+for i, statement := range statements     fmt.Printf("⚡ Executing statement %d...\n", i+1)
     
     // Each statement in its own transaction
-    if err := adapter.ExecuteMigration(ctx, statement); err != nil {
-        return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
+    if err := adapter.ExecuteMigration(ctx, statement); err != nil         return fmt.Errorf("failed to execute statement %d: %w", i+1, err)
     }
     
     fmt.Printf("✅ Statement %d executed successfully\n", i+1)

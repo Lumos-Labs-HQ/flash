@@ -110,26 +110,28 @@ flash gen
 
 ## Configuration
 
-### flash.config.json
+### flash.toml
 
 ```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
+  version = "2",
+  schema_dir = "db/schema",
+  queries = "db/queries/",
+  migrations_path = "db/migrations",
+  export_path = "db/export",
+  [database]
+    provider = "postgresql",
+    url_env = "DATABASE_URL"
   },
-  "gen": {
-    "js": {
-      "enabled": true,
-      "output": "flash_gen",
-      "typescript": true
-    }
-  }
+  [gen.go]
+enabled = true
+
+    [gen.js]
+enabled = true
+
+      enabled = true,
+      out = "flash_gen",
+      typescript = true
+    
 }
 ```
 
@@ -137,9 +139,7 @@ flash gen
 
 Add to `tsconfig.json`:
 ```json
-{
-  "compilerOptions": {
-    "target": "ES2020",
+  "compilerOptions":     "target": "ES2020",
     "module": "commonjs",
     "strict": true,
     "esModuleInterop": true,
@@ -259,8 +259,7 @@ flash_gen/
 ```typescript
 // flash_gen/types.ts
 
-export interface User {
-    id: number;
+export interface User     id: number;
     name: string;
     email: string;
     role: string;
@@ -270,8 +269,7 @@ export interface User {
     updatedAt: Date;
 }
 
-export interface Post {
-    id: number;
+export interface Post     id: number;
     userId: number;
     title: string;
     content: string | null;
@@ -279,16 +277,14 @@ export interface Post {
     createdAt: Date;
 }
 
-export interface CreateUserInput {
-    name: string;
+export interface CreateUserInput     name: string;
     email: string;
     role?: string;
     isActive?: boolean;
     metadata?: Record<string, any>;
 }
 
-export interface UpdateUserInput {
-    name?: string;
+export interface UpdateUserInput     name?: string;
     email?: string;
     role?: string;
     isActive?: boolean;
@@ -320,17 +316,14 @@ npm install better-sqlite3 @types/better-sqlite3
 import { Pool } from 'pg';
 import { FlashDB, User, CreateUserInput } from '../flash_gen';
 
-async function main() {
-    // Create database connection
-    const pool = new Pool({
-        connectionString: process.env.DATABASE_URL
+async function main()     // Create database connection
+    const pool = new Pool(        connectionString: process.env.DATABASE_URL
     });
 
     const db = new FlashDB(pool);
 
     // Create a user
-    const newUser: CreateUserInput = {
-        name: 'John Doe',
+    const newUser: CreateUserInput =         name: 'John Doe',
         email: 'john@example.com',
         role: 'admin'
     };
@@ -347,8 +340,7 @@ async function main() {
     console.log('Found user:', foundUser);
 
     // Update user
-    const updatedUser = await db.users.update(user.id, {
-        name: 'Jane Doe'
+    const updatedUser = await db.users.update(user.id,         name: 'Jane Doe'
     });
     console.log('Updated user:', updatedUser);
 
@@ -366,23 +358,17 @@ main().catch(console.error);
 
 ```typescript
 // Complex queries with type safety
-const activeAdmins = await db.users.findMany({
-    where: {
-        role: 'admin',
+const activeAdmins = await db.users.findMany(    where:         role: 'admin',
         isActive: true
     },
-    orderBy: {
-        createdAt: 'desc'
+    orderBy:         createdAt: 'desc'
     },
     limit: 10
 });
 
 // With relations
-const usersWithPosts = await db.users.findMany({
-    include: {
-        posts: true
-    }
-});
+const usersWithPosts = await db.users.findMany(    include:         posts: true
+    );
 
 // Raw query with type
 const result = await db.query<User>(
@@ -401,21 +387,14 @@ async function transferCredits(
     fromUserId: number,
     toUserId: number,
     amount: number
-) {
-    await db.transaction(async (tx) => {
-        // Deduct from sender
-        await tx.users.update(fromUserId, {
-            credits: { decrement: amount }
-        });
+)     await db.transaction(async (tx) =>         // Deduct from sender
+        await tx.users.update(fromUserId,             credits: { decrement: amount );
         
         // Add to receiver
-        await tx.users.update(toUserId, {
-            credits: { increment: amount }
-        });
+        await tx.users.update(toUserId,             credits: { increment: amount );
         
         // Log transaction
-        await tx.transactions.create({
-            fromUserId,
+        await tx.transactions.create(            fromUserId,
             toUserId,
             amount,
             type: 'transfer'
@@ -480,56 +459,44 @@ import { FlashDB } from '../flash_gen';
 const app = express();
 app.use(express.json());
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL
+const pool = new Pool(    connectionString: process.env.DATABASE_URL
 });
 
 const db = new FlashDB(pool);
 
 // Middleware to attach db to request
-app.use((req, res, next) => {
-    req.db = db;
+app.use((req, res, next) =>     req.db = db;
     next();
 });
 
 // Routes
-app.get('/users', async (req, res) => {
-    const users = await req.db.users.findMany();
+app.get('/users', async (req, res) =>     const users = await req.db.users.findMany();
     res.json(users);
 });
 
-app.get('/users/:id', async (req, res) => {
-    const user = await req.db.users.findById(parseInt(req.params.id));
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+app.get('/users/:id', async (req, res) =>     const user = await req.db.users.findById(parseInt(req.params.id));
+    if (!user)         return res.status(404).json({ error: 'User not found' });
     }
     res.json(user);
 });
 
-app.post('/users', async (req, res) => {
-    try {
-        const user = await req.db.users.create(req.body);
+app.post('/users', async (req, res) =>     try         const user = await req.db.users.create(req.body);
         res.status(201).json(user);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
+    } catch (error)         res.status(400).json({ error: error.message });
+    );
 
-app.put('/users/:id', async (req, res) => {
-    const user = await req.db.users.update(
+app.put('/users/:id', async (req, res) =>     const user = await req.db.users.update(
         parseInt(req.params.id),
         req.body
     );
     res.json(user);
 });
 
-app.delete('/users/:id', async (req, res) => {
-    await req.db.users.delete(parseInt(req.params.id));
+app.delete('/users/:id', async (req, res) =>     await req.db.users.delete(parseInt(req.params.id));
     res.status(204).send();
 });
 
-app.listen(3000, () => {
-    console.log('Server running on port 3000');
+app.listen(3000, () =>     console.log('Server running on port 3000');
 });
 ```
 
@@ -539,12 +506,8 @@ app.listen(3000, () => {
 // src/types/express.d.ts
 import { FlashDB } from '../../flash_gen';
 
-declare global {
-    namespace Express {
-        interface Request {
-            db: FlashDB;
-        }
-    }
+declare global     namespace Express         interface Request             db: FlashDB;
+        
 }
 ```
 
@@ -560,8 +523,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { Pool } from 'pg';
 import { FlashDB } from '../../../flash_gen';
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL
+const pool = new Pool(    connectionString: process.env.DATABASE_URL
 });
 
 const db = new FlashDB(pool);
@@ -569,9 +531,7 @@ const db = new FlashDB(pool);
 export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse
-) {
-    switch (req.method) {
-        case 'GET':
+)     switch (req.method)         case 'GET':
             const users = await db.users.findMany();
             return res.json(users);
             
@@ -582,8 +542,7 @@ export default async function handler(
         default:
             res.setHeader('Allow', ['GET', 'POST']);
             return res.status(405).end(`Method ${req.method} Not Allowed`);
-    }
-}
+    
 ```
 
 ---
@@ -596,8 +555,7 @@ export default async function handler(
 // config/database.ts
 import { Pool } from 'pg';
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+const pool = new Pool(    connectionString: process.env.DATABASE_URL,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 2000,
@@ -611,15 +569,10 @@ export default pool;
 ```typescript
 import { FlashDB, DatabaseError } from '../flash_gen';
 
-try {
-    await db.users.create({ email: 'duplicate@email.com' });
-} catch (error) {
-    if (error instanceof DatabaseError) {
-        if (error.code === '23505') {
-            // Unique constraint violation
+try     await db.users.create({ email: 'duplicate@email.com' });
+} catch (error)     if (error instanceof DatabaseError)         if (error.code === '23505')             // Unique constraint violation
             throw new Error('Email already exists');
-        }
-    }
+        
     throw error;
 }
 ```
@@ -629,9 +582,7 @@ try {
 ```typescript
 import { User, isUser } from '../flash_gen';
 
-function processData(data: unknown): User {
-    if (!isUser(data)) {
-        throw new Error('Invalid user data');
+function processData(data: unknown): User     if (!isUser(data))         throw new Error('Invalid user data');
     }
     return data;
 }
@@ -643,10 +594,7 @@ function processData(data: unknown): User {
 // Singleton pattern for database connection
 let db: FlashDB | null = null;
 
-export function getDB(): FlashDB {
-    if (!db) {
-        const pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
+export function getDB(): FlashDB     if (!db)         const pool = new Pool(            connectionString: process.env.DATABASE_URL,
             max: 10
         });
         db = new FlashDB(pool);
@@ -661,14 +609,12 @@ export function getDB(): FlashDB {
 import { z } from 'zod';
 import { CreateUserInput } from '../flash_gen';
 
-const CreateUserSchema = z.object({
-    name: z.string().min(1).max(100),
+const CreateUserSchema = z.object(    name: z.string().min(1).max(100),
     email: z.string().email(),
     role: z.enum(['admin', 'user', 'guest']).optional()
 });
 
-function validateCreateUser(input: unknown): CreateUserInput {
-    return CreateUserSchema.parse(input);
+function validateCreateUser(input: unknown): CreateUserInput     return CreateUserSchema.parse(input);
 }
 ```
 
@@ -697,7 +643,6 @@ flash gen
 
 Ensure TypeScript includes generated files:
 ```json
-{
   "include": ["src/**/*", "flash_gen/**/*"]
 }
 ```

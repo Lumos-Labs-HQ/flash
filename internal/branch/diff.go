@@ -3,6 +3,7 @@ package branch
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
@@ -36,12 +37,12 @@ func (m *Manager) GetSchemaDiff(ctx context.Context, branch1, branch2 string) (*
 		return nil, fmt.Errorf("branch '%s' not found", branch2)
 	}
 
-	schema1, err := m.getSchemaForBranch(ctx)
+	schema1, err := m.getSchemaForBranch(ctx, b1.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema for %s: %w", branch1, err)
 	}
 
-	schema2, err := m.getSchemaForBranch(ctx,)
+	schema2, err := m.getSchemaForBranch(ctx, b2.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema for %s: %w", branch2, err)
 	}
@@ -49,8 +50,8 @@ func (m *Manager) GetSchemaDiff(ctx context.Context, branch1, branch2 string) (*
 	return m.compareSchemas(schema1, schema2), nil
 }
 
-func (m *Manager) getSchemaForBranch(ctx context.Context) ([]types.SchemaTable, error) {
-	return m.adapter.GetCurrentSchema(ctx)
+func (m *Manager) getSchemaForBranch(ctx context.Context, branchSchema string) ([]types.SchemaTable, error) {
+	return m.adapter.GetSchemaForBranch(ctx, branchSchema)
 }
 
 func (m *Manager) compareSchemas(schema1, schema2 []types.SchemaTable) *SchemaDiff {
@@ -144,37 +145,37 @@ func (d *SchemaDiff) String() string {
 		return "No differences found"
 	}
 
-	result := ""
+	var sb strings.Builder
 
 	if len(d.TablesAdded) > 0 {
-		result += "Tables added:\n"
+		sb.WriteString("Tables added:\n")
 		for _, t := range d.TablesAdded {
-			result += fmt.Sprintf("  + %s\n", t)
+			sb.WriteString(fmt.Sprintf("  + %s\n", t))
 		}
 	}
 
 	if len(d.TablesRemoved) > 0 {
-		result += "Tables removed:\n"
+		sb.WriteString("Tables removed:\n")
 		for _, t := range d.TablesRemoved {
-			result += fmt.Sprintf("  - %s\n", t)
+			sb.WriteString(fmt.Sprintf("  - %s\n", t))
 		}
 	}
 
 	if len(d.TablesChanged) > 0 {
-		result += "Tables modified:\n"
+		sb.WriteString("Tables modified:\n")
 		for _, t := range d.TablesChanged {
-			result += fmt.Sprintf("  ~ %s\n", t.Name)
+			sb.WriteString(fmt.Sprintf("  ~ %s\n", t.Name))
 			for _, c := range t.ColumnsAdded {
-				result += fmt.Sprintf("      + column: %s\n", c)
+				sb.WriteString(fmt.Sprintf("      + column: %s\n", c))
 			}
 			for _, c := range t.ColumnsRemoved {
-				result += fmt.Sprintf("      - column: %s\n", c)
+				sb.WriteString(fmt.Sprintf("      - column: %s\n", c))
 			}
 			for _, c := range t.ColumnsChanged {
-				result += fmt.Sprintf("      ~ column: %s\n", c)
+				sb.WriteString(fmt.Sprintf("      ~ column: %s\n", c))
 			}
 		}
 	}
 
-	return result
+	return sb.String()
 }

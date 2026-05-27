@@ -107,26 +107,28 @@ flash gen
 
 ## Configuration
 
-### flash.config.json
+### flash.toml
 
 ```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
+  version = "2",
+  schema_dir = "db/schema",
+  queries = "db/queries/",
+  migrations_path = "db/migrations",
+  export_path = "db/export",
+  [database]
+    provider = "postgresql",
+    url_env = "DATABASE_URL"
   },
-  "gen": {
-    "python": {
-      "enabled": true,
-      "output": "flash_gen",
-      "async": true
-    }
-  }
+  [gen.go]
+enabled = true
+
+    [gen.python]
+enabled = true
+
+      enabled = true,
+      out = "flash_gen",
+      async = true
+    
 }
 ```
 
@@ -432,8 +434,7 @@ async def transfer_credits(
         )
         
         # Log transaction
-        await tx.transactions.create({
-            "from_user_id": from_user_id,
+        await tx.transactions.create(            "from_user_id": from_user_id,
             "to_user_id": to_user_id,
             "amount": amount,
             "type": "transfer"
@@ -679,11 +680,9 @@ db.execute("UPDATE users SET is_active = false WHERE last_login < %s", [cutoff_d
 ```python
 # With filters
 users = await db.users.find_many(
-    where={
-        "role": "admin",
+    where=        "role": "admin",
         "is_active": True,
-        "created_at": {"gte": datetime(2025, 1, 1)}
-    },
+        "created_at": {"gte": datetime(2025, 1, 1),
     order_by=[
         {"created_at": "desc"},
         {"name": "asc"}
@@ -722,7 +721,7 @@ await db.users.update_many(
 
 # Bulk delete
 await db.users.delete_many(
-    where={"last_login": {"lt": cutoff_date}}
+    where={"last_login": {"lt": cutoff_date
 )
 ```
 

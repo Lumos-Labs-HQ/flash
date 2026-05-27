@@ -9,7 +9,7 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Adapter struct {
@@ -36,9 +36,6 @@ func New() *Adapter {
 
 func (s *Adapter) Connect(ctx context.Context, url string) error {
 	dbPath := strings.TrimPrefix(url, "sqlite://")
-	if !strings.Contains(dbPath, "?") {
-		dbPath += "?cache=shared&_journal_mode=WAL"
-	}
 
 	// Store original path without query parameters
 	s.originalPath = strings.TrimPrefix(url, "sqlite://")
@@ -47,7 +44,7 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 	}
 	s.currentPath = s.originalPath
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite connection: %w", err)
 	}
@@ -56,6 +53,14 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(0)
 	db.SetConnMaxIdleTime(5 * time.Minute)
+
+	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
+		return fmt.Errorf("failed to configure SQLite busy_timeout: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+		// Non-fatal for readonly filesystems or databases that cannot switch mode.
+		_ = err
+	}
 
 	s.db = db
 	return nil
@@ -80,11 +85,8 @@ func (s *Adapter) SwitchDatabase(ctx context.Context, branchFile string) error {
 
 	// Open new database file
 	dbPath := branchFile
-	if !strings.Contains(dbPath, "?") {
-		dbPath += "?cache=shared&_journal_mode=WAL"
-	}
 
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to switch to database %s: %w", branchFile, err)
 	}
@@ -93,6 +95,14 @@ func (s *Adapter) SwitchDatabase(ctx context.Context, branchFile string) error {
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(0)
 	db.SetConnMaxIdleTime(5 * time.Minute)
+
+	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
+		return fmt.Errorf("failed to configure SQLite busy_timeout: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode = WAL"); err != nil {
+		// Non-fatal for readonly filesystems or databases that cannot switch mode.
+		_ = err
+	}
 
 	s.db = db
 	s.currentPath = branchFile
@@ -147,6 +157,11 @@ func (s *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Ti
 
 	rows, err := s.db.QueryContext(ctx, sql, args...)
 	if err != nil {
+		// If the migrations table doesn't exist yet, treat it as "no migrations applied".
+		// This handles fresh databases where _flash_migrations hasn't been created.
+		if strings.Contains(err.Error(), "no such table") {
+			return applied, nil
+		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -186,6 +201,17 @@ func (s *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string)
 }
 
 func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error {
+	// SQLite does not allow PRAGMA foreign_keys inside a transaction.
+	// Detect and extract PRAGMA foreign_keys statements to run outside the transaction.
+	pragmaOff, pragmaOn, cleanedSQL := extractForeignKeyPragmas(migrationSQL)
+
+	// Execute PRAGMA foreign_keys=OFF before the transaction if present
+	if pragmaOff != "" {
+		if _, err := s.db.ExecContext(ctx, pragmaOff); err != nil {
+			return fmt.Errorf("failed to execute PRAGMA foreign_keys=OFF: %w", err)
+		}
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -201,9 +227,9 @@ func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 		return fmt.Errorf("failed to record migration start: %w", err)
 	}
 
-	// Execute the migration SQL
-	if migrationSQL != "" {
-		statements := common.ParseSQLStatements(migrationSQL)
+	// Execute the migration SQL (without PRAGMA statements)
+	if cleanedSQL != "" {
+		statements := common.ParseSQLStatements(cleanedSQL)
 		for i, stmt := range statements {
 			stmt = strings.TrimSpace(stmt)
 			if stmt == "" {
@@ -225,7 +251,38 @@ func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 		return fmt.Errorf("failed to update migration finish time: %w", err)
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Execute PRAGMA foreign_keys=ON after the transaction if present
+	if pragmaOn != "" {
+		if _, err := s.db.ExecContext(ctx, pragmaOn); err != nil {
+			return fmt.Errorf("failed to execute PRAGMA foreign_keys=ON: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// extractForeignKeyPragmas scans migration SQL for PRAGMA foreign_keys statements
+// and returns them separately from the cleaned SQL.
+func extractForeignKeyPragmas(sql string) (off string, on string, cleaned string) {
+	lines := strings.Split(sql, "\n")
+	var cleanedLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.ToLower(line))
+		if strings.HasPrefix(trimmed, "pragma foreign_keys=off") || strings.HasPrefix(trimmed, "pragma foreign_keys = off") {
+			off = strings.TrimSpace(line)
+			continue
+		}
+		if strings.HasPrefix(trimmed, "pragma foreign_keys=on") || strings.HasPrefix(trimmed, "pragma foreign_keys = on") {
+			on = strings.TrimSpace(line)
+			continue
+		}
+		cleanedLines = append(cleanedLines, line)
+	}
+	return off, on, strings.Join(cleanedLines, "\n")
 }
 
 func (s *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
@@ -303,7 +360,12 @@ func (s *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.Query
 }
 
 func (s *Adapter) MapColumnType(dbType string) string {
-	if mapped, exists := typeMap[strings.ToLower(dbType)]; exists {
+	dbType = strings.ToLower(strings.TrimSpace(dbType))
+	// Strip size/precision parameters like (255), (10,2) for lookup
+	if idx := strings.Index(dbType, "("); idx > 0 {
+		dbType = dbType[:idx]
+	}
+	if mapped, exists := typeMap[dbType]; exists {
 		return mapped
 	}
 	return strings.ToUpper(dbType)

@@ -8,7 +8,14 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
-// SQL Parsing helpers
+// Package-level pre-compiled regexes for column/constraint parsing.
+var (
+	parserFKRegex          = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
+	parserReferencesRegex  = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
+	parserOnDeleteRegex    = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
+	parserDefaultRegex     = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
+)
+
 func (sm *SchemaManager) cleanSQL(sql string) string {
 	sql = commentRegex.ReplaceAllString(sql, "")
 	return strings.TrimSpace(whitespaceRegex.ReplaceAllString(sql, " "))
@@ -35,8 +42,14 @@ func (sm *SchemaManager) isCreateIndexStatement(stmt string) bool {
 }
 
 func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaIndex, error) {
-	matches := indexRegex.FindStringSubmatch(stmt)
+	// Extract WHERE clause separately before applying the main regex,
+	// because the WHERE expression may contain parentheses.
+	whereClause := ""
+	if whereMatch := indexWhereRegex.FindStringSubmatch(stmt); len(whereMatch) > 1 {
+		whereClause = strings.TrimSpace(whereMatch[1])
+	}
 
+	matches := indexRegex.FindStringSubmatch(stmt)
 	if len(matches) < 7 {
 		return types.SchemaIndex{}, fmt.Errorf("could not parse CREATE INDEX statement: %s", stmt)
 	}
@@ -75,6 +88,7 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 		Table:   tableName,
 		Columns: columns,
 		Unique:  isUnique,
+		Where:   whereClause,
 	}, nil
 }
 
@@ -83,7 +97,6 @@ func (sm *SchemaManager) isCreateTypeStatement(stmt string) bool {
 }
 
 func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum, error) {
-	// Match: CREATE TYPE enum_name AS ENUM ('value1', 'value2', ...)
 	matches := enumRegex.FindStringSubmatch(stmt)
 
 	if len(matches) < 4 {
@@ -192,8 +205,7 @@ func (sm *SchemaManager) parseColumnDefinitionsAndConstraints(columnDefs string)
 }
 
 func (sm *SchemaManager) parseForeignKeyConstraint(constraint string) *foreignKeyConstraint {
-	fkRegex := regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
-	matches := fkRegex.FindStringSubmatch(constraint)
+	matches := parserFKRegex.FindStringSubmatch(constraint)
 
 	if len(matches) >= 4 {
 		fk := &foreignKeyConstraint{
@@ -335,19 +347,45 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		}
 	}
 
-	referencesRegex := regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
-	if matches := referencesRegex.FindStringSubmatch(colDef); len(matches) >= 3 {
+	if matches := parserReferencesRegex.FindStringSubmatch(colDef); len(matches) >= 3 {
 		column.ForeignKeyTable = matches[1]
 		column.ForeignKeyColumn = matches[2]
 
-		onDeleteRegex := regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
-		if onDeleteMatches := onDeleteRegex.FindStringSubmatch(colDef); len(onDeleteMatches) >= 2 {
+		if onDeleteMatches := parserOnDeleteRegex.FindStringSubmatch(colDef); len(onDeleteMatches) >= 2 {
 			column.OnDeleteAction = strings.ToUpper(onDeleteMatches[1])
 		}
 	}
 
-	defaultRegex := regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
-	if matches := defaultRegex.FindStringSubmatch(colDef); len(matches) > 1 {
+	// Extract CHECK constraint with balanced parentheses
+	checkStart := -1
+	if idx := strings.Index(strings.ToUpper(colDef), "CHECK("); idx != -1 {
+		checkStart = idx
+	} else if idx := strings.Index(strings.ToUpper(colDef), "CHECK ("); idx != -1 {
+		checkStart = idx
+	}
+	if checkStart != -1 {
+		parenIdx := strings.Index(colDef[checkStart:], "(")
+		if parenIdx != -1 {
+			start := checkStart + parenIdx + 1
+			depth := 1
+			end := start
+			for end < len(colDef) && depth > 0 {
+				if colDef[end] == '(' {
+					depth++
+				} else if colDef[end] == ')' {
+					depth--
+				}
+				if depth > 0 {
+					end++
+				}
+			}
+			if depth == 0 {
+				column.Check = strings.TrimSpace(colDef[start:end])
+			}
+		}
+	}
+
+	if matches := parserDefaultRegex.FindStringSubmatch(colDef); len(matches) > 1 {
 		column.Default = matches[1]
 	}
 }

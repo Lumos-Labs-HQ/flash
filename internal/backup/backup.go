@@ -147,49 +147,6 @@ func (bm *BackupManager) GetAllTableNames(ctx context.Context) ([]string, error)
 	return bm.getAllTableNames(ctx)
 }
 
-// func PerformBackup(ctx context.Context, db *pgxpool.Pool, backupPath, comment string) (string, error) {
-// 	backupManager := NewBackupManager(db, backupPath)
-// 	return backupManager.CreateBackup(ctx, comment, createMigrationGetter(db))
-// }
-
-// func createMigrationGetter(db *pgxpool.Pool) func(context.Context) (map[string]*time.Time, error) {
-// 	return func(ctx context.Context) (map[string]*time.Time, error) {
-// 		if _, err := db.Exec(ctx, `
-// 			CREATE TABLE IF NOT EXISTS _flash_migrations (
-// 				id VARCHAR(255) PRIMARY KEY,
-// 				checksum VARCHAR(64) NOT NULL,
-// 				finished_at TIMESTAMP WITH TIME ZONE,
-// 				migration_name VARCHAR(255) NOT NULL,
-// 				logs TEXT,
-// 				rolled_back_at TIMESTAMP WITH TIME ZONE,
-// 				started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-// 				applied_steps_count INTEGER NOT NULL DEFAULT 0
-// 			)`); err != nil {
-// 			return nil, fmt.Errorf("failed to create migrations table: %w", err)
-// 		}
-
-// 		applied := make(map[string]*time.Time)
-// 		rows, err := db.Query(ctx, `
-// 			SELECT id, finished_at
-// 			FROM _flash_migrations
-// 			WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		defer rows.Close()
-
-// 		for rows.Next() {
-// 			var id string
-// 			var finishedAt *time.Time
-// 			if err := rows.Scan(&id, &finishedAt); err != nil {
-// 				return nil, err
-// 			}
-// 			applied[id] = finishedAt
-// 		}
-// 		return applied, nil
-// 	}
-// }
-
 func PerformBackupWithAdapter(ctx context.Context, adapter database.DatabaseAdapter, backupPath, comment string) (string, error) {
 	tables, err := adapter.GetAllTableNames(ctx)
 	if err != nil {

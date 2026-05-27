@@ -44,6 +44,12 @@ features:
     link: /concepts/code-generation
     linkText: See code generation
 
+  - icon: 📖
+    title: Complete Examples
+    details: Copy-paste ready examples for every feature — CRUD, relationships, migrations, seeding, and full workflows.
+    link: /examples/
+    linkText: Browse examples
+
   - icon: 📊
     title: Visual Database Studio
     details: FlashORM Studio provides a visual interface for managing your database, editing data, and creating migrations.

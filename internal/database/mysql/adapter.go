@@ -3,13 +3,15 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 type Adapter struct {
@@ -59,7 +61,11 @@ func (m *Adapter) Connect(ctx context.Context, url string) error {
 				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=verify-ca", "tls=true")
 				dbAndParams = strings.ReplaceAll(dbAndParams, "sslmode=verify-full", "tls=true")
 
-				dsn = fmt.Sprintf("%s@tcp(%s)/%s", credentials, hostPort, dbAndParams)
+				if !strings.HasPrefix(hostPort, "tcp(") && !strings.HasPrefix(hostPort, "unix(") {
+					dsn = fmt.Sprintf("%s@tcp(%s)/%s", credentials, hostPort, dbAndParams)
+				} else {
+					dsn = fmt.Sprintf("%s@%s/%s", credentials, hostPort, dbAndParams)
+				}
 			}
 		}
 	}
@@ -79,8 +85,12 @@ func (m *Adapter) Connect(ctx context.Context, url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open MySQL connection: %w", err)
 	}
-	db.SetMaxOpenConns(3)
-	db.SetMaxIdleConns(1)
+	maxConns := runtime.GOMAXPROCS(0) * 2
+	if maxConns < 4 {
+		maxConns = 4
+	}
+	db.SetMaxOpenConns(maxConns)
+	db.SetMaxIdleConns(maxConns / 2)
 	db.SetConnMaxLifetime(30 * time.Minute)
 	db.SetConnMaxIdleTime(5 * time.Minute)
 
@@ -179,6 +189,12 @@ func (m *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Ti
 
 	rows, err := m.db.QueryContext(ctx, sql, args...)
 	if err != nil {
+		// If the migrations table doesn't exist yet, treat it as "no migrations applied".
+		// This handles fresh databases where _flash_migrations hasn't been created.
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) && mysqlErr.Number == 1146 {
+			return applied, nil
+		}
 		return nil, err
 	}
 	defer rows.Close()
@@ -276,13 +292,6 @@ func (m *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) err
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-
-	var currentDB string
-	if err := tx.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&currentDB); err == nil && currentDB != "" {
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("USE `%s`", currentDB)); err != nil {
-			return fmt.Errorf("failed to set database in transaction: %w", err)
-		}
-	}
 
 	statements := common.ParseSQLStatements(migrationSQL)
 

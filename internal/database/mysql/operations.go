@@ -191,12 +191,20 @@ func (m *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return fmt.Sprintf("ALTER TABLE `%s` DROP COLUMN `%s`;", tableName, columnName)
 }
 
+func (m *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
+	// MySQL: MODIFY COLUMN changes type, nullable, default, unique in one statement.
+	colDef := m.formatColumnTypeInternal(column, true)
+	return fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s;", tableName, column.Name, colDef)
+}
+
 func (m *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	unique := ""
 	if index.Unique {
 		unique = "UNIQUE "
 	}
 	columns := "`" + strings.Join(index.Columns, "`, `") + "`"
+	// MySQL does not support WHERE in CREATE INDEX for InnoDB tables.
+	// Partial indexes are a PostgreSQL/SQLite feature.
 	return fmt.Sprintf("CREATE %sINDEX `%s` ON `%s` (%s);", unique, index.Name, index.Table, columns)
 }
 
@@ -205,12 +213,19 @@ func (m *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
 }
 
 func (m *Adapter) FormatColumnType(column types.SchemaColumn) string {
+	return m.formatColumnTypeInternal(column, false)
+}
+
+// formatColumnTypeInternal builds the column type string. When forAlter is true,
+func (m *Adapter) formatColumnTypeInternal(column types.SchemaColumn, forAlter bool) string {
 	var parts []string
 	columnType := m.convertTypeToMySQL(column.Type)
 	parts = append(parts, columnType)
 
 	if column.IsPrimary {
-		parts = append(parts, "PRIMARY KEY")
+		if !forAlter {
+			parts = append(parts, "PRIMARY KEY")
+		}
 		if strings.Contains(strings.ToUpper(columnType), "INT") {
 			parts = append(parts, "AUTO_INCREMENT")
 		}
@@ -234,6 +249,10 @@ func (m *Adapter) FormatColumnType(column types.SchemaColumn) string {
 			}
 		}
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", defaultValue))
+	}
+
+	if column.Check != "" {
+		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}
 
 	return strings.Join(parts, " ")

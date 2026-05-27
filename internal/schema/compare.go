@@ -29,7 +29,11 @@ func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, cur
 		}
 	}
 
-	for _, targetTable := range targetMap {
+	// Iterate over the target slice (not targetMap) to preserve the
+	// topological sort order established by sortTablesByDependencies.
+	// Use targetMap to get the table with standalone indexes merged in.
+	for _, t := range target {
+		targetTable := targetMap[t.Name]
 		if currentTable, exists := currentMap[targetTable.Name]; !exists {
 			diff.NewTables = append(diff.NewTables, targetTable)
 		} else if tableDiff := sm.compareTablesForDiff(currentTable, targetTable); tableDiff != nil {
@@ -71,7 +75,11 @@ func (sm *SchemaManager) tableMapsToSlice(targetMap map[string]types.SchemaTable
 }
 
 func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable) *types.TableDiff {
-	tableDiff := &types.TableDiff{Name: target.Name}
+	tableDiff := &types.TableDiff{
+		Name:     target.Name,
+		OldTable: current,
+		NewTable: target,
+	}
 	currentCols, targetCols := sm.buildColumnMaps(current.Columns, target.Columns)
 	hasChanges := false
 
@@ -81,10 +89,12 @@ func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable)
 			hasChanges = true
 		} else if !sm.columnsEqual(currentCol, targetCol) {
 			tableDiff.ModifiedColumns = append(tableDiff.ModifiedColumns, types.ColumnDiff{
-				Name:    targetCol.Name,
-				OldType: currentCol.Type,
-				NewType: targetCol.Type,
-				Changes: sm.getColumnChanges(currentCol, targetCol),
+				Name:      targetCol.Name,
+				OldType:   currentCol.Type,
+				NewType:   targetCol.Type,
+				Changes:   sm.getColumnChanges(currentCol, targetCol),
+				OldColumn: currentCol,
+				NewColumn: targetCol,
 			})
 			hasChanges = true
 		}
@@ -120,21 +130,39 @@ func (sm *SchemaManager) buildColumnMaps(current, target []types.SchemaColumn) (
 func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, diff *types.SchemaDiff) {
 	currentIndexes, targetIndexes := sm.buildIndexMaps(current, target)
 
+	// Build sets for fast lookup
+	newTableSet := make(map[string]bool, len(diff.NewTables))
+	for _, t := range diff.NewTables {
+		newTableSet[t.Name] = true
+	}
+	droppedTableSet := make(map[string]bool, len(diff.DroppedTables))
+	for _, name := range diff.DroppedTables {
+		droppedTableSet[name] = true
+	}
+
 	for name, index := range targetIndexes {
 		if _, exists := currentIndexes[name]; !exists {
-			diff.NewIndexes = append(diff.NewIndexes, index)
+			// Skip indexes on newly-created tables; they are created inline
+			// with the table definition and don't need a separate statement.
+			if !newTableSet[index.Table] {
+				diff.NewIndexes = append(diff.NewIndexes, index)
+			}
 		}
 	}
 
 	for name, index := range currentIndexes {
 		if _, exists := targetIndexes[name]; !exists {
-			diff.DroppedIndexes = append(diff.DroppedIndexes, index)
+			// Skip indexes on dropped tables; they are dropped automatically
+			// when the table is dropped.
+			if !droppedTableSet[index.Table] {
+				diff.DroppedIndexes = append(diff.DroppedIndexes, index)
+			}
 		}
 	}
 }
 
 func (sm *SchemaManager) compareEnums(current, target []types.SchemaEnum, diff *types.SchemaDiff) {
-	// PERFORMANCE: Pre-allocate maps
+	// Pre-allocate maps for efficiency.
 	currentMap := make(map[string]types.SchemaEnum, len(current))
 	targetMap := make(map[string]types.SchemaEnum, len(target))
 
@@ -179,9 +207,20 @@ func (sm *SchemaManager) buildIndexMaps(current, target []types.SchemaTable) (ma
 
 // Comparison helpers
 func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
+	// Normalize types through the adapter's type map so that equivalent
+	aTypeNorm := a.Type
+	bTypeNorm := b.Type
+	if sm.adapter != nil {
+		aTypeNorm = sm.adapter.MapColumnType(a.Type)
+		bTypeNorm = sm.adapter.MapColumnType(b.Type)
+	}
+
+	aNullable := a.Nullable && !a.IsPrimary
+	bNullable := b.Nullable && !b.IsPrimary
+
 	return a.Name == b.Name &&
-		a.Type == b.Type &&
-		a.Nullable == b.Nullable &&
+		aTypeNorm == bTypeNorm &&
+		aNullable == bNullable &&
 		a.Default == b.Default &&
 		a.IsPrimary == b.IsPrimary &&
 		a.IsUnique == b.IsUnique &&

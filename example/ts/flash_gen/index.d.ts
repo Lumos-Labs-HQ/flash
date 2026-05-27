@@ -36,6 +36,27 @@ export interface Comments {
   created_at: Date;
 }
 
+export interface GetComplexUserAnalyticsResult {
+  id: number;
+  name: string;
+  email: string;
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+  isadmin: boolean;
+  user_created_at: string;
+  total_posts: string;
+  published_posts: string;
+  draft_posts: string;
+  total_comments: string;
+  posts_commented_on: string;
+  categories_used: string;
+  category_names: string;
+  last_post_date: string;
+  last_comment_date: string;
+  avg_post_length: number;
+  activity_level: string;
+  engagement_score: string;
+}
+
 export interface GetPostWithCommentsResult {
   post_id: number;
   title: string;
@@ -66,27 +87,6 @@ export interface GetPostDetailsWithAllRelationsResult {
   last_comment_date: Date | null;
   content_length: number | null;
   hours_since_created: number | null;
-}
-
-export interface GetComplexUserAnalyticsResult {
-  id: number;
-  name: string;
-  email: string;
-  role: 'admin' | 'moderator' | 'user' | 'guest';
-  isadmin: boolean;
-  user_created_at: string;
-  total_posts: string;
-  published_posts: string;
-  draft_posts: string;
-  total_comments: string;
-  posts_commented_on: string;
-  categories_used: string;
-  category_names: string;
-  last_post_date: string;
-  last_comment_date: string;
-  avg_post_length: number;
-  activity_level: string;
-  engagement_score: string;
 }
 
 export class Queries {

@@ -104,26 +104,26 @@ flash gen
 
 ## Configuration
 
-### flash.config.json
+### flash.toml
 
 ```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
+  version = "2",
+  schema_dir = "db/schema",
+  queries = "db/queries/",
+  migrations_path = "db/migrations",
+  export_path = "db/export",
+  [database]
+    provider = "postgresql",
+    url_env = "DATABASE_URL"
   },
-  "gen": {
-    "go": {
-      "enabled": true,
-      "package": "models",
-      "output": "flash_gen"
-    }
-  }
+  [gen.go]
+enabled = true
+
+    
+      enabled = true,
+      package = "models",
+      out = "flash_gen"
+    
 }
 ```
 
@@ -139,10 +139,9 @@ db/schema/
 └── tags.sql
 ```
 
-Configure in `flash.config.json`:
+Configure in `flash.toml`:
 ```json
-{
-  "schema_dir": "db/schema"
+  schema_dir = "db/schema"
 }
 ```
 
@@ -279,8 +278,7 @@ package flash_gen
 
 import "time"
 
-type User struct {
-    ID        int32     `json:"id" db:"id"`
+type User struct     ID        int32     `json:"id" db:"id"`
     Name      string    `json:"name" db:"name"`
     Email     string    `json:"email" db:"email"`
     Role      string    `json:"role" db:"role"`
@@ -289,8 +287,7 @@ type User struct {
     UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
-type Post struct {
-    ID        int32     `json:"id" db:"id"`
+type Post struct     ID        int32     `json:"id" db:"id"`
     UserID    int32     `json:"user_id" db:"user_id"`
     Title     string    `json:"title" db:"title"`
     Content   *string   `json:"content" db:"content"` // Nullable
@@ -316,11 +313,9 @@ import (
     _ "github.com/lib/pq" // PostgreSQL driver
 )
 
-func main() {
-    // Connect to database
+func main()     // Connect to database
     db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
-    if err != nil {
-        log.Fatal(err)
+    if err != nil         log.Fatal(err)
     }
     defer db.Close()
 
@@ -369,17 +364,14 @@ import (
     "myproject/flash_gen"
 )
 
-func main() {
-    ctx := context.Background()
+func main()     ctx := context.Background()
     
     // Create user
-    user, err := queries.CreateUser(ctx, flash_gen.CreateUserParams{
-        Name:  "John Doe",
+    user, err := queries.CreateUser(ctx, flash_gen.CreateUserParams        Name:  "John Doe",
         Email: "john@example.com",
         Role:  "user",
     })
-    if err != nil {
-        log.Fatal(err)
+    if err != nil         log.Fatal(err)
     }
     
     // Get user
@@ -389,8 +381,7 @@ func main() {
     users, err := queries.ListUsers(ctx)
     
     // Update user
-    user, err = queries.UpdateUser(ctx, flash_gen.UpdateUserParams{
-        ID:    user.ID,
+    user, err = queries.UpdateUser(ctx, flash_gen.UpdateUserParams        ID:    user.ID,
         Name:  "Jane Doe",
         Email: "jane@example.com",
     })
@@ -509,8 +500,7 @@ FlashORM automatically wraps migrations in transactions. For complex queries, us
 
 ```go
 tx, err := db.BeginTx(ctx, nil)
-if err != nil {
-    return err
+if err != nil     return err
 }
 defer tx.Rollback()
 

@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -66,7 +65,7 @@ Examples:
 			return fmt.Errorf("migration name cannot be empty")
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		// Get current branch info
 		branchName, branchSchema, err := migrator.GetCurrentBranchInfo(cfg)

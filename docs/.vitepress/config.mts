@@ -16,11 +16,13 @@ export default defineConfig({
           { text: 'Getting Started', link: '/getting-started' },
           { text: 'Guides', link: '/guides/go' },
           { text: 'Concepts', link: '/concepts/schema' },
+          { text: 'Examples', link: '/examples/' },
           { text: 'Databases', link: '/databases/postgresql' },
           { text: 'Reference', link: '/reference/cli' },
-          { text: 'Advanced', link: '/advanced/how-it-works' }
+          { text: 'Advanced', link: '/advanced/architecture' }
         ]
       },
+      { text: 'Examples', link: '/examples/' },
       { text: 'SQL Studio', link: '/concepts/studio' },
       { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
       { text: 'Redis Studio', link: '/concepts/redis-studio' }
@@ -32,7 +34,7 @@ export default defineConfig({
           text: 'Language Guides',
           items: [
             { text: 'Go', link: '/guides/go' },
-            { text: 'TypeScript/JavaScript', link: '/guides/typescript' },
+            { text: 'TypeScript / JavaScript', link: '/guides/typescript' },
             { text: 'Python', link: '/guides/python' }
           ]
         }
@@ -45,11 +47,29 @@ export default defineConfig({
             { text: 'Migrations', link: '/concepts/migrations' },
             { text: 'Code Generation', link: '/concepts/code-generation' },
             { text: 'Database Seeding', link: '/concepts/seeding' },
-            { text: 'SQL Studio', link: '/concepts/studio' },
-            { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
-            { text: 'Redis Studio', link: '/concepts/redis-studio' },
             { text: 'Data Export', link: '/concepts/export' },
             { text: 'Branching', link: '/concepts/branching' }
+          ]
+        },
+        {
+          text: 'Studio',
+          items: [
+            { text: 'SQL Studio', link: '/concepts/studio' },
+            { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
+            { text: 'Redis Studio', link: '/concepts/redis-studio' }
+          ]
+        }
+      ],
+      '/examples/': [
+        {
+          text: 'Examples',
+          items: [
+            { text: 'Overview', link: '/examples/' },
+            { text: 'Complete Workflows', link: '/examples/complete-workflow' },
+            { text: 'CLI Commands', link: '/examples/cli-commands' },
+            { text: 'Schema Patterns', link: '/examples/schema-patterns' },
+            { text: 'Query Patterns', link: '/examples/query-patterns' },
+            { text: 'Seeding Patterns', link: '/examples/seeding-patterns' }
           ]
         }
       ],
@@ -78,6 +98,7 @@ export default defineConfig({
         {
           text: 'Advanced Topics',
           items: [
+            { text: 'Architecture', link: '/advanced/architecture' },
             { text: 'How It Works', link: '/advanced/how-it-works' },
             { text: 'Plugin System', link: '/advanced/plugins' },
             { text: 'Technology Stack', link: '/advanced/technology-stack' },

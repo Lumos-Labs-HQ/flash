@@ -53,6 +53,7 @@ type DatabaseAdapter interface {
 	GenerateCreateTableSQL(table types.SchemaTable) string
 	GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string
 	GenerateDropColumnSQL(tableName, columnName string) string
+	GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string
 	GenerateAddIndexSQL(index types.SchemaIndex) string
 	GenerateDropIndexSQL(index types.SchemaIndex) string
 

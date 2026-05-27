@@ -107,27 +107,86 @@ flash gen
 
 ## Configuration
 
-### flash.config.json
+### flash.toml
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "python": {
-      "enabled": true,
-      "out": "flash_gen",
-      "async": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.python]
+enabled = true
+out = "flash_gen"
+async = true
+driver = "asyncpg"
+```
+
+### Driver Selection
+
+Flash ORM supports multiple Python database drivers per provider:
+
+**PostgreSQL:**
+| Driver | Package | Mode | Description |
+|--------|---------|------|-------------|
+| `asyncpg` | `asyncpg` | Async (default) | High-performance native async PostgreSQL |
+| `psycopg3` | `psycopg[binary]` | Sync / Async | Modern PostgreSQL adapter |
+
+**MySQL:**
+| Driver | Package | Mode | Description |
+|--------|---------|------|-------------|
+| `aiomysql` | `aiomysql` | Async (default) | Async MySQL driver |
+| `pymysql` | `PyMySQL` | Sync | Pure Python MySQL driver |
+
+**SQLite:**
+| Driver | Package | Mode | Description |
+|--------|---------|------|-------------|
+| `aiosqlite` | `aiosqlite` | Async (default) | Async SQLite wrapper |
+| `sqlite3` | Standard library | Sync | Built-in SQLite |
+
+**Example configurations:**
+
+```toml
+# PostgreSQL with asyncpg (default async)
+[gen.python]
+enabled = true
+driver = "asyncpg"
+async = true
+
+# PostgreSQL with psycopg3 (sync)
+[gen.python]
+enabled = true
+driver = "psycopg3"
+async = false
+
+# MySQL with aiomysql (async)
+[gen.python]
+enabled = true
+driver = "aiomysql"
+async = true
+
+# MySQL with PyMySQL (sync)
+[gen.python]
+enabled = true
+driver = "pymysql"
+async = false
+
+# SQLite with aiosqlite (async)
+[gen.python]
+enabled = true
+driver = "aiosqlite"
+async = true
+
+# SQLite with sqlite3 (sync)
+[gen.python]
+enabled = true
+driver = "sqlite3"
+async = false
 ```
 
 ### Python Dependencies
@@ -814,7 +873,7 @@ myproject/
 │   ├── test_users.py
 │   └── test_posts.py
 ├── requirements.txt
-├── flash.config.json
+├── flash.toml
 └── main.py
 ```
 

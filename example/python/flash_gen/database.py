@@ -30,7 +30,7 @@ def new(db: Any) -> Queries:
     Create a new database client.
     
     Args:
-        db: Database connection (asyncpg.Pool, aiomysql.Pool, or aiosqlite connection)
+        db: Database connection (asyncpg.Pool, psycopg3 Connection, aiomysql.Pool, PyMySQL connection, aiosqlite connection, or sqlite3 connection)
     
     Returns:
         Queries: An instance of the Queries class
