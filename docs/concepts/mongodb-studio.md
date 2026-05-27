@@ -239,31 +239,31 @@ Access comprehensive statistics for any database:
 ### Local MongoDB
 
 ```bash
-flash studio ""mongodb://localhost:27017"
+flash studio "mongodb://localhost:27017"
 ```
 
 ### With Authentication
 
 ```bash
-flash studio ""mongodb://user:password@localhost:27017/mydb?authSource=admin"
+flash studio "mongodb://user:password@localhost:27017/mydb?authSource=admin"
 ```
 
 ### MongoDB Atlas
 
 ```bash
-flash studio ""mongodb+srv://user:password@cluster.mongodb.net/mydb"
+flash studio "mongodb+srv://user:password@cluster.mongodb.net/mydb"
 ```
 
 ### Replica Set
 
 ```bash
-flash studio ""mongodb://host1:27017,host2:27017,host3:27017/mydb?replicaSet=rs0"
+flash studio "mongodb://host1:27017,host2:27017,host3:27017/mydb?replicaSet=rs0"
 ```
 
 ### Connection with Options
 
 ```bash
-flash studio ""mongodb://localhost:27017/mydb?maxPoolSize=10&minPoolSize=5"
+flash studio "mongodb://localhost:27017/mydb?maxPoolSize=10&minPoolSize=5"
 ```
 
 ## UI Features
@@ -338,7 +338,7 @@ Before deleting databases or performing bulk operations:
 mongosh --eval "db.adminCommand('ping')"
 
 # Verify connection string
-flash studio ""mongodb://localhost:27017" --verbose
+flash studio "mongodb://localhost:27017" --verbose
 ```
 
 **Authentication failed:**

@@ -337,25 +337,25 @@ Clear all keys from the current database:
 ### Local Redis
 
 ```bash
-flash studio ""redis://localhost:6379"
+flash studio "redis://localhost:6379"
 ```
 
 ### Remote Redis with Authentication
 
 ```bash
-flash studio ""redis://user:password@redis.example.com:6379"
+flash studio "redis://user:password@redis.example.com:6379"
 ```
 
 ### Redis with TLS/SSL
 
 ```bash
-flash studio ""rediss://user:pass@redis.example.com:6379"
+flash studio "rediss://user:pass@redis.example.com:6379"
 ```
 
 ### Specific Database
 
 ```bash
-flash studio ""redis://localhost:6379/1"
+flash studio "redis://localhost:6379/1"
 ```
 
 ## Keyboard Shortcuts
