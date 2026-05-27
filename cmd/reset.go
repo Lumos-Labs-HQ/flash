@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -41,7 +40,7 @@ Use --force to skip all confirmation prompts.`,
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		m, err := migrator.NewMigrator(cfg)
 		if err != nil {

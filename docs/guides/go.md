@@ -104,26 +104,52 @@ flash gen
 
 ## Configuration
 
-### flash.config.json
+### flash.toml
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "go": {
-      "enabled": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true
+driver = "database/sql"
 ```
+
+### Driver Selection
+
+Flash ORM supports two Go database drivers:
+
+| Driver | Package | Description | Best For |
+|--------|---------|-------------|----------|
+| `database/sql` | Standard library | Generic SQL interface | Portability, switching databases |
+| `pgx` | `github.com/jackc/pgx/v5` | Native PostgreSQL driver | Performance, PostgreSQL-specific features |
+
+**Using `database/sql` (default):**
+```toml
+[gen.go]
+enabled = true
+driver = "database/sql"
+```
+
+**Using `pgx`:**
+```toml
+[gen.go]
+enabled = true
+driver = "pgx"
+```
+
+The `pgx` driver generates code that uses `pgx.Rows`, `pgx.Row`, and `pgconn.PgError` directly, giving you access to PostgreSQL-specific features like:
+- Connection pooling with `pgxpool`
+- Native `COPY` support
+- Better type handling for arrays, JSONB, and enums
+- Faster performance than `database/sql` on PostgreSQL
 
 ### Environment Variables
 
@@ -517,7 +543,7 @@ myproject/
 ├── models/              # Business logic models
 ├── main.go
 ├── go.mod
-└── flash.config.json
+└── flash.toml
 ```
 
 ### Error Handling

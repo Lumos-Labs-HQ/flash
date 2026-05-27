@@ -112,16 +112,13 @@ function setupListeners() {
 async function loadFilterSchema() {
     if (!currentCollection) return;
     try {
-        const params = new URLSearchParams({ database: currentDatabase, page: 1, limit: 50 });
-        const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
+        const params = new URLSearchParams({ database: currentDatabase });
+        const res = await fetch(`/api/collections/${currentCollection}/schema?${params}`);
         const data = await res.json();
-        const docs = data.success && data.data ? data.data.documents : [];
+        const schema = data.success && data.data ? data.data : [];
 
-        if (docs.length > 0) {
-            const fields = new Set();
-            docs.forEach(doc => Object.keys(doc).forEach(k => fields.add(k)));
-            const fieldList = Array.from(fields).sort();
-
+        if (schema.length > 0) {
+            const fieldList = schema.map(f => f.name).sort();
             const container = $('#filter-schema-fields');
             if (container) {
                 container.innerHTML = '<small style="color: var(--text-tertiary); display: block; margin-bottom: 6px;">Click field to add to filter:</small>' +
@@ -131,7 +128,7 @@ async function loadFilterSchema() {
             }
         }
     } catch (err) {
-        console.error('Failed to load schema:', err);
+        console.error('Failed to load filter schema:', err);
     }
 }
 
@@ -142,6 +139,7 @@ function hideAllViews() {
     $('#schema-view').style.display = 'none';
     $('#indexes-view').style.display = 'none';
     $('#aggregation-view').style.display = 'none';
+    $('#empty-state').style.display = 'none';
 }
 
 function showLoading(container) {
@@ -248,9 +246,9 @@ async function selectCollection(name, evt) {
 async function loadDocs(filter) {
     if (!currentCollection) return;
     const actualFilter = filter !== undefined ? filter : currentFilter;
-    
+
+    hideAllViews();
     showContentLoading();
-    $('#empty-state').style.display = 'none';
     $('#toolbar').style.display = 'flex';
     if (viewMode === 'table') {
         $('#table-view').style.display = 'block';
@@ -264,10 +262,8 @@ async function loadDocs(filter) {
         const params = new URLSearchParams({ page: page, limit: pageSize });
         if (actualFilter) params.append('filter', actualFilter);
         if (currentDatabase) params.append('database', currentDatabase);
-        console.log('Fetching documents with params:', { page, pageSize, database: currentDatabase, collection: currentCollection, filter: actualFilter });
         const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
         const data = await res.json();
-        console.log('Raw API response:', JSON.stringify(data, null, 2));
 
         let result = data;
         if (data.success && data.data) {
@@ -276,10 +272,8 @@ async function loadDocs(filter) {
             result = data.data;
         }
 
-        console.log('Extracted result:', result);
         documents = result.documents || result.Documents || [];
         total = result.total_count || result.TotalCount || result.total || 0;
-        console.log('Final documents:', documents.length, 'Total:', total);
         renderDocs();
         updatePagination();
     } catch (err) {
@@ -346,12 +340,11 @@ function renderDocs() {
     const jsonView = $('#json-view');
 
     if (!documents.length) {
+        hideAllViews();
         empty.style.display = 'flex';
         toolbar.style.display = 'none';
-        tableView.style.display = 'none';
-        jsonView.style.display = 'none';
         $('#empty-title').textContent = 'No Documents';
-        $('#empty-text').innerHTML = 'This collection is empty<br><button class="btn btn-primary" style="margin-top: 16px;" id="empty-add-btn"><ion-icon name="add-outline"></ion-icon> Add Document</button>';
+        $('#empty-text').innerHTML = 'This collection is empty<br><button class="btn btn-primary" style="margin-top: 16px;" id="empty-add-btn"><span class="iconify" data-icon="ion:add-outline"></span> Add Document</button>';
         const emptyAddBtn = $('#empty-add-btn');
         if (emptyAddBtn) {
             emptyAddBtn.onclick = () => {
@@ -378,21 +371,41 @@ function renderDocs() {
 }
 
 function renderTableView() {
+    // Collect keys but limit to prevent massive tables on schemaless data
     const keys = new Set();
     documents.forEach(doc => Object.keys(doc).forEach(k => keys.add(k)));
-    const cols = Array.from(keys);
+    let cols = Array.from(keys);
+    // Prioritize _id first, then limit to 20 columns max for performance
+    cols.sort((a, b) => {
+        if (a === '_id') return -1;
+        if (b === '_id') return 1;
+        return a.localeCompare(b);
+    });
+    const MAX_COLS = 20;
+    const hasMoreCols = cols.length > MAX_COLS;
+    const visibleCols = cols.slice(0, MAX_COLS);
 
     const thead = $('#docs-table thead tr');
-    thead.innerHTML = `<th width="40"><input type="checkbox" id="select-all-table"></th>${cols.map(k => `<th>${k}</th>`).join('')}<th width="100">Actions</th>`;
+    const moreHeader = hasMoreCols ? `<th title="${cols.length - MAX_COLS} more fields...">…</th>` : '';
+    thead.innerHTML = `<th width="40"><input type="checkbox" id="select-all-table"></th>${visibleCols.map(k => `<th>${k}</th>`).join('')}${moreHeader}<th width="100">Actions</th>`;
     $('#select-all-table').onchange = toggleSelectAll;
 
     const tbody = $('#docs-table tbody');
     tbody.innerHTML = documents.map(doc => {
         const id = doc._id || doc.id || '';
         const sel = selected.has(id);
+        const cells = visibleCols.map(k => {
+            const val = doc[k];
+            // Skip expensive JSON.stringify for title on large values
+            const title = (typeof val === 'string' && val.length > 100) ? escapeHtml(val.substring(0, 100) + '...') :
+                          (val !== null && typeof val === 'object') ? escapeHtml(JSON.stringify(val).substring(0, 100)) :
+                          escapeHtml(String(val));
+            return `<td title="${title}">${formatValue(val)}</td>`;
+        }).join('');
+        const moreCell = hasMoreCols ? '<td style="color:var(--text-tertiary)">…</td>' : '';
         return `<tr class="${sel ? 'selected' : ''}">
       <td><input type="checkbox" class="row-check" data-id="${id}" ${sel ? 'checked' : ''}></td>
-      ${cols.map(k => `<td title="${escapeHtml(JSON.stringify(doc[k]))}">${formatValue(doc[k])}</td>`).join('')}
+      ${cells}${moreCell}
       <td class="row-actions">
         <button class="action-btn edit" onclick="editDoc('${id}')" title="Edit"><svg width="14" height="14" fill="currentColor"><path d="M11 1l3 3L4 14H1v-3z"/></svg></button>
         <button class="action-btn delete" onclick="deleteDoc('${id}')" title="Delete"><svg width="14" height="14" fill="currentColor"><path d="M5 1h4v1H5zm-2 2h8v10H3zm2 1v8h1V4zm2 0v8h1V4zm2 0v8h1V4z"/></svg></button>
@@ -405,6 +418,10 @@ function renderTableView() {
 }
 
 function renderJSONView() {
+    // Reset lazy node cache before each render
+    _nodeId = 0;
+    for (const k in _jsonNodes) delete _jsonNodes[k];
+
     const container = $('#json-view');
     container.innerHTML = documents.map(doc => {
         const id = doc._id || doc.id || '';
@@ -429,19 +446,6 @@ function renderJSONView() {
 
     $$('.row-check').forEach(cb => cb.onchange = toggleRow);
     updateBulkActions();
-    
-    // Setup toggle buttons - json-expand starts hidden via CSS
-    $$('.json-toggle').forEach(btn => {
-        btn.onclick = function (e) {
-            e.stopPropagation();
-            const expandEl = this.parentElement.nextElementSibling;
-            if (expandEl && expandEl.classList.contains('json-expand')) {
-                const isExpanded = expandEl.style.display === 'block';
-                expandEl.style.display = isExpanded ? 'none' : 'block';
-                this.textContent = isExpanded ? '▶' : '▼';
-            }
-        };
-    });
 }
 
 function copyDocToClipboard(btn, id) {
@@ -458,54 +462,98 @@ function copyDocToClipboard(btn, id) {
     });
 }
 
+// True lazy renderer: collapsed children are NOT in the DOM until expanded
 function renderJSONTree(obj, depth) {
-    if (obj === null || obj === undefined) return `<span class="json-null">null</span>`;
+    if (obj === null || obj === undefined) return '<span class="jv-null">null</span>';
+    const t = typeof obj;
+    if (t === 'string') return '<span class="jv-str">"' + escapeHtml(obj) + '"</span>';
+    if (t === 'number') return '<span class="jv-num">' + obj + '</span>';
+    if (t === 'boolean') return '<span class="jv-bool">' + obj + '</span>';
 
-    const type = typeof obj;
-    if (type === 'string') return `<span class="json-string">"${escapeHtml(obj)}"</span>`;
-    if (type === 'number') return `<span class="json-number">${obj}</span>`;
-    if (type === 'boolean') return `<span class="json-boolean">${obj}</span>`;
-
+    const indent = (depth + 1) * 14;
     const isArray = Array.isArray(obj);
-    const entries = isArray ? obj.map((v, i) => [i, v]) : Object.entries(obj);
+    const entries = isArray ? obj : Object.entries(obj);
+    const len = isArray ? obj.length : entries.length;
 
-    if (!entries.length) {
-        return isArray ? '<span class="json-empty">[ ]</span>' : '<span class="json-empty">{ }</span>';
+    if (len === 0) {
+        return isArray ? '<span class="jv-empty">[]</span>' : '<span class="jv-empty">{}</span>';
     }
 
-    let html = `<div class="json-tree-container">`;
+    const childIndent = indent + 14;
+    const rows = [];
 
-    entries.forEach(([key, val], idx) => {
-        const hasChildren = (val !== null && typeof val === 'object' && (Array.isArray(val) ? val.length > 0 : Object.keys(val).length > 0));
-
-        html += `<div class="json-tree-line">`;
-
-        if (hasChildren) {
-            html += `<button class="json-toggle">▶</button>`;
-            if (!isArray) {
-                html += `<span class="json-key">${escapeHtml(String(key))}</span><span class="json-colon">:</span>`;
+    if (isArray) {
+        for (let i = 0; i < len; i++) {
+            const val = obj[i];
+            if (val !== null && typeof val === 'object') {
+                const childCount = Array.isArray(val) ? val.length : Object.keys(val).length;
+                const label = Array.isArray(val) ? 'Array(' + childCount + ')' : 'Object(' + childCount + ')';
+                const nodeId = storeJSONNode(val, depth + 1);
+                rows.push(
+                    '<div class="jv-line jv-collapsible" style="padding-left:' + childIndent + 'px" data-node="' + nodeId + '">' +
+                    '<span class="jv-arrow">▶</span> <span class="jv-idx">[' + i + ']</span>: ' +
+                    '<span class="jv-preview">' + label + '</span></div>' +
+                    '<div class="jv-nested" style="display:none"></div>'
+                );
             } else {
-                html += `<span class="json-key">[${key}]</span><span class="json-colon">:</span>`;
+                rows.push(
+                    '<div class="jv-line" style="padding-left:' + childIndent + 'px">' +
+                    '<span class="jv-idx">[' + i + ']</span>: ' + renderJSONTree(val, depth + 1) + '</div>'
+                );
             }
-            const preview = Array.isArray(val) ? `Array(${val.length})` : `Object(${Object.keys(val).length})`;
-            html += `<span class="json-preview">${preview}</span>`;
-            html += `</div>`;
-            html += `<div class="json-expand">${renderJSONTree(val, depth + 1)}</div>`;
-        } else {
-            html += `<span class="json-spacer"></span>`;
-            if (!isArray) {
-                html += `<span class="json-key">${escapeHtml(String(key))}</span><span class="json-colon">:</span>`;
-            } else {
-                html += `<span class="json-key">[${key}]</span><span class="json-colon">:</span>`;
-            }
-            html += renderJSONTree(val, depth + 1);
-            html += `</div>`;
         }
-    });
+    } else {
+        for (const [key, val] of entries) {
+            if (val !== null && typeof val === 'object') {
+                const childCount = Array.isArray(val) ? val.length : Object.keys(val).length;
+                const label = Array.isArray(val) ? 'Array(' + childCount + ')' : 'Object(' + childCount + ')';
+                const nodeId = storeJSONNode(val, depth + 1);
+                rows.push(
+                    '<div class="jv-line jv-collapsible" style="padding-left:' + childIndent + 'px" data-node="' + nodeId + '">' +
+                    '<span class="jv-arrow">▶</span> <span class="jv-key">"' + escapeHtml(key) + '"</span>: ' +
+                    '<span class="jv-preview">' + label + '</span></div>' +
+                    '<div class="jv-nested" style="display:none"></div>'
+                );
+            } else {
+                rows.push(
+                    '<div class="jv-line" style="padding-left:' + childIndent + 'px">' +
+                    '<span class="jv-key">"' + escapeHtml(key) + '"</span>: ' + renderJSONTree(val, depth + 1) + '</div>'
+                );
+            }
+        }
+    }
 
-    html += `</div>`;
-    return html;
+    return '<div class="jv-block">' + rows.join('') + '</div>';
 }
+
+let _nodeId = 0;
+const _jsonNodes = {};
+function storeJSONNode(obj, depth) {
+    const id = 'n' + (++_nodeId);
+    _jsonNodes[id] = { obj: obj, depth: depth };
+    return id;
+}
+
+// Event delegation for JSON tree toggles — entire line is clickable
+document.addEventListener('click', function(e) {
+    const line = e.target.closest('.jv-collapsible');
+    if (!line) return;
+    const nested = line.nextElementSibling;
+    if (!nested || !nested.classList.contains('jv-nested')) return;
+    const arrow = line.querySelector('.jv-arrow');
+
+    const isExpanded = nested.style.display === 'block';
+    if (!isExpanded && !nested.dataset.loaded) {
+        const nodeId = line.dataset.node;
+        const data = _jsonNodes[nodeId];
+        if (data) {
+            nested.innerHTML = renderJSONTree(data.obj, data.depth);
+            nested.dataset.loaded = '1';
+        }
+    }
+    nested.style.display = isExpanded ? 'none' : 'block';
+    if (arrow) arrow.textContent = isExpanded ? '▶' : '▼';
+});
 
 function formatValue(val) {
     if (val === null) return '<span style="color:var(--text-tertiary)">null</span>';
@@ -684,50 +732,15 @@ async function loadSchema() {
     const tbody = $('#schema-table tbody');
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;"><div class="loading"><div class="spinner"></div></div></td></tr>';
     try {
-        const params = new URLSearchParams({ database: currentDatabase, page: 1, limit: 100 });
-        const res = await fetch(`/api/collections/${currentCollection}/documents?${params}`);
+        const params = new URLSearchParams({ database: currentDatabase });
+        const res = await fetch(`/api/collections/${currentCollection}/schema?${params}`);
         const data = await res.json();
-        const docs = data.success && data.data ? data.data.documents : [];
-
-        const schema = inferSchema(docs);
+        const schema = data.success && data.data ? data.data : [];
         renderSchema(schema);
     } catch (err) {
         showError('Failed to load schema: ' + err.message);
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-tertiary)">Failed to load schema</td></tr>';
     }
-}
-
-function inferSchema(docs) {
-    const fields = {};
-    const totalDocs = docs.length;
-
-    docs.forEach(doc => {
-        Object.entries(doc).forEach(([key, value]) => {
-            if (!fields[key]) {
-                fields[key] = { types: new Set(), count: 0, nullable: false };
-            }
-            fields[key].count++;
-            fields[key].types.add(getType(value));
-            if (value === null || value === undefined) {
-                fields[key].nullable = true;
-            }
-        });
-    });
-
-    return Object.entries(fields).map(([name, info]) => ({
-        name,
-        type: Array.from(info.types).join(' | '),
-        nullable: info.nullable || info.count < totalDocs,
-        frequency: totalDocs > 0 ? Math.round((info.count / totalDocs) * 100) : 0
-    }));
-}
-
-function getType(value) {
-    if (value === null) return 'null';
-    if (Array.isArray(value)) return 'array';
-    if (value instanceof Date) return 'date';
-    if (typeof value === 'object') return 'object';
-    return typeof value;
 }
 
 function renderSchema(schema) {
@@ -795,7 +808,9 @@ async function createIndex() {
 
     try {
         const keys = JSON.parse(keysStr);
-        const res = await fetch(`/api/collections/${currentCollection}/indexes`, {
+        const url = new URL(`/api/collections/${currentCollection}/indexes`, window.location.origin);
+        if (currentDatabase) url.searchParams.append('database', currentDatabase);
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ keys, unique })
@@ -817,7 +832,9 @@ async function dropIndex(name) {
     if (!confirm(`Drop index "${name}"?`)) return;
 
     try {
-        const res = await fetch(`/api/collections/${currentCollection}/indexes/${name}`, {
+        const url = new URL(`/api/collections/${currentCollection}/indexes/${name}`, window.location.origin);
+        if (currentDatabase) url.searchParams.append('database', currentDatabase);
+        const res = await fetch(url, {
             method: 'DELETE'
         });
 
@@ -892,13 +909,13 @@ function renderPipeline() {
                 </div>
                 <div class="stage-actions">
                     <button class="action-btn" onclick="moveStage(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Move Up">
-                        <ion-icon name="arrow-up-outline"></ion-icon>
+                        <span class="iconify" data-icon="ion:arrow-up-outline"></span>
                     </button>
                     <button class="action-btn" onclick="moveStage(${index}, 1)" ${index === pipelineStages.length - 1 ? 'disabled' : ''} title="Move Down">
-                        <ion-icon name="arrow-down-outline"></ion-icon>
+                        <span class="iconify" data-icon="ion:arrow-down-outline"></span>
                     </button>
                     <button class="action-btn delete" onclick="removeStage(${stage.id})" title="Remove">
-                        <ion-icon name="trash-outline"></ion-icon>
+                        <span class="iconify" data-icon="ion:trash-outline"></span>
                     </button>
                 </div>
             </div>
@@ -977,7 +994,9 @@ async function runAggregation() {
 
         console.log('Running pipeline:', pipeline);
 
-        const res = await fetch(`/api/collections/${currentCollection}/aggregate`, {
+        const url = new URL(`/api/collections/${currentCollection}/aggregate`, window.location.origin);
+        if (currentDatabase) url.searchParams.append('database', currentDatabase);
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(pipeline)
@@ -1030,7 +1049,7 @@ function renderDatabases() {
         return `
     <div class="database-item" onclick='selectDatabase(${jsonName})' oncontextmenu='showDbContextMenu(event, ${jsonName})' data-name="${dataName}">
       <div class="item-name">
-        <ion-icon name="server-outline"></ion-icon>
+        <span class="iconify" data-icon="ion:server-outline"></span>
         ${safeName}
       </div>
       <span class="item-count">${formatSize(db.sizeOnDisk || 0)}</span>
@@ -1052,7 +1071,7 @@ function renderCollections() {
         return `
     <div class="collection-item ${isActive ? 'active' : ''}" onclick='selectCollection(${jsonName}, event)' oncontextmenu='showCollContextMenu(event, ${jsonName})' data-name="${dataName}">
       <div class="item-name">
-        <ion-icon name="folder-outline"></ion-icon>
+        <span class="iconify" data-icon="ion:folder-outline"></span>
         ${safeName}
       </div>
       <span class="item-count">${col.document_count || col.count || 0}</span>
@@ -1089,7 +1108,7 @@ function showDbContextMenu(e, dbName) {
     const jsonName = JSON.stringify(dbName);
     menu.innerHTML = `
         <div class="context-item danger" onclick='event.stopPropagation(); deleteDatabase(${jsonName})'>
-            <ion-icon name="trash-outline"></ion-icon> Delete Database
+            <span class="iconify" data-icon="ion:trash-outline"></span> Delete Database
         </div>
     `;
     document.body.appendChild(menu);
@@ -1108,7 +1127,7 @@ function showCollContextMenu(e, collName) {
     const jsonName = JSON.stringify(collName);
     menu.innerHTML = `
         <div class="context-item danger" onclick='event.stopPropagation(); deleteCollection(${jsonName})'>
-            <ion-icon name="trash-outline"></ion-icon> Delete Collection
+            <span class="iconify" data-icon="ion:trash-outline"></span> Delete Collection
         </div>
     `;
     document.body.appendChild(menu);

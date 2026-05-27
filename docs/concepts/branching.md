@@ -440,40 +440,33 @@ flash branch merge feature/user-profiles
 
 ## Branch Configuration
 
-### flash.config.json
+### flash.toml
 
-```json
-{
-  "branching": {
-    "enabled": true,
-    "default_strategy": "three-way",
-    "auto_commit": true,
-    "conflict_resolution": "interactive",
-    "storage_path": "db/branches"
-  }
-}
+```toml
+
+[branching]
+enabled = true
+default_strategy = "three-way"
+auto_commit = true
+conflict_resolution = "interactive"
+storage_path = "db/branches"
 ```
 
 ### Branch Policies
 
-```json
-{
-  "branch_policies": {
-    "main": {
-      "protected": true,
-      "required_reviews": 2,
-      "auto_merge": false
-    },
-    "release/*": {
-      "protected": true,
-      "required_tests": true
-    },
-    "feature/*": {
-      "max_age_days": 90,
-      "auto_prune": true
-    }
-  }
-}
+```toml
+[branch_policies.main]
+protected = true
+required_reviews = 2
+auto_merge = false
+
+[branch_policies."release/*"]
+protected = true
+required_tests = true
+
+[branch_policies."feature/*"]
+max_age_days = 90
+auto_prune = true
 ```
 
 ## Troubleshooting

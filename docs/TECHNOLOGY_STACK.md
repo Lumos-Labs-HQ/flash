@@ -147,7 +147,7 @@ func init() {
 **Config Loading Priority:**
 1. Command-line flags (`--config`)
 2. Environment variables
-3. `./flash.config.json`
+3. `./flash.toml`
 4. Default values
 
 **Dependencies:**

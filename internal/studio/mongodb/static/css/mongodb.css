@@ -298,89 +298,6 @@
     color: var(--text-primary)
 }
 
-.json-obj {
-    display: block;
-    margin: 0
-}
-
-.json-bracket {
-    color: #808080;
-    font-weight: bold;
-    margin: 0
-}
-
-.json-brackets {
-    color: #808080;
-    font-weight: normal
-}
-
-.json-items {
-    margin-left: 12px;
-    border-left: 1px solid rgba(255, 255, 255, 0.06);
-    padding-left: 6px
-}
-
-.json-row {
-    display: flex;
-    align-items: baseline;
-    padding: 0;
-    min-height: 16px
-}
-
-.json-row:hover {
-    background: rgba(255, 255, 255, 0.02);
-    margin: 0 -2px;
-    padding: 0 2px;
-    border-radius: 2px
-}
-
-.json-toggle {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0;
-    margin: 0 3px 0 0;
-    font-size: 8px;
-    width: 8px;
-    height: 8px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: all .15s
-}
-
-.json-toggle:hover {
-    color: var(--text-primary);
-    transform: scale(1.2)
-}
-
-.json-spacer {
-    width: 11px;
-    display: inline-block;
-    flex-shrink: 0
-}
-
-.json-key {
-    color: #9cdcfe;
-    font-weight: 500
-}
-
-.json-field {
-    color: #9cdcfe;
-    font-weight: 500
-}
-
-.json-colon {
-    color: #808080;
-    margin: 0 4px 0 0
-}
-
-.json-comma {
-    color: #808080
-}
-
 .json-string {
     color: #c3e88d
 }
@@ -398,47 +315,68 @@
     font-style: italic
 }
 
-.json-empty {
+/* Minimal JSON tree view — fewer DOM nodes for performance */
+.jv-block {
+    font-family: 'JetBrains Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.jv-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0;
+    min-height: 18px;
+}
+
+.jv-collapsible {
+    cursor: pointer;
+    user-select: none;
+}
+
+.jv-arrow {
+    display: inline-block;
+    width: 14px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.jv-key {
+    color: #9cdcfe;
+}
+
+.jv-idx {
+    color: #9cdcfe;
+}
+
+.jv-str {
+    color: #c3e88d
+}
+
+.jv-num {
+    color: #f78c6c
+}
+
+.jv-bool {
+    color: #c792ea
+}
+
+.jv-null {
+    color: #808080;
+    font-style: italic
+}
+
+.jv-empty {
     color: #808080
 }
 
-.json-preview {
+.jv-preview {
     color: #888;
     font-style: italic;
-    margin-left: 4px;
     font-size: 11px
 }
-
-.json-expand {
-    display: none;
-    padding-left: 8px
-}
-
-.json-tree-line {
-    display: flex;
-    align-items: baseline;
-    padding: 0;
-    min-height: 16px
-}
-
-.json-object {
-    margin-left: 0 !important
-}
-
-.json-tree-container {
-    margin-left: 0
-}
-
-.json-card-body > .json-tree-container {
-    margin-left: 0;
-    padding-left: 0
-}
-
-.json-expand > .json-tree-container {
-    margin-left: 0;
-    padding-left: 0
-}
-
 
 .nav-breadcrumb {
     flex: 1;
@@ -738,7 +676,7 @@
     background: rgba(239, 68, 68, 0.1);
 }
 
-.context-item ion-icon {
+.context-item .iconify {
     font-size: 18px;
 }
 

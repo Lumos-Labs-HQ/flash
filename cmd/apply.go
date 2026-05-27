@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -40,7 +39,7 @@ This command will:
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		// Get current branch info
 		branchName, branchSchema, err := migrator.GetCurrentBranchInfo(cfg)

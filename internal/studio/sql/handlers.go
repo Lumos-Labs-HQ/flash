@@ -30,8 +30,8 @@ func (s *Server) handleApplySchemaChange(w http.ResponseWriter, r *http.Request)
 	}
 
 	configPath := ""
-	if _, err := os.Stat("./flash.config.json"); err == nil {
-		configPath = "./flash.config.json"
+	if _, err := os.Stat("./flash.toml"); err == nil {
+		configPath = "./flash.toml"
 	}
 
 	if err := s.service.ApplySchemaChange(&change, configPath); err != nil {
@@ -49,7 +49,7 @@ func (s *Server) handleApplySchemaChange(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleCheckConfig(w http.ResponseWriter, r *http.Request) {
 	exists := false
-	if _, err := os.Stat("./flash.config.json"); err == nil {
+	if _, err := os.Stat("./flash.toml"); err == nil {
 		exists = true
 	}
 	common.JSONMap(w, common.Map{"exists": exists})

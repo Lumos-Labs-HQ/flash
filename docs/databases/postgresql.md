@@ -78,20 +78,18 @@ DATABASE_URL=postgres://user:pass@/dbname?host=/tmp
 
 ### PostgreSQL-Specific Config
 
-```json
-// flash.config.json
-{
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL",
-    "pg": {
-      "ssl_mode": "require",
-      "search_path": "public,extensions",
-      "timezone": "UTC",
-      "application_name": "flash-orm"
-    }
-  }
-}
+```toml
+# flash.toml
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[database.pg]
+ssl_mode = "require"
+search_path = "public,extensions"
+timezone = "UTC"
+application_name = "flash-orm"
 ```
 
 ## Data Types

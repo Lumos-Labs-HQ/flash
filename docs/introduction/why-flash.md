@@ -115,14 +115,12 @@ Full type safety across all supported languages with IDE autocomplete.
 ### Switch Databases Effortlessly
 Change databases without rewriting code:
 
-```json
-// flash.config.json
-{
-  "database": {
-    "provider": "postgresql"
-    // Change to "mysql" or "sqlite" anytime
-  }
-}
+```toml
+# flash.toml
+
+[database]
+provider = "postgresql"
+# Change to "mysql" or "sqlite" anytime
 ```
 
 ### Consistent API

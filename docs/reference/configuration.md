@@ -5,40 +5,39 @@ description: Complete reference for FlashORM configuration options
 
 # Configuration Reference
 
-This page provides a complete reference for FlashORM configuration options in `flash.config.json`.
+This page provides a complete reference for FlashORM configuration options in `flash.toml`.
 
 ## File Structure
 
-FlashORM uses a JSON configuration file named `flash.config.json` in your project root.
+FlashORM uses a TOML configuration file named `flash.toml` in your project root.
 
 ## Configuration Schema
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "export_path": "db/export",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "go": {
-      "enabled": true
-    },
-    "js": {
-      "enabled": false,
-      "out": "flash_gen"
-    },
-    "python": {
-      "enabled": false,
-      "out": "flash_gen",
-      "async": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true
+driver = "database/sql"
+
+[gen.js]
+enabled = false
+out = "flash_gen"
+driver = "pg"
+
+[gen.python]
+enabled = false
+out = "flash_gen"
+async = true
+driver = "asyncpg"
 ```
 
 ## Configuration Options
@@ -67,7 +66,7 @@ Directory for migration files. Default: `"db/migrations"`
 
 Directory for exported data files. Default: `"db/export"`
 
-### `database` (object)
+### `database` (table)
 
 Database configuration.
 
@@ -83,11 +82,11 @@ Database provider. Options:
 
 Environment variable name for database URL. Default: `"DATABASE_URL"`
 
-### `gen` (object)
+### `gen` (tables)
 
-Code generation configuration.
+Code generation configuration. Each language has its own table: `[gen.go]`, `[gen.js]`, `[gen.python]`.
 
-#### `gen.go` (object)
+#### `[gen.go]`
 
 Go code generation settings.
 
@@ -95,7 +94,22 @@ Go code generation settings.
 
 Enable Go code generation. Default: `true` when no other generators are enabled.
 
-#### `gen.js` (object)
+##### `gen.go.driver` (string)
+
+Go database driver. Default: `"database/sql"`
+
+| Driver | Description | Best For |
+|--------|-------------|----------|
+| `database/sql` | Standard library SQL interface | Portability, simplicity |
+| `pgx` | jackc/pgx/v5 native driver | PostgreSQL performance, native types |
+
+```toml
+[gen.go]
+enabled = true
+driver = "pgx"
+```
+
+#### `[gen.js]`
 
 JavaScript/TypeScript code generation settings.
 
@@ -107,7 +121,26 @@ Enable JavaScript/TypeScript code generation. Default: `false`
 
 Output directory for generated JS/TS code. Default: `"flash_gen"`
 
-#### `gen.python` (object)
+##### `gen.js.driver` (string)
+
+JavaScript database driver. Default: `"pg"`
+
+| Driver | Description | Database |
+|--------|-------------|----------|
+| `pg` | node-postgres (default) | PostgreSQL |
+| `postgres` | porsager/postgres | PostgreSQL |
+| `mysql2` | mysql2 package | MySQL |
+| `better-sqlite3` | Synchronous SQLite | SQLite |
+| `bun:sqlite` | Bun native SQLite | SQLite |
+
+```toml
+[gen.js]
+enabled = true
+out = "flash_gen"
+driver = "mysql2"
+```
+
+#### `[gen.python]`
 
 Python code generation settings.
 
@@ -122,6 +155,62 @@ Output directory for generated Python code. Default: `"flash_gen"`
 ##### `gen.python.async` (boolean)
 
 Generate async Python code. Default: `true`
+
+##### `gen.python.driver` (string)
+
+Python database driver. Defaults depend on `database.provider`:
+
+**PostgreSQL:**
+| Driver | Description | Mode |
+|--------|-------------|------|
+| `asyncpg` | asyncpg native (default async) | Async |
+| `psycopg3` | psycopg 3.x | Sync or Async |
+
+**MySQL:**
+| Driver | Description | Mode |
+|--------|-------------|------|
+| `aiomysql` | aiomysql (default async) | Async |
+| `pymysql` | PyMySQL | Sync |
+
+**SQLite:**
+| Driver | Description | Mode |
+|--------|-------------|------|
+| `aiosqlite` | aiosqlite (default async) | Async |
+| `sqlite3` | Standard library sqlite3 | Sync |
+
+```toml
+[gen.python]
+enabled = true
+out = "flash_gen"
+async = true
+driver = "psycopg3"
+```
+
+## Driver Selection by Database
+
+### PostgreSQL
+
+| Language | Default Driver | Alternative Drivers |
+|----------|---------------|---------------------|
+| Go | `database/sql` | `pgx` |
+| JavaScript | `pg` | `postgres` |
+| Python | `asyncpg` (async) | `psycopg3` |
+
+### MySQL
+
+| Language | Default Driver | Alternative Drivers |
+|----------|---------------|---------------------|
+| Go | `database/sql` | — |
+| JavaScript | `mysql2` | — |
+| Python | `aiomysql` (async) | `pymysql` |
+
+### SQLite
+
+| Language | Default Driver | Alternative Drivers |
+|----------|---------------|---------------------|
+| Go | `database/sql` | — |
+| JavaScript | `better-sqlite3` | `bun:sqlite` |
+| Python | `aiosqlite` (async) | `sqlite3` |
 
 ## Database URLs
 
@@ -169,7 +258,7 @@ FlashORM expects the following directory structure:
 
 ```
 project/
-├── flash.config.json
+├── flash.toml
 ├── db/
 │   ├── schema/
 │   │   └── *.sql          # Schema files
@@ -183,94 +272,103 @@ project/
 
 ## Examples
 
-### Go Project with PostgreSQL
+### Go Project with PostgreSQL (pgx)
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "go": {
-      "enabled": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true
+driver = "pgx"
 ```
 
-### Node.js Project with TypeScript
+### Node.js Project with TypeScript (postgres driver)
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "js": {
-      "enabled": true,
-      "out": "src/generated"
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.js]
+enabled = true
+out = "src/generated"
+driver = "postgres"
 ```
 
-### Python Project
+### Python Project (psycopg3, sync)
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "python": {
-      "enabled": true,
-      "out": "flashorm_gen",
-      "async": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.python]
+enabled = true
+out = "flashorm_gen"
+async = false
+driver = "psycopg3"
+```
+
+### Python Project (MySQL with PyMySQL)
+
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+
+[database]
+provider = "mysql"
+url_env = "DATABASE_URL"
+
+[gen.python]
+enabled = true
+out = "flashorm_gen"
+async = false
+driver = "pymysql"
 ```
 
 ### Multi-Language Project
 
-```json
-{
-  "version": "2",
-  "schema_dir": "db/schema",
-  "queries": "db/queries/",
-  "migrations_path": "db/migrations",
-  "database": {
-    "provider": "postgresql",
-    "url_env": "DATABASE_URL"
-  },
-  "gen": {
-    "go": {
-      "enabled": true
-    },
-    "js": {
-      "enabled": true,
-      "out": "frontend/src/generated"
-    },
-    "python": {
-      "enabled": true,
-      "out": "backend/flashorm_gen",
-      "async": true
-    }
-  }
-}
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true
+driver = "database/sql"
+
+[gen.js]
+enabled = true
+out = "frontend/src/generated"
+driver = "pg"
+
+[gen.python]
+enabled = true
+out = "backend/flashorm_gen"
+async = true
+driver = "asyncpg"
 ```

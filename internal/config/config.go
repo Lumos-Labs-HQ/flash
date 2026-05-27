@@ -1,70 +1,152 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
+
+	"github.com/BurntSushi/toml"
 )
 
 // ConfigFile is the path to the config file, set by the cmd package from --config flag.
 var ConfigFile string
 
+var (
+	configCacheMu    sync.Mutex
+	configCache      *Config
+	configCacheErr   error
+	configCachePath  string
+	configCacheMtime int64
+)
+
 type Config struct {
-	Version        string   `json:"version"`
-	SchemaPath     string   `json:"schema_path"` // Deprecated: use SchemaDir instead
-	SchemaDir      string   `json:"schema_dir"`  // New: folder containing .sql schema files
-	Queries        string   `json:"queries"`
-	MigrationsPath string   `json:"migrations_path"`
-	ExportPath     string   `json:"export_path"`
-	Database       Database `json:"database"`
-	Gen            Gen      `json:"gen"`
+	Version        string   `toml:"version"`
+	SchemaPath     string   `toml:"schema_path"` // Deprecated: use SchemaDir instead
+	SchemaDir      string   `toml:"schema_dir"`  // New: folder containing .sql schema files
+	Queries        string   `toml:"queries"`
+	MigrationsPath string   `toml:"migrations_path"`
+	ExportPath     string   `toml:"export_path"`
+	Database       Database `toml:"database"`
+	Gen            Gen      `toml:"gen"`
 }
 
 type Database struct {
-	Provider string `json:"provider"`
-	URLEnv   string `json:"url_env"`
+	Provider string `toml:"provider"`
+	URLEnv   string `toml:"url_env"`
 }
 
 type Gen struct {
-	Go     GoGen     `json:"go,omitempty"`
-	JS     JSGen     `json:"js,omitempty"`
-	Python PythonGen `json:"python,omitempty"`
+	Go     GoGen     `toml:"go"`
+	JS     JSGen     `toml:"js"`
+	Python PythonGen `toml:"python"`
 }
 
 type GoGen struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool   `toml:"enabled"`
+	Driver  string `toml:"driver"` // "database/sql" (default) or "pgx"
 }
 
 type JSGen struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Out     string `json:"out,omitempty"`
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Driver  string `toml:"driver"` // "pg" (default) or "postgres"
 }
 
 type PythonGen struct {
-	Enabled bool   `json:"enabled,omitempty"`
-	Out     string `json:"out,omitempty"`
-	Async   bool   `json:"async,omitempty"` // true = async (default), false = sync
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Async   bool   `toml:"async"`  // true = async (default), false = sync
+	Driver  string `toml:"driver"` // database-specific driver
 }
 
-// pythonRaw is used to detect whether "async" was explicitly set in the JSON.
-type pythonRaw struct {
-	Async *bool `json:"async"`
-}
-type genRaw struct {
-	Python pythonRaw `json:"python"`
-}
-type configRaw struct {
-	Gen genRaw `json:"gen"`
+// rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
+type rawPythonGen struct {
+	Enabled bool  `toml:"enabled"`
+	Out     string `toml:"out"`
+	Async   *bool  `toml:"async"` // nil = not present in TOML
+	Driver  string `toml:"driver"`
 }
 
+type rawGen struct {
+	Go     GoGen        `toml:"go"`
+	JS     JSGen        `toml:"js"`
+	Python rawPythonGen `toml:"python"`
+}
+
+type rawConfig struct {
+	Version        string   `toml:"version"`
+	SchemaPath     string   `toml:"schema_path"`
+	SchemaDir      string   `toml:"schema_dir"`
+	Queries        string   `toml:"queries"`
+	MigrationsPath string   `toml:"migrations_path"`
+	ExportPath     string   `toml:"export_path"`
+	Database       Database `toml:"database"`
+	Gen            rawGen   `toml:"gen"`
+}
+
+// Load reads and returns the config, with in-memory caching keyed by file path
+// and modification time. This avoids redundant disk I/O when Load() is called
+// multiple times within a single command invocation.
 func Load() (*Config, error) {
+	path := ConfigFile
+	if path == "" {
+		path = "flash.toml"
+	}
+
+	// Resolve to absolute path for reliable cache keying
+	if absPath, err := filepath.Abs(path); err == nil {
+		path = absPath
+	}
+
+	// Check file mod time for cache invalidation
+	var mtime int64
+	if fi, err := os.Stat(path); err == nil {
+		mtime = fi.ModTime().UnixNano()
+	}
+
+	configCacheMu.Lock()
+	defer configCacheMu.Unlock()
+
+	if configCache != nil && configCachePath == path && configCacheMtime == mtime && configCacheErr == nil {
+		// Return a shallow copy so callers can't mutate the cache
+		cfg := *configCache
+		return &cfg, nil
+	}
+
+	cfg, err := loadUncached()
+	configCache = cfg
+	configCacheErr = err
+	configCachePath = path
+	configCacheMtime = mtime
+	if err != nil {
+		return nil, err
+	}
+	// Return a copy so callers can't mutate the cache
+	copyCfg := *cfg
+	return &copyCfg, nil
+}
+
+// ResetConfigCache clears the in-memory config cache. It is intended for tests
+// that need to reload config from a different file or working directory.
+func ResetConfigCache() {
+	configCacheMu.Lock()
+	defer configCacheMu.Unlock()
+	configCache = nil
+	configCacheErr = nil
+	configCachePath = ""
+	configCacheMtime = 0
+}
+
+// loadUncached performs the actual config loading without caching.
+func loadUncached() (*Config, error) {
 	var cfg Config
 
 	path := ConfigFile
 	if path == "" {
-		path = "flash.config.json"
+		path = "flash.toml"
 	}
 
 	data, err := os.ReadFile(path)
@@ -74,13 +156,27 @@ func Load() (*Config, error) {
 
 	pythonAsyncSet := false
 	if data != nil {
-		if err := json.Unmarshal(data, &cfg); err != nil {
+		var raw rawConfig
+		if err := toml.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf("failed to parse config: %w", err)
 		}
-		// Check if python.async was explicitly set
-		var raw configRaw
-		json.Unmarshal(data, &raw)
-		pythonAsyncSet = raw.Gen.Python.Async != nil
+		// Copy raw values into the main config struct
+		cfg.Version = raw.Version
+		cfg.SchemaPath = raw.SchemaPath
+		cfg.SchemaDir = raw.SchemaDir
+		cfg.Queries = raw.Queries
+		cfg.MigrationsPath = raw.MigrationsPath
+		cfg.ExportPath = raw.ExportPath
+		cfg.Database = raw.Database
+		cfg.Gen.Go = raw.Gen.Go
+		cfg.Gen.JS = raw.Gen.JS
+		cfg.Gen.Python.Enabled = raw.Gen.Python.Enabled
+		cfg.Gen.Python.Out = raw.Gen.Python.Out
+		cfg.Gen.Python.Driver = raw.Gen.Python.Driver
+		if raw.Gen.Python.Async != nil {
+			cfg.Gen.Python.Async = *raw.Gen.Python.Async
+			pythonAsyncSet = true
+		}
 	}
 
 	// Set defaults
@@ -227,6 +323,7 @@ func (c *Config) GetSchemaFiles() ([]string, error) {
 
 	// Sort files for consistent ordering
 	// Files are typically named like: 001_users.sql, 002_posts.sql or users.sql, posts.sql
+	sort.Strings(files)
 	return files, nil
 }
 

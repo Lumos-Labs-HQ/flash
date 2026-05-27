@@ -1,14 +1,7 @@
-package common 
+package common
 
 import (
-	"regexp"
 	"strings"
-)
-
-// Pre-compiled regex patterns for SQL parsing (performance optimization)
-var (
-	commentRegex = regexp.MustCompile(`(?m)^\s*--.*$`)
-	stringRegex  = regexp.MustCompile(`'(?:[^']|'')*'|"(?:[^"]|"")*"|` + "`(?:[^`]|``)*`")
 )
 
 type QueryResult struct {
@@ -16,42 +9,185 @@ type QueryResult struct {
 	Rows    []map[string]interface{}
 }
 
-// ParseSQLStatements uses regex-based parsing for 40-50% performance improvement on large migrations
+// ParseSQLStatements splits SQL migration text into individual statements,
+// correctly handling string literals, comments, and PostgreSQL dollar-quoted
+// blocks so that semicolons inside them do not terminate statements.
 func ParseSQLStatements(sql string) []string {
-	sql = commentRegex.ReplaceAllString(sql, "")
-
-	stringPositions := make(map[int]bool)
-	for _, match := range stringRegex.FindAllStringIndex(sql, -1) {
-		for i := match[0]; i < match[1]; i++ {
-			stringPositions[i] = true
-		}
-	}
-
 	var statements []string
-	estimatedStmts := strings.Count(sql, ";") + 1
-	statements = make([]string, 0, estimatedStmts)
+	var current strings.Builder
 
-	var currentStatement strings.Builder
-	currentStatement.Grow(len(sql) / estimatedStmts)
+	const (
+		normal = iota
+		singleQuote
+		doubleQuote
+		backtick
+		lineComment
+		blockComment
+		dollarQuote
+	)
+	state := normal
+	var dollarTag string
 
-	for i, char := range sql {
-		if char == ';' && !stringPositions[i] {
-			stmt := strings.TrimSpace(currentStatement.String())
-			if stmt != "" && !strings.HasPrefix(stmt, "/*") {
+	for i := 0; i < len(sql); {
+		ch := sql[i]
+
+		switch state {
+		case lineComment:
+			if ch == '\n' {
+				state = normal
+			}
+			i++
+			continue
+
+		case blockComment:
+			if ch == '*' && i+1 < len(sql) && sql[i+1] == '/' {
+				state = normal
+				i += 2
+				continue
+			}
+			i++
+			continue
+
+		case singleQuote:
+			if ch == '\'' {
+				if i+1 < len(sql) && sql[i+1] == '\'' {
+					current.WriteString("''")
+					i += 2
+					continue
+				}
+				state = normal
+			}
+			current.WriteByte(ch)
+			i++
+			continue
+
+		case doubleQuote:
+			if ch == '"' {
+				if i+1 < len(sql) && sql[i+1] == '"' {
+					current.WriteString("\"\"")
+					i += 2
+					continue
+				}
+				state = normal
+			}
+			current.WriteByte(ch)
+			i++
+			continue
+
+		case backtick:
+			if ch == '`' {
+				if i+1 < len(sql) && sql[i+1] == '`' {
+					current.WriteString("``")
+					i += 2
+					continue
+				}
+				state = normal
+			}
+			current.WriteByte(ch)
+			i++
+			continue
+
+		case dollarQuote:
+			if ch == '$' {
+				// Try to find a matching closing tag
+				tagEnd := i + 1
+				for tagEnd < len(sql) && sql[tagEnd] != '$' {
+					if !isDollarTagChar(sql[tagEnd]) {
+						break
+					}
+					tagEnd++
+				}
+				if tagEnd < len(sql) && sql[tagEnd] == '$' {
+					tag := sql[i : tagEnd+1]
+					if tag == dollarTag {
+						state = normal
+						current.WriteString(tag)
+						i = tagEnd + 1
+						continue
+					}
+				}
+			}
+			current.WriteByte(ch)
+			i++
+			continue
+		}
+
+		// state == normal
+		if ch == '-' && i+1 < len(sql) && sql[i+1] == '-' {
+			state = lineComment
+			i += 2
+			continue
+		}
+
+		if ch == '/' && i+1 < len(sql) && sql[i+1] == '*' {
+			state = blockComment
+			i += 2
+			continue
+		}
+
+		if ch == '\'' {
+			state = singleQuote
+			current.WriteByte(ch)
+			i++
+			continue
+		}
+
+		if ch == '"' {
+			state = doubleQuote
+			current.WriteByte(ch)
+			i++
+			continue
+		}
+
+		if ch == '`' {
+			state = backtick
+			current.WriteByte(ch)
+			i++
+			continue
+		}
+
+		if ch == '$' {
+			tagEnd := i + 1
+			for tagEnd < len(sql) && isDollarTagChar(sql[tagEnd]) {
+				tagEnd++
+			}
+			if tagEnd < len(sql) && sql[tagEnd] == '$' {
+				dollarTag = sql[i : tagEnd+1]
+				state = dollarQuote
+				current.WriteString(dollarTag)
+				i = tagEnd + 1
+				continue
+			}
+		}
+
+		if ch == ';' {
+			stmt := strings.TrimSpace(current.String())
+			if stmt != "" {
 				statements = append(statements, stmt)
 			}
-			currentStatement.Reset()
-		} else {
-			currentStatement.WriteRune(char)
+			current.Reset()
+			i++
+			continue
 		}
+
+		current.WriteByte(ch)
+		i++
 	}
 
-	if currentStatement.Len() > 0 {
-		stmt := strings.TrimSpace(currentStatement.String())
-		if stmt != "" && !strings.HasPrefix(stmt, "/*") {
+	if current.Len() > 0 {
+		stmt := strings.TrimSpace(current.String())
+		if stmt != "" {
 			statements = append(statements, stmt)
 		}
 	}
 
 	return statements
+}
+
+func isDollarTagChar(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
+}
+
+func isWhitespace(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }

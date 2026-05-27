@@ -77,22 +77,20 @@ DATABASE_URL=mysql://user:pass@localhost:3306/dbname?charset=utf8mb4&parseTime=t
 
 ### MySQL-Specific Config
 
-```json
-// flash.config.json
-{
-  "database": {
-    "provider": "mysql",
-    "url_env": "DATABASE_URL",
-    "mysql": {
-      "charset": "utf8mb4",
-      "parse_time": true,
-      "loc": "Local",
-      "timeout": "30s",
-      "read_timeout": "30s",
-      "write_timeout": "30s"
-    }
-  }
-}
+```toml
+# flash.toml
+
+[database]
+provider = "mysql"
+url_env = "DATABASE_URL"
+
+[database.mysql]
+charset = "utf8mb4"
+parse_time = true
+loc = "Local"
+timeout = "30s"
+read_timeout = "30s"
+write_timeout = "30s"
 ```
 
 ## Data Types

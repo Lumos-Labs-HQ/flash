@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -46,7 +45,7 @@ The command will:
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		backup, _ := cmd.Flags().GetBool("backup")
 		outputPath, _ := cmd.Flags().GetString("output")

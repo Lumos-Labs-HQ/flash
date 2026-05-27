@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -39,7 +38,7 @@ and which are still pending.`,
 			return fmt.Errorf("failed to create directories: %w", err)
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		m, err := migrator.NewMigrator(cfg)
 		if err != nil {

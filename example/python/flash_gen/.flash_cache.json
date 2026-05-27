@@ -1,27 +1,27 @@
 {
   "version": "1.0",
   "query_file_checksums": {
-    "db\\queries\\other.sql": "8fbd283a3cadc5d721fa0e1d09289810d583fb040f4b720bc7dd07c3f14df178",
-    "db\\queries\\post.sql": "eb65a36d70fadb51522a712e06f6c9383caa47c10fde432026548c4c4a37b138",
-    "db\\queries\\users.sql": "77b78604de0b6783237a6d9c5e27de9eae2f2915d472e05b3ab6bd56ee1b626e"
+    "db/queries/other.sql": "8fbd283a3cadc5d721fa0e1d09289810d583fb040f4b720bc7dd07c3f14df178",
+    "db/queries/post.sql": "eb65a36d70fadb51522a712e06f6c9383caa47c10fde432026548c4c4a37b138",
+    "db/queries/users.sql": "77b78604de0b6783237a6d9c5e27de9eae2f2915d472e05b3ab6bd56ee1b626e"
   },
-  "schema_checksum": "b50cc0d4f29bd2e92a3de4869f9d5fbd7d697b0692d3d43d1ddc7863ab1f6260",
-  "config_checksum": "666c6173685f67656e",
+  "schema_checksum": "d3894cb5528c100ff8a03d9d9c80c4aa489516d9613c378cf4ea25c5f59ccd5e",
+  "config_checksum": "706f737467726573716c7c666c6173685f67656e7c747275657c6173796e637067",
   "query_table_deps": {
-    "db\\queries\\other.sql": [
+    "db/queries/other.sql": [
       "users"
     ],
-    "db\\queries\\post.sql": [
+    "db/queries/post.sql": [
       "users"
     ],
-    "db\\queries\\users.sql": [
+    "db/queries/users.sql": [
       "users"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen\\other.py": "34f248825f6a2365698478b84650036e22dbe49582a36e0c8b2859cc775ac03b",
-    "flash_gen\\post.py": "8e7ca312d3f1ee41ca1664bab6232727f59edeae92baeb2d2790d596f175ef1e",
-    "flash_gen\\users.py": "6da7f656e616945577877746b815bd8ebb737b690be6319c8b5f9fb0e9407978"
+    "flash_gen/other.py": "0b6e4217fa45a840cc0972533c19f1367ac94d89817a66481cd26d136979918e",
+    "flash_gen/post.py": "a8476a00b51d34c1d69f3fdfc8143b1ce9f12ae659e3204c17f2de0d44cc5577",
+    "flash_gen/users.py": "cec49b4c6f3f2cf106e5940c22d66b1a9da5f5dfda275b8c6e2891218f9ba63d"
   },
-  "last_generation": "2026-01-14T03:53:37.1817003+05:30"
+  "last_generation": "2026-05-27T01:27:50.802284962+05:30"
 }

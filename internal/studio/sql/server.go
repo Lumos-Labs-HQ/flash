@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/branch"
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -228,10 +229,39 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.service.ExecuteSQL(req.Query)
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		status := classifySQLError(err)
+		common.JSONError(w, status, err.Error())
 		return
 	}
 	common.JSON(w, data)
+}
+
+// classifySQLError returns an appropriate HTTP status code for a SQL error.
+// Syntax errors and constraint violations return 400 Bad Request.
+// Connection and internal errors return 500 Internal Server Error.
+func classifySQLError(err error) int {
+	msg := strings.ToLower(err.Error())
+	syntaxKeywords := []string{
+		"syntax error", "unrecognized token", "near", "unexpected",
+		"invalid", "parse error", "syntax", "incorrect syntax",
+		"you have an error in your sql syntax",
+	}
+	for _, kw := range syntaxKeywords {
+		if strings.Contains(msg, kw) {
+			return http.StatusBadRequest
+		}
+	}
+	// Constraint violations
+	constraintKeywords := []string{
+		"constraint", "foreign key", "unique constraint", "not null",
+		"check constraint", "violates",
+	}
+	for _, kw := range constraintKeywords {
+		if strings.Contains(msg, kw) {
+			return http.StatusBadRequest
+		}
+	}
+	return http.StatusInternalServerError
 }
 
 func (s *Server) handleUpdateRow(w http.ResponseWriter, r *http.Request) {

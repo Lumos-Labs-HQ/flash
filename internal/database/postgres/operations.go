@@ -269,13 +269,31 @@ func (p *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 	return fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN IF EXISTS \"%s\";", tableName, columnName)
 }
 
+func (p *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
+	// PostgreSQL: ALTER COLUMN TYPE handles the type change.
+	// Other property changes (nullable, default, etc.) are not handled here yet.
+	if column.Type == oldType {
+		return ""
+	}
+	// SERIAL is a pseudo-type macro only valid in CREATE TABLE.
+	newType := column.Type
+	if strings.EqualFold(newType, "SERIAL") {
+		newType = "INTEGER"
+	}
+	return fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;", tableName, column.Name, newType)
+}
+
 func (p *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 	unique := ""
 	if index.Unique {
 		unique = "UNIQUE "
 	}
 	columns := strings.Join(index.Columns, ", ")
-	return fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s);", unique, index.Name, index.Table, columns)
+	sql := fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s)", unique, index.Name, index.Table, columns)
+	if index.Where != "" {
+		sql += fmt.Sprintf(" WHERE %s", index.Where)
+	}
+	return sql + ";"
 }
 
 func (p *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
@@ -307,6 +325,10 @@ func (p *Adapter) FormatColumnType(column types.SchemaColumn) string {
 
 	if column.Default != "" && !strings.Contains(column.Default, "nextval") {
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", column.Default))
+	}
+
+	if column.Check != "" {
+		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}
 
 	return strings.Join(parts, " ")

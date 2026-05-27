@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -40,7 +39,7 @@ Examples:
 			return fmt.Errorf("invalid config: %w", err)
 		}
 
-		ctx := context.Background()
+		ctx := cmd.Context()
 
 		branchName, branchSchema, err := migrator.GetCurrentBranchInfo(cfg)
 		if err == nil && branchName != "main" {

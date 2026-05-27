@@ -28,9 +28,7 @@ func (s *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, er
 		return []types.SchemaTable{}, nil
 	}
 
-	// PERFORMANCE OPTIMIZATION: Parallel column fetching
-	// SQLite doesn't support batching PRAGMA, but we can parallelize
-	// This gives 5-10x speedup for large schemas!
+	// Fetch columns in parallel since SQLite PRAGMAs can't be batched.
 	type result struct {
 		tableName string
 		columns   []types.SchemaColumn
@@ -108,7 +106,6 @@ func (s *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 
 		indexes, err := s.GetTableIndexes(ctx, tableName)
 		if err != nil {
-			// CRITICAL FIX: Return error instead of silently continuing
 			return nil, fmt.Errorf("failed to get indexes for table %s: %w", tableName, err)
 		}
 		if len(indexes) > 0 {
@@ -131,10 +128,7 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 	}
 	defer rows.Close()
 
-	// CRITICAL OPTIMIZATION: Batch fetch unique columns ONCE per table
-	// Old code called isColumnUnique for EVERY column (N+1 problem)
-	// 100 columns = 100 separate PRAGMA queries!
-	// New: Single call = massive speedup
+	// Fetch unique columns once per table to avoid N+1 PRAGMA queries.
 	uniqueColumns := s.getUniqueColumnsForTable(ctx, tableName)
 
 	var columns []types.SchemaColumn

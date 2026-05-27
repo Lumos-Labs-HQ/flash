@@ -6,10 +6,13 @@ const RedisStudio = {
     currentKeyTTL: -1,  // Store current key's TTL for preservation
     currentKeyType: 'string',  // Store current key's type
     keys: [],
+    keysCursor: 0,  // Redis SCAN cursor for pagination
+    keysPattern: '*',
     commandHistory: [],
     historyIndex: -1,
     currentTab: 'browser',
     terminalInput: null,
+    searchDebounceTimer: null,
 
     // Save state to sessionStorage
     saveState() {
@@ -85,7 +88,15 @@ const RedisStudio = {
     },
 
     bindEvents() {
-        document.getElementById('searchInput')?.addEventListener('input', (e) => this.filterKeys(e.target.value));
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = setTimeout(() => {
+                    this.filterKeys(e.target.value);
+                }, 300);
+            });
+        }
         document.getElementById('dbSelect')?.addEventListener('change', (e) => this.selectDatabase(parseInt(e.target.value)));
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => this.switchTab(tab.dataset.tab));
@@ -275,26 +286,47 @@ const RedisStudio = {
     },
 
     // ===== KEY BROWSER =====
-    async loadKeys(pattern) {
+    async loadKeys(pattern, append) {
         pattern = pattern || '*';
         const container = document.getElementById('keysList');
         if (!container) return;
 
-        container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        if (!append) {
+            this.keysCursor = 0;
+            this.keysPattern = pattern;
+            container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        }
 
         try {
-            const response = await fetch('/api/keys?pattern=' + encodeURIComponent(pattern) + '&count=100');
+            const response = await fetch('/api/keys?pattern=' + encodeURIComponent(pattern) + '&cursor=' + this.keysCursor + '&count=100');
             const json = await response.json();
             if (!json.success) throw new Error(json.message);
 
             const data = json.data || {};
-            this.keys = data.keys || [];
+            const newKeys = data.keys || [];
+            this.keysCursor = data.cursor || 0;
 
-            document.getElementById('keysCount').textContent = this.keys.length + ' keys';
+            if (append) {
+                this.keys = this.keys.concat(newKeys);
+            } else {
+                this.keys = newKeys;
+            }
+
+            const totalCount = data.total_count || this.keys.length;
+            document.getElementById('keysCount').textContent = this.keys.length + ' / ' + totalCount + ' keys';
             this.renderKeys();
         } catch (error) {
-            container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
+            if (!append) {
+                container.innerHTML = '<div class="empty-state"><p>Error: ' + escapeHtml(error.message) + '</p></div>';
+            } else {
+                showToast('Failed to load more keys: ' + error.message, 'error');
+            }
         }
+    },
+
+    async loadMoreKeys() {
+        if (this.keysCursor === 0) return;
+        await this.loadKeys(this.keysPattern, true);
     },
 
     renderKeys() {
@@ -314,6 +346,12 @@ const RedisStudio = {
             html += '<div class="key-item ' + isActive + '" onclick="RedisStudio.selectKeyByIndex(' + i + ')">' +
                 '<div class="key-name"><span class="key-type ' + key.type + '">' + key.type + '</span><span>' + escapeHtml(key.key) + '</span></div>' + ttl + '</div>';
         }
+        // Add "Load More" button if there are more keys
+        if (this.keysCursor !== 0) {
+            html += '<div style="padding:12px;text-align:center;">' +
+                '<button class="btn btn-sm" onclick="RedisStudio.loadMoreKeys()">Load More</button>' +
+                '</div>';
+        }
         container.innerHTML = html;
     },
 
@@ -324,7 +362,7 @@ const RedisStudio = {
     },
 
     filterKeys(search) {
-        this.loadKeys(search ? '*' + search + '*' : '*');
+        this.loadKeys(search ? '*' + search + '*' : '*', false);
     },
 
     async selectKey(key) {
@@ -399,6 +437,33 @@ const RedisStudio = {
                     hhtml += '<div class="hash-item"><span class="hash-item-key">' + escapeHtml(k) + '</span><span class="hash-item-value">' + escapeHtml(String(v)) + '</span></div>';
                 });
                 return hhtml + '</div></div></div>';
+            case 'stream':
+                const sitems = Array.isArray(data.value) ? data.value : [];
+                let shtml = '<div class="value-display"><div class="value-display-header"><span>Stream (' + sitems.length + ' entries)</span></div><div class="value-display-body"><div class="list-items">';
+                sitems.forEach(item => {
+                    const id = item.ID || item.id || '?';
+                    const fields = item.Values ? Object.entries(item.Values).map(([k, v]) => k + '=' + v).join(', ') : JSON.stringify(item);
+                    shtml += '<div class="list-item"><span class="list-item-index">' + escapeHtml(String(id)) + '</span><span class="list-item-value">' + escapeHtml(fields) + '</span></div>';
+                });
+                return shtml + '</div></div></div>';
+            case 'bitmap':
+                const bval = data.value && typeof data.value === 'object' ? data.value : {};
+                return '<div class="value-display"><div class="value-display-header"><span>Bitmap</span></div><div class="value-display-body"><pre>' + escapeHtml(JSON.stringify(bval, null, 2)) + '</pre></div></div>';
+            case 'hyperloglog':
+                const hval = data.value && typeof data.value === 'object' ? data.value : {};
+                return '<div class="value-display"><div class="value-display-header"><span>HyperLogLog</span></div><div class="value-display-body"><pre>' + escapeHtml(JSON.stringify(hval, null, 2)) + '</pre></div></div>';
+            case 'geo':
+            case 'geospatial':
+                const gval = Array.isArray(data.value) ? data.value : [];
+                let ghtml = '<div class="value-display"><div class="value-display-header"><span>Geospatial (' + gval.length + ' positions)</span></div><div class="value-display-body"><div class="list-items">';
+                gval.forEach((pos, i) => {
+                    ghtml += '<div class="list-item"><span class="list-item-index">' + i + '</span><span class="list-item-value">' + escapeHtml(JSON.stringify(pos)) + '</span></div>';
+                });
+                return ghtml + '</div></div></div>';
+            case 'json':
+            case 'ReJSON':
+            case 'ReJSON-RL':
+                return '<div class="value-display"><div class="value-display-header"><span>JSON</span></div><div class="value-display-body"><pre>' + escapeHtml(typeof data.value === 'string' ? data.value : JSON.stringify(data.value, null, 2)) + '</pre></div></div>';
             default:
                 return '<div class="value-display"><div class="value-display-body">' + escapeHtml(JSON.stringify(data.value)) + '</div></div>';
         }

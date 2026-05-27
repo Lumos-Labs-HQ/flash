@@ -2,13 +2,16 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -27,6 +30,7 @@ var typeMap = map[string]string{
 	"date": "DATE", "time": "TIME", "numeric": "NUMERIC", "decimal": "NUMERIC",
 	"real": "REAL", "float4": "REAL", "double precision": "DOUBLE PRECISION", "float8": "DOUBLE PRECISION",
 	"uuid": "UUID", "json": "JSON", "jsonb": "JSONB",
+	"serial": "INTEGER", "bigserial": "BIGINT", "smallserial": "SMALLINT",
 }
 
 func New() *Adapter {
@@ -43,7 +47,10 @@ func (p *Adapter) Connect(ctx context.Context, url string) error {
 
 	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeExec
 
-	config.MaxConns = 3
+	config.MaxConns = int32(runtime.GOMAXPROCS(0) * 2)
+	if config.MaxConns < 4 {
+		config.MaxConns = 4
+	}
 	config.MinConns = 0
 	config.MaxConnLifetime = 30 * time.Minute
 	config.MaxConnIdleTime = 5 * time.Minute
@@ -113,6 +120,12 @@ func (p *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Ti
 		ORDER BY started_at
 	`)
 	if err != nil {
+		// If the migrations table doesn't exist yet, treat it as "no migrations applied".
+		// This handles fresh databases where _flash_migrations hasn't been created.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			return applied, nil
+		}
 		return nil, err
 	}
 	defer rows.Close()

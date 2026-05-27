@@ -397,6 +397,43 @@ WHERE id = $user_id;
 | `JSONB` | `[]byte` | `any` | `dict` |
 | `UUID` | `string` | `string` | `str` |
 | `BYTEA` | `[]byte` | `Buffer` | `bytes` |
+| `ARRAY` | `[]string` | `string[]` | `List[str]` |
+| `ENUM('a','b')` | `Status` (const) | `'a' \| 'b'` | `Literal['a','b']` |
+
+### Driver Selection
+
+Flash generates code for multiple database drivers per language. Configure via `flash.toml`:
+
+**Go drivers:**
+- `database/sql` (default) — Standard library, works with all SQL databases
+- `pgx` — jackc/pgx/v5 for PostgreSQL (connection pool, native types, better performance)
+
+**JavaScript/TypeScript drivers:**
+- `pg` (default) — node-postgres for PostgreSQL
+- `postgres` — porsager/postgres for PostgreSQL
+- `mysql2` — MySQL driver
+- `better-sqlite3` — Synchronous SQLite
+- `bun:sqlite` — Bun's native SQLite
+
+**Python drivers:**
+- PostgreSQL: `asyncpg` (default async) / `psycopg3` (sync/async)
+- MySQL: `aiomysql` (default async) / `pymysql` (sync)
+- SQLite: `aiosqlite` (default async) / `sqlite3` (sync)
+
+```toml
+[gen.go]
+enabled = true
+driver = "pgx"
+
+[gen.js]
+enabled = true
+driver = "postgres"
+
+[gen.python]
+enabled = true
+driver = "psycopg3"
+async = true
+```
 
 ### Nullable Types
 

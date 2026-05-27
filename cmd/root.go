@@ -16,7 +16,7 @@ import (
 
 var (
 	cfgFile string
-	Version = "2.4.0"
+	Version = "2.4.1"
 )
 
 func showBanner() {
@@ -174,10 +174,8 @@ func checkPluginRequirement(cmd *cobra.Command, args []string) error {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./flash.config.json)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./flash.toml)")
 	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
 	rootCmd.Flags().BoolP("version", "v", false, "Show CLI version")
 }
 

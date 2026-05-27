@@ -4,19 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SQL Editor - FlashORM Studio</title>
-    <link rel="icon" type="image/png" href="/static/image/logo.png">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/theme/material-darker.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/dialog/dialog.min.css">
+    <link rel="icon" type="image/webp" href="/common/static/image/logo.webp">
+    <link rel="stylesheet" href="/cdn/fonts/fonts.css">
+
     <link rel="stylesheet" href="/common/static/css/base.css">
     <link rel="stylesheet" href="/static/css/sql.css">
-    <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
+    <script src="/cdn/iconify/iconify.min.js"></script>
 </head>
 <body>
     <div class="left-navbar">
-        <img src="/static/image/logo.png" alt="FlashORM" class="left-navbar-logo">
+        <img src="/common/static/image/logo.webp" alt="FlashORM" class="left-navbar-logo">
         
         <a href="/" class="left-navbar-link">
             <span class="iconify" data-icon="mdi:table"></span>
@@ -45,7 +42,7 @@
                 </div>
             </div>
             <div class="editor-wrapper">
-                <textarea id="sql-editor"></textarea>
+                <div id="sql-editor"></div>
             </div>
         </div>
         
@@ -68,16 +65,7 @@
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/show-hint.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/hint/sql-hint.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/matchbrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/edit/closebrackets.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/comment/comment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/search/search.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/search/searchcursor.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/dialog/dialog.min.js"></script>
+    <script src="/cdn/codemirror6/codemirror6.min.js"></script>
     <script src="/common/static/js/common.js"></script>
     <script src="/static/js/sql-hints.js"></script>
     <script src="/static/js/sql.js"></script>

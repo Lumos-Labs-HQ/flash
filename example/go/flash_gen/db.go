@@ -13,6 +13,8 @@ type DBTX interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
+// New creates a new Queries instance.
+// Supported drivers: database/sql (default) and pgx.
 func New(db DBTX) *Queries {
 	return &Queries{
 		db:    db,

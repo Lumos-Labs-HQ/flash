@@ -26,6 +26,7 @@ type SchemaColumn struct {
 	ForeignKeyTable  string
 	ForeignKeyColumn string
 	OnDeleteAction   string
+	Check            string // CHECK constraint expression
 }
 
 type SchemaIndex struct {
@@ -33,6 +34,7 @@ type SchemaIndex struct {
 	Table   string
 	Columns []string
 	Unique  bool
+	Where   string // Partial index WHERE clause (PostgreSQL)
 }
 
 type SchemaDiff struct {
@@ -50,13 +52,17 @@ type TableDiff struct {
 	NewColumns      []SchemaColumn
 	DroppedColumns  []SchemaColumn // Changed from []string to preserve column info for DOWN migration
 	ModifiedColumns []ColumnDiff
+	OldTable        SchemaTable    // Full old table schema (for SQLite table recreation)
+	NewTable        SchemaTable    // Full new table schema (for SQLite table recreation)
 }
 
 type ColumnDiff struct {
-	Name    string
-	OldType string
-	NewType string
-	Changes []string
+	Name      string
+	OldType   string
+	NewType   string
+	Changes   []string
+	OldColumn SchemaColumn
+	NewColumn SchemaColumn
 }
 
 type MigrationConflict struct {
