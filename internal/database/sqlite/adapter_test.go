@@ -358,3 +358,61 @@ func TestSQLiteAdapter_GetAllTableRowCounts(t *testing.T) {
 		t.Errorf("counts = %v, want all 0", counts)
 	}
 }
+
+// ── security hardening 
+
+func TestSQLiteAdapter_ProviderName(t *testing.T) {
+	a := New()
+	if got := a.ProviderName(); got != "sqlite" {
+		t.Errorf("ProviderName() = %q, want sqlite", got)
+	}
+}
+
+func TestSQLiteAdapter_QuoteIdentifier(t *testing.T) {
+	a := New()
+	cases := []struct{ in, want string }{
+		{"users", `"users"`},
+		{"order_items", `"order_items"`},
+		{`tab"le`, `"tab""le"`}, // embedded quote must be doubled
+	}
+	for _, c := range cases {
+		got := a.QuoteIdentifier(c.in)
+		if got != c.want {
+			t.Errorf("QuoteIdentifier(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestSQLiteAdapter_ExecuteQueryWithArgs(t *testing.T) {
+	ctx := context.Background()
+	a := connectMemory(t)
+	a.ExecuteMigration(ctx, "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	a.ExecuteMigration(ctx, "INSERT INTO items VALUES (1, 'alpha'), (2, 'beta')")
+
+	result, err := a.ExecuteQueryWithArgs(ctx, "SELECT id, name FROM items WHERE id = ?", 1)
+	if err != nil {
+		t.Fatalf("ExecuteQueryWithArgs error: %v", err)
+	}
+	if len(result.Rows) != 1 {
+		t.Fatalf("rows = %d, want 1", len(result.Rows))
+	}
+	if result.Rows[0]["name"] != "alpha" {
+		t.Errorf("name = %v, want alpha", result.Rows[0]["name"])
+	}
+}
+
+func TestSQLiteAdapter_ExecuteDMLWithArgs(t *testing.T) {
+	ctx := context.Background()
+	a := connectMemory(t)
+	a.ExecuteMigration(ctx, "CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+	a.ExecuteMigration(ctx, "INSERT INTO items VALUES (1, 'alpha')")
+
+	if err := a.ExecuteDMLWithArgs(ctx, "DELETE FROM items WHERE id = ?", 1); err != nil {
+		t.Fatalf("ExecuteDMLWithArgs error: %v", err)
+	}
+
+	count, _ := a.GetTableRowCount(ctx, "items")
+	if count != 0 {
+		t.Errorf("row count after delete = %d, want 0", count)
+	}
+}
