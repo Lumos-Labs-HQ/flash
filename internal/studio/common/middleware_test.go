@@ -89,8 +89,12 @@ func TestCORSMiddleware(t *testing.T) {
 func TestMaxBytesMiddleware(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := make([]byte, 2048)
-		_, _ = r.Body.Read(buf)
-		w.WriteHeader(http.StatusOK)
+		n, err := r.Body.Read(buf)
+		if err != nil {
+			http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		w.Write(buf[:n])
 	})
 	handler := MaxBytesMiddleware(1024)(inner)
 

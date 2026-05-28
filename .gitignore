@@ -59,3 +59,11 @@ test/speed_test
 
 
 .exe
+
+# Private/local config - never commit
+.claude/
+.codegraph/
+.mcp.json
+AGENTS.md
+opencode.jsonc
+docs/superpowers/
