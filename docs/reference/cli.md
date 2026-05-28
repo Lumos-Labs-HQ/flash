@@ -118,18 +118,18 @@ Generates code based on your `flash.toml` configuration for Go, TypeScript/JavaS
 Launch FlashORM Studio web interface.
 
 ```bash
-flash studio [subcommand] [flags]
+flash studio [URL] [flags]
 ```
 
-**Subcommands:**
-- `sql` (default): Launch SQL Studio for PostgreSQL, MySQL, or SQLite
-- `mongodb`: Launch MongoDB Studio
-- `redis`: Launch Redis Studio
-
 **Flags:**
-- `--port, -p`: Port to run studio on (default: 5555)
-- `--browser, -b`: Open browser automatically (default: true)
-- `--no-browser`: Disable automatic browser opening
+- `--port, -p`: Port to run studio on (default: `5555`)
+- `--browser, -b`: Open browser automatically (default: `true`)
+- `--host`: Host address to bind to (default: `127.0.0.1`)
+- `--auth-token`: Bearer token required for all API requests. **Required when `--host 0.0.0.0` is used.**
+
+::: warning Security
+Binding to `0.0.0.0` (all interfaces) without `--auth-token` is refused at startup. Always set a token when exposing Studio on a network interface.
+:::
 
 **Examples:**
 ```bash
@@ -148,6 +148,12 @@ flash studio "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
 # Redis Studio — auto-detected from redis:// URL
 flash studio "redis://localhost:6379"
 flash studio "redis://:password@localhost:6379" --port 3000
+
+# Network-accessible with authentication
+flash studio --host 0.0.0.0 --auth-token mysecrettoken
+
+# Client request with token
+curl -H "Authorization: Bearer mysecrettoken" http://HOST:5555/api/tables
 ```
 
 ---

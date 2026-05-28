@@ -272,30 +272,60 @@ Since Flash ORM supports Git-like branching for databases:
 
 ### Local Security
 
-- **No External Connections**: Studio runs entirely locally
+- **No External Connections**: Studio runs entirely locally by default
 - **No Data Transmission**: Your data never leaves your machine
-- **Secure by Default**: No remote access unless configured
+- **Loopback-only by default**: Binds to `127.0.0.1` unless `--host` is specified
+
+### Authentication
+
+Studio supports Bearer token authentication via the `--auth-token` flag.
+
+```bash
+# Local-only (no auth needed — default)
+flash studio
+
+# Network-accessible — auth token required
+flash studio --host 0.0.0.0 --auth-token mysecrettoken
+```
+
+When a token is set, every request must include it:
+
+```bash
+curl -H "Authorization: Bearer mysecrettoken" http://HOST:5555/api/tables
+```
+
+::: warning
+Binding to `0.0.0.0` without `--auth-token` is **refused at startup**. This prevents accidentally exposing an unauthenticated Studio on a shared network.
+:::
+
+### CORS
+
+Cross-origin requests are restricted to `localhost` and `127.0.0.1` origins only. Requests from external origins are blocked.
+
+### Request Size Limit
+
+Request bodies are capped at **10 MB** to prevent memory exhaustion from oversized payloads.
+
+### Input Validation
+
+All table and column names are validated before use in queries. Names must match `[a-zA-Z_][a-zA-Z0-9_]*` and cannot exceed 128 characters.
+
+### Error Sanitization
+
+Raw database errors are never sent to the client. Internal errors are logged server-side and a generic message is returned:
+
+| Error type | Client response |
+|---|---|
+| Connection / connect | `"database connection error"` |
+| Timeout | `"request timed out"` |
+| Permission / access denied | `"permission denied"` |
+| Everything else | `"internal error"` |
 
 ### Access Control
 
 - **Database Permissions**: Respects database user permissions
-- **Read-Only Mode**: View-only access for sensitive environments
-- **Audit Logging**: Log all changes made through Studio
-
-### Configuration
-
-```toml
-# flash.toml
-
-[studio]
-port = 3000
-host = "localhost"
-readOnly = false
-
-[studio.auth]
-enabled = false
-users = []
-```
+- **Parameterized Queries**: All data operations use parameterized queries — SQL injection is not possible through the Studio API
+- **Adapter-aware quoting**: Identifiers are quoted correctly per database (`"name"` for PostgreSQL/SQLite, `` `name` `` for MySQL)
 
 ## Advanced Features
 
@@ -313,13 +343,19 @@ Studio supports plugins for extended functionality:
 Studio provides a REST API for automation:
 
 ```bash
-# Get table data
-curl http://localhost:3000/api/tables/users
+# Get all tables (no auth)
+curl http://localhost:5555/api/tables
 
-# Execute query
-curl -X POST http://localhost:3000/api/query \
+# Get table data
+curl http://localhost:5555/api/tables/users
+
+# Execute SQL query
+curl -X POST http://localhost:5555/api/sql \
   -H "Content-Type: application/json" \
-  -d '{"sql": "SELECT * FROM users LIMIT 10"}'
+  -d '{"query": "SELECT * FROM users LIMIT 10"}'
+
+# With auth token
+curl -H "Authorization: Bearer mysecrettoken" http://localhost:5555/api/tables
 ```
 
 ### Keyboard Shortcuts
