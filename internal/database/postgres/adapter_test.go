@@ -251,3 +251,27 @@ func TestGenerateDropIndexSQL(t *testing.T) {
 		t.Errorf("GenerateDropIndexSQL = %q", sql)
 	}
 }
+
+// ── security hardening 
+
+func TestPostgresAdapter_ProviderName(t *testing.T) {
+	a := newAdapter()
+	if got := a.ProviderName(); got != "postgresql" {
+		t.Errorf("ProviderName() = %q, want postgresql", got)
+	}
+}
+
+func TestPostgresAdapter_QuoteIdentifier(t *testing.T) {
+	a := newAdapter()
+	cases := []struct{ in, want string }{
+		{"users", `"users"`},
+		{"order_items", `"order_items"`},
+		{`tab"le`, `"tab""le"`},
+	}
+	for _, c := range cases {
+		got := a.QuoteIdentifier(c.in)
+		if got != c.want {
+			t.Errorf("QuoteIdentifier(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

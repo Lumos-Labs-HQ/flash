@@ -258,3 +258,27 @@ func TestConvertTypeToMySQL(t *testing.T) {
 		}
 	}
 }
+
+// ── security hardening 
+
+func TestMySQLAdapter_ProviderName(t *testing.T) {
+	a := newAdapter()
+	if got := a.ProviderName(); got != "mysql" {
+		t.Errorf("ProviderName() = %q, want mysql", got)
+	}
+}
+
+func TestMySQLAdapter_QuoteIdentifier(t *testing.T) {
+	a := newAdapter()
+	cases := []struct{ in, want string }{
+		{"users", "`users`"},
+		{"order_items", "`order_items`"},
+		{"tab`le", "`tab``le`"}, // embedded backtick must be doubled
+	}
+	for _, c := range cases {
+		got := a.QuoteIdentifier(c.in)
+		if got != c.want {
+			t.Errorf("QuoteIdentifier(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
