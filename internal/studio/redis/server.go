@@ -15,10 +15,12 @@ type Server struct {
 	tmpl          *template.Template
 	service       *Service
 	port          int
+	host          string
+	authToken     string
 	connectionURL string
 }
 
-func NewServer(connectionURL string, port int) *Server {
+func NewServer(connectionURL string, port int, host, authToken string) *Server {
 	opts, err := redis.ParseURL(connectionURL)
 	if err != nil {
 		panic(fmt.Sprintf("Failed to parse Redis URL: %v", err))
@@ -39,6 +41,8 @@ func NewServer(connectionURL string, port int) *Server {
 		tmpl:          tmpl,
 		service:       NewService(client),
 		port:          port,
+		host:          host,
+		authToken:     authToken,
 		connectionURL: connectionURL,
 	}
 
@@ -120,7 +124,13 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	return common.StartServer(s.mux, &s.port, "Redis Studio", openBrowser)
+	return common.StartServer(s.mux, common.StartServerConfig{
+		Host:        s.host,
+		Port:        s.port,
+		Name:        "Redis Studio",
+		OpenBrowser: openBrowser,
+		AuthToken:   s.authToken,
+	})
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {

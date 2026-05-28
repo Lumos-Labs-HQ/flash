@@ -16,10 +16,12 @@ type Server struct {
 	tmpl          *template.Template
 	service       *Service
 	port          int
+	host          string
+	authToken     string
 	connectionURL string
 }
 
-func NewServer(cfg *config.Config, port int) *Server {
+func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
 	adapter := database.NewAdapter(cfg.Database.Provider)
 
 	dbURL, err := cfg.GetDatabaseURL()
@@ -39,6 +41,8 @@ func NewServer(cfg *config.Config, port int) *Server {
 		tmpl:          tmpl,
 		service:       NewService(adapter),
 		port:          port,
+		host:          host,
+		authToken:     authToken,
 		connectionURL: dbURL,
 	}
 
@@ -94,7 +98,13 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	return common.StartServer(s.mux, &s.port, "MongoDB Studio", openBrowser)
+	return common.StartServer(s.mux, common.StartServerConfig{
+		Host:        s.host,
+		Port:        s.port,
+		Name:        "MongoDB Studio",
+		OpenBrowser: openBrowser,
+		AuthToken:   s.authToken,
+	})
 }
 
 // UI Handlers

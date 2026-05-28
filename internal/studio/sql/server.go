@@ -16,13 +16,15 @@ import (
 )
 
 type Server struct {
-	mux     *http.ServeMux
-	tmpl    *template.Template
-	service *Service
-	port    int
+	mux       *http.ServeMux
+	tmpl      *template.Template
+	service   *Service
+	port      int
+	host      string
+	authToken string
 }
 
-func NewServer(cfg *config.Config, port int) *Server {
+func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
 	adapter := database.NewAdapter(cfg.Database.Provider)
 
 	dbURL, err := cfg.GetDatabaseURL()
@@ -52,10 +54,12 @@ func NewServer(cfg *config.Config, port int) *Server {
 	tmpl := common.ParseTemplates(TemplatesFS)
 
 	server := &Server{
-		mux:     mux,
-		tmpl:    tmpl,
-		service: NewService(adapter, cfg),
-		port:    port,
+		mux:       mux,
+		tmpl:      tmpl,
+		service:   NewService(adapter, cfg),
+		port:      port,
+		host:      host,
+		authToken: authToken,
 	}
 
 	server.setupRoutes()
@@ -100,7 +104,13 @@ func (s *Server) setupRoutes() {
 }
 
 func (s *Server) Start(openBrowser bool) error {
-	return common.StartServer(s.mux, &s.port, "Studio", openBrowser)
+	return common.StartServer(s.mux, common.StartServerConfig{
+		Host:        s.host,
+		Port:        s.port,
+		Name:        "Studio",
+		OpenBrowser: openBrowser,
+		AuthToken:   s.authToken,
+	})
 }
 
 // UI Handlers
