@@ -1,118 +1,87 @@
 # FlashORM Release Notes
 
-## Version 2.4.1 — Latest Release
+## Version 2.4.2
 
-### Seed Command Rewrite
+### Security Hardening — SQL Studio
 
-The seed command has been completely rewritten for production use:
+This release hardens the SQL Studio component against SQL injection, unauthorized access, information leakage, and denial-of-service attacks.
 
-- **Automatic FK handling** — Foreign key relationships are now handled automatically. The `--relations` flag has been removed; relations are always resolved via dependency graph + ID tracking.
-- **Simplified flags** — Removed `--relations`, `--batch`, and `--no-transaction`. Added `--dry-run` (preview without inserting) and `--exclude` (skip tables).
-- **MySQL ID extraction fixed** — MySQL now correctly extracts inserted IDs via `SELECT LAST_INSERT_ID()`, making FK relationships work on MySQL.
-- **Self-referencing FKs fixed** — Tables with `parent_id` referencing themselves (e.g., comment threads, category trees) now work correctly.
-- **SQLite multi-row inserts** — SQLite now uses fast multi-row inserts when ID tracking isn't needed.
-- **Smart batching** — Tables referenced by FKs use single-row inserts (to capture IDs). Unreferenced tables use multi-row for speed.
-- **Schema-qualified names** — `public.users:100` parsing fixed with `strings.LastIndex`.
-- **All SQL types supported** — BIGINT, SMALLINT, TINYINT, NUMERIC, REAL, DOUBLE, JSONB, ARRAY, ENUM, BYTEA, BLOB, TIME, TIMESTAMPTZ, CHAR, MEDIUMINT, YEAR all generate correct values.
-- **RFC 4122 UUID v4** — UUID generator is now standards-compliant.
-- **Coordinated timestamps** — When a table has both `created_at` and `updated_at`, `updated_at` is always >= `created_at`.
-- **20+ new column patterns** — username, password, token, slug, bio, metadata, lat/lng, ip, color, gender, role, locale, currency, country, dob, age, percent, is_/has_/can_ booleans, sort_order, version, priority, progress, hash, ref_code.
-- **Word-boundary pattern matching** — Prevents false positives (e.g., `message` no longer matches `age`). Longest-keyword wins for specificity.
-- **ENUM parsing** — Extracts values from `ENUM('a','b')` type definitions and picks randomly.
-- **Column def parsing fix** — `DECIMAL(10, 2) NOT NULL` no longer loses the `NOT NULL` constraint due to comma splitting.
+#### Parameterized Queries
 
-### Multi-Driver Matrix
+All data-mutating operations (INSERT, UPDATE, DELETE) and filtered SELECTs now use driver-level parameterized queries instead of string interpolation. SQL injection through the Studio API is no longer possible.
 
-Code generation now supports multiple database drivers per language:
+New methods added to `DatabaseAdapter`:
+- `ExecuteQueryWithArgs(ctx, query, args...)` — SELECT with bound parameters
+- `ExecuteDMLWithArgs(ctx, query, args...)` — INSERT/UPDATE/DELETE with bound parameters
 
-**Go**
-- `database/sql` (default) — Standard library, works with all SQL databases
-- `pgx` — jackc/pgx/v5 for PostgreSQL (connection pool, native types, better performance)
+#### Adapter-Aware Identifier Quoting
 
-**JavaScript / TypeScript**
-- `pg` (default) — node-postgres for PostgreSQL
-- `postgres` — porsager/postgres (tagged template literals, lightweight)
-- `mysql2` — MySQL driver
-- `better-sqlite3` — Synchronous SQLite driver
-- `bun:sqlite` — Bun's native SQLite driver
+Identifiers (table and column names) are now quoted using the correct syntax for each database:
+- PostgreSQL / SQLite → `"name"`
+- MySQL → `` `name` ``
 
-**Python**
-- PostgreSQL: `asyncpg` (default async) / `psycopg3` (sync or async)
-- MySQL: `aiomysql` (default async) / `pymysql` (sync)
-- SQLite: `aiosqlite` (default async) / `sqlite3` (sync)
+New method: `QuoteIdentifier(name string) string`
 
-Configure via `flash.toml`:
+This fixes DDL generation that previously used hardcoded double-quotes, which broke on MySQL.
 
-```toml
-[gen.go]
-enabled = true
-driver = "pgx"
+#### Authentication & Bind Address Control
 
-[gen.js]
-enabled = true
-driver = "postgres"
+Two new flags on `flash studio`:
 
-[gen.python]
-enabled = true
-driver = "psycopg3"
-async = true
+```bash
+--host string         Host to bind to (default "127.0.0.1")
+--auth-token string   Bearer token for API authentication
 ```
 
-### Documentation Overhaul
+Binding to `0.0.0.0` without `--auth-token` is refused at startup:
 
-- **New Examples section** — Complete examples for every feature:
-  - End-to-end workflows for Go, TypeScript, and Python
-  - Every CLI command with all flags and real-world patterns
-  - Common schema patterns (blog, e-commerce, social, SaaS, audit logging)
-  - SQL query patterns (CRUD, relationships, aggregation, search, JSON, window functions)
-  - Seeding patterns with generated data reference tables
-- **Updated CLI Reference** — Corrected seed command flags, added all examples.
-- **Updated Seeding docs** — Removed outdated flags, added dry-run and exclude examples.
-- **Enhanced Architecture docs** — Added seeding pipeline, plugin system, complete data flow diagrams, and multi-driver matrix.
-- **Updated Configuration Reference** — Documented all supported drivers per language.
-- **Updated Language Guides** — Added driver selection sections for Go, TypeScript, and Python.
-- **Better VitePress navigation** — Added Examples to top nav and sidebar.
+```bash
+# Safe — local only, no auth needed
+flash studio
 
+# Network-accessible — token required
+flash studio --host 0.0.0.0 --auth-token mysecrettoken
+```
 
-### Plugin System
+All API requests are validated against the token using constant-time comparison to prevent timing attacks.
 
-The plugin architecture has been redesigned:
+#### CORS Restriction
 
-- **core** — ORM, migrations, and seeding. Installs automatically the first time any ORM command is run; no manual setup required.
-- **studio** — Visual database editor. Optional, installed manually when needed.
+Cross-origin requests are now restricted to `localhost` and `127.0.0.1` origins. Requests from external origins are blocked.
 
-The `all` plugin has been removed. A new `flash update` command updates all installed plugins. Use `--self` to also update the flash binary, or `--self-only` to update only the binary.
+#### Request Body Size Limit
 
-### SQL Studio — Export & Import
+Request bodies are capped at 10 MB to prevent memory exhaustion from oversized payloads.
 
-Export and import are now available directly from the SQL Studio interface. Three export modes are supported: Schema Only, Data Only, and Complete (schema + data).
+#### Input Validation
 
-**Performance**
-- The full database schema is now fetched in a single query at the start of export and reused throughout, eliminating one query per table for schema introspection.
-- Data export no longer issues a row count query before fetching — rows are paged directly until exhausted, removing an extra round-trip per table.
+All table and column name inputs are validated before use in queries. Valid identifiers must match `[a-zA-Z_][a-zA-Z0-9_]*` and cannot exceed 128 characters. Dotted qualified names (`schema.table`) are also validated per segment.
 
-**User Experience**
-- A full-screen progress overlay appears during export and import with live status messages at each stage.
-- A progress bar transitions from an animated state while the server is working to a percentage fill as each phase completes.
-- An accurate summary is shown on import completion — tables created, rows inserted, and any errors.
+#### Error Sanitization
 
-### Dependency Reduction
+Raw database error messages are no longer sent to clients. Internal errors are logged server-side; clients receive a generic category:
 
-- Fiber framework removed — replaced with stdlib `net/http`
-- Viper removed — replaced with stdlib `encoding/json`
-- lib/pq removed — pgx/v5 is now the sole PostgreSQL driver
-- mapstructure removed — plain `json` struct tags used throughout
-- Approximately 8 fewer transitive dependencies; smaller binary size
+| Error contains | Client response |
+|---|---|
+| `connection`, `connect` | `"database connection error"` |
+| `timeout` | `"request timed out"` |
+| `permission`, `access denied` | `"permission denied"` |
+| Everything else | `"internal error"` |
 
 ### Bug Fixes
 
-- Fixed `down` command missing from plugin registry
-- Fixed CSS duplication across studio static assets
+- SQL syntax errors and constraint violations from the query runner now return HTTP 400 instead of 500
+- MySQL identifier quoting now uses backticks instead of double-quotes
+
+### Testing
+
+- New unit tests for `sanitizeError`, `classifySQLError`, `ValidateIdentifier`, `ValidateQualifiedIdentifier`, `AuthMiddleware`, `CORSMiddleware`, `MaxBytesMiddleware`
+- New adapter tests for `QuoteIdentifier`, `ProviderName`, `ExecuteQueryWithArgs`, `ExecuteDMLWithArgs` on SQLite, PostgreSQL, and MySQL
+- New integration tests for Studio auth token enforcement and the `0.0.0.0` bind guard
+
+### Upgrade Notes
+
+No breaking changes. Default behavior is unchanged — Studio still binds to `127.0.0.1` with no auth required for local use.
 
 ---
 
-For detailed documentation, see:
-- [Usage Guide — Go](docs/USAGE_GO.md)
-- [Usage Guide — TypeScript](docs/USAGE_TYPESCRIPT.md)
-- [Usage Guide — Python](docs/USAGE_PYTHON.md)
-- [Contributing](docs/contributing.md)
