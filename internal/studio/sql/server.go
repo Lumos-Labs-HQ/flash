@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -130,7 +131,8 @@ func (s *Server) handleSQL(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetTables(w http.ResponseWriter, r *http.Request) {
 	tables, err := s.service.GetTables()
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleGetTables: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSON(w, tables)
@@ -152,7 +154,8 @@ func (s *Server) handleGetTableData(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.service.GetTableDataFiltered(tableName, page, limit, filters)
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleGetTableData: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSON(w, data)
@@ -161,7 +164,8 @@ func (s *Server) handleGetTableData(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetSchema(w http.ResponseWriter, r *http.Request) {
 	schema, err := s.service.GetSchemaVisualization()
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleGetSchema: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSON(w, schema)
@@ -177,7 +181,8 @@ func (s *Server) handleSaveChanges(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.service.SaveChanges(tableName, req.Changes); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleSaveChanges: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMessage(w, "Changes saved successfully")
@@ -193,7 +198,8 @@ func (s *Server) handleAddRow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.service.AddRow(tableName, req.Data); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleAddRow: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMessage(w, "Row added successfully")
@@ -204,7 +210,8 @@ func (s *Server) handleDeleteRow(w http.ResponseWriter, r *http.Request) {
 	rowID := r.PathValue("id")
 
 	if err := s.service.DeleteRow(tableName, rowID); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleDeleteRow: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMessage(w, "Row deleted successfully")
@@ -222,7 +229,8 @@ func (s *Server) handleDeleteRows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.service.DeleteRows(tableName, req.RowIDs); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleDeleteRows: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMessage(w, fmt.Sprintf("Deleted %d row(s) successfully", len(req.RowIDs)))
@@ -240,10 +248,31 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 	data, err := s.service.ExecuteSQL(req.Query)
 	if err != nil {
 		status := classifySQLError(err)
-		common.JSONError(w, status, err.Error())
+		if status == http.StatusInternalServerError {
+			log.Printf("ERROR handleExecuteSQL: %v", err)
+			common.JSONError(w, status, sanitizeError(err))
+		} else {
+			common.JSONError(w, status, err.Error())
+		}
 		return
 	}
 	common.JSON(w, data)
+}
+
+// sanitizeError returns a generic error message for the client.
+// The original error should be logged server-side before calling this.
+func sanitizeError(err error) string {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "connection") || strings.Contains(msg, "connect") {
+		return "database connection error"
+	}
+	if strings.Contains(msg, "timeout") {
+		return "request timed out"
+	}
+	if strings.Contains(msg, "permission") || strings.Contains(msg, "access denied") {
+		return "permission denied"
+	}
+	return "internal error"
 }
 
 // classifySQLError returns an appropriate HTTP status code for a SQL error.
@@ -285,7 +314,8 @@ func (s *Server) handleUpdateRow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.service.UpdateRow(table, id, data); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleUpdateRow: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMap(w, common.Map{"success": true})
@@ -301,7 +331,8 @@ func (s *Server) handleInsertRow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.service.InsertRow(table, data); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleInsertRow: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMap(w, common.Map{"success": true})
@@ -310,7 +341,8 @@ func (s *Server) handleInsertRow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetEditorHints(w http.ResponseWriter, r *http.Request) {
 	hints, err := s.service.GetEditorHints()
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleGetEditorHints: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSON(w, hints)
