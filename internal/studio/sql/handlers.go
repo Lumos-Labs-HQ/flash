@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"log"
 	"net/http"
 	"os"
 
@@ -16,7 +17,8 @@ func (s *Server) handlePreviewSchemaChange(w http.ResponseWriter, r *http.Reques
 
 	preview, err := s.service.PreviewSchemaChange(&change)
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handlePreviewSchemaChange: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONRaw(w, preview)
@@ -35,7 +37,8 @@ func (s *Server) handleApplySchemaChange(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := s.service.ApplySchemaChange(&change, configPath); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleApplySchemaChange: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 
@@ -58,7 +61,8 @@ func (s *Server) handleCheckConfig(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetBranches(w http.ResponseWriter, r *http.Request) {
 	branches, current, err := s.service.GetBranches()
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleGetBranches: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 	common.JSONMap(w, common.Map{"branches": branches, "current": current})
@@ -74,7 +78,8 @@ func (s *Server) handleSwitchBranch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.service.SwitchBranch(req.Branch); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleSwitchBranch: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 
@@ -102,7 +107,8 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.service.ExportDatabase(exportType)
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleExport: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 
@@ -123,7 +129,8 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 
 	result, err := s.service.ImportDatabase(&importData)
 	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
+		log.Printf("ERROR handleImport: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
 		return
 	}
 

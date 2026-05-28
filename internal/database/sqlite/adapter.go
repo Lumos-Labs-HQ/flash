@@ -359,6 +359,65 @@ func (s *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.Query
 	}, nil
 }
 
+func (s *Adapter) ExecuteQueryWithArgs(ctx context.Context, query string, args ...interface{}) (*common.QueryResult, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %w", err)
+	}
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			val := values[i]
+			if b, ok := val.([]byte); ok {
+				row[col] = string(b)
+			} else {
+				row[col] = val
+			}
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return &common.QueryResult{
+		Columns: columns,
+		Rows:    results,
+	}, nil
+}
+
+func (s *Adapter) ExecuteDMLWithArgs(ctx context.Context, query string, args ...interface{}) error {
+	_, err := s.db.ExecContext(ctx, query, args...)
+	return err
+}
+
+func (s *Adapter) QuoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func (s *Adapter) ProviderName() string {
+	return "sqlite"
+}
+
 func (s *Adapter) MapColumnType(dbType string) string {
 	dbType = strings.ToLower(strings.TrimSpace(dbType))
 	// Strip size/precision parameters like (255), (10,2) for lookup

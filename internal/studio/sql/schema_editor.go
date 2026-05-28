@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
@@ -63,6 +64,14 @@ func (s *Service) PreviewSchemaChange(change *SchemaChange) (*SchemaPreview, err
 }
 
 func (s *Service) ApplySchemaChange(change *SchemaChange, configPath string) error {
+	if err := common.ValidateQualifiedIdentifier(change.Table); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+	if change.Column != nil && change.Column.Name != "" {
+		if err := common.ValidateIdentifier(change.Column.Name); err != nil {
+			return fmt.Errorf("invalid column name: %w", err)
+		}
+	}
 	if change.Type == "add_column" {
 		exists, err := s.adapter.CheckColumnExists(s.ctx, change.Table, change.Column.Name)
 		if err == nil && exists {
@@ -93,19 +102,19 @@ func (s *Service) generateSQL(change *SchemaChange) string {
 	case "add_column":
 		return s.generateAddColumn(change)
 	case "drop_column":
-		return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s;", change.Table, change.Column.Name)
+		return fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s;", s.quote(change.Table), s.quote(change.Column.Name))
 	case "modify_column":
 		return s.generateModifyColumn(change)
 	case "add_table", "create_table":
 		return s.generateCreateTable(change)
 	case "drop_table":
-		return fmt.Sprintf("DROP TABLE %s;", change.Table)
+		return fmt.Sprintf("DROP TABLE %s;", s.quote(change.Table))
 	case "create_enum":
 		return s.generateCreateEnum(change)
 	case "alter_enum":
 		return s.generateAlterEnum(change)
 	case "drop_enum":
-		return fmt.Sprintf("DROP TYPE %s;", change.EnumName)
+		return fmt.Sprintf("DROP TYPE %s;", s.quote(change.EnumName))
 	default:
 		return change.SQL
 	}
@@ -179,7 +188,7 @@ func (s *Service) generateAddColumn(change *SchemaChange) string {
 		}
 	}
 
-	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", change.Table, col.Name, colType)
+	sql := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", s.quote(change.Table), s.quote(col.Name), colType)
 
 	if !col.Nullable {
 		sql += " NOT NULL"
@@ -198,7 +207,7 @@ func (s *Service) generateAddColumn(change *SchemaChange) string {
 	if col.ForeignKey != nil {
 		constraintName := fmt.Sprintf("fk_%s_%s", change.Table, col.Name)
 		sql += fmt.Sprintf("\nALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s);",
-			change.Table, constraintName, col.Name, col.ForeignKey.Table, col.ForeignKey.Column)
+			s.quote(change.Table), constraintName, s.quote(col.Name), s.quote(col.ForeignKey.Table), s.quote(col.ForeignKey.Column))
 	}
 
 	return sql
@@ -220,21 +229,21 @@ func (s *Service) generateModifyColumn(change *SchemaChange) string {
 	}
 
 	statements := []string{
-		fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", change.Table, col.Name, colType),
+		fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", s.quote(change.Table), s.quote(col.Name), colType),
 	}
 
 	if col.Nullable {
-		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL", change.Table, col.Name))
+		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL", s.quote(change.Table), s.quote(col.Name)))
 	} else {
-		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL", change.Table, col.Name))
+		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL", s.quote(change.Table), s.quote(col.Name)))
 	}
 
 	if col.Default != "" && !col.AutoIncrement {
 		if sanitized := sanitizeDefaultValue(col.Default, colType); sanitized != "" {
-			statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s", change.Table, col.Name, sanitized))
+			statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET DEFAULT %s", s.quote(change.Table), s.quote(col.Name), sanitized))
 		}
 	} else if !col.AutoIncrement {
-		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT", change.Table, col.Name))
+		statements = append(statements, fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT", s.quote(change.Table), s.quote(col.Name)))
 	}
 
 	return strings.Join(statements, ";\n") + ";"
@@ -251,7 +260,7 @@ func (s *Service) generateCreateTable(change *SchemaChange) string {
 		columns = change.TableDef.Columns
 	}
 
-	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", tableName))
+	sql.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", s.quote(tableName)))
 
 	for i, col := range columns {
 		colType := col.Type
@@ -266,7 +275,7 @@ func (s *Service) generateCreateTable(change *SchemaChange) string {
 			}
 		}
 
-		sql.WriteString(fmt.Sprintf("  %s %s", col.Name, colType))
+		sql.WriteString(fmt.Sprintf("  %s %s", s.quote(col.Name), colType))
 
 		if col.IsPrimary {
 			sql.WriteString(" PRIMARY KEY")
@@ -286,7 +295,7 @@ func (s *Service) generateCreateTable(change *SchemaChange) string {
 		if col.ForeignKey != nil {
 			constraintName := fmt.Sprintf("fk_%s_%s", tableName, col.Name)
 			fkSQL := fmt.Sprintf("  CONSTRAINT %s FOREIGN KEY (%s) REFERENCES %s(%s)",
-				constraintName, col.Name, col.ForeignKey.Table, col.ForeignKey.Column)
+				constraintName, s.quote(col.Name), s.quote(col.ForeignKey.Table), s.quote(col.ForeignKey.Column))
 			foreignKeys = append(foreignKeys, fkSQL)
 		}
 
@@ -311,19 +320,19 @@ func (s *Service) generateCreateEnum(change *SchemaChange) string {
 	for i, v := range change.EnumValues {
 		values[i] = fmt.Sprintf("'%s'", v)
 	}
-	return fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", change.EnumName, strings.Join(values, ", "))
+	return fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", s.quote(change.EnumName), strings.Join(values, ", "))
 }
 
 func (s *Service) generateAlterEnum(change *SchemaChange) string {
 	var sql strings.Builder
 	sql.WriteString(fmt.Sprintf("-- Recreating enum %s\n", change.EnumName))
-	sql.WriteString(fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE;\n", change.EnumName))
+	sql.WriteString(fmt.Sprintf("DROP TYPE IF EXISTS %s CASCADE;\n", s.quote(change.EnumName)))
 
 	values := make([]string, len(change.EnumValues))
 	for i, v := range change.EnumValues {
 		values[i] = fmt.Sprintf("'%s'", v)
 	}
-	sql.WriteString(fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", change.EnumName, strings.Join(values, ", ")))
+	sql.WriteString(fmt.Sprintf("CREATE TYPE %s AS ENUM (%s);", s.quote(change.EnumName), strings.Join(values, ", ")))
 
 	return sql.String()
 }
@@ -394,7 +403,7 @@ func (s *Service) generateSchemaSQL(tables []types.SchemaTable, enums []types.Sc
 
 	if len(enums) > 0 {
 		for _, enum := range enums {
-			sql.WriteString(fmt.Sprintf("CREATE TYPE \"%s\" AS ENUM (", enum.Name))
+			sql.WriteString(fmt.Sprintf("CREATE TYPE %s AS ENUM (", s.quote(enum.Name)))
 			for i, val := range enum.Values {
 				sql.WriteString(fmt.Sprintf("'%s'", val))
 				if i < len(enum.Values)-1 {
@@ -411,13 +420,13 @@ func (s *Service) generateSchemaSQL(tables []types.SchemaTable, enums []types.Sc
 			continue
 		}
 
-		sql.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS \"%s\" (\n", table.Name))
+		sql.WriteString(fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", s.quote(table.Name)))
 
 		var foreignKeys []string
 		for _, col := range table.Columns {
 			if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
-				fkDef := fmt.Sprintf("  FOREIGN KEY (\"%s\") REFERENCES \"%s\"(\"%s\")",
-					col.Name, col.ForeignKeyTable, col.ForeignKeyColumn)
+				fkDef := fmt.Sprintf("  FOREIGN KEY (%s) REFERENCES %s(%s)",
+					s.quote(col.Name), s.quote(col.ForeignKeyTable), s.quote(col.ForeignKeyColumn))
 				if col.OnDeleteAction != "" {
 					fkDef += fmt.Sprintf(" ON DELETE %s", col.OnDeleteAction)
 				}
@@ -426,7 +435,7 @@ func (s *Service) generateSchemaSQL(tables []types.SchemaTable, enums []types.Sc
 		}
 
 		for j, col := range table.Columns {
-			sql.WriteString(fmt.Sprintf("  \"%s\" %s", col.Name, col.Type))
+			sql.WriteString(fmt.Sprintf("  %s %s", s.quote(col.Name), col.Type))
 
 			if col.IsPrimary {
 				sql.WriteString(" PRIMARY KEY")

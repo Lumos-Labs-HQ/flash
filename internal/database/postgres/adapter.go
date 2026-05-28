@@ -271,6 +271,56 @@ func (p *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.Query
 	}, nil
 }
 
+func (p *Adapter) ExecuteQueryWithArgs(ctx context.Context, query string, args ...interface{}) (*common.QueryResult, error) {
+	rows, err := p.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+	defer rows.Close()
+
+	fieldDescriptions := rows.FieldDescriptions()
+	columns := make([]string, len(fieldDescriptions))
+	for i, fd := range fieldDescriptions {
+		columns[i] = string(fd.Name)
+	}
+
+	results := make([]map[string]interface{}, 0, 64)
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		row := make(map[string]interface{}, len(columns))
+		for i, col := range columns {
+			row[col] = values[i]
+		}
+		results = append(results, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
+	}
+
+	return &common.QueryResult{
+		Columns: columns,
+		Rows:    results,
+	}, nil
+}
+
+func (p *Adapter) ExecuteDMLWithArgs(ctx context.Context, query string, args ...interface{}) error {
+	_, err := p.pool.Exec(ctx, query, args...)
+	return err
+}
+
+func (p *Adapter) QuoteIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+func (p *Adapter) ProviderName() string {
+	return "postgresql"
+}
+
 func (p *Adapter) MapColumnType(dbType string) string {
 	if mapped, exists := typeMap[strings.ToLower(dbType)]; exists {
 		return mapped

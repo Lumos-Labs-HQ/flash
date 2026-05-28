@@ -26,6 +26,10 @@ type DatabaseAdapter interface {
 	ExecuteMigration(ctx context.Context, migrationSQL string) error
 	ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum string, migrationSQL string) error
 	ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error)
+	ExecuteQueryWithArgs(ctx context.Context, query string, args ...interface{}) (*common.QueryResult, error)
+	ExecuteDMLWithArgs(ctx context.Context, query string, args ...interface{}) error
+	QuoteIdentifier(name string) string
+	ProviderName() string
 
 	// Schema operations
 	GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error)
