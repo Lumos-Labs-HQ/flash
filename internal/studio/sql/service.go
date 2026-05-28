@@ -23,6 +23,19 @@ func NewService(adapter database.DatabaseAdapter, cfg *config.Config) *Service {
 	return &Service{adapter: adapter, cfg: cfg, ctx: context.Background()}
 }
 
+func (s *Service) quote(name string) string {
+	return s.adapter.QuoteIdentifier(name)
+}
+
+func (s *Service) placeholder(n int) string {
+	switch s.adapter.ProviderName() {
+	case "postgresql":
+		return fmt.Sprintf("$%d", n)
+	default:
+		return "?"
+	}
+}
+
 func (s *Service) ensureCorrectSchema() error {
 	if s.cfg == nil {
 		return nil
@@ -51,7 +64,7 @@ func (s *Service) ensureCorrectSchema() error {
 
 	switch s.cfg.Database.Provider {
 	case "postgresql", "postgres":
-		query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
+		query := fmt.Sprintf("SET search_path TO %s, public", s.quote(currentBranch.Schema))
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
 	case "mysql", "sqlite", "sqlite3":
@@ -133,14 +146,14 @@ func (s *Service) GetTableDataFiltered(tableName string, page, limit int, filter
 	offset := (page - 1) * limit
 
 	// Build WHERE clause from filters
-	whereClause := s.buildWhereClause(filters, columnTypes)
+	whereClause, whereArgs := s.buildWhereClause(filters, columnTypes)
 
-	rows, err := s.getRowsFiltered(tableName, limit, offset, whereClause)
+	rows, err := s.getRowsFiltered(tableName, limit, offset, whereClause, whereArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	total, _ := s.getFilteredRowCount(tableName, whereClause)
+	total, _ := s.getFilteredRowCount(tableName, whereClause, whereArgs)
 
 	return &common.TableData{
 		Columns: columns,
@@ -153,6 +166,11 @@ func (s *Service) GetTableDataFiltered(tableName string, page, limit int, filter
 
 func (s *Service) SaveChanges(tableName string, changes []common.RowChange) error {
 	s.ensureCorrectSchema()
+
+	if err := common.ValidateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return err
@@ -168,11 +186,15 @@ func (s *Service) SaveChanges(tableName string, changes []common.RowChange) erro
 
 	for _, change := range changes {
 		if change.Action == "update" {
-			query := fmt.Sprintf("UPDATE %s SET %s = '%s' WHERE %s = '%s'",
-				common.QuoteIdentifier(tableName), common.QuoteIdentifier(change.Column),
-				change.Value, common.QuoteIdentifier(pkColumn), change.RowID)
+			if err := common.ValidateIdentifier(change.Column); err != nil {
+				return fmt.Errorf("invalid column name: %w", err)
+			}
 
-			if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
+			query := fmt.Sprintf("UPDATE %s SET %s = %s WHERE %s = %s",
+				s.quote(tableName), s.quote(change.Column),
+				s.placeholder(0), s.quote(pkColumn), s.placeholder(1))
+
+			if err := s.adapter.ExecuteDMLWithArgs(s.ctx, query, change.Value, change.RowID); err != nil {
 				return fmt.Errorf("failed to update %s.%s: %w", tableName, change.Column, err)
 			}
 		}
@@ -182,6 +204,11 @@ func (s *Service) SaveChanges(tableName string, changes []common.RowChange) erro
 
 func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 	s.ensureCorrectSchema()
+
+	if err := common.ValidateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return err
@@ -196,9 +223,9 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 	}
 
 	for _, rowID := range rowIDs {
-		query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'",
-			common.QuoteIdentifier(tableName), common.QuoteIdentifier(pkColumn), rowID)
-		if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s = %s",
+			s.quote(tableName), s.quote(pkColumn), s.placeholder(0))
+		if err := s.adapter.ExecuteDMLWithArgs(s.ctx, query, rowID); err != nil {
 			return fmt.Errorf("failed to delete row %s: %w", rowID, err)
 		}
 	}
@@ -207,38 +234,51 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 
 func (s *Service) AddRow(tableName string, data map[string]any) error {
 	s.ensureCorrectSchema()
+
+	if err := common.ValidateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+
 	if len(data) == 0 {
 		return fmt.Errorf("no data provided")
 	}
 
 	columns := []string{}
-	values := []string{}
+	placeholders := []string{}
+	args := []any{}
 
+	n := 0
 	for col, val := range data {
-		columns = append(columns, common.QuoteIdentifier(col))
-		if val == nil {
-			values = append(values, "NULL")
-		} else {
-			strVal := fmt.Sprintf("%v", val)
-			escapedVal := strings.ReplaceAll(strVal, "'", "''")
-			values = append(values, fmt.Sprintf("'%s'", escapedVal))
+		if err := common.ValidateIdentifier(col); err != nil {
+			return fmt.Errorf("invalid column name: %w", err)
 		}
+		columns = append(columns, s.quote(col))
+		placeholders = append(placeholders, s.placeholder(n))
+		if val == nil {
+			args = append(args, nil)
+		} else {
+			args = append(args, val)
+		}
+		n++
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		common.QuoteIdentifier(tableName),
+		s.quote(tableName),
 		strings.Join(columns, ", "),
-		strings.Join(values, ", "))
+		strings.Join(placeholders, ", "))
 
-	return s.adapter.ExecuteMigration(s.ctx, query)
+	return s.adapter.ExecuteDMLWithArgs(s.ctx, query, args...)
 }
 
 func (s *Service) DeleteRow(tableName, rowID string) error {
+	if err := common.ValidateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
-		escaped := strings.ReplaceAll(rowID, "'", "''")
-		query := fmt.Sprintf("DELETE FROM %s WHERE id = '%s'", common.QuoteIdentifier(tableName), escaped)
-		return s.adapter.ExecuteMigration(s.ctx, query)
+		query := fmt.Sprintf("DELETE FROM %s WHERE id = %s", s.quote(tableName), s.placeholder(0))
+		return s.adapter.ExecuteDMLWithArgs(s.ctx, query, rowID)
 	}
 
 	pkColumn := "id"
@@ -249,21 +289,20 @@ func (s *Service) DeleteRow(tableName, rowID string) error {
 		}
 	}
 
-	escaped := strings.ReplaceAll(rowID, "'", "''")
-	query := fmt.Sprintf("DELETE FROM %s WHERE %s = '%s'",
-		common.QuoteIdentifier(tableName), common.QuoteIdentifier(pkColumn), escaped)
-	return s.adapter.ExecuteMigration(s.ctx, query)
+	query := fmt.Sprintf("DELETE FROM %s WHERE %s = %s",
+		s.quote(tableName), s.quote(pkColumn), s.placeholder(0))
+	return s.adapter.ExecuteDMLWithArgs(s.ctx, query, rowID)
 }
 
-func (s *Service) getFilteredRowCount(tableName, whereClause string) (int, error) {
+func (s *Service) getFilteredRowCount(tableName string, whereClause string, args []any) (int, error) {
 	if whereClause == "" {
 		return s.adapter.GetTableRowCount(s.ctx, tableName)
 	}
 
 	query := fmt.Sprintf("SELECT COUNT(*) as count FROM %s WHERE %s",
-		common.QuoteIdentifier(tableName), whereClause)
+		s.quote(tableName), whereClause)
 
-	result, err := s.adapter.ExecuteQuery(s.ctx, query)
+	result, err := s.adapter.ExecuteQueryWithArgs(s.ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -284,34 +323,39 @@ func (s *Service) getFilteredRowCount(tableName, whereClause string) (int, error
 	return 0, nil
 }
 
-func (s *Service) buildWhereClause(filters []common.Filter, columnTypes map[string]string) string {
+func (s *Service) buildWhereClause(filters []common.Filter, columnTypes map[string]string) (string, []any) {
 	if len(filters) == 0 {
-		return ""
+		return "", nil
 	}
 
 	var conditions []string
 	var currentGroup []string
+	var allArgs []any
+	argOffset := 0
 
 	for i, filter := range filters {
 		if filter.Column == "" {
 			continue
 		}
 
-		condition := s.buildFilterCondition(filter, columnTypes)
-		if condition == "" {
+		result := s.buildFilterCondition(filter, columnTypes, argOffset)
+		if result == nil {
 			continue
 		}
 
+		argOffset += len(result.args)
+		allArgs = append(allArgs, result.args...)
+
 		if i == 0 || filter.Logic == "where" {
-			currentGroup = append(currentGroup, condition)
+			currentGroup = append(currentGroup, result.clause)
 		} else if filter.Logic == "and" {
-			currentGroup = append(currentGroup, condition)
+			currentGroup = append(currentGroup, result.clause)
 		} else if filter.Logic == "or" {
 			if len(currentGroup) > 0 {
 				conditions = append(conditions, "("+strings.Join(currentGroup, " AND ")+")")
-				currentGroup = []string{condition}
+				currentGroup = []string{result.clause}
 			} else {
-				currentGroup = append(currentGroup, condition)
+				currentGroup = append(currentGroup, result.clause)
 			}
 		}
 	}
@@ -321,15 +365,23 @@ func (s *Service) buildWhereClause(filters []common.Filter, columnTypes map[stri
 	}
 
 	if len(conditions) == 0 {
-		return ""
+		return "", nil
 	}
 
-	return strings.Join(conditions, " OR ")
+	return strings.Join(conditions, " OR "), allArgs
 }
 
-func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[string]string) string {
-	col := common.QuoteIdentifier(filter.Column)
-	value := strings.ReplaceAll(filter.Value, "'", "''")
+type filterResult struct {
+	clause string
+	args   []any
+}
+
+func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[string]string, argOffset int) *filterResult {
+	if filter.Column == "" {
+		return nil
+	}
+
+	col := s.quote(filter.Column)
 
 	colType := strings.ToLower(columnTypes[filter.Column])
 	isNumeric := strings.Contains(colType, "int") || strings.Contains(colType, "serial") ||
@@ -340,60 +392,120 @@ func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[str
 	switch filter.Operator {
 	case "equals":
 		if isNumeric {
-			return fmt.Sprintf("%s = %s", col, value)
+			return &filterResult{
+				clause: fmt.Sprintf("%s = %s", col, s.placeholder(argOffset)),
+				args:   []any{filter.Value},
+			}
 		}
-		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) = LOWER('%s')", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("LOWER(CAST(%s AS TEXT)) = LOWER(%s)", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value},
+		}
 	case "not_equals":
 		if isNumeric {
-			return fmt.Sprintf("%s != %s", col, value)
+			return &filterResult{
+				clause: fmt.Sprintf("%s != %s", col, s.placeholder(argOffset)),
+				args:   []any{filter.Value},
+			}
 		}
-		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) != LOWER('%s')", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("LOWER(CAST(%s AS TEXT)) != LOWER(%s)", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value},
+		}
 	case "contains":
-		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER('%%%s%%')", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER(%s)", col, s.placeholder(argOffset)),
+			args:   []any{"%" + filter.Value + "%"},
+		}
 	case "not_contains":
-		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) NOT LIKE LOWER('%%%s%%')", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("LOWER(CAST(%s AS TEXT)) NOT LIKE LOWER(%s)", col, s.placeholder(argOffset)),
+			args:   []any{"%" + filter.Value + "%"},
+		}
 	case "starts_with":
-		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER('%s%%')", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER(%s)", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value + "%"},
+		}
 	case "ends_with":
-		return fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER('%%%s')", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("LOWER(CAST(%s AS TEXT)) LIKE LOWER(%s)", col, s.placeholder(argOffset)),
+			args:   []any{"%" + filter.Value},
+		}
 	case "gt":
 		if isNumeric {
-			return fmt.Sprintf("%s > %s", col, value)
+			return &filterResult{
+				clause: fmt.Sprintf("%s > %s", col, s.placeholder(argOffset)),
+				args:   []any{filter.Value},
+			}
 		}
-		return fmt.Sprintf("%s > '%s'", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("%s > %s", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value},
+		}
 	case "lt":
 		if isNumeric {
-			return fmt.Sprintf("%s < %s", col, value)
+			return &filterResult{
+				clause: fmt.Sprintf("%s < %s", col, s.placeholder(argOffset)),
+				args:   []any{filter.Value},
+			}
 		}
-		return fmt.Sprintf("%s < '%s'", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("%s < %s", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value},
+		}
 	case "gte":
 		if isNumeric {
-			return fmt.Sprintf("%s >= %s", col, value)
+			return &filterResult{
+				clause: fmt.Sprintf("%s >= %s", col, s.placeholder(argOffset)),
+				args:   []any{filter.Value},
+			}
 		}
-		return fmt.Sprintf("%s >= '%s'", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("%s >= %s", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value},
+		}
 	case "lte":
 		if isNumeric {
-			return fmt.Sprintf("%s <= %s", col, value)
+			return &filterResult{
+				clause: fmt.Sprintf("%s <= %s", col, s.placeholder(argOffset)),
+				args:   []any{filter.Value},
+			}
 		}
-		return fmt.Sprintf("%s <= '%s'", col, value)
+		return &filterResult{
+			clause: fmt.Sprintf("%s <= %s", col, s.placeholder(argOffset)),
+			args:   []any{filter.Value},
+		}
 	case "is_null":
-		return fmt.Sprintf("%s IS NULL", col)
+		return &filterResult{
+			clause: fmt.Sprintf("%s IS NULL", col),
+			args:   nil,
+		}
 	case "is_not_null":
-		return fmt.Sprintf("%s IS NOT NULL", col)
+		return &filterResult{
+			clause: fmt.Sprintf("%s IS NOT NULL", col),
+			args:   nil,
+		}
 	case "is_empty":
-		return fmt.Sprintf("(%s IS NULL OR CAST(%s AS TEXT) = '')", col, col)
+		return &filterResult{
+			clause: fmt.Sprintf("(%s IS NULL OR CAST(%s AS TEXT) = '')", col, col),
+			args:   nil,
+		}
 	case "is_not_empty":
-		return fmt.Sprintf("(%s IS NOT NULL AND CAST(%s AS TEXT) != '')", col, col)
+		return &filterResult{
+			clause: fmt.Sprintf("(%s IS NOT NULL AND CAST(%s AS TEXT) != '')", col, col),
+			args:   nil,
+		}
 	default:
-		return ""
+		return nil
 	}
 }
 
-func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string) ([]map[string]any, error) {
+func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string, args []any) ([]map[string]any, error) {
 	var query string
 	if whereClause != "" {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT %d OFFSET %d",
-			common.QuoteIdentifier(tableName), whereClause, limit, offset)
+			s.quote(tableName), whereClause, limit, offset)
 	} else {
 		// Try to use paginated query first (only when no filter)
 		type PaginatedFetcher interface {
@@ -405,29 +517,49 @@ func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClau
 		}
 
 		query = fmt.Sprintf("SELECT * FROM %s LIMIT %d OFFSET %d",
-			common.QuoteIdentifier(tableName), limit, offset)
+			s.quote(tableName), limit, offset)
 	}
 
-	result, err := s.adapter.ExecuteQuery(s.ctx, query)
-	if err != nil {
-		data, err := s.adapter.GetTableData(s.ctx, tableName)
+	var rows []map[string]any
+	if whereClause != "" {
+		res, err := s.adapter.ExecuteQueryWithArgs(s.ctx, query, args...)
 		if err != nil {
-			return nil, err
+			data, err2 := s.adapter.GetTableData(s.ctx, tableName)
+			if err2 != nil {
+				return nil, err
+			}
+			start := offset
+			end := offset + limit
+			if start > len(data) {
+				return []map[string]any{}, nil
+			}
+			if end > len(data) {
+				end = len(data)
+			}
+			return data[start:end], nil
 		}
-
-		start := offset
-		end := offset + limit
-		if start > len(data) {
-			return []map[string]any{}, nil
+		rows = res.Rows
+	} else {
+		res, err := s.adapter.ExecuteQuery(s.ctx, query)
+		if err != nil {
+			data, err2 := s.adapter.GetTableData(s.ctx, tableName)
+			if err2 != nil {
+				return nil, err
+			}
+			start := offset
+			end := offset + limit
+			if start > len(data) {
+				return []map[string]any{}, nil
+			}
+			if end > len(data) {
+				end = len(data)
+			}
+			return data[start:end], nil
 		}
-		if end > len(data) {
-			end = len(data)
-		}
-
-		return data[start:end], nil
+		rows = res.Rows
 	}
 
-	return result.Rows, nil
+	return rows, nil
 }
 
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {
@@ -651,6 +783,10 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
 	s.ensureCorrectSchema()
 
+	if err := common.ValidateIdentifier(table); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
+
 	schema, err := s.adapter.GetTableColumns(s.ctx, table)
 	if err != nil {
 		return err
@@ -665,50 +801,63 @@ func (s *Service) UpdateRow(table string, id interface{}, data map[string]interf
 	}
 
 	var setClauses []string
+	var args []any
+	n := 0
 	for col, val := range data {
+		if err := common.ValidateIdentifier(col); err != nil {
+			return fmt.Errorf("invalid column name: %w", err)
+		}
 		if val == nil {
-			setClauses = append(setClauses, fmt.Sprintf("%s = NULL", common.QuoteIdentifier(col)))
+			setClauses = append(setClauses, fmt.Sprintf("%s = NULL", s.quote(col)))
 		} else {
-			strVal := fmt.Sprintf("%v", val)
-			escapedVal := strings.ReplaceAll(strVal, "'", "''")
-			setClauses = append(setClauses, fmt.Sprintf("%s = '%s'", common.QuoteIdentifier(col), escapedVal))
+			setClauses = append(setClauses, fmt.Sprintf("%s = %s", s.quote(col), s.placeholder(n)))
+			args = append(args, val)
+			n++
 		}
 	}
 
 	idStr := fmt.Sprintf("%v", id)
-	escapedId := strings.ReplaceAll(idStr, "'", "''")
+	query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
+		s.quote(table), strings.Join(setClauses, ", "),
+		s.quote(pkColumn), s.placeholder(n))
+	args = append(args, idStr)
 
-	query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = '%s'",
-		common.QuoteIdentifier(table), strings.Join(setClauses, ", "),
-		common.QuoteIdentifier(pkColumn), escapedId)
-
-	return s.adapter.ExecuteMigration(s.ctx, query)
+	return s.adapter.ExecuteDMLWithArgs(s.ctx, query, args...)
 }
 
 func (s *Service) InsertRow(table string, data map[string]interface{}) error {
 	s.ensureCorrectSchema()
+
+	if err := common.ValidateIdentifier(table); err != nil {
+		return fmt.Errorf("invalid table name: %w", err)
+	}
 
 	if len(data) == 0 {
 		return fmt.Errorf("no data provided")
 	}
 
 	var columns []string
-	var values []string
+	var placeholders []string
+	var args []any
+	n := 0
 	for col, val := range data {
-		columns = append(columns, common.QuoteIdentifier(col))
-		if val == nil {
-			values = append(values, "NULL")
-		} else {
-			strVal := fmt.Sprintf("%v", val)
-			escapedVal := strings.ReplaceAll(strVal, "'", "''")
-			values = append(values, fmt.Sprintf("'%s'", escapedVal))
+		if err := common.ValidateIdentifier(col); err != nil {
+			return fmt.Errorf("invalid column name: %w", err)
 		}
+		columns = append(columns, s.quote(col))
+		placeholders = append(placeholders, s.placeholder(n))
+		if val == nil {
+			args = append(args, nil)
+		} else {
+			args = append(args, val)
+		}
+		n++
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		common.QuoteIdentifier(table), strings.Join(columns, ", "), strings.Join(values, ", "))
+		s.quote(table), strings.Join(columns, ", "), strings.Join(placeholders, ", "))
 
-	return s.adapter.ExecuteMigration(s.ctx, query)
+	return s.adapter.ExecuteDMLWithArgs(s.ctx, query, args...)
 }
 
 func (s *Service) GetBranches() ([]map[string]interface{}, string, error) {
@@ -764,7 +913,7 @@ func (s *Service) SwitchBranch(branchName string) error {
 
 	switch s.cfg.Database.Provider {
 	case "postgresql", "postgres":
-		query := fmt.Sprintf("SET search_path TO %s, public", branchSchema)
+		query := fmt.Sprintf("SET search_path TO %s, public", s.quote(branchSchema))
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to set search_path: %w", err)
 		}

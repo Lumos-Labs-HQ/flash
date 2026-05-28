@@ -54,20 +54,36 @@ func SetupStaticFS(mux *http.ServeMux, studioStaticFS embed.FS) {
 	mux.Handle("GET /cdn/", http.StripPrefix("/cdn/", cdnServer))
 }
 
-// StartServer finds an available port, prints the URL, optionally opens a browser, and starts listening
-func StartServer(mux *http.ServeMux, port *int, name string, openBrowser bool) error {
-	available := FindAvailablePort(*port)
-	if available != *port {
-		fmt.Printf("Port %d is in use, using port %d instead\n", *port, available)
-		*port = available
+// StartServerConfig holds configuration for starting the studio server.
+type StartServerConfig struct {
+	Host        string
+	Port        int
+	Name        string
+	OpenBrowser bool
+	AuthToken   string
+}
+
+// StartServer finds an available port, prints the URL, optionally opens a browser, and starts listening.
+func StartServer(mux *http.ServeMux, cfg StartServerConfig) error {
+	available := FindAvailablePort(cfg.Port)
+	if available != cfg.Port {
+		fmt.Printf("Port %d is in use, using port %d instead\n", cfg.Port, available)
+		cfg.Port = available
 	}
 
-	url := fmt.Sprintf("http://localhost:%d", *port)
-	fmt.Printf("FlashORM %s starting on %s\n", name, url)
+	// Wrap mux with middleware
+	var handler http.Handler = mux
+	handler = MaxBytesMiddleware(10 << 20)(handler) // 10 MB
+	handler = CORSMiddleware(handler)
+	handler = AuthMiddleware(cfg.AuthToken)(handler)
 
-	if openBrowser {
+	bindAddr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	url := fmt.Sprintf("http://%s:%d", cfg.Host, cfg.Port)
+	fmt.Printf("FlashORM %s starting on %s\n", cfg.Name, url)
+
+	if cfg.OpenBrowser {
 		go OpenBrowser(url)
 	}
 
-	return http.ListenAndServe(fmt.Sprintf(":%d", *port), mux)
+	return http.ListenAndServe(bindAddr, handler)
 }

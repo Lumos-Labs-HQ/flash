@@ -37,6 +37,12 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		port, _ := cmd.Flags().GetInt("port")
 		browser, _ := cmd.Flags().GetBool("browser")
+		host, _ := cmd.Flags().GetString("host")
+		authToken, _ := cmd.Flags().GetString("auth-token")
+
+		if host == "0.0.0.0" && authToken == "" {
+			return fmt.Errorf("refusing to start on 0.0.0.0 without --auth-token (use 127.0.0.1 for local-only access)")
+		}
 
 		// If a positional argument is provided, auto-detect the studio type from the URL
 		if len(args) > 0 && args[0] != "" {
@@ -46,7 +52,7 @@ Examples:
 			switch studioType {
 			case "redis":
 				fmt.Printf("🔴 Starting Redis Studio: %s\n", maskDBURL(url))
-				redisServer := redis.NewServer(url, port)
+				redisServer := redis.NewServer(url, port, host, authToken)
 				return redisServer.Start(browser)
 			case "mongodb":
 				fmt.Printf("🍃 Starting MongoDB Studio: %s\n", maskDBURL(url))
@@ -58,7 +64,7 @@ Examples:
 					},
 				}
 				os.Setenv("STUDIO_DB_URL", url)
-				mongoServer := mongodb.NewServer(cfg, port)
+				mongoServer := mongodb.NewServer(cfg, port, host, authToken)
 				return mongoServer.Start(browser)
 			default:
 				fmt.Printf("🗄️  Starting SQL Studio: %s\n", maskDBURL(url))
@@ -70,7 +76,7 @@ Examples:
 					},
 				}
 				os.Setenv("STUDIO_DB_URL", url)
-				server := studio.New(cfg, port)
+				server := studio.New(cfg, port, host, authToken)
 				return server.Start(browser)
 			}
 		}
@@ -87,12 +93,12 @@ Examples:
 
 		if cfg.Database.Provider == "mongodb" || cfg.Database.Provider == "mongo" {
 			fmt.Println("🍃 Starting MongoDB Studio...")
-			mongoServer := mongodb.NewServer(cfg, port)
+			mongoServer := mongodb.NewServer(cfg, port, host, authToken)
 			return mongoServer.Start(browser)
 		}
 
 		fmt.Println("🗄️  Starting SQL Studio...")
-		server := studio.New(cfg, port)
+		server := studio.New(cfg, port, host, authToken)
 		return server.Start(browser)
 	},
 }
@@ -100,6 +106,8 @@ Examples:
 func init() {
 	studioCmd.Flags().IntP("port", "p", 5555, "Port to run studio on")
 	studioCmd.Flags().BoolP("browser", "b", true, "Open browser automatically")
+	studioCmd.Flags().String("host", "127.0.0.1", "Host to bind to (use 0.0.0.0 for all interfaces)")
+	studioCmd.Flags().String("auth-token", "", "Bearer token for API authentication (required if host is 0.0.0.0)")
 }
 
 func maskDBURL(url string) string {

@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
@@ -35,6 +36,22 @@ func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 
 func (a *Adapter) ExecuteQuery(ctx context.Context, query string) (*common.QueryResult, error) {
 	return nil, nil
+}
+
+func (a *Adapter) ExecuteQueryWithArgs(ctx context.Context, query string, args ...interface{}) (*common.QueryResult, error) {
+	return nil, fmt.Errorf("MongoDB does not support SQL queries")
+}
+
+func (a *Adapter) ExecuteDMLWithArgs(ctx context.Context, query string, args ...interface{}) error {
+	return fmt.Errorf("MongoDB does not support SQL DML")
+}
+
+func (a *Adapter) QuoteIdentifier(name string) string {
+	return name
+}
+
+func (a *Adapter) ProviderName() string {
+	return "mongodb"
 }
 
 func (a *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error) {
