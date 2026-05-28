@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -35,14 +36,19 @@ func startStudio(t *testing.T, dir string, port int, extraArgs ...string) (url s
 }
 
 // TestStudioSecurity verifies the security hardening behaviours added in the
-// "feat(Security hardening)" PR: auth token enforcement and the 0.0.0.0 guard.
+// "feat(Security hardening)" : auth token enforcement and the 0.0.0.0 guard.
 func TestStudioSecurity(t *testing.T) {
 	// Use SQLite so no external DB is needed.
 	db := Database{Name: "sqlite", URL: getEnv("SQLITE_URL", "sqlite://./test.db")}
 
 	dir := "test_projects/studio_security"
+	os.RemoveAll(dir)
+	os.MkdirAll(dir, 0755)
 	setupProject(t, dir, db)
-	t.Cleanup(func() { flash(t, dir, "reset", "--force") })
+	t.Cleanup(func() {
+		flash(t, dir, "reset", "--force")
+		os.RemoveAll(dir)
+	})
 
 	// ── 1. Auth token: unauthenticated request returns 401 ────────────────────
 	t.Run("AuthToken_Unauthenticated", func(t *testing.T) {
