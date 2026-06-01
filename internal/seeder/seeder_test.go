@@ -133,7 +133,7 @@ func TestDataGenerator_Generate_DATE(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Email(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("email", "TEXT", false)
+	v := g.GenerateForColumn("email", "TEXT", false, nil)
 	s, ok := v.(string)
 	if !ok {
 		t.Fatalf("email column = %T, want string", v)
@@ -145,7 +145,7 @@ func TestDataGenerator_GenerateForColumn_Email(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Username(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("username", "VARCHAR", false)
+	v := g.GenerateForColumn("username", "VARCHAR", false, nil)
 	if _, ok := v.(string); !ok {
 		t.Errorf("username column = %T, want string", v)
 	}
@@ -153,7 +153,7 @@ func TestDataGenerator_GenerateForColumn_Username(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Password(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("password", "VARCHAR", false)
+	v := g.GenerateForColumn("password", "VARCHAR", false, nil)
 	s, ok := v.(string)
 	if !ok {
 		t.Fatalf("password column = %T, want string", v)
@@ -165,7 +165,7 @@ func TestDataGenerator_GenerateForColumn_Password(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Phone(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("phone", "TEXT", false)
+	v := g.GenerateForColumn("phone", "TEXT", false, nil)
 	s, ok := v.(string)
 	if !ok {
 		t.Fatalf("phone column = %T, want string", v)
@@ -178,7 +178,7 @@ func TestDataGenerator_GenerateForColumn_Phone(t *testing.T) {
 func TestDataGenerator_GenerateForColumn_Document_IsNil(t *testing.T) {
 	g := newGen(t)
 	for i := 0; i < 20; i++ {
-		if v := g.GenerateForColumn("document", "TEXT", false); v != nil {
+		if v := g.GenerateForColumn("document", "TEXT", false, nil); v != nil {
 			t.Errorf("document column = %v, want nil", v)
 			break
 		}
@@ -187,7 +187,7 @@ func TestDataGenerator_GenerateForColumn_Document_IsNil(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Status(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("status", "TEXT", false)
+	v := g.GenerateForColumn("status", "TEXT", false, nil)
 	if _, ok := v.(string); !ok {
 		t.Errorf("status column = %T, want string", v)
 	}
@@ -195,7 +195,7 @@ func TestDataGenerator_GenerateForColumn_Status(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_IsActive_Boolean(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("is_active", "BOOLEAN", false)
+	v := g.GenerateForColumn("is_active", "BOOLEAN", false, nil)
 	if _, ok := v.(bool); !ok {
 		t.Errorf("is_active column = %T, want bool", v)
 	}
@@ -203,7 +203,7 @@ func TestDataGenerator_GenerateForColumn_IsActive_Boolean(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_HasPermission_Boolean(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("has_permission", "TINYINT", false)
+	v := g.GenerateForColumn("has_permission", "TINYINT", false, nil)
 	if _, ok := v.(bool); !ok {
 		t.Errorf("has_permission column = %T, want bool", v)
 	}
@@ -211,7 +211,7 @@ func TestDataGenerator_GenerateForColumn_HasPermission_Boolean(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_CreatedAt(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("created_at", "TIMESTAMP", false)
+	v := g.GenerateForColumn("created_at", "TIMESTAMP", false, nil)
 	if _, ok := v.(time.Time); !ok {
 		t.Errorf("created_at column = %T, want time.Time", v)
 	}
@@ -219,7 +219,7 @@ func TestDataGenerator_GenerateForColumn_CreatedAt(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_IP(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("ip_address", "VARCHAR", false)
+	v := g.GenerateForColumn("ip_address", "VARCHAR", false, nil)
 	s, ok := v.(string)
 	if !ok {
 		t.Fatalf("ip_address column = %T, want string", v)
@@ -232,7 +232,7 @@ func TestDataGenerator_GenerateForColumn_IP(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Color(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("color", "VARCHAR", false)
+	v := g.GenerateForColumn("color", "VARCHAR", false, nil)
 	s, ok := v.(string)
 	if !ok {
 		t.Fatalf("color column = %T, want string", v)
@@ -244,7 +244,7 @@ func TestDataGenerator_GenerateForColumn_Color(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Slug(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("slug", "VARCHAR", false)
+	v := g.GenerateForColumn("slug", "VARCHAR", false, nil)
 	if _, ok := v.(string); !ok {
 		t.Errorf("slug column = %T, want string", v)
 	}
@@ -252,7 +252,7 @@ func TestDataGenerator_GenerateForColumn_Slug(t *testing.T) {
 
 func TestDataGenerator_GenerateForColumn_Token(t *testing.T) {
 	g := newGen(t)
-	v := g.GenerateForColumn("api_token", "VARCHAR", false)
+	v := g.GenerateForColumn("api_token", "VARCHAR", false, nil)
 	if _, ok := v.(string); !ok {
 		t.Errorf("api_token column = %T, want string", v)
 	}

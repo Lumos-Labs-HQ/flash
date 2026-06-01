@@ -44,6 +44,20 @@ func (m *Migrator) ApplyWithConflictDetection(ctx context.Context) error {
 	}
 
 	pending := utils.FilterPendingMigrations(migrations, applied)
+
+	// Ghost-state detection: if all migrations appear applied but the database
+	// has no user tables, the tracking table is stale (e.g. DB was wiped and
+	// recreated, or the URL was changed to a DB that previously ran migrations
+	// but was then reset). Re-apply everything from scratch.
+	if len(pending) == 0 && len(applied) > 0 && len(migrations) > 0 {
+		if empty, checkErr := m.isDatabaseEmpty(ctx); checkErr == nil && empty {
+			if err := m.clearMigrationRecords(ctx); err != nil {
+				return fmt.Errorf("failed to clear stale migration records: %w", err)
+			}
+			pending = migrations
+		}
+	}
+
 	if len(pending) == 0 {
 		fmt.Println("No pending migrations")
 		return nil
@@ -624,4 +638,24 @@ func (m *Migrator) extractDownSQL(filePath string) string {
 // removeMigrationRecord removes a migration record from the tracking table
 func (m *Migrator) removeMigrationRecord(ctx context.Context, migrationID string) error {
 	return m.adapter.RemoveMigrationRecord(ctx, migrationID)
+}
+
+// isDatabaseEmpty returns true when no user tables exist (excluding _flash_migrations).
+func (m *Migrator) isDatabaseEmpty(ctx context.Context) (bool, error) {
+	tables, err := m.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, t := range tables {
+		if t != "_flash_migrations" {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// clearMigrationRecords deletes all rows from _flash_migrations so migrations
+// can be re-applied from scratch.
+func (m *Migrator) clearMigrationRecords(ctx context.Context) error {
+	return m.adapter.ExecuteMigration(ctx, "DELETE FROM _flash_migrations")
 }

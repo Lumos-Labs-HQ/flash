@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -118,6 +119,12 @@ func RunRaw(cmd *cobra.Command, args []string, queryFlag bool, fileFlag bool) er
 				continue
 			}
 
+			// PostgreSQL does not support ADD CONSTRAINT IF NOT EXISTS.
+			// Rewrite to a DO block that checks pg_constraint first.
+			if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
+				statement = rewriteAddConstraintIfNotExists(statement)
+			}
+
 			fmt.Printf("⚡ Executing statement %d...\n", i+1)
 
 			if err := adapter.ExecuteMigration(ctx, statement); err != nil {
@@ -216,4 +223,21 @@ func splitSQLStatements(content string) []string {
 	}
 
 	return statements
+}
+
+// rewriteAddConstraintIfNotExists rewrites:
+//   ALTER TABLE t ADD CONSTRAINT IF NOT EXISTS name ...
+// to a DO block that skips if the constraint already exists,
+// because PostgreSQL does not support IF NOT EXISTS for ADD CONSTRAINT.
+func rewriteAddConstraintIfNotExists(stmt string) string {
+	re := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(\S+)\s+ADD\s+CONSTRAINT\s+IF\s+NOT\s+EXISTS\s+(\S+)\s+(.+)`)
+	m := re.FindStringSubmatch(stmt)
+	if m == nil {
+		return stmt
+	}
+	table, name, rest := m[1], m[2], strings.TrimRight(strings.TrimSpace(m[3]), ";")
+	return fmt.Sprintf(
+		`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '%s') THEN ALTER TABLE %s ADD CONSTRAINT %s %s; END IF; END $$`,
+		name, table, name, rest,
+	)
 }
