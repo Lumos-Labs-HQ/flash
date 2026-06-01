@@ -6,9 +6,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 )
 
 var updateCmd = &cobra.Command{

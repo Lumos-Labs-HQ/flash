@@ -62,4 +62,5 @@ This command will:
 
 func init() {
 	// Command is registered by plugin executors, not the base CLI
+	applyCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 }

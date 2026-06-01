@@ -3,9 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 )
 
 var removePluginCmd = &cobra.Command{
@@ -54,7 +55,7 @@ Examples:
 
 			var confirm string
 			fmt.Print("Continue? (y/N): ")
-			fmt.Scanln(&confirm)
+			_, _ = fmt.Scanln(&confirm)
 
 			if confirm != "y" && confirm != "Y" {
 				color.Cyan("❌ Cancelled")

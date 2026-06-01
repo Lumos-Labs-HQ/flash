@@ -302,32 +302,3 @@ func (s *Adapter) getIndexColumns(ctx context.Context, indexName string) []strin
 	}
 	return columns
 }
-
-func (s *Adapter) formatSQLiteType(dataType string) string {
-	switch strings.ToUpper(dataType) {
-	case "INTEGER":
-		return "INTEGER"
-	case "TEXT":
-		return "TEXT"
-	case "REAL":
-		return "REAL"
-	case "BLOB":
-		return "BLOB"
-	case "NUMERIC":
-		return "NUMERIC"
-	default:
-		return strings.ToUpper(dataType)
-	}
-}
-
-func (s *Adapter) formatSQLiteDefault(defaultValue string) string {
-	if defaultValue == "" {
-		return ""
-	}
-
-	if strings.Contains(strings.ToLower(defaultValue), "current_timestamp") {
-		return "CURRENT_TIMESTAMP"
-	}
-
-	return defaultValue
-}

@@ -3,8 +3,9 @@ package mongodb
 import (
 	"context"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"go.mongodb.org/mongo-driver/bson"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
 // This interface extends beyond the generic DatabaseAdapter to provide

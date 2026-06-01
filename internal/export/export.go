@@ -14,9 +14,10 @@ import (
 	"sync"
 	"time"
 
+	_ "modernc.org/sqlite"
+
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
-	_ "modernc.org/sqlite"
 )
 
 func PerformExport(ctx context.Context, adapter database.DatabaseAdapter, exportPath, format string) (string, error) {
@@ -140,14 +141,14 @@ func exportToCSV(data types.BackupData, exportPath string) (string, error) {
 		}
 		sort.Strings(headers)
 
-		writer.Write(headers)
+		_ = writer.Write(headers)
 
 		for _, row := range rows {
 			values := make([]string, len(headers))
 			for i, header := range headers {
 				values[i] = fmt.Sprintf("%v", row[header])
 			}
-			writer.Write(values)
+			_ = writer.Write(values)
 		}
 
 		writer.Flush()
