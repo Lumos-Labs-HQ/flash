@@ -78,12 +78,13 @@ Examples:
 		}
 
 		seedConfig := seeder.SeedConfig{
-			Count:    count,
-			Tables:   tableCounts,
-			Truncate: truncate,
-			Force:    force,
-			DryRun:   dryRun,
-			Exclude:  exclude,
+			Count:          count,
+			Tables:         tableCounts,
+			Truncate:       truncate,
+			Force:          force,
+			DryRun:         dryRun,
+			Exclude:        exclude,
+			SpecificTables: specificTables,
 		}
 
 		ctx := cmd.Context()

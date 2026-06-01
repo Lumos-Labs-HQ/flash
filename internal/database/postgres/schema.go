@@ -476,7 +476,15 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		}
 
 		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
-		columnIndex[tableName][columnName] = &tableMap[tableName].Columns[len(tableMap[tableName].Columns)-1]
+	}
+	rows.Close()
+
+	// Build columnIndex AFTER all appends — appending can reallocate the slice,
+	for tName, tbl := range tableMap {
+		columnIndex[tName] = make(map[string]*types.SchemaColumn, len(tbl.Columns))
+		for i := range tbl.Columns {
+			columnIndex[tName][tbl.Columns[i].Name] = &tbl.Columns[i]
+		}
 	}
 
 	// Step 3: Get all constraints using pg_constraint directly (much faster than information_schema joins)
@@ -551,8 +559,17 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 				switch constraintType {
 				case "PK":
 					col.IsPrimary = true
-					// Update type for SERIAL detection
-					col.Type = p.formatPullColumnType(p.reverseMapType(col.Type), sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}, col.Default, true)
+					// For integer PKs, always treat as SERIAL — the sequence is implicit
+					switch p.reverseMapType(col.Type) {
+					case "int4":
+						col.Type = "SERIAL"
+					case "int8":
+						col.Type = "BIGSERIAL"
+					case "int2":
+						col.Type = "SMALLSERIAL"
+					default:
+						col.Type = p.formatPullColumnType(p.reverseMapType(col.Type), sql.NullInt64{}, sql.NullInt64{}, sql.NullInt64{}, col.Default, true)
+					}
 				case "UQ":
 					col.IsUnique = true
 				case "FK":

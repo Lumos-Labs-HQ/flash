@@ -207,7 +207,6 @@ func (sm *SchemaManager) buildIndexMaps(current, target []types.SchemaTable) (ma
 
 // Comparison helpers
 func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
-	// Normalize types through the adapter's type map so that equivalent
 	aTypeNorm := a.Type
 	bTypeNorm := b.Type
 	if sm.adapter != nil {
@@ -218,6 +217,15 @@ func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
 	aNullable := a.Nullable && !a.IsPrimary
 	bNullable := b.Nullable && !b.IsPrimary
 
+	aOnDelete := a.OnDeleteAction
+	bOnDelete := b.OnDeleteAction
+	if aOnDelete == "NO ACTION" {
+		aOnDelete = ""
+	}
+	if bOnDelete == "NO ACTION" {
+		bOnDelete = ""
+	}
+
 	return a.Name == b.Name &&
 		aTypeNorm == bTypeNorm &&
 		aNullable == bNullable &&
@@ -226,7 +234,7 @@ func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
 		a.IsUnique == b.IsUnique &&
 		a.ForeignKeyTable == b.ForeignKeyTable &&
 		a.ForeignKeyColumn == b.ForeignKeyColumn &&
-		a.OnDeleteAction == b.OnDeleteAction
+		aOnDelete == bOnDelete
 }
 
 func (sm *SchemaManager) getColumnChanges(old, new types.SchemaColumn) []string {
