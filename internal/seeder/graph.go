@@ -33,7 +33,7 @@ func (g *DependencyGraph) BuildInsertionOrder() ([]string, error) {
 
 		temp[tableName] = true
 		table := g.tables[tableName]
-		
+
 		if table != nil {
 			for _, dep := range table.Dependencies {
 				if dep != tableName { // Skip self-references

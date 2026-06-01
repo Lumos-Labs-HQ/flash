@@ -27,7 +27,7 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 		sourceFile string
 		queries    []*parser.Query
 	}
-	
+
 	fileGroups := make([]fileGroup, 0, len(queryGroups))
 	for sourceFile, fileQueries := range queryGroups {
 		fileGroups = append(fileGroups, fileGroup{sourceFile, fileQueries})
@@ -89,7 +89,7 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 	}
 
 	gencommon.PrintGenerateMessage(sourceFile, ".py")
-	
+
 	w := gencommon.GetBuilder()
 	defer gencommon.PutBuilder(w)
 
@@ -109,7 +109,7 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 	w.WriteString("    def __init__(self, db):\n")
 	w.WriteString("        self.db = db\n")
 	w.WriteString("        self._stmts = {}\n")
-	
+
 	isAsync := g.Config.Gen.Python.Async
 	provider := g.Config.Database.Provider
 	if isAsync && provider == "mysql" {
@@ -119,11 +119,11 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 		w.WriteString("        @contextlib.asynccontextmanager\n")
 		w.WriteString("        async def _manager():\n")
 		w.WriteString("            if hasattr(self.db, 'acquire'):\n")
-			w.WriteString("                async with self.db.acquire() as conn:\n")
-			w.WriteString("                    yield conn\n")
-			w.WriteString("            else:\n")
-			w.WriteString("                yield self.db\n")
-			w.WriteString("        return _manager()\n")
+		w.WriteString("                async with self.db.acquire() as conn:\n")
+		w.WriteString("                    yield conn\n")
+		w.WriteString("            else:\n")
+		w.WriteString("                yield self.db\n")
+		w.WriteString("        return _manager()\n")
 	}
 	w.WriteString("\n")
 

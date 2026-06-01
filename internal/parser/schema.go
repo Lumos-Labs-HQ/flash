@@ -47,7 +47,6 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 		schemaDir = filepath.Join(cwd, schemaDir)
 	}
 
-
 	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
 		files, err := filepath.Glob(filepath.Join(schemaDir, "*.sql"))
 		if err == nil && len(files) > 0 {

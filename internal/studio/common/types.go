@@ -63,10 +63,10 @@ type BranchInfo struct {
 
 // Filter represents a single filter condition for server-side filtering
 type Filter struct {
-	Logic    string `json:"logic"`    
-	Column   string `json:"column"`   
-	Operator string `json:"operator"` 
-	Value    string `json:"value"`    
+	Logic    string `json:"logic"`
+	Column   string `json:"column"`
+	Operator string `json:"operator"`
+	Value    string `json:"value"`
 }
 
 // ExportType defines the type of export

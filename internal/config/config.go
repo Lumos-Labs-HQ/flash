@@ -64,7 +64,7 @@ type PythonGen struct {
 
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
 type rawPythonGen struct {
-	Enabled bool  `toml:"enabled"`
+	Enabled bool   `toml:"enabled"`
 	Out     string `toml:"out"`
 	Async   *bool  `toml:"async"` // nil = not present in TOML
 	Driver  string `toml:"driver"`

@@ -252,7 +252,7 @@ func TestGenerateDropIndexSQL(t *testing.T) {
 	}
 }
 
-// ── security hardening 
+// ── security hardening
 
 func TestPostgresAdapter_ProviderName(t *testing.T) {
 	a := newAdapter()

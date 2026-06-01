@@ -152,9 +152,9 @@ func TestGenerateSQLFromDiff_MySQLModifiedColumn(t *testing.T) {
 				Name: "users",
 				ModifiedColumns: []types.ColumnDiff{
 					{
-						Name:    "email",
-						OldType: "VARCHAR(100)",
-						NewType: "VARCHAR(255)",
+						Name:      "email",
+						OldType:   "VARCHAR(100)",
+						NewType:   "VARCHAR(255)",
 						OldColumn: types.SchemaColumn{Name: "email", Type: "VARCHAR(100)", Nullable: false},
 						NewColumn: types.SchemaColumn{Name: "email", Type: "VARCHAR(255)", Nullable: false},
 					},
@@ -186,9 +186,9 @@ func TestGenerateSQLFromDiff_MySQLModifiedColumn_NoPrimaryKeyInAlter(t *testing.
 				Name: "users",
 				ModifiedColumns: []types.ColumnDiff{
 					{
-						Name:    "id",
-						OldType: "INT",
-						NewType: "BIGINT",
+						Name:      "id",
+						OldType:   "INT",
+						NewType:   "BIGINT",
 						OldColumn: types.SchemaColumn{Name: "id", Type: "INT", IsPrimary: true, IsAutoIncrement: true},
 						NewColumn: types.SchemaColumn{Name: "id", Type: "BIGINT", IsPrimary: true, IsAutoIncrement: true},
 					},
@@ -219,9 +219,9 @@ func TestGenerateSQLFromDiff_PostgresModifiedColumn(t *testing.T) {
 				Name: "users",
 				ModifiedColumns: []types.ColumnDiff{
 					{
-						Name:    "email",
-						OldType: "VARCHAR(100)",
-						NewType: "TEXT",
+						Name:      "email",
+						OldType:   "VARCHAR(100)",
+						NewType:   "TEXT",
 						OldColumn: types.SchemaColumn{Name: "email", Type: "VARCHAR(100)", Nullable: false},
 						NewColumn: types.SchemaColumn{Name: "email", Type: "TEXT", Nullable: false},
 					},
@@ -248,9 +248,9 @@ func TestGenerateSQLFromDiff_PostgresModifiedColumn_NeverSerial(t *testing.T) {
 				Name: "users",
 				ModifiedColumns: []types.ColumnDiff{
 					{
-						Name:    "id",
-						OldType: "INTEGER",
-						NewType: "SERIAL",
+						Name:      "id",
+						OldType:   "INTEGER",
+						NewType:   "SERIAL",
 						OldColumn: types.SchemaColumn{Name: "id", Type: "INTEGER", IsPrimary: true},
 						NewColumn: types.SchemaColumn{Name: "id", Type: "SERIAL", IsPrimary: true},
 					},
@@ -281,9 +281,9 @@ func TestHasSignificantSQLiteModifications_True(t *testing.T) {
 		Name: "users",
 		ModifiedColumns: []types.ColumnDiff{
 			{
-				Name:    "age",
-				OldType: "TEXT",
-				NewType: "INTEGER",
+				Name:      "age",
+				OldType:   "TEXT",
+				NewType:   "INTEGER",
 				OldColumn: types.SchemaColumn{Name: "age", Type: "TEXT"},
 				NewColumn: types.SchemaColumn{Name: "age", Type: "INTEGER"},
 			},
@@ -302,9 +302,9 @@ func TestHasSignificantSQLiteModifications_False_Cosmetic(t *testing.T) {
 		Name: "users",
 		ModifiedColumns: []types.ColumnDiff{
 			{
-				Name:    "email",
-				OldType: "TEXT",
-				NewType: "VARCHAR(255)",
+				Name:      "email",
+				OldType:   "TEXT",
+				NewType:   "VARCHAR(255)",
 				OldColumn: types.SchemaColumn{Name: "email", Type: "TEXT"},
 				NewColumn: types.SchemaColumn{Name: "email", Type: "VARCHAR(255)"},
 			},
@@ -416,9 +416,9 @@ func TestGenerateSQLFromDiff_SQLiteSkipsRedundantAlterTable(t *testing.T) {
 				},
 				ModifiedColumns: []types.ColumnDiff{
 					{
-						Name:    "name",
-						OldType: "TEXT",
-						NewType: "INTEGER",
+						Name:      "name",
+						OldType:   "TEXT",
+						NewType:   "INTEGER",
 						OldColumn: types.SchemaColumn{Name: "name", Type: "TEXT", Nullable: false},
 						NewColumn: types.SchemaColumn{Name: "name", Type: "INTEGER", Nullable: false},
 					},

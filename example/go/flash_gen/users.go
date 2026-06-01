@@ -37,14 +37,14 @@ func (q *Queries) Createuser(name string, email string) (CreateuserRow, error) {
 }
 
 type CreateuserRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address sql.NullString `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Email string `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
+	Id        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Address   sql.NullString `json:"address"`
+	Isadmin   bool           `json:"isadmin"`
+	Email     string         `json:"email"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	Role      UserRole       `json:"role"`
 }
 
 func (q *Queries) Getuser(id int64) (GetuserRow, error) {
@@ -77,14 +77,14 @@ func (q *Queries) Getuser(id int64) (GetuserRow, error) {
 }
 
 type GetuserRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address sql.NullString `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Email string `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
+	Id        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Address   sql.NullString `json:"address"`
+	Isadmin   bool           `json:"isadmin"`
+	Email     string         `json:"email"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	Role      UserRole       `json:"role"`
 }
 
 func (q *Queries) Getuserbyemail(email string) (GetuserbyemailRow, error) {
@@ -117,14 +117,14 @@ func (q *Queries) Getuserbyemail(email string) (GetuserbyemailRow, error) {
 }
 
 type GetuserbyemailRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address sql.NullString `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Email string `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
+	Id        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Address   sql.NullString `json:"address"`
+	Isadmin   bool           `json:"isadmin"`
+	Email     string         `json:"email"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	Role      UserRole       `json:"role"`
 }
 
 func (q *Queries) Createcategory(name string) (CreatecategoryRow, error) {
@@ -157,16 +157,16 @@ func (q *Queries) Createcategory(name string) (CreatecategoryRow, error) {
 }
 
 type CreatecategoryRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
+	Id        int64     `json:"id"`
+	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type CreatepostParams struct {
-	UserId int64 `json:"user_id"`
-	CategoryId int64 `json:"category_id"`
-	Title string `json:"title"`
-	Content string `json:"content"`
+	UserId     int64  `json:"user_id"`
+	CategoryId int64  `json:"category_id"`
+	Title      string `json:"title"`
+	Content    string `json:"content"`
 }
 
 func (q *Queries) Createpost(arg CreatepostParams) (CreatepostRow, error) {
@@ -190,14 +190,14 @@ func (q *Queries) Createpost(arg CreatepostParams) (CreatepostRow, error) {
 }
 
 type CreatepostRow struct {
-	Id int64 `json:"id"`
-	UserId int64 `json:"user_id"`
-	CategoryId int64 `json:"category_id"`
-	Title string `json:"title"`
-	Content string `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Status PostStatus `json:"status"`
+	Id         int64      `json:"id"`
+	UserId     int64      `json:"user_id"`
+	CategoryId int64      `json:"category_id"`
+	Title      string     `json:"title"`
+	Content    string     `json:"content"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+	Status     PostStatus `json:"status"`
 }
 
 func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (CreatecommentRow, error) {
@@ -230,10 +230,10 @@ func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (C
 }
 
 type CreatecommentRow struct {
-	Id int64 `json:"id"`
-	PostId int64 `json:"post_id"`
-	UserId int64 `json:"user_id"`
-	Content string `json:"content"`
+	Id        int64     `json:"id"`
+	PostId    int64     `json:"post_id"`
+	UserId    int64     `json:"user_id"`
+	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -256,7 +256,7 @@ func (q *Queries) Getpostwithcomments(id int64) ([]GetpostwithcommentsRow, error
 	}
 	defer rows.Close()
 
-	items := make([]GetpostwithcommentsRow, 0, 8) 
+	items := make([]GetpostwithcommentsRow, 0, 8)
 	for rows.Next() {
 		var item GetpostwithcommentsRow
 		if err := rows.Scan(&item.PostId, &item.Title, &item.Content, &item.Author, &item.CommentText, &item.Commenter); err != nil {
@@ -268,12 +268,12 @@ func (q *Queries) Getpostwithcomments(id int64) ([]GetpostwithcommentsRow, error
 }
 
 type GetpostwithcommentsRow struct {
-	PostId int64 `json:"post_id"`
-	Title string `json:"title"`
-	Content string `json:"content"`
-	Author string `json:"author"`
+	PostId      int64  `json:"post_id"`
+	Title       string `json:"title"`
+	Content     string `json:"content"`
+	Author      string `json:"author"`
 	CommentText string `json:"comment_text"`
-	Commenter string `json:"commenter"`
+	Commenter   string `json:"commenter"`
 }
 
 func (q *Queries) Getpostdetailswithallrelations(id int64) (GetpostdetailswithallrelationsRow, error) {
@@ -306,25 +306,25 @@ func (q *Queries) Getpostdetailswithallrelations(id int64) (Getpostdetailswithal
 }
 
 type GetpostdetailswithallrelationsRow struct {
-	Id int64 `json:"id"`
-	Title string `json:"title"`
-	Content string `json:"content"`
-	Status PostStatus `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	AuthorId string `json:"author_id"`
-	AuthorName string `json:"author_name"`
-	AuthorEmail string `json:"author_email"`
-	AuthorRole string `json:"author_role"`
-	AuthorIsAdmin string `json:"author_is_admin"`
-	CategoryId int64 `json:"category_id"`
-	CategoryName string `json:"category_name"`
-	CommentCount int64 `json:"comment_count"`
-	UniqueCommenters int64 `json:"unique_commenters"`
-	AllComments sql.NullString `json:"all_comments"`
-	CommenterNames sql.NullString `json:"commenter_names"`
-	LastCommentDate sql.NullTime `json:"last_comment_date"`
-	ContentLength sql.NullInt64 `json:"content_length"`
+	Id                int64           `json:"id"`
+	Title             string          `json:"title"`
+	Content           string          `json:"content"`
+	Status            PostStatus      `json:"status"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+	AuthorId          string          `json:"author_id"`
+	AuthorName        string          `json:"author_name"`
+	AuthorEmail       string          `json:"author_email"`
+	AuthorRole        string          `json:"author_role"`
+	AuthorIsAdmin     string          `json:"author_is_admin"`
+	CategoryId        int64           `json:"category_id"`
+	CategoryName      string          `json:"category_name"`
+	CommentCount      int64           `json:"comment_count"`
+	UniqueCommenters  int64           `json:"unique_commenters"`
+	AllComments       sql.NullString  `json:"all_comments"`
+	CommenterNames    sql.NullString  `json:"commenter_names"`
+	LastCommentDate   sql.NullTime    `json:"last_comment_date"`
+	ContentLength     sql.NullInt64   `json:"content_length"`
 	HoursSinceCreated sql.NullFloat64 `json:"hours_since_created"`
 }
 
@@ -347,7 +347,7 @@ func (q *Queries) Getcomplexuseranalytics(total_posts int64, total_comments int6
 	}
 	defer rows.Close()
 
-	items := make([]GetcomplexuseranalyticsRow, 0, 8) 
+	items := make([]GetcomplexuseranalyticsRow, 0, 8)
 	for rows.Next() {
 		var item GetcomplexuseranalyticsRow
 		if err := rows.Scan(&item.Id, &item.Name, &item.Email, &item.Role, &item.Isadmin, &item.UserCreatedAt, &item.TotalPosts, &item.PublishedPosts, &item.DraftPosts, &item.TotalComments, &item.PostsCommentedOn, &item.CategoriesUsed, &item.CategoryNames, &item.LastPostDate, &item.LastCommentDate, &item.AvgPostLength, &item.ActivityLevel, &item.EngagementScore); err != nil {
@@ -359,23 +359,22 @@ func (q *Queries) Getcomplexuseranalytics(total_posts int64, total_comments int6
 }
 
 type GetcomplexuseranalyticsRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Role UserRole `json:"role"`
-	Isadmin bool `json:"isadmin"`
-	UserCreatedAt string `json:"user_created_at"`
-	TotalPosts string `json:"total_posts"`
-	PublishedPosts string `json:"published_posts"`
-	DraftPosts string `json:"draft_posts"`
-	TotalComments string `json:"total_comments"`
-	PostsCommentedOn string `json:"posts_commented_on"`
-	CategoriesUsed string `json:"categories_used"`
-	CategoryNames string `json:"category_names"`
-	LastPostDate string `json:"last_post_date"`
-	LastCommentDate string `json:"last_comment_date"`
-	AvgPostLength float64 `json:"avg_post_length"`
-	ActivityLevel string `json:"activity_level"`
-	EngagementScore string `json:"engagement_score"`
+	Id               int64    `json:"id"`
+	Name             string   `json:"name"`
+	Email            string   `json:"email"`
+	Role             UserRole `json:"role"`
+	Isadmin          bool     `json:"isadmin"`
+	UserCreatedAt    string   `json:"user_created_at"`
+	TotalPosts       string   `json:"total_posts"`
+	PublishedPosts   string   `json:"published_posts"`
+	DraftPosts       string   `json:"draft_posts"`
+	TotalComments    string   `json:"total_comments"`
+	PostsCommentedOn string   `json:"posts_commented_on"`
+	CategoriesUsed   string   `json:"categories_used"`
+	CategoryNames    string   `json:"category_names"`
+	LastPostDate     string   `json:"last_post_date"`
+	LastCommentDate  string   `json:"last_comment_date"`
+	AvgPostLength    float64  `json:"avg_post_length"`
+	ActivityLevel    string   `json:"activity_level"`
+	EngagementScore  string   `json:"engagement_score"`
 }
-

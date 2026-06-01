@@ -568,7 +568,6 @@ func (s *Service) processDocumentTypes(doc map[string]interface{}) {
 	}
 }
 
-
 func getString(m map[string]interface{}, key string) string {
 	if v, ok := m[key].(string); ok {
 		return v

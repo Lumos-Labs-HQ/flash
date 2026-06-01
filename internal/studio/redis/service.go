@@ -1024,15 +1024,15 @@ func (s *Service) GetReplicationInfo() (*ReplicationInfo, error) {
 
 // ClusterInfo represents cluster information
 type ClusterInfo struct {
-	Enabled   bool                     `json:"enabled"`
-	State     string                   `json:"state,omitempty"`
-	SlotsOk   int                      `json:"slots_ok,omitempty"`
+	Enabled    bool                     `json:"enabled"`
+	State      string                   `json:"state,omitempty"`
+	SlotsOk    int                      `json:"slots_ok,omitempty"`
 	SlotsPfail int                      `json:"slots_pfail,omitempty"`
-	SlotsFail int                      `json:"slots_fail,omitempty"`
-	KnownNodes int                     `json:"known_nodes,omitempty"`
-	Size      int                      `json:"size,omitempty"`
-	Nodes     []map[string]interface{} `json:"nodes,omitempty"`
-	RawInfo   map[string]string        `json:"raw_info,omitempty"`
+	SlotsFail  int                      `json:"slots_fail,omitempty"`
+	KnownNodes int                      `json:"known_nodes,omitempty"`
+	Size       int                      `json:"size,omitempty"`
+	Nodes      []map[string]interface{} `json:"nodes,omitempty"`
+	RawInfo    map[string]string        `json:"raw_info,omitempty"`
 }
 
 // GetClusterInfo returns cluster information
@@ -1100,14 +1100,14 @@ func parseClusterNodes(nodesStr string) []map[string]interface{} {
 		parts := strings.Fields(line)
 		if len(parts) >= 8 {
 			node := map[string]interface{}{
-				"id":      parts[0],
-				"addr":    parts[1],
-				"flags":   parts[2],
-				"master":  parts[3],
-				"ping":    parts[4],
-				"pong":    parts[5],
-				"epoch":   parts[6],
-				"state":   parts[7],
+				"id":     parts[0],
+				"addr":   parts[1],
+				"flags":  parts[2],
+				"master": parts[3],
+				"ping":   parts[4],
+				"pong":   parts[5],
+				"epoch":  parts[6],
+				"state":  parts[7],
 			}
 			if len(parts) > 8 {
 				node["slots"] = strings.Join(parts[8:], " ")
@@ -1212,15 +1212,15 @@ func (s *Service) GetACLLog(count int) ([]map[string]interface{}, error) {
 	logs := make([]map[string]interface{}, 0, len(result))
 	for _, entry := range result {
 		log := map[string]interface{}{
-			"count":           entry.Count,
-			"reason":          entry.Reason,
-			"context":         entry.Context,
-			"object":          entry.Object,
-			"username":        entry.Username,
-			"age_seconds":     entry.AgeSeconds,
-			"client_info":     entry.ClientInfo,
-			"entry_id":        entry.EntryID,
-			"timestamp_created": entry.TimestampCreated,
+			"count":                  entry.Count,
+			"reason":                 entry.Reason,
+			"context":                entry.Context,
+			"object":                 entry.Object,
+			"username":               entry.Username,
+			"age_seconds":            entry.AgeSeconds,
+			"client_info":            entry.ClientInfo,
+			"entry_id":               entry.EntryID,
+			"timestamp_created":      entry.TimestampCreated,
 			"timestamp_last_updated": entry.TimestampLastUpdated,
 		}
 		logs = append(logs, log)

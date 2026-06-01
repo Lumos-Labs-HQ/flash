@@ -12,7 +12,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 )
 
-// generateQueriesIncremental generates queries with incremental support  
+// generateQueriesIncremental generates queries with incremental support
 func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRegen bool) error {
 	queryGroups := make(map[string][]*parser.Query)
 	for _, query := range queries {
@@ -28,7 +28,7 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 		sourceFile string
 		queries    []*parser.Query
 	}
-	
+
 	fileGroups := make([]fileGroup, 0, len(queryGroups))
 	for sourceFile, fileQueries := range queryGroups {
 		fileGroups = append(fileGroups, fileGroup{sourceFile, fileQueries})
@@ -89,14 +89,14 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.Query, fullRegen bool, usedNamesMu *sync.Mutex, usedNames map[string]int) error {
 	queryFile := filepath.Join(g.Config.Queries, sourceFile+".sql")
 	currentHash, _ := gencommon.ComputeFileChecksum(queryFile)
-	
+
 	if !gencommon.ShouldRegenerateFile(g.cache, queryFile, currentHash, fullRegen) {
 		gencommon.PrintSkipMessage(sourceFile, ".go")
 		return nil
 	}
 
 	gencommon.PrintGenerateMessage(sourceFile, ".go")
-	
+
 	// Use pooled string builder
 	code := gencommon.GetBuilder()
 	defer gencommon.PutBuilder(code)
@@ -153,7 +153,7 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	}
 
 	baseName := strings.TrimSuffix(sourceFile, ".sql")
-	
+
 	// Thread-safe name deduplication
 	usedNamesMu.Lock()
 	outputFile := baseName + ".go"

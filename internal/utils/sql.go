@@ -9,12 +9,12 @@ import (
 
 // Pre-compiled regex patterns for SQL parsing (performance optimization)
 var (
-	blockCommentRegex    = regexp.MustCompile(`/\*[\s\S]*?\*/`)
-	insertIntoRegex      = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-	fromTableRegex       = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-	updateTableRegex     = regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-	deleteFromRegex      = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`)
-	modifyingQueryRegex  = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE)\b`)
+	blockCommentRegex   = regexp.MustCompile(`/\*[\s\S]*?\*/`)
+	insertIntoRegex     = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
+	fromTableRegex      = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
+	updateTableRegex    = regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
+	deleteFromRegex     = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`)
+	modifyingQueryRegex = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE)\b`)
 )
 
 // ExtractTableName extracts the primary table name from a SQL query.
@@ -67,7 +67,7 @@ func RemoveComments(sql string) string {
 				i++
 			}
 			if i < len(sql) {
-				result.WriteByte('\n') 
+				result.WriteByte('\n')
 			}
 			start = i + 1
 		}
@@ -77,6 +77,7 @@ func RemoveComments(sql string) string {
 	// Remove block comments
 	return blockCommentRegex.ReplaceAllString(result.String(), "")
 }
+
 // SplitColumns splits a comma-separated column string, respecting parentheses depth.
 // This handles cases like "col1, COALESCE(a, b), col2" correctly.
 func SplitColumns(columnsStr string) []string {

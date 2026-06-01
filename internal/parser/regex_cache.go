@@ -12,13 +12,13 @@ type RegexCache struct {
 	ThenRe        *regexp.Regexp
 	ArithmeticRe  *regexp.Regexp
 	TableColRefRe *regexp.Regexp
-	
+
 	// CTE patterns
 	WithRe func(cteAlias string) *regexp.Regexp
-	
+
 	// Column reference patterns
 	ColRefPattern func(cteColumn string) *regexp.Regexp
-	
+
 	// Aggregate function patterns
 	ArrayAggPattern  func(cteColumn string) *regexp.Regexp
 	StringAggPattern func(cteColumn string) *regexp.Regexp
@@ -45,16 +45,16 @@ func GetRegexCache() *RegexCache {
 			ThenRe:        regexp.MustCompile(`(?i)THEN\s+'([^']*)'`),
 			ArithmeticRe:  regexp.MustCompile(`\s*[+\-*/]\s*`),
 			TableColRefRe: regexp.MustCompile(`^(\w+)\.(\w+)$`),
-			
+
 			// Dynamic pattern generators (compiled on-demand and cached)
 			WithRe: func(cteAlias string) *regexp.Regexp {
 				return regexp.MustCompile(`(?is)` + regexp.QuoteMeta(cteAlias) + `\s+AS\s*\((.*?)\)(?:\s*,|\s+SELECT)`)
 			},
-			
+
 			ColRefPattern: func(cteColumn string) *regexp.Regexp {
 				return regexp.MustCompile(`(?i)(\w+)\.(\w+)\s+AS\s+` + cteColumn)
 			},
-			
+
 			// Aggregate function pattern generators
 			ArrayAggPattern: func(cteColumn string) *regexp.Regexp {
 				return regexp.MustCompile(`(?i)ARRAY_AGG\([^)]+\)\s+(?:AS\s+)?` + cteColumn)
