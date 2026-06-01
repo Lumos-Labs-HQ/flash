@@ -258,10 +258,9 @@ func (m *Adapter) formatColumnTypeInternal(column types.SchemaColumn, forAlter b
 	return strings.Join(parts, " ")
 }
 
-
 func (m *Adapter) convertTypeToMySQL(pgType string) string {
 	upperType := strings.ToUpper(pgType)
-	
+
 	if upperType == "SERIAL" {
 		return "INT"
 	}
@@ -271,14 +270,14 @@ func (m *Adapter) convertTypeToMySQL(pgType string) string {
 	if upperType == "SMALLSERIAL" {
 		return "SMALLINT"
 	}
-	
+
 	if strings.Contains(upperType, "TIMESTAMP WITH TIME ZONE") || strings.Contains(upperType, "TIMESTAMPTZ") {
 		return "TIMESTAMP"
 	}
-	
+
 	if upperType == "BOOLEAN" || upperType == "BOOL" {
 		return "TINYINT(1)"
 	}
-	
+
 	return pgType
 }

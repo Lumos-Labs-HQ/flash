@@ -200,4 +200,3 @@ func FilterPendingMigrations(migrations []types.Migration, applied map[string]*t
 func ComputeChecksum(content []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(content))
 }
-

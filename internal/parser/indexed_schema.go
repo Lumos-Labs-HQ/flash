@@ -8,9 +8,9 @@ import (
 // IndexedSchema wraps Schema with fast lookup indices
 type IndexedSchema struct {
 	*Schema
-	tableIndex  map[string]*Table              // lowercase table name → table
-	columnIndex map[string]map[string]*Column  // table name → (column name → column)
-	mu          sync.RWMutex                   // protects indices during concurrent access
+	tableIndex  map[string]*Table             // lowercase table name → table
+	columnIndex map[string]map[string]*Column // table name → (column name → column)
+	mu          sync.RWMutex                  // protects indices during concurrent access
 }
 
 // NewIndexedSchema creates an indexed schema from a regular schema
@@ -57,7 +57,7 @@ func (idx *IndexedSchema) GetTable(tableName string) *Table {
 func (idx *IndexedSchema) GetColumn(tableName, columnName string) *Column {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	
+
 	tableKey := strings.ToLower(tableName)
 	colMap, ok := idx.columnIndex[tableKey]
 	if !ok {
@@ -78,7 +78,7 @@ func (idx *IndexedSchema) TableExists(tableName string) bool {
 func (idx *IndexedSchema) ColumnExists(tableName, columnName string) bool {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	
+
 	tableKey := strings.ToLower(tableName)
 	colMap, ok := idx.columnIndex[tableKey]
 	if !ok {
@@ -92,7 +92,7 @@ func (idx *IndexedSchema) ColumnExists(tableName, columnName string) bool {
 func (idx *IndexedSchema) GetTableNames() []string {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
-	
+
 	names := make([]string, 0, len(idx.tableIndex))
 	for name := range idx.tableIndex {
 		names = append(names, name)

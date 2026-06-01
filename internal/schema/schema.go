@@ -163,7 +163,7 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 			queue = append(queue, tableName)
 		}
 	}
-	
+
 	// Process tables (sort queue only once for determinism)
 	sort.Strings(queue)
 

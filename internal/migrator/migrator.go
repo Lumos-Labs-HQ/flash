@@ -113,8 +113,8 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	var sqlContent string
 	// Check for index changes too, not just tables and enums.
 	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
-	   len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
-	   len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
+		len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
+		len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -388,11 +388,11 @@ func (m *Migrator) PullSchema(ctx context.Context) ([]types.SchemaTable, error) 
 // generateSQLiteTableRecreateSQL generates the multi-statement SQL required to
 // recreate a SQLite table when columns are modified (since SQLite does not
 // support ALTER COLUMN). The pattern is:
-//   1. Create a temporary table with the new schema
-//   2. Copy data from old to new (matching columns only)
-//   3. Drop the old table
-//   4. Rename the temporary table
-//   5. Recreate indexes
+//  1. Create a temporary table with the new schema
+//  2. Copy data from old to new (matching columns only)
+//  3. Drop the old table
+//  4. Rename the temporary table
+//  5. Recreate indexes
 func (m *Migrator) generateSQLiteTableRecreateSQL(oldTable, newTable types.SchemaTable) string {
 	var parts []string
 

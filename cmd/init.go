@@ -83,7 +83,7 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 	}
 
 	files := map[string]string{
-		"flash.toml":          projectTemplate.GetFlashORMConfig(),
+		"flash.toml":           projectTemplate.GetFlashORMConfig(),
 		"db/schema/schema.sql": projectTemplate.GetSchema(),
 		"db/queries/users.sql": projectTemplate.GetQueries(),
 	}

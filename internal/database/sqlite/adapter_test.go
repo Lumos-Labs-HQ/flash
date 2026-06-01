@@ -359,7 +359,7 @@ func TestSQLiteAdapter_GetAllTableRowCounts(t *testing.T) {
 	}
 }
 
-// ── security hardening 
+// ── security hardening
 
 func TestSQLiteAdapter_ProviderName(t *testing.T) {
 	a := New()

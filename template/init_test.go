@@ -22,7 +22,10 @@ func TestDatabaseTypeConstants(t *testing.T) {
 }
 
 func TestValidateDatabaseType(t *testing.T) {
-	cases := []struct{ in string; want DatabaseType }{
+	cases := []struct {
+		in   string
+		want DatabaseType
+	}{
 		{"sqlite", SQLite},
 		{"mysql", MySQL},
 		{"postgresql", PostgreSQL},
@@ -52,7 +55,10 @@ func TestGetFlashORMConfig_ValidTOML(t *testing.T) {
 }
 
 func TestGetFlashORMConfig_CorrectProvider(t *testing.T) {
-	cases := []struct{ db DatabaseType; want string }{
+	cases := []struct {
+		db   DatabaseType
+		want string
+	}{
 		{PostgreSQL, "postgresql"},
 		{MySQL, "mysql"},
 		{SQLite, "sqlite"},
@@ -189,7 +195,10 @@ func TestGetEnvTemplate_ContainsDatabaseURL(t *testing.T) {
 }
 
 func TestGetEnvTemplate_CorrectScheme(t *testing.T) {
-	cases := []struct{ db DatabaseType; scheme string }{
+	cases := []struct {
+		db     DatabaseType
+		scheme string
+	}{
 		{PostgreSQL, "postgres://"},
 		{MySQL, "mysql://"},
 		{SQLite, "sqlite://"},

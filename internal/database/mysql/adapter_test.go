@@ -259,7 +259,7 @@ func TestConvertTypeToMySQL(t *testing.T) {
 	}
 }
 
-// ── security hardening 
+// ── security hardening
 
 func TestMySQLAdapter_ProviderName(t *testing.T) {
 	a := newAdapter()

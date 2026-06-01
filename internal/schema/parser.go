@@ -10,10 +10,10 @@ import (
 
 // Package-level pre-compiled regexes for column/constraint parsing.
 var (
-	parserFKRegex          = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
-	parserReferencesRegex  = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
-	parserOnDeleteRegex    = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
-	parserDefaultRegex     = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
+	parserFKRegex         = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
+	parserReferencesRegex = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
+	parserOnDeleteRegex   = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
+	parserDefaultRegex    = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
 )
 
 func (sm *SchemaManager) cleanSQL(sql string) string {

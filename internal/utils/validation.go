@@ -169,7 +169,9 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 // extractTableNamesFromSchema extracts table names from various schema types
 func extractTableNamesFromSchema(schema interface{}) map[string]bool {
 	// Try known interface types first (fast path)
-	if s, ok := schema.(interface{ GetTables() []interface{ GetName() string } }); ok {
+	if s, ok := schema.(interface {
+		GetTables() []interface{ GetName() string }
+	}); ok {
 		tables := s.GetTables()
 		names := make(map[string]bool, len(tables))
 		for _, t := range tables {

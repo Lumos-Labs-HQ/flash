@@ -18,7 +18,7 @@ type Manager struct {
 
 func NewManager(cfg *config.Config) (*Manager, error) {
 	adapter := database.NewAdapter(cfg.Database.Provider)
-	
+
 	dbURL, err := cfg.GetDatabaseURL()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database URL: %w", err)

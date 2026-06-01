@@ -34,14 +34,14 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetS
 	} else {
 		sourceFile = a.getBranchFilePath(sourceSchema)
 	}
-	
+
 	targetFile := a.getBranchFilePath(targetSchema)
-	
+
 	// Copy the database file
 	if err := copyFile(sourceFile, targetFile); err != nil {
 		return fmt.Errorf("failed to clone database file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -49,12 +49,12 @@ func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchSchema string) (
 	// Switch to branch file temporarily
 	originalPath := a.currentPath
 	defer a.SwitchDatabase(ctx, originalPath)
-	
+
 	branchFile := a.getBranchFilePath(branchSchema)
 	if err := a.SwitchDatabase(ctx, branchFile); err != nil {
 		return nil, err
 	}
-	
+
 	return a.GetCurrentSchema(ctx)
 }
 
@@ -73,12 +73,12 @@ func (a *Adapter) GetTableNamesInSchema(ctx context.Context, schemaName string) 
 	// Switch to branch file temporarily
 	originalPath := a.currentPath
 	defer a.SwitchDatabase(ctx, originalPath)
-	
+
 	branchFile := a.getBranchFilePath(schemaName)
 	if err := a.SwitchDatabase(ctx, branchFile); err != nil {
 		return nil, err
 	}
-	
+
 	return a.GetAllTableNames(ctx)
 }
 
@@ -87,7 +87,7 @@ func (a *Adapter) getBranchFilePath(branchName string) string {
 	dir := filepath.Dir(a.originalPath)
 	ext := filepath.Ext(a.originalPath)
 	base := strings.TrimSuffix(filepath.Base(a.originalPath), ext)
-	
+
 	// Create branch file name: database_branch_branchname.db
 	return filepath.Join(dir, fmt.Sprintf("%s_branch_%s%s", base, branchName, ext))
 }

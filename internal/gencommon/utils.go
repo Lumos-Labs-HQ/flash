@@ -11,20 +11,20 @@ import (
 // This is shared by all generators (Go, JS, Python)
 func ExtractTableDependencies(queries []*parser.Query) []string {
 	tableSet := make(map[string]bool)
-	
+
 	for _, query := range queries {
 		tableName := utils.ExtractTableName(query.SQL)
 		if tableName != "" {
 			tableSet[tableName] = true
 		}
-		
+
 		for _, col := range query.Columns {
 			if col.Table != "" {
 				tableSet[col.Table] = true
 			}
 		}
 	}
-	
+
 	tables := make([]string, 0, len(tableSet))
 	for table := range tableSet {
 		tables = append(tables, table)
@@ -54,7 +54,7 @@ func PrintGenerateMessage(sourceFile, extension string) {
 func UpdateCacheForFile(cache *GenerationCache, queryFile, currentHash string, tableDeps []string, generatedPath string) {
 	cache.UpdateQueryChecksum(queryFile, currentHash)
 	cache.UpdateQueryDependencies(queryFile, tableDeps)
-	
+
 	if genHash, err := ComputeFileChecksum(generatedPath); err == nil {
 		cache.UpdateGeneratedFileChecksum(generatedPath, genHash)
 	}

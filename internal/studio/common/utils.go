@@ -20,21 +20,21 @@ func FindAvailablePort(startPort int) int {
 
 func isPortAvailable(port int) bool {
 	addr := fmt.Sprintf(":%d", port)
-	
+
 	ln, err := net.Listen("tcp4", addr)
 	if err != nil {
 		return false
 	}
 	ln.Close()
-	
+
 	time.Sleep(10 * time.Millisecond)
-	
+
 	conn, err := net.DialTimeout("tcp4", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
 	if err == nil {
 		conn.Close()
-		return false 
+		return false
 	}
-	
+
 	return true
 }
 

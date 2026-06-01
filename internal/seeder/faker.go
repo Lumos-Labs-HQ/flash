@@ -69,35 +69,35 @@ func NewDataGenerator() (*DataGenerator, error) {
 func (g *DataGenerator) initPatterns() {
 	rawPatterns := map[string]func() interface{}{
 		// Identity
-		"first_name|firstname|fname": g.randomFrom(g.fakeData.FirstNames, "John"),
-		"last_name|lastname|lname":   g.randomFrom(g.fakeData.LastNames, "Doe"),
-		"email|e_mail":               g.generateEmail,
-		"username|user_name|login|handle|screen_name": g.generateUsername,
-		"password|passwd|pwd|secret": g.generatePassword,
+		"first_name|firstname|fname":                              g.randomFrom(g.fakeData.FirstNames, "John"),
+		"last_name|lastname|lname":                                g.randomFrom(g.fakeData.LastNames, "Doe"),
+		"email|e_mail":                                            g.generateEmail,
+		"username|user_name|login|handle|screen_name":             g.generateUsername,
+		"password|passwd|pwd|secret":                              g.generatePassword,
 		"token|api_key|access_token|refresh_token|jwt|auth_token": g.generateToken,
-		"name":                       g.generateFullName,
+		"name": g.generateFullName,
 
 		// Content
-		"title|headline|subject":        g.randomFrom(g.fakeData.Titles, "Sample Title"),
-		"description|summary|excerpt":   g.randomFrom(g.fakeData.Paragraphs, "Sample description"),
+		"title|headline|subject":                 g.randomFrom(g.fakeData.Titles, "Sample Title"),
+		"description|summary|excerpt":            g.randomFrom(g.fakeData.Paragraphs, "Sample description"),
 		"content|body|message|comment|note|text": g.randomFrom(g.fakeData.Paragraphs, "Sample content"),
-		"bio|about|biography":           g.randomFrom(g.fakeData.Paragraphs, "Short bio text"),
-		"phone|tel|mobile|cell":         g.generatePhone,
-		"url|link|website|homepage":     g.generateURL,
-		"slug|permalink|path":           g.generateSlug,
+		"bio|about|biography":                    g.randomFrom(g.fakeData.Paragraphs, "Short bio text"),
+		"phone|tel|mobile|cell":                  g.generatePhone,
+		"url|link|website|homepage":              g.generateURL,
+		"slug|permalink|path":                    g.generateSlug,
 
 		// Media
 		"image|img|photo|picture|thumbnail|banner|cover": g.randomFrom(g.fakeData.ImageUrls, "https://picsum.photos/400/300"),
 		"avatar|profile_pic|profile_image":               g.randomFrom(g.fakeData.AvatarUrls, "https://i.pravatar.cc/150"),
 
 		// Location
-		"address|addr":           g.generateAddress,
-		"city":                   g.randomFrom(g.fakeData.Cities, "New York"),
-		"state|province|region":  g.randomFrom(g.fakeData.States, "California"),
-		"zip|postal|postcode":    g.generateZip,
-		"country|nation":         g.randomFrom([]string{"US", "CA", "GB", "DE", "FR", "JP", "AU", "BR", "IN", "MX"}, "US"),
-		"latitude|lat":           func() interface{} { return float64(g.rand.Intn(180000)-90000) / 1000.0 },
-		"longitude|lng|lon":      func() interface{} { return float64(g.rand.Intn(360000)-180000) / 1000.0 },
+		"address|addr":          g.generateAddress,
+		"city":                  g.randomFrom(g.fakeData.Cities, "New York"),
+		"state|province|region": g.randomFrom(g.fakeData.States, "California"),
+		"zip|postal|postcode":   g.generateZip,
+		"country|nation":        g.randomFrom([]string{"US", "CA", "GB", "DE", "FR", "JP", "AU", "BR", "IN", "MX"}, "US"),
+		"latitude|lat":          func() interface{} { return float64(g.rand.Intn(180000)-90000) / 1000.0 },
+		"longitude|lng|lon":     func() interface{} { return float64(g.rand.Intn(360000)-180000) / 1000.0 },
 
 		// Business
 		"company|organization|org|firm": g.randomFrom(g.fakeData.Companies, "Tech Company Inc"),
@@ -110,21 +110,21 @@ func (g *DataGenerator) initPatterns() {
 		"gender|sex":                    g.randomFrom([]string{"male", "female", "non-binary", "other", "prefer-not-to-say"}, "other"),
 
 		// Technical
-		"color|colour|hex":            g.generateColor,
-		"ip|ip_address|remote_addr":   g.generateIP,
-		"locale|lang|language":        g.randomFrom([]string{"en", "es", "fr", "de", "ja", "zh", "pt", "it", "ko", "ru"}, "en"),
-		"currency|curr":               g.randomFrom([]string{"USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY"}, "USD"),
+		"color|colour|hex":                     g.generateColor,
+		"ip|ip_address|remote_addr":            g.generateIP,
+		"locale|lang|language":                 g.randomFrom([]string{"en", "es", "fr", "de", "ja", "zh", "pt", "it", "ko", "ru"}, "en"),
+		"currency|curr":                        g.randomFrom([]string{"USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY"}, "USD"),
 		"metadata|meta|extra|attrs|properties": func() interface{} { return `{"generated": true}` },
 		"hash|checksum|md5|sha|sha256|digest":  g.generateHash,
 		"code|short_code|reference|ref_no":     g.generateRefCode,
-		"version|ver":                 func() interface{} { return fmt.Sprintf("%d.%d.%d", g.rand.Intn(5), g.rand.Intn(20), g.rand.Intn(20)) },
+		"version|ver":                          func() interface{} { return fmt.Sprintf("%d.%d.%d", g.rand.Intn(5), g.rand.Intn(20), g.rand.Intn(20)) },
 
 		// Temporal
 		"dob|birth_date|birthdate|date_of_birth": func() interface{} {
 			return time.Now().AddDate(-18-g.rand.Intn(60), -g.rand.Intn(12), -g.rand.Intn(28))
 		},
-		"age":                       func() interface{} { return g.rand.Intn(80) + 18 },
-		"duration|elapsed|timeout":  func() interface{} { return g.rand.Intn(3600) + 1 },
+		"age":                      func() interface{} { return g.rand.Intn(80) + 18 },
+		"duration|elapsed|timeout": func() interface{} { return g.rand.Intn(3600) + 1 },
 		"sort_order|display_order|position|rank|seq|sequence": func() interface{} { return g.rand.Intn(1000) },
 
 		// Numeric / Finance

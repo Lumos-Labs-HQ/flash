@@ -365,7 +365,7 @@ func testRaw(t *testing.T, dir string, _ Database) {
 
 func testSeed(t *testing.T, dir string, _ Database) {
 	out, err := flash(t, dir, "seed", "--count", "5", "--force")
-	t.Logf("seed output: %s", out)																											
+	t.Logf("seed output: %s", out)
 	if err != nil {
 		t.Logf("seed error (non-fatal): %v", err)
 	}

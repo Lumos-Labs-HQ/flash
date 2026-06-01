@@ -32,7 +32,7 @@ type GenerationCache struct {
 
 	// Metadata
 	LastGeneration time.Time `json:"last_generation"`
-	
+
 	mu sync.RWMutex
 }
 
@@ -142,7 +142,7 @@ func (c *GenerationCache) GetAffectedQueries(changedTables []string) []string {
 	defer c.mu.RUnlock()
 
 	affectedSet := make(map[string]bool)
-	
+
 	for queryFile, tables := range c.QueryTableDeps {
 		for _, table := range tables {
 			for _, changedTable := range changedTables {
@@ -286,7 +286,7 @@ func (c *GenerationCache) Save() error {
 	defer c.mu.RUnlock()
 
 	cacheFile := filepath.Join("flash_gen", cacheFileName)
-	
+
 	// Ensure directory exists
 	if err := os.MkdirAll("flash_gen", 0755); err != nil {
 		return err

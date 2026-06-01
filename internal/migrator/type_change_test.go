@@ -36,9 +36,9 @@ func TestGenerateSQLFromDiff_AddColumnWithTypeEquivalentDiff_SQLite(t *testing.T
 				},
 				ModifiedColumns: []types.ColumnDiff{
 					{
-						Name:    "name",
-						OldType: "TEXT",
-						NewType: "VARCHAR(255)",
+						Name:      "name",
+						OldType:   "TEXT",
+						NewType:   "VARCHAR(255)",
 						OldColumn: types.SchemaColumn{Name: "name", Type: "TEXT", Nullable: false},
 						NewColumn: types.SchemaColumn{Name: "name", Type: "VARCHAR(255)", Nullable: false},
 					},

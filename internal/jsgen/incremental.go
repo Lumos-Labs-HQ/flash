@@ -27,7 +27,7 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 		sourceFile string
 		queries    []*parser.Query
 	}
-	
+
 	fileGroups := make([]fileGroup, 0, len(queryGroups))
 	for sourceFile, fileQueries := range queryGroups {
 		fileGroups = append(fileGroups, fileGroup{sourceFile, fileQueries})
@@ -89,7 +89,7 @@ func (g *Generator) generateSingleJSFile(sourceFile string, fileQueries []*parse
 	}
 
 	gencommon.PrintGenerateMessage(sourceFile, ".js")
-	
+
 	w := gencommon.GetBuilder()
 	defer gencommon.PutBuilder(w)
 
@@ -107,7 +107,7 @@ func (g *Generator) generateSingleJSFile(sourceFile string, fileQueries []*parse
 	w.WriteString("}\n\nmodule.exports = { Queries };\n")
 
 	baseName := strings.TrimSuffix(sourceFile, ".sql")
-	
+
 	usedNamesMu.Lock()
 	outputFile := baseName + ".js"
 	if count, exists := usedNames[baseName]; exists {

@@ -751,5 +751,3 @@ func (p *Adapter) formatDefaultValue(defaultVal string) string {
 
 	return cleaned
 }
-
-

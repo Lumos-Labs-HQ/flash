@@ -44,7 +44,9 @@ func TestParseJSON_ValidBody(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/", body)
 	r.Header.Set("Content-Type", "application/json")
 
-	var req struct{ Name string `json:"name"` }
+	var req struct {
+		Name string `json:"name"`
+	}
 	if err := common.ParseJSON(r, &req); err != nil {
 		t.Fatalf("ParseJSON error: %v", err)
 	}

@@ -51,7 +51,7 @@ func (g *Generator) Generate() error {
 	}
 
 	configHash := g.computeConfigChecksum()
-	
+
 	// Check if full regeneration is needed
 	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
 
@@ -84,7 +84,7 @@ func (g *Generator) Generate() error {
 	g.cache.UpdateSchemaChecksum(schemaHash)
 	g.cache.UpdateConfigChecksum(configHash)
 	g.cache.MarkGeneration()
-	
+
 	// Save cache to disk
 	if err := g.cache.Save(); err != nil {
 		// Non-fatal: just log and continue
@@ -383,8 +383,6 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 
 	return expanded
 }
-
-
 
 func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Query) error {
 	if g.Config.Gen.Go.Driver == "pgx" {
@@ -686,8 +684,6 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 	return nil
 }
 
-
-
 func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	sqlTypeLower := strings.ToLower(sqlType)
 
@@ -868,8 +864,6 @@ func extractEnumValues(columnType string) []string {
 
 	return result
 }
-
-
 
 func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)

@@ -52,8 +52,8 @@ type TableDiff struct {
 	NewColumns      []SchemaColumn
 	DroppedColumns  []SchemaColumn // Changed from []string to preserve column info for DOWN migration
 	ModifiedColumns []ColumnDiff
-	OldTable        SchemaTable    // Full old table schema (for SQLite table recreation)
-	NewTable        SchemaTable    // Full new table schema (for SQLite table recreation)
+	OldTable        SchemaTable // Full old table schema (for SQLite table recreation)
+	NewTable        SchemaTable // Full new table schema (for SQLite table recreation)
 }
 
 type ColumnDiff struct {

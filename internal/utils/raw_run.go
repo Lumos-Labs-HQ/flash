@@ -226,7 +226,9 @@ func splitSQLStatements(content string) []string {
 }
 
 // rewriteAddConstraintIfNotExists rewrites:
-//   ALTER TABLE t ADD CONSTRAINT IF NOT EXISTS name ...
+//
+//	ALTER TABLE t ADD CONSTRAINT IF NOT EXISTS name ...
+//
 // to a DO block that skips if the constraint already exists,
 // because PostgreSQL does not support IF NOT EXISTS for ADD CONSTRAINT.
 func rewriteAddConstraintIfNotExists(stmt string) string {

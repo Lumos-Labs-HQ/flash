@@ -73,7 +73,7 @@ func (p *QueryParser) Parse(schema *Schema) ([]*Query, error) {
 func (p *QueryParser) parseFilesConcurrently(files []string, schema *Schema) ([]*Query, error) {
 	// Create indexed schema for O(1) lookups
 	indexedSchema := NewIndexedSchema(schema)
-	
+
 	// Determine optimal worker count (don't exceed CPU count or file count)
 	numWorkers := runtime.NumCPU()
 	if numWorkers > len(files) {
@@ -89,7 +89,7 @@ func (p *QueryParser) parseFilesConcurrently(files []string, schema *Schema) ([]
 		err     error
 		file    string
 	}
-	
+
 	fileChan := make(chan string, len(files))
 	resultChan := make(chan parseResult, len(files))
 
@@ -386,7 +386,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 					} else {
 						if !strings.Contains(colName, "(") {
 							if idx := strings.Index(colName, "."); idx != -1 {
-								originalExpr = colName 
+								originalExpr = colName
 								colName = colName[idx+1:]
 							}
 						}
@@ -529,7 +529,7 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 	}
 
 	if strings.Contains(exprUpper, "COUNT(") {
-		return "INTEGER", false, true 
+		return "INTEGER", false, true
 	}
 
 	if strings.Contains(exprUpper, "SUM(") {
@@ -537,7 +537,7 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 	}
 
 	if strings.Contains(exprUpper, "AVG(") {
-		return "NUMERIC", true, true 
+		return "NUMERIC", true, true
 	}
 
 	if strings.Contains(exprUpper, "MAX(") || strings.Contains(exprUpper, "MIN(") {
@@ -548,19 +548,19 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 	}
 
 	if strings.Contains(exprUpper, "STRING_AGG(") {
-		return "TEXT", true, true 
+		return "TEXT", true, true
 	}
 
 	if strings.Contains(exprUpper, "ARRAY_AGG(") {
-		return "TEXT[]", true, true 
+		return "TEXT[]", true, true
 	}
 
 	if strings.Contains(exprUpper, "LENGTH(") {
-		return "INTEGER", true, true 
+		return "INTEGER", true, true
 	}
 
 	if strings.Contains(exprUpper, "EXTRACT(") {
-		return "NUMERIC", true, true 
+		return "NUMERIC", true, true
 	}
 
 	// Check for COALESCE
@@ -609,7 +609,7 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 			return "INTEGER", false, true
 		}
 
-		return "TEXT", false, true 
+		return "TEXT", false, true
 	}
 
 	// Check for arithmetic operations
@@ -671,7 +671,7 @@ func (p *QueryParser) inferTypeFromCTE(sql string, cteAlias string, cteColumn st
 		{fmt.Sprintf(`(?i)COUNT\([^)]*\)(?:\s+FILTER\s*\([^)]*\))?\s+(?:AS\s+)?%s`, cteColumn), "INTEGER", false},
 		{fmt.Sprintf(`(?i)SUM\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "NUMERIC", true},
 		{fmt.Sprintf(`(?i)AVG\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "NUMERIC", true},
-		{fmt.Sprintf(`(?i)MAX\(([^)]+)\)\s+(?:AS\s+)?%s`, cteColumn), "", true}, 
+		{fmt.Sprintf(`(?i)MAX\(([^)]+)\)\s+(?:AS\s+)?%s`, cteColumn), "", true},
 		{fmt.Sprintf(`(?i)MIN\(([^)]+)\)\s+(?:AS\s+)?%s`, cteColumn), "", true},
 		{fmt.Sprintf(`(?i)LENGTH\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "INTEGER", true},
 		{fmt.Sprintf(`(?i)EXTRACT\([^)]+\)\s+(?:AS\s+)?%s`, cteColumn), "NUMERIC", true},
@@ -724,14 +724,14 @@ func (p *QueryParser) inferTypeFromCTE(sql string, cteAlias string, cteColumn st
 func (p *QueryParser) validateInsertColumns(sql string, table *Table) error {
 	insertRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+[\w"]+\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)`)
 	matches := insertRegex.FindStringSubmatch(sql)
-	
+
 	if len(matches) < 3 {
 		return nil
 	}
 
 	columnsStr := matches[1]
 	valuesStr := matches[2]
-	
+
 	columnNames := strings.Split(columnsStr, ",")
 	valueParams := strings.Split(valuesStr, ",")
 

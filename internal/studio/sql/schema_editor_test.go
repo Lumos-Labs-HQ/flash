@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"context"
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/sqlite"
-	"context"
 )
 
 // newTestService creates a Service backed by an in-memory SQLite adapter.
