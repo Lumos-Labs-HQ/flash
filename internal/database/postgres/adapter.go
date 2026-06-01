@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 )
 
 type Adapter struct {
@@ -146,7 +147,7 @@ func (p *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = tx.Exec(ctx, `
 	INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
@@ -169,7 +170,7 @@ func (p *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, applied_steps_count)
@@ -211,7 +212,7 @@ func (p *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) err
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	statements := common.ParseSQLStatements(migrationSQL)
 

@@ -44,7 +44,7 @@ func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
 			if currentBranch := store.GetBranch(store.Current); currentBranch != nil {
 				if cfg.Database.Provider == "postgresql" || cfg.Database.Provider == "postgres" {
 					query := fmt.Sprintf("SET search_path TO %s, public", currentBranch.Schema)
-					adapter.ExecuteQuery(ctx, query)
+					_, _ = adapter.ExecuteQuery(ctx, query)
 					fmt.Printf("Studio using schema: %s (branch: %s)\n", currentBranch.Schema, currentBranch.Name)
 				}
 			}
@@ -116,15 +116,15 @@ func (s *Server) Start(openBrowser bool) error {
 
 // UI Handlers
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "index.html", common.Map{"Title": "FlashORM Studio"})
+	_ = s.tmpl.ExecuteTemplate(w, "index.html", common.Map{"Title": "FlashORM Studio"})
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "schema.html", common.Map{"Title": "FlashORM Studio"})
+	_ = s.tmpl.ExecuteTemplate(w, "schema.html", common.Map{"Title": "FlashORM Studio"})
 }
 
 func (s *Server) handleSQL(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "sql.html", common.Map{"Title": "SQL Editor - FlashORM Studio"})
+	_ = s.tmpl.ExecuteTemplate(w, "sql.html", common.Map{"Title": "SQL Editor - FlashORM Studio"})
 }
 
 // API Handlers

@@ -83,11 +83,6 @@ func init() {
 	unqualifiedColPatternRegex = regexp.MustCompile(`\b(\w+)\b`)
 }
 
-// tableAccessor is a helper interface for extracting table info via type assertion
-type tableAccessor interface {
-	GetTableNames() map[string]bool
-}
-
 // ValidateTableReferences checks if tables referenced in queries exist in the schema
 // Uses type assertion for performance instead of reflection
 func ValidateTableReferences(sql string, schema interface{}, sourceFile string) error {
@@ -178,16 +173,6 @@ func extractTableNamesFromSchema(schema interface{}) map[string]bool {
 			names[strings.ToLower(t.GetName())] = true
 		}
 		return names
-	}
-
-	// Try struct with Tables field via type assertion on common patterns
-	type tablesHolder struct {
-		Tables interface{}
-	}
-
-	// Check for *parser.Schema-like structure with Tables []*Table
-	type tableWithName interface {
-		GetName() string
 	}
 
 	// Use type switch for known patterns

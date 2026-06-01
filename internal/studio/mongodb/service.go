@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/database"
 )
 
 type Service struct {

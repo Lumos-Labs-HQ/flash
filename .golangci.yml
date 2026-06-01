@@ -1,0 +1,21 @@
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - misspell
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/Lumos-Labs-HQ/flash
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck

@@ -109,20 +109,20 @@ func (s *Server) Start(openBrowser bool) error {
 
 // UI Handlers
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "index.html", common.Map{
+	_ = s.tmpl.ExecuteTemplate(w, "index.html", common.Map{
 		"Title":         "FlashORM MongoDB Studio",
 		"ConnectionURL": s.connectionURL,
 	})
 }
 
 func (s *Server) handleCollections(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "collections.html", common.Map{"Title": "Collections - FlashORM MongoDB Studio"})
+	_ = s.tmpl.ExecuteTemplate(w, "collections.html", common.Map{"Title": "Collections - FlashORM MongoDB Studio"})
 }
 
 func (s *Server) handleAggregation(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "aggregation.html", common.Map{"Title": "Aggregation - FlashORM MongoDB Studio"})
+	_ = s.tmpl.ExecuteTemplate(w, "aggregation.html", common.Map{"Title": "Aggregation - FlashORM MongoDB Studio"})
 }
 
 func (s *Server) handleIndexes(w http.ResponseWriter, r *http.Request) {
-	s.tmpl.ExecuteTemplate(w, "indexes.html", common.Map{"Title": "Indexes - FlashORM MongoDB Studio"})
+	_ = s.tmpl.ExecuteTemplate(w, "indexes.html", common.Map{"Title": "Indexes - FlashORM MongoDB Studio"})
 }

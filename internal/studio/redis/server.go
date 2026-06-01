@@ -6,8 +6,9 @@ import (
 	"html/template"
 	"net/http"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/studio/common"
 )
 
 type Server struct {
@@ -138,7 +139,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 16; i++ {
 		databases[i] = i
 	}
-	s.tmpl.ExecuteTemplate(w, "index.html", common.Map{
+	_ = s.tmpl.ExecuteTemplate(w, "index.html", common.Map{
 		"Title":     "FlashORM Redis Studio",
 		"Host":      maskRedisURL(s.connectionURL),
 		"Databases": databases,

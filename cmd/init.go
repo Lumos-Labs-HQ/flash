@@ -140,9 +140,9 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 
 	// Write a first-run marker so docs can guide the user
 	if projectName != "" {
-		os.WriteFile(filepath.Join(projectName, ".flash"), []byte("new=true\n"), 0644)
+		_ = os.WriteFile(filepath.Join(projectName, ".flash"), []byte("new=true\n"), 0644)
 	} else {
-		os.WriteFile(".flash", []byte("new=true\n"), 0644)
+		_ = os.WriteFile(".flash", []byte("new=true\n"), 0644)
 	}
 
 	// Reset config cache so subsequent commands pick up the new config

@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
+
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
-	"github.com/fatih/color"
 )
 
 // Package-level pre-compiled regexes to avoid recompilation on every parse.
@@ -197,7 +198,7 @@ func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
 		}
 
 		if err := s.commitTransaction(ctx); err != nil {
-			s.rollbackTransaction(ctx)
+			_ = s.rollbackTransaction(ctx)
 			return fmt.Errorf("failed to commit transaction: %w", err)
 		}
 		color.Cyan("🔓 Transaction committed")
@@ -845,7 +846,7 @@ func (s *Seeder) truncateTables(ctx context.Context, order []string) error {
 			_, err = s.adapter.ExecuteQuery(ctx, query)
 			if err == nil {
 				resetQuery := fmt.Sprintf("DELETE FROM sqlite_sequence WHERE name='%s'", tableName)
-				s.adapter.ExecuteQuery(ctx, resetQuery)
+				_, _ = s.adapter.ExecuteQuery(ctx, resetQuery)
 			}
 		default:
 			query = fmt.Sprintf("DELETE FROM %s", tableName)

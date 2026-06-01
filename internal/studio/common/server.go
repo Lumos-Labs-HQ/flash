@@ -36,11 +36,11 @@ func SetupStaticFS(mux *http.ServeMux, studioStaticFS embed.FS) {
 	// Serve common shared files
 	mux.HandleFunc("GET /common/static/css/base.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css")
-		w.Write(baseCSS)
+		_, _ = w.Write(baseCSS)
 	})
 	mux.HandleFunc("GET /common/static/js/common.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
-		w.Write(commonJS)
+		_, _ = w.Write(commonJS)
 	})
 
 	// Serve common static assets (images, etc.)
@@ -82,7 +82,7 @@ func StartServer(mux *http.ServeMux, cfg StartServerConfig) error {
 	fmt.Printf("FlashORM %s starting on %s\n", cfg.Name, url)
 
 	if cfg.OpenBrowser {
-		go OpenBrowser(url)
+		go func() { _ = OpenBrowser(url) }()
 	}
 
 	return http.ListenAndServe(bindAddr, handler)

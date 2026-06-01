@@ -349,7 +349,7 @@ func (m *Migrator) Reset(ctx context.Context, force bool) error {
 
 	// Re-enable foreign key checks for MySQL
 	if m.provider == "mysql" {
-		m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 1")
+		_ = m.adapter.ExecuteMigration(ctx, "SET FOREIGN_KEY_CHECKS = 1")
 	}
 
 	// Drop all enums

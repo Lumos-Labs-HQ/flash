@@ -7,9 +7,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
-	"github.com/spf13/cobra"
 )
 
 func RunRaw(cmd *cobra.Command, args []string, queryFlag bool, fileFlag bool) error {
