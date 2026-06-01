@@ -295,6 +295,9 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 		// Corrupted snapshot → warn and fall back to DB
 		fmt.Printf("⚠️  Schema snapshot corrupted (%v). Falling back to live database.\n", err)
 	}
+
+	snapshotMissing := snap == nil && err == nil
+
 	if snap != nil && err == nil {
 		currentTables = snap.Tables
 		currentEnums = snap.Enums
@@ -313,6 +316,10 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 		// Extract indexes from current tables since DB introspection returns them inline
 		for _, table := range currentTables {
 			currentIndexes = append(currentIndexes, table.Indexes...)
+		}
+
+		if snapshotMissing {
+			_ = SaveSchemaSnapshot(snapshotPath, currentTables, currentEnums, currentIndexes)
 		}
 	}
 

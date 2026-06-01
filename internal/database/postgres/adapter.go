@@ -23,7 +23,7 @@ type Adapter struct {
 var typeMap = map[string]string{
 	"character varying": "VARCHAR", "varchar": "VARCHAR",
 	"character": "CHAR", "char": "CHAR", "text": "TEXT",
-	"integer": "INTEGER", "int4": "INTEGER", "bigint": "BIGINT", "int8": "BIGINT",
+	"integer": "INTEGER", "int": "INTEGER", "int4": "INTEGER", "bigint": "BIGINT", "int8": "BIGINT",
 	"smallint": "SMALLINT", "int2": "SMALLINT", "boolean": "BOOLEAN", "bool": "BOOLEAN",
 	"timestamp with time zone": "TIMESTAMP WITH TIME ZONE", "timestamptz": "TIMESTAMP WITH TIME ZONE",
 	"timestamp without time zone": "TIMESTAMP", "timestamp": "TIMESTAMP",
