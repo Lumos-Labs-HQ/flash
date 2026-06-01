@@ -1,10 +1,10 @@
 package sql
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"context"
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/sqlite"
 )

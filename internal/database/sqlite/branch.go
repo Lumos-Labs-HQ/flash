@@ -48,7 +48,7 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceSchema, targetS
 func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchSchema string) ([]types.SchemaTable, error) {
 	// Switch to branch file temporarily
 	originalPath := a.currentPath
-	defer a.SwitchDatabase(ctx, originalPath)
+	defer func() { _ = a.SwitchDatabase(ctx, originalPath) }()
 
 	branchFile := a.getBranchFilePath(branchSchema)
 	if err := a.SwitchDatabase(ctx, branchFile); err != nil {
@@ -72,7 +72,7 @@ func (a *Adapter) SetActiveSchema(ctx context.Context, schemaName string) error 
 func (a *Adapter) GetTableNamesInSchema(ctx context.Context, schemaName string) ([]string, error) {
 	// Switch to branch file temporarily
 	originalPath := a.currentPath
-	defer a.SwitchDatabase(ctx, originalPath)
+	defer func() { _ = a.SwitchDatabase(ctx, originalPath) }()
 
 	branchFile := a.getBranchFilePath(schemaName)
 	if err := a.SwitchDatabase(ctx, branchFile); err != nil {

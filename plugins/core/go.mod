@@ -4,10 +4,11 @@ go 1.26.2
 
 replace github.com/Lumos-Labs-HQ/flash => ../..
 
-require github.com/Lumos-Labs-HQ/flash v0.0.0-00010101000000-000000000000
+require github.com/Lumos-Labs-HQ/flash v0.0.0-20260601183410-fedd8d7ebfc5
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

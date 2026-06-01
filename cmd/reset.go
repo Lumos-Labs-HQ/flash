@@ -56,4 +56,5 @@ Use --force to skip all confirmation prompts.`,
 
 func init() {
 	// Command is registered by plugin executors, not the base CLI
+	resetCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompts")
 }

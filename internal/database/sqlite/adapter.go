@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Masterminds/squirrel"
 	_ "modernc.org/sqlite"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 )
 
 type Adapter struct {
@@ -182,7 +183,7 @@ func (s *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	_, err = tx.ExecContext(ctx, `
 	INSERT INTO _flash_migrations (id, migration_name, checksum, started_at, finished_at, applied_steps_count)
@@ -216,7 +217,7 @@ func (s *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// First, record the migration with started_at only
 	_, err = tx.ExecContext(ctx, `
@@ -290,7 +291,7 @@ func (s *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) err
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	statements := common.ParseSQLStatements(migrationSQL)
 

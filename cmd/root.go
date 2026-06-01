@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
-	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/plugin"
 )
 
 var (
@@ -80,7 +81,7 @@ Database Support:
 		if len(args) == 0 {
 			showBanner()
 			fmt.Println()
-			cmd.Help()
+			_ = cmd.Help()
 		}
 	},
 }
@@ -181,8 +182,8 @@ func init() {
 
 func initConfig() {
 	if err := godotenv.Load(); err != nil {
-		godotenv.Load(".env")
-		godotenv.Load(".env.local")
+		_ = godotenv.Load(".env")
+		_ = godotenv.Load(".env.local")
 	}
 
 	config.ConfigFile = cfgFile

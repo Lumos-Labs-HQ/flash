@@ -301,7 +301,7 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	if snap != nil && err == nil {
 		currentTables = snap.Tables
 		currentEnums = snap.Enums
-		currentIndexes = snap.Indexes
+		_ = snap.Indexes // indexes from snapshot not used in diff; live DB path populates currentIndexes
 	} else {
 		// 2. Snapshot missing or invalid → fall back to live database introspection.
 		currentTables, err = sm.adapter.GetCurrentSchema(ctx)
