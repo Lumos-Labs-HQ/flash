@@ -220,9 +220,16 @@ func columnMatches(colLower, keyword string) bool {
 	return false
 }
 
-func (g *DataGenerator) GenerateForColumn(colName, colType string, nullable bool) interface{} {
+func (g *DataGenerator) GenerateForColumn(colName, colType string, nullable bool, enumTypes map[string][]string) interface{} {
 	if nullable && g.rand.Intn(10) < 2 {
 		return nil
+	}
+
+	// Check if the column type is a custom enum type
+	if enumTypes != nil {
+		if vals, ok := enumTypes[strings.ToLower(colType)]; ok && len(vals) > 0 {
+			return vals[g.rand.Intn(len(vals))]
+		}
 	}
 
 	colLower := strings.ToLower(colName)

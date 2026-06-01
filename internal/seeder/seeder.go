@@ -19,6 +19,7 @@ var (
 	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["']?(\w+)["']?\s*\(([\s\S]*?)\);`)
 	seederFKRegex    = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(["']?(\w+)["']?\)\s*REFERENCES\s+["']?(\w+)["']?\s*\(["']?(\w+)["']?\)`)
 	seederRefRegex   = regexp.MustCompile(`(?i)REFERENCES\s+["']?(\w+)["']?\s*\(["']?(\w+)["']?\)`)
+	createTypeRegex  = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+["']?(\w+)["']?\s+AS\s+ENUM\s*\(([\s\S]*?)\)`)
 )
 
 type Seeder struct {
@@ -28,6 +29,7 @@ type Seeder struct {
 	graph       *DependencyGraph
 	insertedIDs map[string][]interface{}
 	seedConfig  SeedConfig
+	enumTypes   map[string][]string // custom enum type name -> values
 }
 
 func NewSeeder(cfg *config.Config) (*Seeder, error) {
@@ -54,6 +56,7 @@ func NewSeeder(cfg *config.Config) (*Seeder, error) {
 		generator:   generator,
 		graph:       NewDependencyGraph(),
 		insertedIDs: make(map[string][]interface{}),
+		enumTypes:   make(map[string][]string),
 	}, nil
 }
 
@@ -82,6 +85,22 @@ func (s *Seeder) Seed(ctx context.Context, seedConfig SeedConfig) error {
 	// Apply exclusions
 	for _, ex := range seedConfig.Exclude {
 		delete(tables, ex)
+	}
+
+	// If specific tables were requested, restrict to those tables only.
+	// We do NOT auto-include FK parents — the user is responsible for ensuring
+	// parent data exists (or using --truncate + seeding parents separately).
+	// This matches the documented behaviour: "flash seed users" seeds only users.
+	if len(seedConfig.SpecificTables) > 0 {
+		requested := make(map[string]bool, len(seedConfig.SpecificTables))
+		for _, t := range seedConfig.SpecificTables {
+			requested[t] = true
+		}
+		for name := range tables {
+			if !requested[name] {
+				delete(tables, name)
+			}
+		}
 	}
 
 	// Validate identifiers
@@ -206,7 +225,7 @@ func (s *Seeder) dryRun(tables map[string]*TableInfo, order []string) error {
 
 		color.Cyan("📋 %s (%d sample records):", tableName, count)
 		for i := 0; i < count; i++ {
-			record := s.generateRecord(table, nil)
+			record := s.generateRecord(table, nil, nil)
 			var parts []string
 			for _, col := range table.Columns {
 				val := record[col.Name]
@@ -223,7 +242,7 @@ func (s *Seeder) dryRun(tables map[string]*TableInfo, order []string) error {
 	return nil
 }
 
-func (s *Seeder) generateRecord(table *TableInfo, availableIDs map[string][]interface{}) map[string]interface{} {
+func (s *Seeder) generateRecord(table *TableInfo, availableIDs map[string][]interface{}, usedFKValues map[string]map[interface{}]bool) map[string]interface{} {
 	record := make(map[string]interface{})
 
 	// Coordinated timestamps: if a table has both created_at and updated_at,
@@ -255,12 +274,25 @@ func (s *Seeder) generateRecord(table *TableInfo, availableIDs map[string][]inte
 		if col.IsFK {
 			key := col.FKTable
 			if ids, ok := availableIDs[key]; ok && len(ids) > 0 {
-				record[col.Name] = ids[s.generator.rand.Intn(len(ids))]
-				continue
+				// For unique FK columns, pick an unused value to avoid duplicate key violations.
+				if col.IsUnique {
+					if used, tracked := usedFKValues[col.Name]; tracked {
+						val := s.pickUnusedID(ids, used)
+						if val != nil {
+							used[val] = true
+							record[col.Name] = val
+							continue
+						}
+						// All IDs exhausted — fall through to nullable/fallback handling
+					}
+				} else {
+					record[col.Name] = ids[s.generator.rand.Intn(len(ids))]
+					continue
+				}
 			}
 			if !col.Nullable {
 				// NOT NULL FK with no referenced data yet (e.g. first row of self-reference)
-				record[col.Name] = s.generator.GenerateForColumn(col.Name, col.Type, col.Nullable)
+				record[col.Name] = s.generator.GenerateForColumn(col.Name, col.Type, col.Nullable, s.enumTypes)
 				continue
 			}
 			record[col.Name] = nil
@@ -277,9 +309,25 @@ func (s *Seeder) generateRecord(table *TableInfo, availableIDs map[string][]inte
 			continue
 		}
 
-		record[col.Name] = s.generator.GenerateForColumn(col.Name, col.Type, col.Nullable)
+		record[col.Name] = s.generator.GenerateForColumn(col.Name, col.Type, col.Nullable, s.enumTypes)
 	}
 	return record
+}
+
+// pickUnusedID returns the first ID from ids that hasn't been used yet, or nil if all are used.
+func (s *Seeder) pickUnusedID(ids []interface{}, used map[interface{}]bool) interface{} {
+	// Shuffle a copy of the indices to avoid always picking in order
+	indices := make([]int, len(ids))
+	for i := range indices {
+		indices[i] = i
+	}
+	s.generator.rand.Shuffle(len(indices), func(i, j int) { indices[i], indices[j] = indices[j], indices[i] })
+	for _, idx := range indices {
+		if !used[ids[idx]] {
+			return ids[idx]
+		}
+	}
+	return nil
 }
 
 func isAutoIncrementType(colType, provider string) bool {
@@ -302,9 +350,18 @@ func (s *Seeder) seedTable(ctx context.Context, table *TableInfo, count int, nee
 		availableIDs[k] = v
 	}
 
+	// usedFKValues tracks which FK values have been used for unique FK columns
+	// to prevent duplicate key violations on UNIQUE FK columns.
+	usedFKValues := make(map[string]map[interface{}]bool)
+	for _, col := range table.Columns {
+		if col.IsFK && col.IsUnique {
+			usedFKValues[col.Name] = make(map[interface{}]bool)
+		}
+	}
+
 	var inserted int
 	for i := 0; i < count; i++ {
-		record := s.generateRecord(table, availableIDs)
+		record := s.generateRecord(table, availableIDs, usedFKValues)
 		batch = append(batch, record)
 
 		if len(batch) >= batchSize || i == count-1 {
@@ -357,7 +414,12 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 		return s.insertMultiRow(ctx, tableName, records)
 	}
 
-	// ID-tracking path: insert one by one.
+	// PostgreSQL: use a single multi-row INSERT ... RETURNING for ID tracking.
+	if needsIDs && len(records) > 1 && (provider == "postgresql" || provider == "postgres") && pkColumn != "" {
+		return s.insertMultiRowReturning(ctx, tableName, records, pkColumn)
+	}
+
+	// ID-tracking path for MySQL/SQLite or single records: insert one by one.
 	ids := make([]interface{}, 0, len(records))
 	for _, record := range records {
 		id, err := s.insertRecord(ctx, tableName, record, pkColumn)
@@ -366,6 +428,48 @@ func (s *Seeder) insertBatch(ctx context.Context, tableName string, records []ma
 		}
 		if id != nil {
 			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+func (s *Seeder) insertMultiRowReturning(ctx context.Context, tableName string, records []map[string]interface{}, pkColumn string) ([]interface{}, error) {
+	if !isValidIdentifier(tableName) {
+		return nil, fmt.Errorf("invalid table name: %s", tableName)
+	}
+	if !isValidIdentifier(pkColumn) {
+		return nil, fmt.Errorf("invalid primary key column: %s", pkColumn)
+	}
+
+	columns := make([]string, 0, len(records[0]))
+	for col := range records[0] {
+		if !isValidIdentifier(col) {
+			return nil, fmt.Errorf("invalid column name: %s", col)
+		}
+		columns = append(columns, col)
+	}
+
+	allValueStrs := make([]string, 0, len(records))
+	for _, record := range records {
+		valueStrs := make([]string, 0, len(columns))
+		for _, col := range columns {
+			valueStrs = append(valueStrs, s.formatValue(record[col]))
+		}
+		allValueStrs = append(allValueStrs, "("+strings.Join(valueStrs, ", ")+")")
+	}
+
+	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s RETURNING %s",
+		tableName, strings.Join(columns, ", "), strings.Join(allValueStrs, ", "), pkColumn)
+
+	result, err := s.adapter.ExecuteQuery(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]interface{}, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		if val, ok := row[pkColumn]; ok {
+			ids = append(ids, val)
 		}
 	}
 	return ids, nil
@@ -554,6 +658,23 @@ func (s *Seeder) parseSchema() (map[string]*TableInfo, error) {
 			continue
 		}
 
+		// Parse custom enum types (e.g. CREATE TYPE foo AS ENUM ('a', 'b'))
+		for _, m := range createTypeRegex.FindAllStringSubmatch(content, -1) {
+			if len(m) < 3 {
+				continue
+			}
+			typeName := strings.ToLower(m[1])
+			var vals []string
+			for _, sm := range enumValueRegex.FindAllStringSubmatch(m[2], -1) {
+				if len(sm) >= 2 {
+					vals = append(vals, sm[1])
+				}
+			}
+			if len(vals) > 0 {
+				s.enumTypes[typeName] = vals
+			}
+		}
+
 		matches := createTableRegex.FindAllStringSubmatch(content, -1)
 		for _, match := range matches {
 			if len(match) < 3 {
@@ -658,6 +779,7 @@ func (s *Seeder) parseTableDefinition(tableName, body string) *TableInfo {
 			Type:     colType,
 			Nullable: !strings.Contains(lineUpper, "NOT NULL"),
 			IsPK:     strings.Contains(lineUpper, "PRIMARY KEY") || strings.Contains(strings.ToUpper(colType), "SERIAL"),
+			IsUnique: strings.Contains(lineUpper, "UNIQUE"),
 		}
 
 		// Check for inline REFERENCES

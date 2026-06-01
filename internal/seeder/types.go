@@ -1,12 +1,13 @@
 package seeder
 
 type SeedConfig struct {
-	Count    int            // Default records per table
-	Tables   map[string]int // Per-table counts
-	Truncate bool           // Clear tables before seeding
-	Force    bool           // Skip confirmations and continue on errors
-	DryRun   bool           // Print sample data without inserting
-	Exclude  []string       // Tables to skip
+	Count          int            // Default records per table
+	Tables         map[string]int // Per-table counts (also used as the specific-tables filter when non-empty)
+	Truncate       bool           // Clear tables before seeding
+	Force          bool           // Skip confirmations and continue on errors
+	DryRun         bool           // Print sample data without inserting
+	Exclude        []string       // Tables to skip
+	SpecificTables []string       // If set, only seed these tables (plus required FK parents)
 }
 
 type TableInfo struct {
@@ -22,6 +23,7 @@ type ColumnInfo struct {
 	Type     string
 	Nullable bool
 	IsPK     bool
+	IsUnique bool
 	IsFK     bool
 	FKTable  string
 	FKColumn string
