@@ -261,13 +261,6 @@ func isAlphaNum(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // SQL keywords map
 var sqlKeywords = map[string]bool{
 	"SELECT": true, "FROM": true, "WHERE": true, "JOIN": true, "INNER": true,

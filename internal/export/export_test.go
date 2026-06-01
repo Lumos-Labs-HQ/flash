@@ -1,6 +1,7 @@
 package export
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -141,7 +142,7 @@ func TestExportToSQLite_CreatesDB(t *testing.T) {
 		"users": {{"id": "1", "email": "a@b.com"}},
 	})
 
-	path, err := exportToSQLite(nil, nil, data, dir)
+	path, err := exportToSQLite(context.TODO(), nil, data, dir)
 	if err != nil {
 		t.Fatalf("exportToSQLite error: %v", err)
 	}

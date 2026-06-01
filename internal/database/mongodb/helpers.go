@@ -82,23 +82,6 @@ func convertBSONValue(v interface{}) interface{} {
 	}
 }
 
-// extractBetween extracts a substring between two delimiters.
-// DEPRECATED: use extractBetweenBalanced for nested delimiters.
-func extractBetween(str, start, end string) string {
-	startIdx := strings.Index(str, start)
-	if startIdx == -1 {
-		return ""
-	}
-	startIdx += len(start)
-
-	endIdx := strings.LastIndex(str, end)
-	if endIdx == -1 || endIdx <= startIdx {
-		return ""
-	}
-
-	return strings.TrimSpace(str[startIdx:endIdx])
-}
-
 // extractBetweenBalanced extracts a substring between start and end delimiters,
 // respecting nested matching pairs. This correctly handles nested braces/objects.
 func extractBetweenBalanced(str, start, end string) string {

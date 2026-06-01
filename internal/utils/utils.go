@@ -83,7 +83,7 @@ func (i *InputUtils) AskConfirmation(message string, force bool) bool {
 	}
 	fmt.Printf("%s (y/N): ", message)
 	var response string
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response)
 	return strings.ToLower(response) == "y" || strings.ToLower(response) == "yes"
 }
 

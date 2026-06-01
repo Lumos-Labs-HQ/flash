@@ -580,9 +580,7 @@ func (m *Manager) UpdatePlugin(name, version string) error {
 
 	// Force re-install by removing the version equality guard inside InstallPlugin:
 	// We temporarily clear the version so InstallPlugin does not short-circuit.
-	if _, exists := m.registry.Plugins[name]; exists {
-		delete(m.registry.Plugins, name)
-	}
+	delete(m.registry.Plugins, name)
 
 	return m.InstallPlugin(name, version)
 }

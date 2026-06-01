@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type BackupManager struct {

@@ -79,7 +79,7 @@ func (s *Service) ensureCorrectSchema() error {
 }
 
 func (s *Service) GetTables() ([]common.TableInfo, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 	tables, err := s.adapter.GetAllTableNames(s.ctx)
 	if err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func (s *Service) GetTableData(tableName string, page, limit int) (*common.Table
 }
 
 func (s *Service) GetTableDataFiltered(tableName string, page, limit int, filters []common.Filter) (*common.TableData, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func (s *Service) GetTableDataFiltered(tableName string, page, limit int, filter
 }
 
 func (s *Service) SaveChanges(tableName string, changes []common.RowChange) error {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	if err := common.ValidateIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
@@ -203,7 +203,7 @@ func (s *Service) SaveChanges(tableName string, changes []common.RowChange) erro
 }
 
 func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	if err := common.ValidateIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
@@ -233,7 +233,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 }
 
 func (s *Service) AddRow(tableName string, data map[string]any) error {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	if err := common.ValidateIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
@@ -563,7 +563,7 @@ func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClau
 }
 
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	// Use a channel to load tables concurrently with timeout
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
@@ -711,7 +711,7 @@ func stripSQLComments(query string) string {
 }
 
 func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 	query = strings.TrimSpace(query)
 
 	// Strip leading comments to detect the actual query type
@@ -781,7 +781,7 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 }
 
 func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	if err := common.ValidateIdentifier(table); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
@@ -826,7 +826,7 @@ func (s *Service) UpdateRow(table string, id interface{}, data map[string]interf
 }
 
 func (s *Service) InsertRow(table string, data map[string]interface{}) error {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	if err := common.ValidateIdentifier(table); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
@@ -934,7 +934,7 @@ func (s *Service) SwitchBranch(branchName string) error {
 // GetEditorHints returns schema information optimized for editor autocomplete
 // This data should be cached on the client side to avoid repeated database calls
 func (s *Service) GetEditorHints() (map[string]any, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	tables, err := s.adapter.GetAllTableNames(s.ctx)
 	if err != nil {
@@ -1133,7 +1133,7 @@ func (s *Service) getEnumTypes(ctx context.Context) ([]common.ExportEnumType, er
 
 // ExportDatabase exports the database schema and/or data based on export type
 func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportData, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	ctx, cancel := context.WithTimeout(s.ctx, 60*time.Second)
 	defer cancel()
@@ -1466,7 +1466,7 @@ func (s *Service) createEnumType(ctx context.Context, enumType common.ExportEnum
 
 // ImportDatabase imports data from an export file
 func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportResult, error) {
-	s.ensureCorrectSchema()
+	_ = s.ensureCorrectSchema()
 
 	result := &common.ImportResult{
 		EnumTypesCreated: make([]string, 0),

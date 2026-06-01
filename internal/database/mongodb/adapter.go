@@ -8,10 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
 type Adapter struct {
