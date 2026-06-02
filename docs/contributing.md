@@ -23,26 +23,23 @@ Thank you for your interest in contributing to FlashORM! This guide will help yo
 
 ### Prerequisites
 
-- **Go 1.24.2+**
+- **Go 1.26+**
 - **Git**
-- **Make** (for build automation)
+- **Task** (`go install github.com/go-task/task/v3/cmd/task@latest`)
 - **Docker** (for testing with databases)
 
 ### Setup Development Environment
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/YOUR_USERNAME/flash.git
+git clone https://github.com/Lumos-Labs-HQ/flash.git
 cd flash
 
-# Set up development environment
-make dev-setup
-
 # Build the project
-make build-all
+task build
 
 # Run tests
-make test
+task test
 ```
 
 ## Development Setup
@@ -51,79 +48,100 @@ make test
 
 ```bash
 # Install Go dependencies
-go mod download
+go mod tidy
 
-# Set up pre-commit hooks
-make setup-hooks
-
-# Create development databases (requires Docker)
-make db-setup
-
-# Verify setup
-make verify
+# Verify setup — print current version
+task version
 ```
 
 ### Development Build
 
 ```bash
-# Build development version with all features
-make dev
+# Build development version (dev + plugins tags)
+task build
 
-# Install locally
-make install-dev
+# Install locally to $GOPATH/bin
+task install
 
 # Test the installation
 flash --version
 ```
 
-### IDE Setup
-
-**VS Code:**
-- Install Go extension
-- Configure settings for Go development
-- Set up debugging configuration
-
-**GoLand/IntelliJ:**
-- Import project as Go module
-- Configure Go SDK 1.24.2+
-- Set up run configurations
-
 ## Project Structure
 
 ```
 FlashORM/
-├── cmd/                    # CLI commands
-│   ├── root.go            # Root command
-│   ├── init.go            # Init command
-│   ├── migrate.go         # Migration commands
-│   ├── gen.go             # Code generation
-│   └── studio.go          # Studio command
-├── internal/              # Internal packages
-│   ├── config/            # Configuration management
-│   ├── database/          # Database adapters
-│   │   ├── adapter.go     # Common interface
-│   │   ├── postgres/      # PostgreSQL adapter
-│   │   ├── mysql/         # MySQL adapter
-│   │   └── sqlite/        # SQLite adapter
-│   ├── migrator/          # Migration logic
-│   ├── schema/            # Schema management
-│   ├── parser/            # SQL parser
-│   ├── gogen/             # Go code generator
-│   ├── jsgen/             # JavaScript/TypeScript generator
-│   ├── pygen/             # Python generator
-│   ├── export/            # Data export system
-│   ├── studio/            # Web studio
-│   └── utils/             # Utilities
-├── template/              # Project templates
-├── docs/                  # Documentation
-├── example/               # Example projects
-│   ├── go/                # Go example
-│   ├── python/            # Python example
-│   └── ts/                # TypeScript example
-├── test/                  # Test utilities
-├── scripts/               # Build and release scripts
-├── Makefile              # Build automation
-└── go.mod                # Go module
+├── cmd/                        # CLI commands
+│   ├── root.go                # Root command (production build tag)
+│   ├── root_dev.go            # Root command (dev build tag)
+│   ├── base.go                # Base command registration
+│   ├── base_dev.go            # Dev-only command registration
+│   ├── init.go                # flash init
+│   ├── migrate.go             # flash migrate
+│   ├── apply.go               # flash apply
+│   ├── down.go                # flash down
+│   ├── status.go              # flash status
+│   ├── gen.go                 # flash gen
+│   ├── seed.go                # flash seed
+│   ├── export.go              # flash export
+│   ├── pull.go                # flash pull
+│   ├── raw.go                 # flash raw
+│   ├── reset.go               # flash reset
+│   ├── studio.go              # flash studio
+│   ├── branch.go              # flash branch
+│   ├── plugins.go             # flash plugins
+│   ├── add_plugin.go          # flash add-plugin
+│   ├── remove_plugin.go       # flash remove-plugin
+│   ├── update.go              # flash update
+│   ├── plugin_executors.go    # Plugin executor wiring
+│   └── plugin_executor_studio.go
+├── internal/                  # Internal packages
+│   ├── config/                # Configuration (flash.toml)
+│   ├── database/              # Database adapters
+│   │   ├── adapter.go         # Common interface
+│   │   ├── factory.go         # Adapter factory
+│   │   ├── common/            # Shared DB utilities
+│   │   ├── postgres/          # PostgreSQL adapter
+│   │   ├── mysql/             # MySQL adapter
+│   │   ├── sqlite/            # SQLite adapter
+│   │   └── mongodb/           # MongoDB adapter
+│   ├── migrator/              # Migration engine
+│   ├── schema/                # Schema parsing & diffing
+│   ├── parser/                # SQL / query parser
+│   ├── gencommon/             # Shared codegen utilities
+│   ├── gogen/                 # Go code generator
+│   ├── jsgen/                 # JS/TS code generator
+│   ├── pygen/                 # Python code generator
+│   ├── seeder/                # Database seeder
+│   ├── export/                # Data export (JSON/CSV/SQLite)
+│   ├── backup/                # Backup utilities
+│   ├── pull/                  # Schema introspection (flash pull)
+│   ├── branch/                # Git-like schema branching
+│   ├── plugin/                # Plugin registry & manager
+│   ├── studio/                # Studio backends
+│   │   ├── sql/               # SQL Studio
+│   │   ├── mongodb/           # MongoDB Studio
+│   │   ├── redis/             # Redis Studio
+│   │   └── common/            # Shared studio utilities
+│   ├── types/                 # Shared type definitions
+│   └── utils/                 # General utilities
+├── plugins/                   # Standalone plugin binaries
+│   ├── core/                  # Core ORM plugin
+│   └── studio/                # Studio plugin
+├── template/                  # Project init templates
+├── example/                   # Example projects
+│   ├── go/                    # Go example
+│   ├── python/                # Python example
+│   └── ts/                    # TypeScript example
+├── test/
+│   └── integration/           # Integration tests (requires Docker)
+├── npm/                       # npm package wrapper
+├── python/                    # Python package wrapper
+├── docs/                      # VitePress documentation site
+├── Taskfile.yml               # Build automation (task)
+├── Makefile                   # Legacy / CI build targets
+├── main.go                    # Entry point
+└── go.mod                     # Go module
 ```
 
 ## Development Workflow
@@ -160,54 +178,27 @@ Follow the development guidelines:
 ### 4. Test Your Changes
 
 ```bash
-# Run all tests
-make test
-
-# Run specific test
-go test ./internal/migrator -v
-
-# Test with different databases
-make test-postgres
-make test-mysql
-make test-sqlite
+# Run all unit tests
+task test
 
 # Run integration tests
-make test-integration
+task test-integration
 
-# Test CLI commands
-make test-cli
+# Run a specific package test manually
+go test ./internal/migrator -v
 ```
 
 ### 5. Format and Lint
 
 ```bash
 # Format code
-make fmt
+task fmt
 
 # Lint code
-make lint
-
-# Check for security issues
-make security
-
-# Run all quality checks
-make quality
+task lint
 ```
 
-### 6. Update Documentation
-
-```bash
-# Build documentation
-make docs
-
-# Serve documentation locally
-make docs-serve
-
-# Check for broken links
-make docs-check
-```
-
-### 7. Commit and Push
+### 6. Commit and Push
 
 ```bash
 # Add changes
@@ -224,7 +215,7 @@ git commit -m "feat: add new feature description
 git push origin feature/your-feature-name
 ```
 
-### 8. Create Pull Request
+### 7. Create Pull Request
 
 - Go to GitHub and create a PR
 - Fill out the PR template
@@ -249,79 +240,31 @@ import (
 )
 
 func TestMigrator_ApplyMigration(t *testing.T) {
-    // Setup
-    cfg := &config.Config{
-        // test configuration
-    }
+    cfg := &config.Config{}
 
     migrator, err := NewMigrator(cfg)
     require.NoError(t, err)
 
-    // Test
     err = migrator.ApplyMigration(context.Background(), migration)
 
-    // Assert
     assert.NoError(t, err)
-    // Additional assertions...
 }
 ```
 
 ### Integration Tests
 
-```go
-// Example integration test
-func TestMigrationWorkflow(t *testing.T) {
-    if testing.Short() {
-        t.Skip("Skipping integration test")
-    }
-
-    // Setup test database
-    db := setupTestDatabase(t)
-    defer db.Close()
-
-    // Run migration workflow
-    cfg := createTestConfig(db)
-    migrator, err := NewMigrator(cfg)
-    require.NoError(t, err)
-
-    // Create and apply migration
-    migration := createTestMigration()
-    err = migrator.ApplyMigration(context.Background(), migration)
-    assert.NoError(t, err)
-
-    // Verify migration was applied
-    applied, err := migrator.GetAppliedMigrations(context.Background())
-    assert.NoError(t, err)
-    assert.Contains(t, applied, migration.ID)
-}
-```
-
-### Database-Specific Tests
-
 ```bash
-# Test with PostgreSQL
-make test-postgres
-
-# Test with MySQL
-make test-mysql
-
-# Test with SQLite
-make test-sqlite
-
-# Test with MongoDB
-make test-mongodb
+# Build and run integration tests
+task test-integration
 ```
 
 ### CLI Testing
 
 ```bash
-# Test CLI commands
-go run main.go --help
-go run main.go version
-
-# Test with example project
-cd example/go
-go run ../../main.go status
+# Build and test CLI commands manually
+task build
+./build/flash --help
+./build/flash version
 ```
 
 ## Code Style
@@ -341,17 +284,14 @@ import (
     "github.com/Lumos-Labs-HQ/flash/internal/config"
 )
 
-// Struct comments
+// Migrator handles database migrations
 type Migrator struct {
-    // Field comments
     adapter database.DatabaseAdapter
     cfg     *config.Config
 }
 
-// Function comments
 // ApplyMigration applies a single migration to the database
 func (m *Migrator) ApplyMigration(ctx context.Context, migration *Migration) error {
-    // Implementation
     return nil
 }
 ```
@@ -367,7 +307,6 @@ func (m *Migrator) ApplyMigration(ctx context.Context, migration *Migration) err
 ### Error Handling
 
 ```go
-// Good error handling
 func (m *Migrator) ApplyMigration(ctx context.Context, migration *Migration) error {
     if migration == nil {
         return fmt.Errorf("migration cannot be nil")
@@ -377,35 +316,7 @@ func (m *Migrator) ApplyMigration(ctx context.Context, migration *Migration) err
         return fmt.Errorf("invalid migration: %w", err)
     }
 
-    // Implementation
     return nil
-}
-
-// Bad error handling
-func (m *Migrator) ApplyMigration(ctx context.Context, migration *Migration) error {
-    // Don't ignore errors
-    m.validateMigration(migration) // Wrong!
-
-    // Don't return generic errors
-    return errors.New("something went wrong") // Wrong!
-}
-```
-
-### Documentation
-
-```go
-// Package-level documentation
-// Package migrator handles database migrations for FlashORM.
-// It provides functionality to create, apply, and rollback migrations
-// across different database systems.
-package migrator
-
-// Function documentation
-// CreateMigration creates a new migration file with the given name.
-// The migration will include both up and down SQL scripts.
-// Returns the path to the created migration file or an error.
-func CreateMigration(name string) (string, error) {
-    // Implementation
 }
 ```
 
@@ -493,14 +404,12 @@ Follows [Semantic Versioning](https://semver.org/):
 
    ### Bug Fixes
    - Fix migration rollback issue
-
-   ### Breaking Changes
-   - Remove deprecated API endpoints
    ```
 
 4. **Run Release Tests**
    ```bash
-   make test-release
+   task test
+   task test-integration
    ```
 
 5. **Create Git Tag**
@@ -543,7 +452,6 @@ Contributors are recognized in:
 - **Documentation**: Check docs first
 - **Issues**: Search existing issues
 - **Discussions**: Ask the community
-- **Discord**: Real-time help
 
 ## Additional Resources
 
@@ -552,32 +460,26 @@ Contributors are recognized in:
 - [Go Documentation](https://golang.org/doc/)
 - [Effective Go](https://golang.org/doc/effective_go.html)
 - [Go Testing](https://golang.org/pkg/testing/)
-- [Database Internals](https://www.databass.dev/)
 
 ### Development Tools
 
 - **golangci-lint**: Linting and code quality
 - **goimports**: Import management
 - **delve**: Go debugger
-- **benchstat**: Benchmark analysis
 
-### Project Scripts
+### All Task Commands
 
 ```bash
-# View all available make targets
-make help
+# Show all available tasks
+task --list
 
-# Clean build artifacts
-make clean
-
-# Update dependencies
-make deps
-
-# Generate mocks for testing
-make mocks
-
-# Run security checks
-make security
+task build            # Build dev binary (dev + plugins tags)
+task install          # Install dev binary to $GOPATH/bin
+task test             # Run all unit tests
+task test-integration # Run integration tests
+task fmt              # Format code
+task lint             # Lint code
+task version          # Print current version
 ```
 
-Thank you for contributing to FlashORM! Your contributions help make the project better for everyone. Whether it's fixing bugs, adding features, improving documentation, or helping other contributors, every contribution is valuable.
+Thank you for contributing to FlashORM! Every contribution — bug fixes, features, documentation, or helping other contributors — is valuable.
