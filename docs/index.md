@@ -19,8 +19,6 @@ hero:
       text: View on GitHub
       link: https://github.com/SpreadSheets600/flash-orm
 
-
-layout: home
 features:
   - icon: 🗃️
     title: Multi-Database Support
