@@ -3,8 +3,24 @@ name: FlashORM-Testcase
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - 'test/**'
+      - 'internal/**'
+      - 'template/**'
+      - 'cmd/**'
+      - 'Taskfile.yml'
+      - '.github/workflows/testcase.yml'
+
   pull_request:
     branches: [ main ]
+    paths:
+      - 'test/**'
+      - 'internal/**'
+      - 'template/**'
+      - 'cmd/**'
+      - 'Taskfile.yml'
+      - '.github/workflows/testcase.yml'
+
 
 jobs:
   unit-tests:
@@ -16,7 +32,7 @@ jobs:
 
     - uses: actions/setup-go@v5
       with:
-        go-version: '1.23.x'
+        go-version: '1.25.x'
         cache: true
 
     - name: Download dependencies
@@ -64,7 +80,7 @@ jobs:
 
     - uses: actions/setup-go@v5
       with:
-        go-version: '1.23.x'
+        go-version: '1.25.x'
         cache: true
 
     - name: Download dependencies
