@@ -25,7 +25,7 @@
   <a href="RELEASE_NOTES.md">📋 Release Notes</a>
 </p>
 
-![image](.github/flash-orm.png)
+![image](/img/flash-orm.png)
 
 ---
 

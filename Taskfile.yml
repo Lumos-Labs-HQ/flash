@@ -1,0 +1,56 @@
+version: "3"
+
+vars:
+  BINARY: flash
+  BUILD_DIR: build
+  VERSION:
+    sh: grep 'Version = ' cmd/root.go | head -1 | sed 's/.*"\(.*\)".*/\1/'
+  LDFLAGS: -s -w -X 'github.com/Lumos-Labs-HQ/flash/cmd.Version={{.VERSION}}'
+
+tasks:
+  # DEV
+
+  build:
+    desc: Build development binary 
+    cmds:
+      - go build -tags="dev,plugins"
+      - echo "Dev build"
+
+  install:
+    desc: Build and install dev binary to $GOPATH/bin
+    cmds:
+      - task: build
+      - go install -tags="dev,plugins"
+      - echo "Installed binary"
+
+  test:
+    desc: Run all tests with dev + plugins tags
+    cmds:
+      - go test -tags="dev,plugins" -v ./...
+
+  test-integration:
+    desc: Run all command integration tests
+    cmds:
+      - task: build
+      - cd test/integration && go test -tags="dev,plugins" -v ./...
+      - rm flash
+
+
+  # ── Shared ───────────────────────────────────────────────────────────
+
+  version:
+    desc: Print current version
+    cmds:
+      - echo "v{{.VERSION}}"
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+      - echo "Code formatted"
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run
+      - echo "Linting complete"

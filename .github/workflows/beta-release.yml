@@ -43,7 +43,7 @@ jobs:
         generate_release_notes: true
         files: |
           release/*
-        body_path: BETA_RELEASE_NOTES.MD
+        body_path: docs/notes/BETA_RELEASE_NOTES.MD
          
 
   publish-npm-beta:

@@ -49,4 +49,4 @@ jobs:
         generate_release_notes: true
         files: |
           release/*
-        body_path: RELEASE_NOTES.md
+        body_path: docs/notes/RELEASE_NOTES.md
