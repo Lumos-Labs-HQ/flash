@@ -165,7 +165,7 @@ function initializeEditor() {
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         bracketMatching(),
         closeBrackets(),
-        autocompletion({ override: [SqlHints.sqlCompletionSource] }),
+        autocompletion({ override: [SqlHints.sqlCompletionSource], activateOnTyping: true }),
         highlightActiveLine(),
         highlightSelectionMatches(),
         search({ top: true }),
@@ -188,6 +188,7 @@ function initializeEditor() {
     }),
     parent: document.getElementById('sql-editor')
   });
+  window._sqlEditor = editor; // expose for sql-hints.js
 
   // Document-level Ctrl+Enter / Cmd+Enter handler — most reliable approach
   document.addEventListener('keydown', function onDocKeyDown(e) {

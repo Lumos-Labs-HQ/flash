@@ -175,8 +175,10 @@ const TABLE_CONTEXT = new Set(['FROM', 'JOIN', 'INTO', 'UPDATE', 'TABLE', 'REFER
 const COLUMN_CONTEXT = new Set(['SELECT', 'WHERE', 'AND', 'OR', 'SET', 'ON', 'BY', 'HAVING', 'RETURNING', 'ORDER']);
 
 // --- Helper: get editor doc ---
+// editor is defined in sql.js — access via window._sqlEditor to avoid closure scope issues
 function getDoc() {
-  return editor && editor.state ? editor.state.doc : null;
+  const ed = window._sqlEditor;
+  return ed && ed.state ? ed.state.doc : null;
 }
 
 function getEditorText() {
@@ -249,107 +251,68 @@ function sqlCompletionSource(context) {
   const lineText = line.text;
   const ch = pos - line.from;
 
-  // Skip if in comment (simple check)
+  // Skip if in a line comment
   const beforeCursor = lineText.substring(0, ch);
-  if (beforeCursor.trimStart().startsWith('--')) {
-    return null;
-  }
+  if (beforeCursor.trimStart().startsWith('--')) return null;
 
-  // Find word start
+  // Find word start (letters, digits, underscore)
   let start = ch;
-  while (start > 0 && /[\w]/.test(lineText.charAt(start - 1))) {
-    start--;
-  }
+  while (start > 0 && /\w/.test(lineText[start - 1])) start--;
 
   const word = lineText.substring(start, ch);
   const prefix = word.toLowerCase();
 
-  // Analyze context
-  const cursorPos = offsetToLineCh(doc, pos);
-  const contextInfo = analyzeContext(cursorPos);
+  // Only trigger on explicit request OR when typing word chars
+  if (!context.explicit && word.length === 0) return null;
 
-  // Build completions
-  let completions = [];
+  const fullText = doc.toString();
+  const textBefore = fullText.substring(0, line.from + start);
 
-  // Check for table.column pattern
-  const beforeWord = lineText.substring(0, start);
-  const dotMatch = beforeWord.match(/(\w+)\.\s*$/);
+  // table.column pattern
+  const dotMatch = lineText.substring(0, start).match(/(\w+)\.\s*$/);
   if (dotMatch) {
-    const tableOrAlias = dotMatch[1].toLowerCase();
-    const tableName = resolveTableOrAlias(tableOrAlias);
+    const tableName = resolveTableOrAlias(dotMatch[1].toLowerCase(), fullText);
     if (tableName) {
-      completions = getColumnsForTable(tableName, prefix);
-      return formatCompletionResult(completions, line.from + start, pos);
+      return formatCompletionResult(getColumnsForTable(tableName, prefix), line.from + start, pos);
     }
   }
 
-  // Get completions based on context
-  if (contextInfo.expectsTable) {
+  const lastKeyword = findLastKeyword(textBefore);
+  const expectsTable = TABLE_CONTEXT.has(lastKeyword);
+  const expectsColumn = COLUMN_CONTEXT.has(lastKeyword);
+  const tables = extractTables(fullText);
+
+  let completions = [];
+  if (expectsTable) {
     completions.push(...getTableCompletions(prefix));
-    completions.push(...getKeywordCompletions(prefix, contextInfo.lastKeyword));
-  } else if (contextInfo.expectsColumn) {
-    completions.push(...getColumnCompletions(prefix, contextInfo.tables));
+    completions.push(...getKeywordCompletions(prefix, lastKeyword));
+  } else if (expectsColumn) {
+    completions.push(...getColumnCompletions(prefix, tables));
     completions.push(...getTableCompletions(prefix));
-    completions.push(...getKeywordCompletions(prefix, contextInfo.lastKeyword));
+    completions.push(...getKeywordCompletions(prefix, lastKeyword));
   } else {
-    completions.push(...getKeywordCompletions(prefix, contextInfo.lastKeyword));
+    completions.push(...getKeywordCompletions(prefix, lastKeyword));
     completions.push(...getTableCompletions(prefix));
-    completions.push(...getColumnCompletions(prefix, contextInfo.tables));
+    completions.push(...getColumnCompletions(prefix, tables));
   }
 
   return formatCompletionResult(completions, line.from + start, pos);
 }
 
 /**
- * Analyze the SQL context at cursor position
- */
-function analyzeContext(cur) {
-  const fullText = getEditorText();
-  const cursorOffset = lineChToOffset(getDoc(), cur);
-  const textBefore = fullText.substring(0, cursorOffset);
-
-  const tables = extractTables(fullText);
-  const lastKeyword = findLastKeyword(textBefore);
-
-  const expectsTable = TABLE_CONTEXT.has(lastKeyword);
-  const expectsColumn = COLUMN_CONTEXT.has(lastKeyword);
-
-  return {
-    lastKeyword,
-    tables,
-    expectsTable,
-    expectsColumn
-  };
-}
-
-/**
- * Find the last SQL keyword in text
+ * Find the last SQL keyword in text — fast single reverse-scan.
+ * Builds a reversed token list and picks the first token that matches a keyword.
  */
 function findLastKeyword(text) {
-  const upper = text.toUpperCase();
-
-  let lastKw = '';
-  let lastPos = -1;
-
-  for (const kw of ALL_SQL_KEYWORDS) {
-    const regex = new RegExp(`\\b${kw}\\b`, 'gi');
-    let match;
-    while ((match = regex.exec(upper)) !== null) {
-      if (match.index > lastPos) {
-        const afterKw = upper.substring(match.index + kw.length);
-        if (/^\s*\w*$/.test(afterKw) || afterKw.length === 0) {
-          lastPos = match.index;
-          lastKw = kw;
-        }
-        if (TABLE_CONTEXT.has(kw) || COLUMN_CONTEXT.has(kw)) {
-          lastPos = match.index;
-          lastKw = kw;
-        }
-      }
+  // Tokenize by whitespace/punctuation, scan from the end
+  const tokens = text.trim().split(/[\s,;()]+/).filter(Boolean);
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const upper = tokens[i].toUpperCase();
+    if (TABLE_CONTEXT.has(upper) || COLUMN_CONTEXT.has(upper) || NEXT_KEYWORDS[upper]) {
+      return upper;
     }
   }
-
-  return lastKw;
+  return '';
 }
 
 /**
@@ -382,23 +345,17 @@ function extractTables(queryText) {
 /**
  * Resolve table name or alias
  */
-function resolveTableOrAlias(alias) {
+function resolveTableOrAlias(alias, text) {
   if (!schemaCache) return null;
+  if (schemaCache[alias]) return alias;
 
-  if (schemaCache[alias]) {
-    return alias;
-  }
-
-  const text = getEditorText();
+  const fullText = text || getEditorText();
   const regex = new RegExp(`(\\w+)\\s+(?:AS\\s+)?${alias}\\b`, 'gi');
-  const match = regex.exec(text);
+  const match = regex.exec(fullText);
   if (match) {
     const tableName = match[1].toLowerCase();
-    if (schemaCache[tableName]) {
-      return tableName;
-    }
+    if (schemaCache[tableName]) return tableName;
   }
-
   return null;
 }
 
