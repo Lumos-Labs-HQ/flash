@@ -1,0 +1,425 @@
+package sql
+
+import (
+	"context"
+	"fmt"
+)
+
+type DBMetrics struct {
+	Provider string `json:"provider"`
+
+	
+	ActiveConnections int `json:"active_connections"`
+	IdleConnections   int `json:"idle_connections"`
+	TotalConnections  int `json:"total_connections"`
+	MaxConnections    int `json:"max_connections"`
+
+	DatabaseSizeMB float64 `json:"database_size_mb"`
+
+	RowsInserted int64 `json:"rows_inserted"`
+	RowsUpdated  int64 `json:"rows_updated"`
+	RowsDeleted  int64 `json:"rows_deleted"`
+	RowsFetched  int64 `json:"rows_fetched"`
+
+	CacheHitRate float64 `json:"cache_hit_rate"` // percentage 0-100
+
+	Deadlocks int64 `json:"deadlocks"`
+
+	ActiveQueries []ActiveQuery `json:"active_queries"`
+
+	SlowQueries []SlowQuery `json:"slow_queries"`
+
+	TableSizes []TableSize `json:"table_sizes"`
+}
+
+type ActiveQuery struct {
+	PID      int    `json:"pid"`
+	Duration string `json:"duration"`
+	State    string `json:"state"`
+	Query    string `json:"query"`
+	User     string `json:"user"`
+}
+
+type SlowQuery struct {
+	Query      string  `json:"query"`
+	Calls      int64   `json:"calls"`
+	TotalMS    float64 `json:"total_ms"`
+	MeanMS     float64 `json:"mean_ms"`
+	Rows       int64   `json:"rows"`
+}
+
+type TableSize struct {
+	Name      string  `json:"name"`
+	SizeMB    float64 `json:"size_mb"`
+	RowCount  int64   `json:"row_count"`
+}
+
+func (s *Service) GetMetrics(ctx context.Context) (*DBMetrics, error) {
+	provider := s.adapter.ProviderName()
+	m := &DBMetrics{Provider: provider}
+
+	switch provider {
+	case "postgres", "postgresql":
+		return s.getPostgresMetrics(ctx, m)
+	case "mysql":
+		return s.getMySQLMetrics(ctx, m)
+	case "sqlite", "sqlite3":
+		return s.getSQLiteMetrics(ctx, m)
+	default:
+		return m, nil
+	}
+}
+
+func (s *Service) getPostgresMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
+
+	// Connections
+	r, err := s.adapter.ExecuteQuery(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE state = 'active')::int AS active,
+			COUNT(*) FILTER (WHERE state = 'idle')::int   AS idle,
+			COUNT(*)::int                                  AS total,
+			(SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max
+		FROM pg_stat_activity
+		WHERE datname = current_database()`)
+	if err == nil && len(r.Rows) > 0 {
+		row := r.Rows[0]
+		m.ActiveConnections = toInt(row["active"])
+		m.IdleConnections = toInt(row["idle"])
+		m.TotalConnections = toInt(row["total"])
+		m.MaxConnections = toInt(row["max"])
+	}
+
+	// DB size — cast to float8 so pgx returns float64
+	r, err = s.adapter.ExecuteQuery(ctx,
+		`SELECT CAST(COALESCE(SUM(pg_total_relation_size(relid)),0) AS float8) / 1048576.0 AS size_mb
+		 FROM pg_stat_user_tables`)
+	if err == nil && len(r.Rows) > 0 {
+		m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
+	}
+
+	// Row activity from pg_stat_user_tables (works on Neon)
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT
+			CAST(COALESCE(SUM(n_tup_ins),0)      AS bigint) AS inserted,
+			CAST(COALESCE(SUM(n_tup_upd),0)      AS bigint) AS updated,
+			CAST(COALESCE(SUM(n_tup_del),0)      AS bigint) AS deleted,
+			CAST(COALESCE(SUM(seq_tup_read),0)   AS bigint) AS fetched
+		FROM pg_stat_user_tables`)
+	if err == nil && len(r.Rows) > 0 {
+		row := r.Rows[0]
+		m.RowsInserted = toInt64(row["inserted"])
+		m.RowsUpdated = toInt64(row["updated"])
+		m.RowsDeleted = toInt64(row["deleted"])
+		m.RowsFetched = toInt64(row["fetched"])
+	}
+
+	// Deadlocks from pg_stat_database (may be 0 on Neon, that's fine)
+	r, err = s.adapter.ExecuteQuery(ctx,
+		`SELECT CAST(COALESCE(SUM(deadlocks),0) AS bigint) AS deadlocks
+		 FROM pg_stat_database WHERE datname = current_database()`)
+	if err == nil && len(r.Rows) > 0 {
+		m.Deadlocks = toInt64(r.Rows[0]["deadlocks"])
+	}
+
+	// Cache hit rate from pg_statio_user_tables (works on Neon)
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT CAST(
+			CASE WHEN (SUM(heap_blks_hit)+SUM(heap_blks_read))=0 THEN 0
+			     ELSE 100.0*SUM(heap_blks_hit)/NULLIF(SUM(heap_blks_hit)+SUM(heap_blks_read),0)
+			END AS float8) AS hit_rate
+		FROM pg_statio_user_tables`)
+	if err == nil && len(r.Rows) > 0 {
+		m.CacheHitRate = toFloat(r.Rows[0]["hit_rate"])
+	}
+	// Active queries (excluding self)
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT pid,
+			   COALESCE(EXTRACT(EPOCH FROM (now() - query_start))::int::text || 's', '0s') AS duration,
+			   state,
+			   LEFT(query, 120) AS query,
+			   usename AS "user"
+		FROM pg_stat_activity
+		WHERE datname = current_database()
+		  AND state != 'idle'
+		  AND pid <> pg_backend_pid()
+		ORDER BY query_start
+		LIMIT 20`)
+	if err == nil {
+		for _, row := range r.Rows {
+			m.ActiveQueries = append(m.ActiveQueries, ActiveQuery{
+				PID:      toInt(row["pid"]),
+				Duration: toString(row["duration"]),
+				State:    toString(row["state"]),
+				Query:    toString(row["query"]),
+				User:     toString(row["user"]),
+			})
+		}
+	}
+
+	// Slow queries (requires pg_stat_statements; gracefully skip if unavailable)
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT LEFT(query, 120) AS query, calls,
+			   ROUND(total_exec_time::numeric, 2) AS total_ms,
+			   ROUND(mean_exec_time::numeric, 2)  AS mean_ms,
+			   rows
+		FROM pg_stat_statements
+		ORDER BY mean_exec_time DESC
+		LIMIT 10`)
+	if err == nil {
+		for _, row := range r.Rows {
+			m.SlowQueries = append(m.SlowQueries, SlowQuery{
+				Query:   toString(row["query"]),
+				Calls:   toInt64(row["calls"]),
+				TotalMS: toFloat(row["total_ms"]),
+				MeanMS:  toFloat(row["mean_ms"]),
+				Rows:    toInt64(row["rows"]),
+			})
+		}
+	}
+
+	// Table sizes
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT relname AS name,
+			   CAST(pg_total_relation_size(relid) AS float8) / 1048576.0 AS size_mb,
+			   CAST(n_live_tup AS bigint) AS row_count
+		FROM pg_stat_user_tables
+		ORDER BY pg_total_relation_size(relid) DESC
+		LIMIT 20`)
+	if err == nil {
+		for _, row := range r.Rows {
+			m.TableSizes = append(m.TableSizes, TableSize{
+				Name:     toString(row["name"]),
+				SizeMB:   toFloat(row["size_mb"]),
+				RowCount: toInt64(row["row_count"]),
+			})
+		}
+	}
+
+	return m, nil
+}
+
+func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
+	// Connections
+	r, err := s.adapter.ExecuteQuery(ctx, `
+		SELECT
+			SUM(CASE WHEN Command != 'Sleep' THEN 1 ELSE 0 END) AS active,
+			SUM(CASE WHEN Command  = 'Sleep' THEN 1 ELSE 0 END) AS idle,
+			COUNT(*) AS total
+		FROM information_schema.PROCESSLIST`)
+	if err == nil && len(r.Rows) > 0 {
+		row := r.Rows[0]
+		m.ActiveConnections = toInt(row["active"])
+		m.IdleConnections = toInt(row["idle"])
+		m.TotalConnections = toInt(row["total"])
+	}
+
+	r, err = s.adapter.ExecuteQuery(ctx, `SELECT @@max_connections AS max`)
+	if err == nil && len(r.Rows) > 0 {
+		m.MaxConnections = toInt(r.Rows[0]["max"])
+	}
+
+	// Database size — use ANALYZE + flush to get fresh stats
+	s.adapter.ExecuteQuery(ctx, `SELECT 1`) // warm up
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT COALESCE(ROUND(SUM(data_length + index_length) / 1048576, 4), 0) AS size_mb
+		FROM information_schema.TABLES
+		WHERE table_schema = DATABASE()`)
+	if err == nil && len(r.Rows) > 0 {
+		m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
+	}
+
+	// Row activity + cache — use SHOW GLOBAL STATUS (works without performance_schema privs)
+	vars, err2 := s.adapter.ExecuteQuery(ctx, `SHOW GLOBAL STATUS WHERE Variable_name IN
+		('Com_insert','Com_update','Com_delete','Com_select',
+		 'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads')`)
+	if err2 == nil {
+		vmap := make(map[string]float64)
+		for _, row := range vars.Rows {
+			vmap[toString(row["Variable_name"])] = toFloat(row["Value"])
+		}
+		m.RowsInserted = int64(vmap["Com_insert"])
+		m.RowsUpdated  = int64(vmap["Com_update"])
+		m.RowsDeleted  = int64(vmap["Com_delete"])
+		m.RowsFetched  = int64(vmap["Com_select"])
+		reads := vmap["Innodb_buffer_pool_read_requests"]
+		disk  := vmap["Innodb_buffer_pool_reads"]
+		if reads > 0 {
+			m.CacheHitRate = (reads - disk) / reads * 100
+		}
+	}
+
+	// Active queries
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT ID AS pid, TIME AS duration, STATE AS state,
+			   LEFT(INFO, 120) AS query, USER AS user
+		FROM information_schema.PROCESSLIST
+		WHERE COMMAND != 'Sleep' AND ID != CONNECTION_ID()
+		ORDER BY TIME DESC LIMIT 20`)
+	if err == nil {
+		for _, row := range r.Rows {
+			m.ActiveQueries = append(m.ActiveQueries, ActiveQuery{
+				PID:      toInt(row["pid"]),
+				Duration: fmt.Sprintf("%ds", toInt(row["duration"])),
+				State:    toString(row["state"]),
+				Query:    toString(row["query"]),
+				User:     toString(row["user"]),
+			})
+		}
+	}
+
+	// Slow queries
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT LEFT(DIGEST_TEXT, 120) AS query,
+			   COUNT_STAR AS calls,
+			   ROUND(SUM_TIMER_WAIT/1000000000, 2) AS total_ms,
+			   ROUND(AVG_TIMER_WAIT/1000000000, 2) AS mean_ms,
+			   SUM_ROWS_EXAMINED AS rows
+		FROM performance_schema.events_statements_summary_by_digest
+		ORDER BY AVG_TIMER_WAIT DESC LIMIT 10`)
+	if err == nil {
+		for _, row := range r.Rows {
+			m.SlowQueries = append(m.SlowQueries, SlowQuery{
+				Query:   toString(row["query"]),
+				Calls:   toInt64(row["calls"]),
+				TotalMS: toFloat(row["total_ms"]),
+				MeanMS:  toFloat(row["mean_ms"]),
+				Rows:    toInt64(row["rows"]),
+			})
+		}
+	}
+
+	// Table sizes
+	r, err = s.adapter.ExecuteQuery(ctx, `
+		SELECT table_name AS name,
+			   COALESCE(ROUND((data_length + index_length) / 1048576, 4), 0) AS size_mb,
+			   COALESCE(table_rows, 0) AS row_count
+		FROM information_schema.TABLES
+		WHERE table_schema = DATABASE()
+		ORDER BY (data_length + index_length) DESC LIMIT 20`)
+	if err == nil {
+		for _, row := range r.Rows {
+			m.TableSizes = append(m.TableSizes, TableSize{
+				Name:     toString(row["name"]),
+				SizeMB:   toFloat(row["size_mb"]),
+				RowCount: toInt64(row["row_count"]),
+			})
+		}
+	}
+
+	return m, nil
+}
+
+func (s *Service) getSQLiteMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
+	// SQLite: limited metrics — just table sizes and row counts
+	tables, err := s.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return m, nil
+	}
+
+	var totalSize int64
+	for _, table := range tables {
+		if table == "_flash_migrations" {
+			continue
+		}
+		r, err := s.adapter.ExecuteQueryWithArgs(ctx,
+			fmt.Sprintf("SELECT COUNT(*) AS cnt FROM %q", table))
+		if err == nil && len(r.Rows) > 0 {
+			cnt := toInt64(r.Rows[0]["cnt"])
+			totalSize += cnt
+			m.TableSizes = append(m.TableSizes, TableSize{
+				Name:     table,
+				RowCount: cnt,
+			})
+		}
+	}
+
+	// SQLite page count * page size = db size
+	r, err := s.adapter.ExecuteQuery(ctx, "SELECT page_count * page_size / 1048576.0 AS size_mb FROM pragma_page_count(), pragma_page_size()")
+	if err == nil && len(r.Rows) > 0 {
+		m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
+	}
+
+	m.MaxConnections = 1
+	m.TotalConnections = 1
+	m.ActiveConnections = 1
+
+	return m, nil
+}
+
+// helpers
+func toInt(v interface{}) int {
+	if v == nil {
+		return 0
+	}
+	switch x := v.(type) {
+	case int:
+		return x
+	case int32:
+		return int(x)
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	case float32:
+		return int(x)
+	case []byte:
+		var n int
+		fmt.Sscanf(string(x), "%d", &n)
+		return n
+	case string:
+		var n int
+		fmt.Sscanf(x, "%d", &n)
+		return n
+	}
+	// Fallback for pgtype.Numeric and other types
+	var n int
+	fmt.Sscanf(fmt.Sprintf("%v", v), "%d", &n)
+	return n
+}
+
+func toInt64(v interface{}) int64 {
+	return int64(toInt(v))
+}
+
+func toFloat(v interface{}) float64 {
+	if v == nil {
+		return 0
+	}
+	switch x := v.(type) {
+	case float64:
+		return x
+	case float32:
+		return float64(x)
+	case int64:
+		return float64(x)
+	case int32:
+		return float64(x)
+	case int:
+		return float64(x)
+	case []byte:
+		var f float64
+		fmt.Sscanf(string(x), "%f", &f)
+		return f
+	case string:
+		var f float64
+		fmt.Sscanf(x, "%f", &f)
+		return f
+	}
+	// Fallback: convert via fmt for any other type (e.g. pgtype.Numeric)
+	var f float64
+	fmt.Sscanf(fmt.Sprintf("%v", v), "%f", &f)
+	return f
+}
+
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case []byte:
+		return string(x)
+	}
+	return fmt.Sprintf("%v", v)
+}
