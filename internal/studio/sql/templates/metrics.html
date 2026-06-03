@@ -14,46 +14,20 @@
 <body>
     <div class="left-navbar">
         <img src="/common/static/image/logo.webp" alt="FlashORM" class="left-navbar-logo">
-        <a href="/" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:table"></span>
-            <span class="tooltip">Data</span>
-        </a>
-        <a href="/sql" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:code-braces"></span>
-            <span class="tooltip">SQL Editor</span>
-        </a>
-        <a href="/schema" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:file-tree"></span>
-            <span class="tooltip">Schema</span>
-        </a>
-        <a href="/metrics" class="left-navbar-link active">
-            <span class="iconify" data-icon="mdi:chart-line"></span>
-            <span class="tooltip">Metrics</span>
-        </a>
+        <a href="/" class="left-navbar-link"><span class="iconify" data-icon="mdi:table"></span><span class="tooltip">Data</span></a>
+        <a href="/sql" class="left-navbar-link"><span class="iconify" data-icon="mdi:code-braces"></span><span class="tooltip">SQL Editor</span></a>
+        <a href="/schema" class="left-navbar-link"><span class="iconify" data-icon="mdi:file-tree"></span><span class="tooltip">Schema</span></a>
+        <a href="/metrics" class="left-navbar-link active"><span class="iconify" data-icon="mdi:chart-line"></span><span class="tooltip">Metrics</span></a>
     </div>
 
     <div class="studio-container">
         <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">Monitoring</div>
-            </div>
+            <div class="sidebar-header"><div class="sidebar-title">Monitoring</div></div>
             <div class="tables-list">
-                <div class="table-item active" onclick="switchSection('metrics')">
-                    <span class="iconify" data-icon="mdi:chart-bar"></span>
-                    <span>Metrics</span>
-                </div>
-                <div class="table-item" onclick="switchSection('queries')">
-                    <span class="iconify" data-icon="mdi:play-circle-outline"></span>
-                    <span>Active Queries</span>
-                </div>
-                <div class="table-item" onclick="switchSection('slow')">
-                    <span class="iconify" data-icon="mdi:timer-alert-outline"></span>
-                    <span>Query Performance</span>
-                </div>
-                <div class="table-item" onclick="switchSection('tables')">
-                    <span class="iconify" data-icon="mdi:database-outline"></span>
-                    <span>System Operations</span>
-                </div>
+                <div class="table-item active" onclick="switchSection('metrics')"><span class="iconify" data-icon="mdi:chart-bar"></span><span>Metrics</span></div>
+                <div class="table-item" onclick="switchSection('queries')"><span class="iconify" data-icon="mdi:play-circle-outline"></span><span>Active Queries</span></div>
+                <div class="table-item" onclick="switchSection('slow')"><span class="iconify" data-icon="mdi:timer-alert-outline"></span><span>Query Performance</span></div>
+                <div class="table-item" onclick="switchSection('tables')"><span class="iconify" data-icon="mdi:database-outline"></span><span>System Operations</span></div>
             </div>
         </aside>
 
@@ -85,11 +59,10 @@
                                 <span class="ldot" style="background:#38bdf8"></span>Active
                                 <span class="ldot" style="background:#4ade80"></span>Idle
                                 <span class="ldot" style="background:#fb923c"></span>Total
-                                <span class="ldot" style="background:#f87171"></span>Max
                             </div>
                         </div>
                         <div class="chart-meta" id="chart-connections-meta">—</div>
-                        <canvas id="chart-connections" class="chart-canvas"></canvas>
+                        <div id="chart-connections-wrap" class="chart-wrap"></div>
                     </div>
 
                     <div class="chart-card">
@@ -98,7 +71,7 @@
                             <div class="chart-legend"><span class="ldot" style="background:#38bdf8"></span>MB</div>
                         </div>
                         <div class="chart-meta" id="chart-size-meta">—</div>
-                        <canvas id="chart-size" class="chart-canvas"></canvas>
+                        <div id="chart-size-wrap" class="chart-wrap"></div>
                     </div>
 
                     <div class="chart-card">
@@ -107,7 +80,7 @@
                             <div class="chart-legend"><span class="ldot" style="background:#4ade80"></span>%</div>
                         </div>
                         <div class="chart-meta" id="chart-cache-meta">—</div>
-                        <canvas id="chart-cache" class="chart-canvas"></canvas>
+                        <div id="chart-cache-wrap" class="chart-wrap"></div>
                     </div>
 
                     <div class="chart-card">
@@ -116,7 +89,7 @@
                             <div class="chart-legend"><span class="ldot" style="background:#f87171"></span>Count</div>
                         </div>
                         <div class="chart-meta" id="chart-deadlocks-meta">—</div>
-                        <canvas id="chart-deadlocks" class="chart-canvas"></canvas>
+                        <div id="chart-deadlocks-wrap" class="chart-wrap"></div>
                     </div>
 
                     <div class="chart-card">
@@ -129,22 +102,18 @@
                             </div>
                         </div>
                         <div class="chart-meta" id="chart-rows-meta">—</div>
-                        <canvas id="chart-rows" class="chart-canvas"></canvas>
+                        <div id="chart-rows-wrap" class="chart-wrap"></div>
                     </div>
 
                     <div class="chart-card">
-                        <div class="chart-card-header">
-                            <span class="chart-title">Connection Pool</span>
-                        </div>
+                        <div class="chart-card-header"><span class="chart-title">Connection Pool</span></div>
                         <div class="chart-meta" id="pool-meta">—</div>
-                        <canvas id="chart-pool" class="chart-canvas"></canvas>
+                        <div id="chart-pool-wrap" class="chart-wrap"></div>
                     </div>
 
                     <div class="chart-card wide">
-                        <div class="chart-card-header">
-                            <span class="chart-title">Table Sizes</span>
-                        </div>
-                        <canvas id="chart-table-sizes" class="chart-canvas" style="height:180px!important"></canvas>
+                        <div class="chart-card-header"><span class="chart-title">Table Sizes</span></div>
+                        <div id="chart-table-sizes-wrap" class="chart-wrap" style="min-height:200px"></div>
                     </div>
 
                 </div>
@@ -170,7 +139,7 @@
                 </div>
             </div>
 
-            <!-- SYSTEM / TABLE SIZES -->
+            <!-- SYSTEM -->
             <div id="section-tables" class="section-content" style="display:none">
                 <div class="data-table-wrap">
                     <table class="m-table" id="table-sizes">
