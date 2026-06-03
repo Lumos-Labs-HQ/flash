@@ -47,30 +47,32 @@ function pushHistory(m) {
     prevDeleted  = m.rows_deleted  || 0;
   }
 
-  // On first load seed 15 points with realistic variation so chart isn't flat
+  // Only seed historical points if there's real data to vary around
   if (history.timestamps.length === 0) {
-    const base = {
-      active: m.active_connections || 1,
-      idle:   m.idle_connections   || 0,
-      total:  m.total_connections  || 1,
-      size:   m.database_size_mb   || 0.1,
-      cache:  m.cache_hit_rate     || 90,
-    };
-    for (let i = 14; i >= 1; i--) {
-      const d = new Date(Date.now() - i * 30000);
-      const t = d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-      // Realistic cache fluctuation ±8%, connections ±2, rows random small bursts
-      const r = () => (Math.random() - 0.5) * 2; // -1 to 1
-      push(history.timestamps, t);
-      push(history.active,    Math.max(0, Math.round(base.active + r() * 2)));
-      push(history.idle,      Math.max(0, Math.round(base.idle   + r() * 1)));
-      push(history.total,     Math.max(0, Math.round(base.total  + r() * 2)));
-      push(history.size_mb,   Math.max(0, base.size + r() * base.size * 0.05));
-      push(history.cache,     Math.min(100, Math.max(0, base.cache + r() * 8)));
-      push(history.deadlocks, Math.max(0, Math.round(Math.random() * 0.3)));
-      push(history.inserted,  Math.round(Math.random() * 5));
-      push(history.updated,   Math.round(Math.random() * 3));
-      push(history.deleted,   Math.round(Math.random() * 2));
+    const hasData = (m.active_connections > 0) || (m.database_size_mb > 0) || (m.cache_hit_rate > 0);
+    if (hasData) {
+      const base = {
+        active: m.active_connections || 1,
+        idle:   m.idle_connections   || 0,
+        total:  m.total_connections  || 1,
+        size:   m.database_size_mb   || 0,
+        cache:  m.cache_hit_rate     || 0,
+      };
+      for (let i = 14; i >= 1; i--) {
+        const d = new Date(Date.now() - i * 30000);
+        const t = d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+        const r = () => (Math.random() - 0.5) * 2;
+        push(history.timestamps, t);
+        push(history.active,    Math.max(0, Math.round(base.active + r() * 2)));
+        push(history.idle,      Math.max(0, Math.round(base.idle   + r() * 1)));
+        push(history.total,     Math.max(0, Math.round(base.total  + r() * 2)));
+        push(history.size_mb,   Math.max(0, base.size + r() * base.size * 0.05));
+        push(history.cache,     Math.min(100, Math.max(0, base.cache + r() * 8)));
+        push(history.deadlocks, Math.max(0, Math.round(Math.random() * 0.3)));
+        push(history.inserted,  Math.round(Math.random() * 5));
+        push(history.updated,   Math.round(Math.random() * 3));
+        push(history.deleted,   Math.round(Math.random() * 2));
+      }
     }
   }
 
@@ -100,10 +102,10 @@ function renderAll(m) {
     toSeries(history.active, 'Active', C.sky),
     toSeries(history.idle,   'Idle',   C.green),
     toSeries(history.total,  'Total',  C.orange),
-  ], { height: 220 });
+  ], { height: 220, yMin: 0 });
 
   document.getElementById('chart-size-meta').textContent = formatMB(m.database_size_mb);
-  makeSVGChart('chart-size-wrap', [toSeries(history.size_mb, 'Size (MB)', C.sky)]);
+  makeSVGChart('chart-size-wrap', [toSeries(history.size_mb, 'Size (MB)', C.sky)], { yMin: 0 });
 
   document.getElementById('chart-cache-meta').textContent =
     isSQLite ? 'N/A' : m.cache_hit_rate.toFixed(1) + '%';
@@ -111,7 +113,7 @@ function renderAll(m) {
 
   document.getElementById('chart-deadlocks-meta').textContent =
     isSQLite ? 'N/A' : 'Total: ' + m.deadlocks;
-  makeSVGChart('chart-deadlocks-wrap', [toSeries(history.deadlocks, 'Deadlocks', C.red)]);
+  makeSVGChart('chart-deadlocks-wrap', [toSeries(history.deadlocks, 'Deadlocks', C.red)], { yMin: 0 });
 
   document.getElementById('chart-rows-meta').textContent =
     isSQLite ? 'N/A' : `+${fmtNum(history.inserted.at(-1))} ins  +${fmtNum(history.updated.at(-1))} upd  +${fmtNum(history.deleted.at(-1))} del  (since last poll)`;
@@ -119,7 +121,7 @@ function renderAll(m) {
     toSeries(history.inserted, 'Inserted', C.green),
     toSeries(history.updated,  'Updated',  C.sky),
     toSeries(history.deleted,  'Deleted',  C.red),
-  ]);
+  ], { yMin: 0 });
 
   document.getElementById('pool-meta').textContent =
     `${m.active_connections} active / ${m.idle_connections} idle / ${m.max_connections} max`;
@@ -165,7 +167,7 @@ function makeSVGChart(id, series, opts = {}) {
   const rawMin = opts.yMin != null ? opts.yMin : Math.min(...allVals, 0);
   const rawMax = opts.yMax != null ? opts.yMax : Math.max(...allVals, rawMin + 1);
   const yPad = (rawMax - rawMin) * 0.08 || 0.5;
-  const yMin = opts.yMin != null ? opts.yMin : rawMin - yPad;
+  const yMin = opts.yMin != null ? opts.yMin : Math.max(0, rawMin - yPad);
   const yMax = opts.yMax != null ? opts.yMax : rawMax + yPad;
 
   const labels = series[0]?.data.map(d => d.label) || [];
