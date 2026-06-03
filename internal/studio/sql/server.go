@@ -74,6 +74,7 @@ func (s *Server) setupRoutes() {
 	s.mux.HandleFunc("GET /{$}", s.handleIndex)
 	s.mux.HandleFunc("GET /schema", s.handleSchema)
 	s.mux.HandleFunc("GET /sql", s.handleSQL)
+	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
 
 	// API routes
 	s.mux.HandleFunc("GET /api/tables", s.handleGetTables)
@@ -98,6 +99,9 @@ func (s *Server) setupRoutes() {
 
 	// Editor hints API (cached on client-side)
 	s.mux.HandleFunc("GET /api/editor/hints", s.handleGetEditorHints)
+
+	// Metrics API
+	s.mux.HandleFunc("GET /api/metrics", s.handleGetMetrics)
 
 	// Export/Import API
 	s.mux.HandleFunc("GET /api/export/{type}", s.handleExport)
@@ -125,6 +129,10 @@ func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSQL(w http.ResponseWriter, r *http.Request) {
 	_ = s.tmpl.ExecuteTemplate(w, "sql.html", common.Map{"Title": "SQL Editor - FlashORM Studio"})
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	_ = s.tmpl.ExecuteTemplate(w, "metrics.html", common.Map{"Title": "Metrics - FlashORM Studio"})
 }
 
 // API Handlers
@@ -346,4 +354,14 @@ func (s *Server) handleGetEditorHints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	common.JSON(w, hints)
+}
+
+func (s *Server) handleGetMetrics(w http.ResponseWriter, r *http.Request) {
+	metrics, err := s.service.GetMetrics(r.Context())
+	if err != nil {
+		log.Printf("ERROR handleGetMetrics: %v", err)
+		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
+		return
+	}
+	common.JSON(w, metrics)
 }
