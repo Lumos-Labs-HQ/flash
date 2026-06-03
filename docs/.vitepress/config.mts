@@ -55,6 +55,7 @@ export default defineConfig({
           text: 'Studio',
           items: [
             { text: 'SQL Studio', link: '/concepts/studio' },
+            { text: 'Database Metrics', link: '/concepts/metrics' },
             { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
             { text: 'Redis Studio', link: '/concepts/redis-studio' }
           ]

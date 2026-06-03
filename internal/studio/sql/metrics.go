@@ -8,7 +8,6 @@ import (
 type DBMetrics struct {
 	Provider string `json:"provider"`
 
-	
 	ActiveConnections int `json:"active_connections"`
 	IdleConnections   int `json:"idle_connections"`
 	TotalConnections  int `json:"total_connections"`
@@ -41,17 +40,17 @@ type ActiveQuery struct {
 }
 
 type SlowQuery struct {
-	Query      string  `json:"query"`
-	Calls      int64   `json:"calls"`
-	TotalMS    float64 `json:"total_ms"`
-	MeanMS     float64 `json:"mean_ms"`
-	Rows       int64   `json:"rows"`
+	Query   string  `json:"query"`
+	Calls   int64   `json:"calls"`
+	TotalMS float64 `json:"total_ms"`
+	MeanMS  float64 `json:"mean_ms"`
+	Rows    int64   `json:"rows"`
 }
 
 type TableSize struct {
-	Name      string  `json:"name"`
-	SizeMB    float64 `json:"size_mb"`
-	RowCount  int64   `json:"row_count"`
+	Name     string  `json:"name"`
+	SizeMB   float64 `json:"size_mb"`
+	RowCount int64   `json:"row_count"`
 }
 
 func (s *Service) GetMetrics(ctx context.Context) (*DBMetrics, error) {
@@ -219,7 +218,7 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 	}
 
 	// Database size — use ANALYZE + flush to get fresh stats
-	s.adapter.ExecuteQuery(ctx, `SELECT 1`) // warm up
+	_, _ = s.adapter.ExecuteQuery(ctx, `SELECT 1`) // warm up
 	r, err = s.adapter.ExecuteQuery(ctx, `
 		SELECT COALESCE(ROUND(SUM(data_length + index_length) / 1048576, 4), 0) AS size_mb
 		FROM information_schema.TABLES
@@ -238,11 +237,11 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 			vmap[toString(row["Variable_name"])] = toFloat(row["Value"])
 		}
 		m.RowsInserted = int64(vmap["Com_insert"])
-		m.RowsUpdated  = int64(vmap["Com_update"])
-		m.RowsDeleted  = int64(vmap["Com_delete"])
-		m.RowsFetched  = int64(vmap["Com_select"])
+		m.RowsUpdated = int64(vmap["Com_update"])
+		m.RowsDeleted = int64(vmap["Com_delete"])
+		m.RowsFetched = int64(vmap["Com_select"])
 		reads := vmap["Innodb_buffer_pool_read_requests"]
-		disk  := vmap["Innodb_buffer_pool_reads"]
+		disk := vmap["Innodb_buffer_pool_reads"]
 		if reads > 0 {
 			m.CacheHitRate = (reads - disk) / reads * 100
 		}
@@ -364,16 +363,15 @@ func toInt(v interface{}) int {
 		return int(x)
 	case []byte:
 		var n int
-		fmt.Sscanf(string(x), "%d", &n)
+		_, _ = fmt.Sscanf(string(x), "%d", &n)
 		return n
 	case string:
 		var n int
-		fmt.Sscanf(x, "%d", &n)
+		_, _ = fmt.Sscanf(x, "%d", &n)
 		return n
 	}
-	// Fallback for pgtype.Numeric and other types
 	var n int
-	fmt.Sscanf(fmt.Sprintf("%v", v), "%d", &n)
+	_, _ = fmt.Sscanf(fmt.Sprintf("%v", v), "%d", &n)
 	return n
 }
 
@@ -398,16 +396,15 @@ func toFloat(v interface{}) float64 {
 		return float64(x)
 	case []byte:
 		var f float64
-		fmt.Sscanf(string(x), "%f", &f)
+		_, _ = fmt.Sscanf(string(x), "%f", &f)
 		return f
 	case string:
 		var f float64
-		fmt.Sscanf(x, "%f", &f)
+		_, _ = fmt.Sscanf(x, "%f", &f)
 		return f
 	}
-	// Fallback: convert via fmt for any other type (e.g. pgtype.Numeric)
 	var f float64
-	fmt.Sscanf(fmt.Sprintf("%v", v), "%f", &f)
+	_, _ = fmt.Sscanf(fmt.Sprintf("%v", v), "%f", &f)
 	return f
 }
 
