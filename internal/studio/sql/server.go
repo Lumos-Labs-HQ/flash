@@ -255,13 +255,15 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 
 	data, err := s.service.ExecuteSQL(req.Query)
 	if err != nil {
+		log.Printf("ERROR handleExecuteSQL: %v", err)
 		status := classifySQLError(err)
-		if status == http.StatusInternalServerError {
-			log.Printf("ERROR handleExecuteSQL: %v", err)
-			common.JSONError(w, status, sanitizeError(err))
-		} else {
-			common.JSONError(w, status, err.Error())
+		// Always show the real error for SQL execution — it's a user-visible query error,
+		// not a server infrastructure error. Only sanitize true infrastructure errors.
+		msg := err.Error()
+		if s := sanitizeInfraError(err); s != "" {
+			msg = s
 		}
+		common.JSONError(w, status, msg)
 		return
 	}
 	common.JSON(w, data)
@@ -281,6 +283,23 @@ func sanitizeError(err error) string {
 		return "permission denied"
 	}
 	return "internal error"
+}
+
+// sanitizeInfraError returns a generic message only for true infrastructure errors
+// (connection, timeout, permission). Returns "" for normal SQL errors so callers
+// can show the real message to the user.
+func sanitizeInfraError(err error) string {
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "connection") || strings.Contains(msg, "connect") {
+		return "database connection error"
+	}
+	if strings.Contains(msg, "timeout") {
+		return "request timed out"
+	}
+	if strings.Contains(msg, "permission") || strings.Contains(msg, "access denied") {
+		return "permission denied"
+	}
+	return ""
 }
 
 // classifySQLError returns an appropriate HTTP status code for a SQL error.

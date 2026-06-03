@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/branch"
@@ -565,11 +566,20 @@ func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClau
 func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	_ = s.ensureCorrectSchema()
 
-	// Use a channel to load tables concurrently with timeout
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 
-	tables, err := s.adapter.GetCurrentSchema(ctx)
+	// Use PullCompleteSchema directly to avoid N per-table index queries
+	type SchemaFetcher interface {
+		PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
+	}
+	var tables []types.SchemaTable
+	var err error
+	if fetcher, ok := s.adapter.(SchemaFetcher); ok {
+		tables, err = fetcher.PullCompleteSchema(ctx)
+	} else {
+		tables, err = s.adapter.GetCurrentSchema(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -936,51 +946,73 @@ func (s *Service) SwitchBranch(branchName string) error {
 func (s *Service) GetEditorHints() (map[string]any, error) {
 	_ = s.ensureCorrectSchema()
 
-	tables, err := s.adapter.GetAllTableNames(s.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build schema map: table -> columns
-	schema := make(map[string][]map[string]string)
-
-	for _, tableName := range tables {
-		if tableName == "_flash_migrations" {
-			continue
-		}
-
-		columns, err := s.adapter.GetTableColumns(s.ctx, tableName)
-		if err != nil {
-			// Skip tables we can't read columns from
-			schema[tableName] = []map[string]string{}
-			continue
-		}
-
-		cols := make([]map[string]string, 0, len(columns))
-		seen := make(map[string]bool)
-		for _, col := range columns {
-			if seen[col.Name] {
-				continue
-			}
-			seen[col.Name] = true
-			cols = append(cols, map[string]string{
-				"name": col.Name,
-				"type": col.Type,
-			})
-		}
-		schema[tableName] = cols
-	}
-
-	// Get database provider
 	provider := "sql"
 	if s.cfg != nil {
 		provider = s.cfg.Database.Provider
 	}
 
-	return map[string]any{
-		"provider": provider,
-		"schema":   schema,
-	}, nil
+	schema := make(map[string][]map[string]string)
+
+	// Use PullCompleteSchema for a single bulk query instead of N per-table calls
+	type SchemaFetcher interface {
+		PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
+	}
+	if fetcher, ok := s.adapter.(SchemaFetcher); ok {
+		if schemaTables, err := fetcher.PullCompleteSchema(s.ctx); err == nil {
+			for _, t := range schemaTables {
+				if t.Name == "_flash_migrations" {
+					continue
+				}
+				cols := make([]map[string]string, 0, len(t.Columns))
+				seen := make(map[string]bool, len(t.Columns))
+				for _, col := range t.Columns {
+					if seen[col.Name] {
+						continue
+					}
+					seen[col.Name] = true
+					cols = append(cols, map[string]string{"name": col.Name, "type": col.Type})
+				}
+				schema[t.Name] = cols
+			}
+			return map[string]any{"provider": provider, "schema": schema}, nil
+		}
+	}
+
+	// Fallback: parallel per-table column queries
+	tables, err := s.adapter.GetAllTableNames(s.ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, tableName := range tables {
+		if tableName == "_flash_migrations" {
+			continue
+		}
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			columns, err := s.adapter.GetTableColumns(s.ctx, name)
+			cols := []map[string]string{}
+			if err == nil {
+				seen := make(map[string]bool)
+				for _, col := range columns {
+					if seen[col.Name] {
+						continue
+					}
+					seen[col.Name] = true
+					cols = append(cols, map[string]string{"name": col.Name, "type": col.Type})
+				}
+			}
+			mu.Lock()
+			schema[name] = cols
+			mu.Unlock()
+		}(tableName)
+	}
+	wg.Wait()
+
+	return map[string]any{"provider": provider, "schema": schema}, nil
 }
 
 // sortTablesByDependency sorts tables in topological order based on foreign key dependencies.

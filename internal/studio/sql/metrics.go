@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 type DBMetrics struct {
@@ -70,241 +71,319 @@ func (s *Service) GetMetrics(ctx context.Context) (*DBMetrics, error) {
 }
 
 func (s *Service) getPostgresMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-	// Connections
-	r, err := s.adapter.ExecuteQuery(ctx, `
-		SELECT
-			COUNT(*) FILTER (WHERE state = 'active')::int AS active,
-			COUNT(*) FILTER (WHERE state = 'idle')::int   AS idle,
-			COUNT(*)::int                                  AS total,
-			(SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max
-		FROM pg_stat_activity
-		WHERE datname = current_database()`)
-	if err == nil && len(r.Rows) > 0 {
-		row := r.Rows[0]
-		m.ActiveConnections = toInt(row["active"])
-		m.IdleConnections = toInt(row["idle"])
-		m.TotalConnections = toInt(row["total"])
-		m.MaxConnections = toInt(row["max"])
+	run := func(fn func()) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fn()
+		}()
 	}
 
-	// DB size — cast to float8 so pgx returns float64
-	r, err = s.adapter.ExecuteQuery(ctx,
-		`SELECT CAST(COALESCE(SUM(pg_total_relation_size(relid)),0) AS float8) / 1048576.0 AS size_mb
-		 FROM pg_stat_user_tables`)
-	if err == nil && len(r.Rows) > 0 {
-		m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
-	}
-
-	// Row activity from pg_stat_user_tables (works on Neon)
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT
-			CAST(COALESCE(SUM(n_tup_ins),0)      AS bigint) AS inserted,
-			CAST(COALESCE(SUM(n_tup_upd),0)      AS bigint) AS updated,
-			CAST(COALESCE(SUM(n_tup_del),0)      AS bigint) AS deleted,
-			CAST(COALESCE(SUM(seq_tup_read),0)   AS bigint) AS fetched
-		FROM pg_stat_user_tables`)
-	if err == nil && len(r.Rows) > 0 {
-		row := r.Rows[0]
-		m.RowsInserted = toInt64(row["inserted"])
-		m.RowsUpdated = toInt64(row["updated"])
-		m.RowsDeleted = toInt64(row["deleted"])
-		m.RowsFetched = toInt64(row["fetched"])
-	}
-
-	// Deadlocks from pg_stat_database (may be 0 on Neon, that's fine)
-	r, err = s.adapter.ExecuteQuery(ctx,
-		`SELECT CAST(COALESCE(SUM(deadlocks),0) AS bigint) AS deadlocks
-		 FROM pg_stat_database WHERE datname = current_database()`)
-	if err == nil && len(r.Rows) > 0 {
-		m.Deadlocks = toInt64(r.Rows[0]["deadlocks"])
-	}
-
-	// Cache hit rate from pg_statio_user_tables (works on Neon)
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT CAST(
-			CASE WHEN (SUM(heap_blks_hit)+SUM(heap_blks_read))=0 THEN 0
-			     ELSE 100.0*SUM(heap_blks_hit)/NULLIF(SUM(heap_blks_hit)+SUM(heap_blks_read),0)
-			END AS float8) AS hit_rate
-		FROM pg_statio_user_tables`)
-	if err == nil && len(r.Rows) > 0 {
-		m.CacheHitRate = toFloat(r.Rows[0]["hit_rate"])
-	}
-	// Active queries (excluding self)
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT pid,
-			   COALESCE(EXTRACT(EPOCH FROM (now() - query_start))::int::text || 's', '0s') AS duration,
-			   state,
-			   LEFT(query, 120) AS query,
-			   usename AS "user"
-		FROM pg_stat_activity
-		WHERE datname = current_database()
-		  AND state != 'idle'
-		  AND pid <> pg_backend_pid()
-		ORDER BY query_start
-		LIMIT 20`)
-	if err == nil {
-		for _, row := range r.Rows {
-			m.ActiveQueries = append(m.ActiveQueries, ActiveQuery{
-				PID:      toInt(row["pid"]),
-				Duration: toString(row["duration"]),
-				State:    toString(row["state"]),
-				Query:    toString(row["query"]),
-				User:     toString(row["user"]),
-			})
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT
+				COUNT(*) FILTER (WHERE state = 'active')::int AS active,
+				COUNT(*) FILTER (WHERE state = 'idle')::int   AS idle,
+				COUNT(*)::int                                  AS total,
+				(SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max
+			FROM pg_stat_activity
+			WHERE datname = current_database()`)
+		if err == nil && len(r.Rows) > 0 {
+			row := r.Rows[0]
+			mu.Lock()
+			m.ActiveConnections = toInt(row["active"])
+			m.IdleConnections = toInt(row["idle"])
+			m.TotalConnections = toInt(row["total"])
+			m.MaxConnections = toInt(row["max"])
+			mu.Unlock()
 		}
-	}
+	})
 
-	// Slow queries (requires pg_stat_statements; gracefully skip if unavailable)
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT LEFT(query, 120) AS query, calls,
-			   ROUND(total_exec_time::numeric, 2) AS total_ms,
-			   ROUND(mean_exec_time::numeric, 2)  AS mean_ms,
-			   rows
-		FROM pg_stat_statements
-		ORDER BY mean_exec_time DESC
-		LIMIT 10`)
-	if err == nil {
-		for _, row := range r.Rows {
-			m.SlowQueries = append(m.SlowQueries, SlowQuery{
-				Query:   toString(row["query"]),
-				Calls:   toInt64(row["calls"]),
-				TotalMS: toFloat(row["total_ms"]),
-				MeanMS:  toFloat(row["mean_ms"]),
-				Rows:    toInt64(row["rows"]),
-			})
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx,
+			`SELECT CAST(COALESCE(SUM(pg_total_relation_size(relid)),0) AS float8) / 1048576.0 AS size_mb
+			 FROM pg_stat_user_tables`)
+		if err == nil && len(r.Rows) > 0 {
+			mu.Lock()
+			m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
+			mu.Unlock()
 		}
-	}
+	})
 
-	// Table sizes
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT relname AS name,
-			   CAST(pg_total_relation_size(relid) AS float8) / 1048576.0 AS size_mb,
-			   CAST(n_live_tup AS bigint) AS row_count
-		FROM pg_stat_user_tables
-		ORDER BY pg_total_relation_size(relid) DESC
-		LIMIT 20`)
-	if err == nil {
-		for _, row := range r.Rows {
-			m.TableSizes = append(m.TableSizes, TableSize{
-				Name:     toString(row["name"]),
-				SizeMB:   toFloat(row["size_mb"]),
-				RowCount: toInt64(row["row_count"]),
-			})
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT
+				CAST(COALESCE(SUM(n_tup_ins),0)      AS bigint) AS inserted,
+				CAST(COALESCE(SUM(n_tup_upd),0)      AS bigint) AS updated,
+				CAST(COALESCE(SUM(n_tup_del),0)      AS bigint) AS deleted,
+				CAST(COALESCE(SUM(seq_tup_read),0)   AS bigint) AS fetched
+			FROM pg_stat_user_tables`)
+		if err == nil && len(r.Rows) > 0 {
+			row := r.Rows[0]
+			mu.Lock()
+			m.RowsInserted = toInt64(row["inserted"])
+			m.RowsUpdated = toInt64(row["updated"])
+			m.RowsDeleted = toInt64(row["deleted"])
+			m.RowsFetched = toInt64(row["fetched"])
+			mu.Unlock()
 		}
-	}
+	})
 
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx,
+			`SELECT CAST(COALESCE(SUM(deadlocks),0) AS bigint) AS deadlocks
+			 FROM pg_stat_database WHERE datname = current_database()`)
+		if err == nil && len(r.Rows) > 0 {
+			mu.Lock()
+			m.Deadlocks = toInt64(r.Rows[0]["deadlocks"])
+			mu.Unlock()
+		}
+	})
+
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT CAST(
+				CASE WHEN (SUM(heap_blks_hit)+SUM(heap_blks_read))=0 THEN 0
+				     ELSE 100.0*SUM(heap_blks_hit)/NULLIF(SUM(heap_blks_hit)+SUM(heap_blks_read),0)
+				END AS float8) AS hit_rate
+			FROM pg_statio_user_tables`)
+		if err == nil && len(r.Rows) > 0 {
+			mu.Lock()
+			m.CacheHitRate = toFloat(r.Rows[0]["hit_rate"])
+			mu.Unlock()
+		}
+	})
+
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT pid,
+				   COALESCE(EXTRACT(EPOCH FROM (now() - query_start))::int::text || 's', '0s') AS duration,
+				   state,
+				   LEFT(query, 120) AS query,
+				   usename AS "user"
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND state != 'idle'
+			  AND pid <> pg_backend_pid()
+			ORDER BY query_start
+			LIMIT 20`)
+		if err == nil {
+			var aq []ActiveQuery
+			for _, row := range r.Rows {
+				aq = append(aq, ActiveQuery{
+					PID:      toInt(row["pid"]),
+					Duration: toString(row["duration"]),
+					State:    toString(row["state"]),
+					Query:    toString(row["query"]),
+					User:     toString(row["user"]),
+				})
+			}
+			mu.Lock()
+			m.ActiveQueries = aq
+			mu.Unlock()
+		}
+	})
+
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT LEFT(query, 120) AS query, calls,
+				   ROUND(total_exec_time::numeric, 2) AS total_ms,
+				   ROUND(mean_exec_time::numeric, 2)  AS mean_ms,
+				   rows
+			FROM pg_stat_statements
+			ORDER BY mean_exec_time DESC
+			LIMIT 10`)
+		if err == nil {
+			var sq []SlowQuery
+			for _, row := range r.Rows {
+				sq = append(sq, SlowQuery{
+					Query:   toString(row["query"]),
+					Calls:   toInt64(row["calls"]),
+					TotalMS: toFloat(row["total_ms"]),
+					MeanMS:  toFloat(row["mean_ms"]),
+					Rows:    toInt64(row["rows"]),
+				})
+			}
+			mu.Lock()
+			m.SlowQueries = sq
+			mu.Unlock()
+		}
+	})
+
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT relname AS name,
+				   CAST(pg_total_relation_size(relid) AS float8) / 1048576.0 AS size_mb,
+				   CAST(n_live_tup AS bigint) AS row_count
+			FROM pg_stat_user_tables
+			ORDER BY pg_total_relation_size(relid) DESC
+			LIMIT 20`)
+		if err == nil {
+			var ts []TableSize
+			for _, row := range r.Rows {
+				ts = append(ts, TableSize{
+					Name:     toString(row["name"]),
+					SizeMB:   toFloat(row["size_mb"]),
+					RowCount: toInt64(row["row_count"]),
+				})
+			}
+			mu.Lock()
+			m.TableSizes = ts
+			mu.Unlock()
+		}
+	})
+
+	wg.Wait()
 	return m, nil
 }
 
 func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
-	// Connections
-	r, err := s.adapter.ExecuteQuery(ctx, `
-		SELECT
-			SUM(CASE WHEN Command != 'Sleep' THEN 1 ELSE 0 END) AS active,
-			SUM(CASE WHEN Command  = 'Sleep' THEN 1 ELSE 0 END) AS idle,
-			COUNT(*) AS total
-		FROM information_schema.PROCESSLIST`)
-	if err == nil && len(r.Rows) > 0 {
-		row := r.Rows[0]
-		m.ActiveConnections = toInt(row["active"])
-		m.IdleConnections = toInt(row["idle"])
-		m.TotalConnections = toInt(row["total"])
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	run := func(fn func()) {
+		wg.Add(1)
+		go func() { defer wg.Done(); fn() }()
 	}
 
-	r, err = s.adapter.ExecuteQuery(ctx, `SELECT @@max_connections AS max`)
-	if err == nil && len(r.Rows) > 0 {
-		m.MaxConnections = toInt(r.Rows[0]["max"])
-	}
-
-	// Database size — use ANALYZE + flush to get fresh stats
-	_, _ = s.adapter.ExecuteQuery(ctx, `SELECT 1`) // warm up
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT COALESCE(ROUND(SUM(data_length + index_length) / 1048576, 4), 0) AS size_mb
-		FROM information_schema.TABLES
-		WHERE table_schema = DATABASE()`)
-	if err == nil && len(r.Rows) > 0 {
-		m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
-	}
-
-	// Row activity + cache — use SHOW GLOBAL STATUS (works without performance_schema privs)
-	vars, err2 := s.adapter.ExecuteQuery(ctx, `SHOW GLOBAL STATUS WHERE Variable_name IN
-		('Com_insert','Com_update','Com_delete','Com_select',
-		 'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads')`)
-	if err2 == nil {
-		vmap := make(map[string]float64)
-		for _, row := range vars.Rows {
-			vmap[toString(row["Variable_name"])] = toFloat(row["Value"])
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT
+				SUM(CASE WHEN Command != 'Sleep' THEN 1 ELSE 0 END) AS active,
+				SUM(CASE WHEN Command  = 'Sleep' THEN 1 ELSE 0 END) AS idle,
+				COUNT(*) AS total
+			FROM information_schema.PROCESSLIST`)
+		if err == nil && len(r.Rows) > 0 {
+			row := r.Rows[0]
+			mu.Lock()
+			m.ActiveConnections = toInt(row["active"])
+			m.IdleConnections = toInt(row["idle"])
+			m.TotalConnections = toInt(row["total"])
+			mu.Unlock()
 		}
-		m.RowsInserted = int64(vmap["Com_insert"])
-		m.RowsUpdated = int64(vmap["Com_update"])
-		m.RowsDeleted = int64(vmap["Com_delete"])
-		m.RowsFetched = int64(vmap["Com_select"])
-		reads := vmap["Innodb_buffer_pool_read_requests"]
-		disk := vmap["Innodb_buffer_pool_reads"]
-		if reads > 0 {
-			m.CacheHitRate = (reads - disk) / reads * 100
-		}
-	}
+	})
 
-	// Active queries
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT ID AS pid, TIME AS duration, STATE AS state,
-			   LEFT(INFO, 120) AS query, USER AS user
-		FROM information_schema.PROCESSLIST
-		WHERE COMMAND != 'Sleep' AND ID != CONNECTION_ID()
-		ORDER BY TIME DESC LIMIT 20`)
-	if err == nil {
-		for _, row := range r.Rows {
-			m.ActiveQueries = append(m.ActiveQueries, ActiveQuery{
-				PID:      toInt(row["pid"]),
-				Duration: fmt.Sprintf("%ds", toInt(row["duration"])),
-				State:    toString(row["state"]),
-				Query:    toString(row["query"]),
-				User:     toString(row["user"]),
-			})
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `SELECT @@max_connections AS max`)
+		if err == nil && len(r.Rows) > 0 {
+			mu.Lock()
+			m.MaxConnections = toInt(r.Rows[0]["max"])
+			mu.Unlock()
 		}
-	}
+	})
 
-	// Slow queries
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT LEFT(DIGEST_TEXT, 120) AS query,
-			   COUNT_STAR AS calls,
-			   ROUND(SUM_TIMER_WAIT/1000000000, 2) AS total_ms,
-			   ROUND(AVG_TIMER_WAIT/1000000000, 2) AS mean_ms,
-			   SUM_ROWS_EXAMINED AS rows
-		FROM performance_schema.events_statements_summary_by_digest
-		ORDER BY AVG_TIMER_WAIT DESC LIMIT 10`)
-	if err == nil {
-		for _, row := range r.Rows {
-			m.SlowQueries = append(m.SlowQueries, SlowQuery{
-				Query:   toString(row["query"]),
-				Calls:   toInt64(row["calls"]),
-				TotalMS: toFloat(row["total_ms"]),
-				MeanMS:  toFloat(row["mean_ms"]),
-				Rows:    toInt64(row["rows"]),
-			})
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT COALESCE(ROUND(SUM(data_length + index_length) / 1048576, 4), 0) AS size_mb
+			FROM information_schema.TABLES
+			WHERE table_schema = DATABASE()`)
+		if err == nil && len(r.Rows) > 0 {
+			mu.Lock()
+			m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
+			mu.Unlock()
 		}
-	}
+	})
 
-	// Table sizes
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT table_name AS name,
-			   COALESCE(ROUND((data_length + index_length) / 1048576, 4), 0) AS size_mb,
-			   COALESCE(table_rows, 0) AS row_count
-		FROM information_schema.TABLES
-		WHERE table_schema = DATABASE()
-		ORDER BY (data_length + index_length) DESC LIMIT 20`)
-	if err == nil {
-		for _, row := range r.Rows {
-			m.TableSizes = append(m.TableSizes, TableSize{
-				Name:     toString(row["name"]),
-				SizeMB:   toFloat(row["size_mb"]),
-				RowCount: toInt64(row["row_count"]),
-			})
+	run(func() {
+		vars, err := s.adapter.ExecuteQuery(ctx, `SHOW GLOBAL STATUS WHERE Variable_name IN
+			('Com_insert','Com_update','Com_delete','Com_select',
+			 'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads')`)
+		if err == nil {
+			vmap := make(map[string]float64)
+			for _, row := range vars.Rows {
+				vmap[toString(row["Variable_name"])] = toFloat(row["Value"])
+			}
+			reads := vmap["Innodb_buffer_pool_read_requests"]
+			disk := vmap["Innodb_buffer_pool_reads"]
+			mu.Lock()
+			m.RowsInserted = int64(vmap["Com_insert"])
+			m.RowsUpdated = int64(vmap["Com_update"])
+			m.RowsDeleted = int64(vmap["Com_delete"])
+			m.RowsFetched = int64(vmap["Com_select"])
+			if reads > 0 {
+				m.CacheHitRate = (reads - disk) / reads * 100
+			}
+			mu.Unlock()
 		}
-	}
+	})
 
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT ID AS pid, TIME AS duration, STATE AS state,
+				   LEFT(INFO, 120) AS query, USER AS user
+			FROM information_schema.PROCESSLIST
+			WHERE COMMAND != 'Sleep' AND ID != CONNECTION_ID()
+			ORDER BY TIME DESC LIMIT 20`)
+		if err == nil {
+			var aq []ActiveQuery
+			for _, row := range r.Rows {
+				aq = append(aq, ActiveQuery{
+					PID:      toInt(row["pid"]),
+					Duration: fmt.Sprintf("%ds", toInt(row["duration"])),
+					State:    toString(row["state"]),
+					Query:    toString(row["query"]),
+					User:     toString(row["user"]),
+				})
+			}
+			mu.Lock()
+			m.ActiveQueries = aq
+			mu.Unlock()
+		}
+	})
+
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT LEFT(DIGEST_TEXT, 120) AS query,
+				   COUNT_STAR AS calls,
+				   ROUND(SUM_TIMER_WAIT/1000000000, 2) AS total_ms,
+				   ROUND(AVG_TIMER_WAIT/1000000000, 2) AS mean_ms,
+				   SUM_ROWS_EXAMINED AS rows
+			FROM performance_schema.events_statements_summary_by_digest
+			ORDER BY AVG_TIMER_WAIT DESC LIMIT 10`)
+		if err == nil {
+			var sq []SlowQuery
+			for _, row := range r.Rows {
+				sq = append(sq, SlowQuery{
+					Query:   toString(row["query"]),
+					Calls:   toInt64(row["calls"]),
+					TotalMS: toFloat(row["total_ms"]),
+					MeanMS:  toFloat(row["mean_ms"]),
+					Rows:    toInt64(row["rows"]),
+				})
+			}
+			mu.Lock()
+			m.SlowQueries = sq
+			mu.Unlock()
+		}
+	})
+
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx, `
+			SELECT table_name AS name,
+				   COALESCE(ROUND((data_length + index_length) / 1048576, 4), 0) AS size_mb,
+				   COALESCE(table_rows, 0) AS row_count
+			FROM information_schema.TABLES
+			WHERE table_schema = DATABASE()
+			ORDER BY (data_length + index_length) DESC LIMIT 20`)
+		if err == nil {
+			var ts []TableSize
+			for _, row := range r.Rows {
+				ts = append(ts, TableSize{
+					Name:     toString(row["name"]),
+					SizeMB:   toFloat(row["size_mb"]),
+					RowCount: toInt64(row["row_count"]),
+				})
+			}
+			mu.Lock()
+			m.TableSizes = ts
+			mu.Unlock()
+		}
+	})
+
+	wg.Wait()
 	return m, nil
 }
 
