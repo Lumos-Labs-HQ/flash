@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/webp" href="/common/static/image/logo.webp">
+    <link rel="stylesheet" href="/cdn/fonts/fonts.css">
+    <link rel="stylesheet" href="/common/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/index.css">
+    <link rel="stylesheet" href="/static/css/metrics.css">
+    <script src="/cdn/iconify/iconify-v3.min.js"></script>
+</head>
+<body>
+    <div class="left-navbar">
+        <img src="/common/static/image/logo.webp" alt="FlashORM" class="left-navbar-logo">
+        <a href="/" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:table"></span>
+            <span class="tooltip">Data</span>
+        </a>
+        <a href="/sql" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:code-braces"></span>
+            <span class="tooltip">SQL Editor</span>
+        </a>
+        <a href="/schema" class="left-navbar-link">
+            <span class="iconify" data-icon="mdi:file-tree"></span>
+            <span class="tooltip">Schema</span>
+        </a>
+        <a href="/metrics" class="left-navbar-link active">
+            <span class="iconify" data-icon="mdi:chart-line"></span>
+            <span class="tooltip">Metrics</span>
+        </a>
+    </div>
+
+    <div class="studio-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Monitoring</div>
+            </div>
+            <div class="tables-list">
+                <div class="table-item active" onclick="switchSection('metrics')">
+                    <span class="iconify" data-icon="mdi:chart-bar"></span>
+                    <span>Metrics</span>
+                </div>
+                <div class="table-item" onclick="switchSection('queries')">
+                    <span class="iconify" data-icon="mdi:play-circle-outline"></span>
+                    <span>Active Queries</span>
+                </div>
+                <div class="table-item" onclick="switchSection('slow')">
+                    <span class="iconify" data-icon="mdi:timer-alert-outline"></span>
+                    <span>Query Performance</span>
+                </div>
+                <div class="table-item" onclick="switchSection('tables')">
+                    <span class="iconify" data-icon="mdi:database-outline"></span>
+                    <span>System Operations</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="content metrics-main">
+            <div class="metrics-topbar">
+                <div>
+                    <h2 class="metrics-heading" id="section-title">Metrics</h2>
+                    <span class="metrics-provider" id="metrics-provider">—</span>
+                </div>
+                <div class="metrics-topbar-right">
+                    <div class="time-range-btns">
+                        <button class="time-btn active" onclick="setRange(this,'1h')">Last hour</button>
+                        <button class="time-btn" onclick="setRange(this,'1d')">Last day</button>
+                    </div>
+                    <button class="btn-refresh" id="refresh-btn" onclick="loadMetrics()">
+                        <span class="iconify" data-icon="mdi:refresh"></span> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- METRICS -->
+            <div id="section-metrics" class="section-content">
+                <div class="charts-grid">
+
+                    <div class="chart-card wide">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Connections</span>
+                            <div class="chart-legend">
+                                <span class="ldot" style="background:#38bdf8"></span>Active
+                                <span class="ldot" style="background:#4ade80"></span>Idle
+                                <span class="ldot" style="background:#fb923c"></span>Total
+                                <span class="ldot" style="background:#f87171"></span>Max
+                            </div>
+                        </div>
+                        <div class="chart-meta" id="chart-connections-meta">—</div>
+                        <canvas id="chart-connections" class="chart-canvas"></canvas>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Database Size</span>
+                            <div class="chart-legend"><span class="ldot" style="background:#38bdf8"></span>MB</div>
+                        </div>
+                        <div class="chart-meta" id="chart-size-meta">—</div>
+                        <canvas id="chart-size" class="chart-canvas"></canvas>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Cache Hit Rate</span>
+                            <div class="chart-legend"><span class="ldot" style="background:#4ade80"></span>%</div>
+                        </div>
+                        <div class="chart-meta" id="chart-cache-meta">—</div>
+                        <canvas id="chart-cache" class="chart-canvas"></canvas>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Deadlocks</span>
+                            <div class="chart-legend"><span class="ldot" style="background:#f87171"></span>Count</div>
+                        </div>
+                        <div class="chart-meta" id="chart-deadlocks-meta">—</div>
+                        <canvas id="chart-deadlocks" class="chart-canvas"></canvas>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Row Activity</span>
+                            <div class="chart-legend">
+                                <span class="ldot" style="background:#4ade80"></span>Inserted
+                                <span class="ldot" style="background:#38bdf8"></span>Updated
+                                <span class="ldot" style="background:#f87171"></span>Deleted
+                            </div>
+                        </div>
+                        <div class="chart-meta" id="chart-rows-meta">—</div>
+                        <canvas id="chart-rows" class="chart-canvas"></canvas>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Connection Pool</span>
+                        </div>
+                        <div class="chart-meta" id="pool-meta">—</div>
+                        <canvas id="chart-pool" class="chart-canvas"></canvas>
+                    </div>
+
+                    <div class="chart-card wide">
+                        <div class="chart-card-header">
+                            <span class="chart-title">Table Sizes</span>
+                        </div>
+                        <canvas id="chart-table-sizes" class="chart-canvas" style="height:180px!important"></canvas>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ACTIVE QUERIES -->
+            <div id="section-queries" class="section-content" style="display:none">
+                <div class="data-table-wrap">
+                    <table class="m-table" id="table-active-queries">
+                        <thead><tr><th>PID</th><th>User</th><th>State</th><th>Duration</th><th>Query</th></tr></thead>
+                        <tbody><tr><td colspan="5" class="empty-cell">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SLOW QUERIES -->
+            <div id="section-slow" class="section-content" style="display:none">
+                <div class="data-table-wrap">
+                    <table class="m-table" id="table-slow-queries">
+                        <thead><tr><th>Query</th><th>Calls</th><th>Mean (ms)</th><th>Total (ms)</th><th>Rows</th></tr></thead>
+                        <tbody><tr><td colspan="5" class="empty-cell">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SYSTEM / TABLE SIZES -->
+            <div id="section-tables" class="section-content" style="display:none">
+                <div class="data-table-wrap">
+                    <table class="m-table" id="table-sizes">
+                        <thead><tr><th>Table</th><th>Size</th><th></th><th>Rows</th></tr></thead>
+                        <tbody><tr><td colspan="4" class="empty-cell">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/common/static/js/common.js"></script>
+    <script src="/static/js/metrics.js"></script>
+</body>
+</html>
