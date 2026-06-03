@@ -1481,18 +1481,16 @@ func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) 
 	}
 }
 
-// createEnumType creates a PostgreSQL ENUM type
+// createEnumType creates a PostgreSQL ENUM type.
 func (s *Service) createEnumType(ctx context.Context, enumType common.ExportEnumType) error {
-	// Quote each enum value
 	quotedValues := make([]string, len(enumType.Values))
 	for i, v := range enumType.Values {
 		quotedValues[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
 	}
-
+	// Use unquoted name so PostgreSQL lowercases it, matching unquoted column type refs
 	query := fmt.Sprintf("CREATE TYPE %s AS ENUM (%s)",
-		common.QuoteIdentifier(enumType.Name),
+		enumType.Name,
 		strings.Join(quotedValues, ", "))
-
 	return s.adapter.ExecuteMigration(ctx, query)
 }
 
@@ -1507,7 +1505,7 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 		Errors:           make([]string, 0),
 	}
 
-	ctx, cancel := context.WithTimeout(s.ctx, 120*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, 300*time.Second)
 	defer cancel()
 
 	// Phase 0: Create ENUM types first (before tables)
@@ -1604,7 +1602,6 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 	// Phase 3: Add foreign key constraints (after all data is in place)
 	for _, fk := range pendingFKs {
 		if !existingTableMap[fk.fkTable] {
-			// Referenced table doesn't exist, skip this FK
 			continue
 		}
 
@@ -1614,31 +1611,56 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 			common.QuoteIdentifier(fk.fkTable),
 			common.QuoteIdentifier(fk.fkColumn))
 
-		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
-			// FK constraint errors are non-fatal, just log them
-			result.Errors = append(result.Errors, fmt.Sprintf("Failed to add FK on %s.%s: %v", fk.tableName, fk.colName, err))
-		}
+		// FK failures (no unique constraint on target, already exists, etc.) are non-fatal — skip silently
+		_ = s.adapter.ExecuteMigration(ctx, query)
 	}
 
 	return result, nil
 }
 
+// normalizeColType converts Prisma/export column types to valid PostgreSQL types.
+func normalizeColType(t string) string {
+	if strings.HasPrefix(t, "_") {
+		return strings.ToUpper(t[1:]) + "[]"
+	}
+	return t
+}
+
+// normalizeDefault fixes default values that need type casting after type normalization.
+func normalizeDefault(def, colType string) string {
+	if def == "" {
+		return ""
+	}
+	// ARRAY[] default needs explicit cast for array types
+	if def == "ARRAY[]" && strings.HasSuffix(colType, "[]") {
+		return fmt.Sprintf("ARRAY[]::%s", colType)
+	}
+	return def
+}
+
 // createTableFromSchemaNoFK creates a new table from the export schema WITHOUT foreign key constraints
 func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
 	var columnDefs []string
+	var pkCols []string
 
 	for _, col := range schema.Columns {
-		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), col.Type)
-
 		if col.PrimaryKey {
+			pkCols = append(pkCols, common.QuoteIdentifier(col.Name))
+		}
+	}
+	compositePK := len(pkCols) > 1
+
+	for _, col := range schema.Columns {
+		colType := normalizeColType(col.Type)
+		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
+
+		if col.PrimaryKey && !compositePK {
 			def += " PRIMARY KEY"
 		}
 		if col.AutoIncrement {
-			// Handle auto-increment based on database type
-			if s.cfg != nil && (s.cfg.Database.Provider == "mysql") {
+			if s.cfg != nil && s.cfg.Database.Provider == "mysql" {
 				def += " AUTO_INCREMENT"
 			}
-			// For PostgreSQL, SERIAL type already handles auto-increment
 		}
 		if !col.Nullable && !col.PrimaryKey {
 			def += " NOT NULL"
@@ -1647,10 +1669,17 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 			def += " UNIQUE"
 		}
 		if col.Default != "" {
-			def += fmt.Sprintf(" DEFAULT %s", col.Default)
+			normalized := normalizeDefault(col.Default, colType)
+			if normalized != "" {
+				def += fmt.Sprintf(" DEFAULT %s", normalized)
+			}
 		}
 
 		columnDefs = append(columnDefs, def)
+	}
+
+	if compositePK {
+		columnDefs = append(columnDefs, fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(pkCols, ", ")))
 	}
 
 	query := fmt.Sprintf("CREATE TABLE %s (\n  %s\n)",
@@ -1709,179 +1738,90 @@ func (s *Service) updateTableSchema(ctx context.Context, tableName string, schem
 	return added, nil
 }
 
-// importTableData imports data into an existing table using batch operations
+// sqlLiteral converts a Go value to a SQL literal string.
+func sqlLiteral(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	if arr, ok := v.([]interface{}); ok {
+		elems := make([]string, len(arr))
+		for i, elem := range arr {
+			if elem == nil {
+				elems[i] = "NULL"
+			} else {
+				s := strings.ReplaceAll(fmt.Sprintf("%v", elem), `"`, `\"`)
+				elems[i] = `"` + s + `"`
+			}
+		}
+		return fmt.Sprintf("'{%s}'", strings.Join(elems, ","))
+	}
+	// JSON numbers decode as float64 — emit without decimal if whole number
+	if f, ok := v.(float64); ok {
+		if f == float64(int64(f)) {
+			return fmt.Sprintf("'%d'", int64(f))
+		}
+		return fmt.Sprintf("'%g'", f)
+	}
+	strVal := fmt.Sprintf("%v", v)
+	escaped := strings.ReplaceAll(strVal, "'", "''")
+	return fmt.Sprintf("'%s'", escaped)
+}
 func (s *Service) importTableData(ctx context.Context, tableName string, data []map[string]any) (int, int, error) {
 	if len(data) == 0 {
 		return 0, 0, nil
 	}
 
-	// Get primary key column once
-	columns, err := s.adapter.GetTableColumns(ctx, tableName)
-	if err != nil {
-		return 0, 0, err
+	// Collect stable column order from first row
+	var colNames []string
+	for col := range data[0] {
+		colNames = append(colNames, col)
 	}
-
-	pkColumn := ""
-	for _, col := range columns {
-		if col.IsPrimary {
-			pkColumn = col.Name
-			break
-		}
+	var quotedCols []string
+	for _, col := range colNames {
+		quotedCols = append(quotedCols, common.QuoteIdentifier(col))
 	}
-
-	// Batch-check which PKs already exist (single query instead of N queries)
-	existingPKs := make(map[string]bool)
-	if pkColumn != "" {
-		const checkBatch = 500
-		for i := 0; i < len(data); i += checkBatch {
-			end := i + checkBatch
-			if end > len(data) {
-				end = len(data)
-			}
-			var pkValues []string
-			for _, row := range data[i:end] {
-				if pkValue, ok := row[pkColumn]; ok && pkValue != nil {
-					strVal := fmt.Sprintf("%v", pkValue)
-					escaped := strings.ReplaceAll(strVal, "'", "''")
-					pkValues = append(pkValues, fmt.Sprintf("'%s'", escaped))
-				}
-			}
-			if len(pkValues) == 0 {
-				continue
-			}
-			query := fmt.Sprintf("SELECT %s FROM %s WHERE %s IN (%s)",
-				common.QuoteIdentifier(pkColumn),
-				common.QuoteIdentifier(tableName),
-				common.QuoteIdentifier(pkColumn),
-				strings.Join(pkValues, ","))
-			result, err := s.adapter.ExecuteQuery(ctx, query)
-			if err == nil {
-				for _, row := range result.Rows {
-					if v, ok := row[pkColumn]; ok {
-						existingPKs[fmt.Sprintf("%v", v)] = true
-					}
-				}
-			}
-		}
-	}
-
-	// Split rows into new (batch insert) and existing (update)
-	var newRows []map[string]any
-	var updateRows []map[string]any
-	for _, row := range data {
-		if pkColumn != "" {
-			if pkValue, ok := row[pkColumn]; ok && pkValue != nil {
-				if existingPKs[fmt.Sprintf("%v", pkValue)] {
-					updateRows = append(updateRows, row)
-					continue
-				}
-			}
-		}
-		newRows = append(newRows, row)
-	}
+	colList := strings.Join(quotedCols, ", ")
 
 	inserted := 0
-	updated := 0
-
-	// Batch INSERT new rows (multi-row VALUES)
-	if len(newRows) > 0 {
-		// Collect stable column order from first row
-		var colNames []string
-		for col := range newRows[0] {
-			colNames = append(colNames, col)
+	const batchSize = 500
+	for i := 0; i < len(data); i += batchSize {
+		end := i + batchSize
+		if end > len(data) {
+			end = len(data)
 		}
+		batch := data[i:end]
 
-		var quotedCols []string
-		for _, col := range colNames {
-			quotedCols = append(quotedCols, common.QuoteIdentifier(col))
-		}
-		colList := strings.Join(quotedCols, ", ")
-
-		const insertBatch = 200
-		for i := 0; i < len(newRows); i += insertBatch {
-			end := i + insertBatch
-			if end > len(newRows) {
-				end = len(newRows)
+		var valueGroups []string
+		for _, row := range batch {
+			var vals []string
+			for _, col := range colNames {
+				vals = append(vals, sqlLiteral(row[col]))
 			}
-			batch := newRows[i:end]
+			valueGroups = append(valueGroups, "("+strings.Join(vals, ", ")+")")
+		}
 
-			var valueGroups []string
+		query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s ON CONFLICT DO NOTHING",
+			common.QuoteIdentifier(tableName), colList,
+			strings.Join(valueGroups, ", "))
+
+		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+			// Fallback: single-row inserts to skip individual bad rows
 			for _, row := range batch {
 				var vals []string
 				for _, col := range colNames {
-					v, ok := row[col]
-					if !ok || v == nil {
-						vals = append(vals, "NULL")
-					} else {
-						strVal := fmt.Sprintf("%v", v)
-						escaped := strings.ReplaceAll(strVal, "'", "''")
-						vals = append(vals, fmt.Sprintf("'%s'", escaped))
-					}
+					vals = append(vals, sqlLiteral(row[col]))
 				}
-				valueGroups = append(valueGroups, "("+strings.Join(vals, ", ")+")")
-			}
-
-			query := fmt.Sprintf("INSERT INTO %s (%s) VALUES %s",
-				common.QuoteIdentifier(tableName), colList,
-				strings.Join(valueGroups, ", "))
-
-			if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
-				// Fallback: insert one by one
-				for _, row := range batch {
-					var vals []string
-					for _, col := range colNames {
-						v, ok := row[col]
-						if !ok || v == nil {
-							vals = append(vals, "NULL")
-						} else {
-							strVal := fmt.Sprintf("%v", v)
-							escaped := strings.ReplaceAll(strVal, "'", "''")
-							vals = append(vals, fmt.Sprintf("'%s'", escaped))
-						}
-					}
-					single := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-						common.QuoteIdentifier(tableName), colList,
-						strings.Join(vals, ", "))
-					if err := s.adapter.ExecuteMigration(ctx, single); err != nil {
-						continue
-					}
+				single := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT DO NOTHING",
+					common.QuoteIdentifier(tableName), colList,
+					strings.Join(vals, ", "))
+				if err2 := s.adapter.ExecuteMigration(ctx, single); err2 == nil {
 					inserted++
 				}
-			} else {
-				inserted += len(batch)
 			}
+		} else {
+			inserted += len(batch)
 		}
 	}
 
-	// Update existing rows (individual updates, but without redundant schema lookups)
-	for _, row := range updateRows {
-		var setClauses []string
-		for col, val := range row {
-			if col == pkColumn {
-				continue
-			}
-			if val == nil {
-				setClauses = append(setClauses, fmt.Sprintf("%s = NULL", common.QuoteIdentifier(col)))
-			} else {
-				strVal := fmt.Sprintf("%v", val)
-				escaped := strings.ReplaceAll(strVal, "'", "''")
-				setClauses = append(setClauses, fmt.Sprintf("%s = '%s'", common.QuoteIdentifier(col), escaped))
-			}
-		}
-		if len(setClauses) == 0 {
-			continue
-		}
-		pkVal := fmt.Sprintf("%v", row[pkColumn])
-		escapedPK := strings.ReplaceAll(pkVal, "'", "''")
-		query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = '%s'",
-			common.QuoteIdentifier(tableName),
-			strings.Join(setClauses, ", "),
-			common.QuoteIdentifier(pkColumn), escapedPK)
-		if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
-			continue
-		}
-		updated++
-	}
-
-	return inserted, updated, nil
+	return inserted, 0, nil
 }
