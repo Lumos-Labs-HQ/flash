@@ -218,40 +218,33 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 		m.MaxConnections = toInt(r.Rows[0]["max"])
 	}
 
-	// Database size
+	// Database size — use ANALYZE + flush to get fresh stats
+	s.adapter.ExecuteQuery(ctx, `SELECT 1`) // warm up
 	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT ROUND(SUM(data_length + index_length) / 1048576, 2) AS size_mb
+		SELECT COALESCE(ROUND(SUM(data_length + index_length) / 1048576, 4), 0) AS size_mb
 		FROM information_schema.TABLES
 		WHERE table_schema = DATABASE()`)
 	if err == nil && len(r.Rows) > 0 {
 		m.DatabaseSizeMB = toFloat(r.Rows[0]["size_mb"])
 	}
 
-	// Row activity from global status
-	statusVars := map[string]*int64{
-		"Com_insert": &m.RowsInserted,
-		"Com_update": &m.RowsUpdated,
-		"Com_delete": &m.RowsDeleted,
-		"Com_select": &m.RowsFetched,
-	}
-	for varName, dest := range statusVars {
-		r, err = s.adapter.ExecuteQueryWithArgs(ctx,
-			"SELECT VARIABLE_VALUE AS v FROM performance_schema.global_status WHERE VARIABLE_NAME = ?", varName)
-		if err == nil && len(r.Rows) > 0 {
-			*dest = toInt64(r.Rows[0]["v"])
+	// Row activity + cache — use SHOW GLOBAL STATUS (works without performance_schema privs)
+	vars, err2 := s.adapter.ExecuteQuery(ctx, `SHOW GLOBAL STATUS WHERE Variable_name IN
+		('Com_insert','Com_update','Com_delete','Com_select',
+		 'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads')`)
+	if err2 == nil {
+		vmap := make(map[string]float64)
+		for _, row := range vars.Rows {
+			vmap[toString(row["Variable_name"])] = toFloat(row["Value"])
 		}
-	}
-
-	// Cache hit rate (InnoDB buffer pool)
-	r, err = s.adapter.ExecuteQuery(ctx, `
-		SELECT
-		  (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Innodb_buffer_pool_read_requests') AS reads,
-		  (SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME='Innodb_buffer_pool_reads') AS disk_reads`)
-	if err == nil && len(r.Rows) > 0 {
-		reads := toFloat(r.Rows[0]["reads"])
-		diskReads := toFloat(r.Rows[0]["disk_reads"])
+		m.RowsInserted = int64(vmap["Com_insert"])
+		m.RowsUpdated  = int64(vmap["Com_update"])
+		m.RowsDeleted  = int64(vmap["Com_delete"])
+		m.RowsFetched  = int64(vmap["Com_select"])
+		reads := vmap["Innodb_buffer_pool_read_requests"]
+		disk  := vmap["Innodb_buffer_pool_reads"]
 		if reads > 0 {
-			m.CacheHitRate = (reads - diskReads) / reads * 100
+			m.CacheHitRate = (reads - disk) / reads * 100
 		}
 	}
 
@@ -261,8 +254,7 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 			   LEFT(INFO, 120) AS query, USER AS user
 		FROM information_schema.PROCESSLIST
 		WHERE COMMAND != 'Sleep' AND ID != CONNECTION_ID()
-		ORDER BY TIME DESC
-		LIMIT 20`)
+		ORDER BY TIME DESC LIMIT 20`)
 	if err == nil {
 		for _, row := range r.Rows {
 			m.ActiveQueries = append(m.ActiveQueries, ActiveQuery{
@@ -275,7 +267,7 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 		}
 	}
 
-	// Slow queries from performance_schema
+	// Slow queries
 	r, err = s.adapter.ExecuteQuery(ctx, `
 		SELECT LEFT(DIGEST_TEXT, 120) AS query,
 			   COUNT_STAR AS calls,
@@ -283,8 +275,7 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 			   ROUND(AVG_TIMER_WAIT/1000000000, 2) AS mean_ms,
 			   SUM_ROWS_EXAMINED AS rows
 		FROM performance_schema.events_statements_summary_by_digest
-		ORDER BY AVG_TIMER_WAIT DESC
-		LIMIT 10`)
+		ORDER BY AVG_TIMER_WAIT DESC LIMIT 10`)
 	if err == nil {
 		for _, row := range r.Rows {
 			m.SlowQueries = append(m.SlowQueries, SlowQuery{
@@ -300,12 +291,11 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 	// Table sizes
 	r, err = s.adapter.ExecuteQuery(ctx, `
 		SELECT table_name AS name,
-			   ROUND((data_length + index_length) / 1048576, 2) AS size_mb,
-			   table_rows AS row_count
+			   COALESCE(ROUND((data_length + index_length) / 1048576, 4), 0) AS size_mb,
+			   COALESCE(table_rows, 0) AS row_count
 		FROM information_schema.TABLES
 		WHERE table_schema = DATABASE()
-		ORDER BY (data_length + index_length) DESC
-		LIMIT 20`)
+		ORDER BY (data_length + index_length) DESC LIMIT 20`)
 	if err == nil {
 		for _, row := range r.Rows {
 			m.TableSizes = append(m.TableSizes, TableSize{
