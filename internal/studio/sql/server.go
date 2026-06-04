@@ -190,7 +190,11 @@ func (s *Server) handleSaveChanges(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.service.SaveChanges(tableName, req.Changes); err != nil {
 		log.Printf("ERROR handleSaveChanges: %v", err)
-		common.JSONError(w, http.StatusInternalServerError, sanitizeError(err))
+		msg := err.Error()
+		if s := sanitizeInfraError(err); s != "" {
+			msg = s
+		}
+		common.JSONError(w, http.StatusInternalServerError, msg)
 		return
 	}
 	common.JSONMessage(w, "Changes saved successfully")

@@ -1,901 +1,594 @@
-// State Management with Session Persistence
+// ===== State =====
 const STORAGE_KEY = 'flashorm_studio_state';
-
 const state = {
-    currentTable: null,
-    data: null,
-    changes: new Map(),
-    page: 1,
-    limit: 50,
-    tablesCache: null,
-    foreignKeys: new Map(),
-    filters: [],
-    scrollPosition: 0,
-
-    // Persist state to sessionStorage
+    currentTable: null, data: null, changes: new Map(),
+    page: 1, limit: 50, tablesCache: null, foreignKeys: new Map(),
+    filters: [], scrollPosition: 0,
     save() {
-        const toSave = {
-            currentTable: this.currentTable,
-            page: this.page,
-            limit: this.limit,
-            filters: this.filters,
-            scrollPosition: window.scrollY || 0,
-            // Convert Map to array for JSON serialization
-            changes: Array.from(this.changes.entries())
-        };
-        try {
-            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-        } catch (e) {
-            console.warn('Failed to save state:', e);
-        }
+        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ currentTable: this.currentTable, page: this.page, limit: this.limit, filters: this.filters, scrollPosition: window.scrollY||0, changes: Array.from(this.changes.entries()) })); } catch(e) {}
     },
-
-    // Restore state from sessionStorage
     restore() {
         try {
-            const saved = sessionStorage.getItem(STORAGE_KEY);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                this.currentTable = parsed.currentTable || null;
-                this.page = parsed.page || 1;
-                this.limit = parsed.limit || 50;
-                this.filters = parsed.filters || [];
-                this.scrollPosition = parsed.scrollPosition || 0;
-                // Restore changes Map
-                if (parsed.changes && Array.isArray(parsed.changes)) {
-                    this.changes = new Map(parsed.changes);
-                }
-                return true;
-            }
-        } catch (e) {
-            console.warn('Failed to restore state:', e);
-        }
-        return false;
+            const s = sessionStorage.getItem(STORAGE_KEY);
+            if (!s) return false;
+            const p = JSON.parse(s);
+            this.currentTable = p.currentTable||null; this.page = p.page||1; this.limit = p.limit||50;
+            this.filters = p.filters||[]; this.scrollPosition = p.scrollPosition||0;
+            if (p.changes) this.changes = new Map(p.changes);
+            return true;
+        } catch(e) { return false; }
     },
-
-    // Clear persisted state
-    clear() {
-        this.changes.clear();
-        this.filters = [];
-        sessionStorage.removeItem(STORAGE_KEY);
-    }
+    clear() { this.changes.clear(); this.filters=[]; sessionStorage.removeItem(STORAGE_KEY); }
 };
 
-// Initialize
+let currentColumns = [];
+let colWidths = {}; // tableName -> { colName -> px }
+
+// ===== Init =====
 document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     await loadTables();
+    if (state.restore() && state.currentTable) {
+        await selectTable(state.currentTable);
+        if (state.filters.length > 0) setTimeout(() => restoreFilters(state.filters), 200);
+    }
+    window.addEventListener('beforeunload', () => { state.scrollPosition = window.scrollY; state.save(); });
+    document.querySelectorAll('a[href]').forEach(l => l.addEventListener('click', () => { state.scrollPosition = window.scrollY; state.save(); }));
+});
 
-    // Restore previous state if available
-    if (state.restore()) {
-        // Restore the previously selected table
-        if (state.currentTable) {
-            await selectTable(state.currentTable);
+function setupEventListeners() {
+    document.getElementById('delete-selected-btn')?.addEventListener('click', deleteSelected);
+    document.getElementById('search-tables')?.addEventListener('input', debounce(filterTables, 200));
+    document.addEventListener('keydown', handleGlobalKey);
+}
 
-            // Restore filters after table data is fully loaded
-            // Need a short delay to ensure DOM and columns are ready
-            setTimeout(() => {
-                if (state.filters && state.filters.length > 0 && typeof restoreFilters === 'function') {
-                    restoreFilters(state.filters);
-                }
-            }, 200);
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
-            // Restore scroll position after render
-            setTimeout(() => {
-                window.scrollTo(0, state.scrollPosition);
-            }, 300);
+// ===== Tables =====
+async function loadTables() {
+    const res = await apiCall('/api/tables').catch(() => null);
+    if (res?.success) { state.tablesCache = res.data; renderTablesList(res.data); }
+}
+
+function renderTablesList(tables) {
+    const el = document.getElementById('tables-list');
+    if (!tables?.length) { el.innerHTML = '<div style="padding:12px;color:#444;font-size:12px;">No models found</div>'; return; }
+    el.innerHTML = tables.map(t => `
+        <div class="table-item" data-table="${escapeHtml(t.name)}" onclick="selectTable('${escapeHtml(t.name)}')" title="${escapeHtml(t.name)}">
+            <span class="iconify table-item-icon" data-icon="mdi:table"></span>
+            <span class="table-item-name">${escapeHtml(t.name)}</span>
+            <span class="table-count">${t.row_count}</span>
+        </div>`).join('');
+}
+
+function filterTables(e) {
+    const q = (e?.target?.value || document.getElementById('search-tables')?.value || '').toLowerCase();
+    if (!state.tablesCache) return;
+    renderTablesList(q ? state.tablesCache.filter(t => t.name.toLowerCase().includes(q)) : state.tablesCache);
+}
+window.filterTables = filterTables;
+
+async function selectTable(name) {
+    closeMobileSidebar();
+    state.currentTable = name; state.page = 1; state.changes.clear();
+    document.getElementById('current-table').textContent = name;
+    document.getElementById('save-btn').style.display = 'none';
+    document.querySelectorAll('.table-item').forEach(i => i.classList.toggle('active', i.dataset.table === name));
+    showLoadingSkeleton();
+    await loadTableData();
+    if (state.data?.columns) currentColumns = state.data.columns;
+}
+window.selectTable = selectTable;
+
+function showLoadingSkeleton() {
+    document.getElementById('grid-container').innerHTML = `<div style="padding:0;"><div class="skeleton" style="height:36px;border-radius:0;"></div><div class="skeleton" style="height:calc(100vh - 200px);border-radius:0;margin-top:1px;"></div></div>`;
+}
+
+// ===== Data =====
+async function loadTableData() {
+    if (!state.currentTable) return;
+    let url = `/api/tables/${state.currentTable}?page=${state.page}&limit=${state.limit}`;
+    if (state.filters?.length) url += `&filters=${encodeURIComponent(JSON.stringify(state.filters))}`;
+    const res = await apiCall(url).catch(() => null);
+    if (!res?.success) return;
+    state.data = res.data;
+    const rows = res.data.rows?.length || 0;
+    document.getElementById('row-count').textContent = `${rows} of ${res.data.total||0}`;
+    if (res.data.columns) {
+        const seen = new Set(); currentColumns = [];
+        res.data.columns.forEach(c => { if (!seen.has(c.name)) { seen.add(c.name); currentColumns.push(c); } });
+    }
+    renderDataGrid(res.data);
+    updatePagination(res.data);
+}
+
+// ===== Grid Render =====
+function renderDataGrid(data) {
+    const container = document.getElementById('grid-container');
+    container.style.display = ''; container.style.alignItems = ''; container.style.justifyContent = '';
+
+    if (!data.rows?.length) {
+        if (data.columns?.length) {
+            // Show schema as a proper table
+            const rows = data.columns.map(col => {
+                const badges = [];
+                if (col.primary_key) badges.push('<span class="badge badge-primary">PK</span>');
+                if (col.foreign_key_table) badges.push(`<span class="badge badge-purple">FK → ${escapeHtml(col.foreign_key_table)}.${escapeHtml(col.foreign_key_column)}</span>`);
+                if (!col.nullable && !col.primary_key) badges.push('<span class="badge badge-info">NOT NULL</span>');
+                if (col.auto_increment) badges.push('<span class="badge badge-primary">AUTO</span>');
+                if (col.default) badges.push(`<span style="font-size:10px;color:#555;">default: ${escapeHtml(col.default)}</span>`);
+                return `<tr>
+                    <td><div class="td-inner"><span class="v-string">${escapeHtml(col.name)}</span></div></td>
+                    <td><div class="td-inner"><span class="v-uuid">${escapeHtml(col.type||'')}</span></div></td>
+                    <td><div class="td-inner"><span class="${col.nullable?'v-bool':'v-null'}">${col.nullable?'yes':'no'}</span></div></td>
+                    <td><div class="td-inner" style="gap:4px;flex-wrap:wrap;">${badges.join('')}</div></td>
+                </tr>`;
+            }).join('');
+            container.innerHTML = `<div class="grid-scroll-container"><table class="data-table">
+                <thead><tr>
+                    <th><div class="th-inner"><span class="col-name">Column</span></div></th>
+                    <th><div class="th-inner"><span class="col-name">Type</span></div></th>
+                    <th><div class="th-inner"><span class="col-name">Nullable</span></div></th>
+                    <th><div class="th-inner"><span class="col-name">Constraints</span></div></th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table></div>`;
+        } else {
+            container.style.display = 'flex'; container.style.alignItems = 'center'; container.style.justifyContent = 'center';
+            container.innerHTML = `<div class="empty-state"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg><div>No rows</div></div>`;
         }
+        return;
     }
 
-    // Save state before page unload
-    window.addEventListener('beforeunload', () => {
-        state.scrollPosition = window.scrollY;
-        state.save();
-    });
+    const cols = currentColumns;
+    cols.forEach(c => { if (c.foreign_key_table) state.foreignKeys.set(c.name, { table: c.foreign_key_table, column: c.foreign_key_column }); });
 
-    // Also save state when clicking any navigation link (for tab switching)
-    document.querySelectorAll('a[href]').forEach(link => {
-        link.addEventListener('click', () => {
-            state.scrollPosition = window.scrollY;
-            state.save();
+    const tableKey = state.currentTable;
+    if (!colWidths[tableKey]) colWidths[tableKey] = {};
+    const cw = colWidths[tableKey];
+
+    const thCells = cols.map(col => {
+        const w = cw[col.name] ? `width:${cw[col.name]}px;min-width:${cw[col.name]}px;` : 'min-width:100px;';
+        return `<th style="${w}" data-col="${escapeHtml(col.name)}">
+            <div class="th-inner">
+                <span class="col-name">${escapeHtml(col.name)}</span>
+                <span class="col-type">${escapeHtml(col.type||'')}</span>
+            </div>
+            <div class="col-resize-handle" data-col="${escapeHtml(col.name)}"></div>
+        </th>`;
+    }).join('');
+
+    const rows = data.rows.map((row, idx) => {
+        const pk = getPKValue(row, cols);
+        const cells = cols.map(col => {
+            const val = row[col.name];
+            const fk = state.foreignKeys.get(col.name);
+            const formatted = formatValue(val, fk);
+            const clickAttr = fk && val != null
+                ? `onclick="navigateToForeignKey('${escapeHtml(fk.table)}','${escapeHtml(fk.column)}','${escapeHtml(String(val))}');event.stopPropagation()"`
+                : `onclick="openCellEditor(this,'${escapeHtml(String(pk))}','${escapeHtml(col.name)}',event)"`;
+            return `<td data-row="${escapeHtml(String(pk))}" data-col="${escapeHtml(col.name)}">
+                <div class="td-inner" ${clickAttr}><span class="cell-text">${formatted}</span></div>
+            </td>`;
+        }).join('');
+        return `<tr data-pk="${escapeHtml(String(pk))}">
+            <td class="td-checkbox"><div class="td-inner"><input type="checkbox" class="row-checkbox" data-row="${escapeHtml(String(pk))}" onchange="toggleRowSelection(this)"></div></td>
+            ${cells}
+        </tr>`;
+    }).join('');
+
+    container.innerHTML = `<div class="grid-scroll-container" id="grid-scroll">
+        <table class="data-table" id="data-table">
+            <thead><tr>
+                <th class="th-checkbox"><div class="th-inner"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></div></th>
+                ${thCells}
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+    </div>`;
+
+    setupColumnResize();
+}
+
+function getPKValue(row, cols) {
+    const pkCol = cols.find(c => c.primary_key);
+    return pkCol ? row[pkCol.name] : (row.id ?? Object.values(row)[0]);
+}
+
+// ===== Column Resize =====
+function setupColumnResize() {
+    document.querySelectorAll('.col-resize-handle').forEach(handle => {
+        let startX, startW, th;
+        handle.addEventListener('mousedown', e => {
+            e.preventDefault(); e.stopPropagation();
+            th = handle.closest('th');
+            startX = e.clientX; startW = th.offsetWidth;
+            handle.classList.add('resizing');
+            const onMove = ev => {
+                const w = Math.max(60, startW + (ev.clientX - startX));
+                th.style.width = w + 'px'; th.style.minWidth = w + 'px';
+                const col = handle.dataset.col;
+                if (!colWidths[state.currentTable]) colWidths[state.currentTable] = {};
+                colWidths[state.currentTable][col] = w;
+            };
+            const onUp = () => { handle.classList.remove('resizing'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
         });
+    });
+}
+
+// ===== Cell Editor Popup =====
+let editorState = { rowId: null, col: null, originalValue: null };
+
+function openCellEditor(tdInner, rowId, col, event) {
+    const td = tdInner.closest('td');
+    if (!td) return;
+
+    const rawVal = getCellRawValue(rowId, col);
+    const colMeta = currentColumns.find(c => c.name === col);
+    const isNullable = colMeta ? colMeta.nullable : true;
+
+    editorState = { rowId, col, originalValue: rawVal, td, isNullable };
+
+    const popup = document.getElementById('cell-editor');
+    const ta = document.getElementById('cell-editor-ta');
+    ta.value = rawVal === null ? '' : String(rawVal);
+
+    // Show/hide Set NULL based on nullable
+    const nullBtn = document.getElementById('ced-null');
+    nullBtn.style.display = isNullable ? '' : 'none';
+
+    const rect = td.getBoundingClientRect();
+    popup.style.display = 'flex';
+
+    let top = rect.bottom + 2;
+    let left = rect.left;
+    if (top + 200 > window.innerHeight) top = rect.top - 180;
+    if (left + 340 > window.innerWidth) left = window.innerWidth - 350;
+    if (left < 8) left = 8;
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+
+    ta.focus(); ta.select();
+    document.querySelectorAll('td.editing').forEach(c => c.classList.remove('editing'));
+    td.classList.add('editing');
+}
+window.openCellEditor = openCellEditor;
+
+function getCellRawValue(rowId, col) {
+    if (!state.data?.rows) return null;
+    const cols = currentColumns;
+    const pkCol = cols.find(c => c.primary_key);
+    const row = state.data.rows.find(r => {
+        const pk = pkCol ? r[pkCol.name] : (r.id ?? Object.values(r)[0]);
+        return String(pk) === String(rowId);
+    });
+    return row ? (row[col] ?? null) : null;
+}
+
+function closeCellEditor() {
+    document.getElementById('cell-editor').style.display = 'none';
+    document.querySelectorAll('td.editing').forEach(c => c.classList.remove('editing'));
+    editorState = { rowId: null, col: null, originalValue: null };
+}
+
+function saveCellEditor() {
+    const { rowId, col, originalValue, td } = editorState;
+    if (!rowId || !col) return;
+    const newVal = document.getElementById('cell-editor-ta').value;
+    if (newVal !== String(originalValue ?? '')) {
+        if (!state.changes.has(rowId)) state.changes.set(rowId, {});
+        state.changes.get(rowId)[col] = newVal;
+        if (td) td.classList.add('cell-dirty');
+        document.getElementById('save-btn').style.display = 'inline-flex';
+        // Update display
+        if (td) td.querySelector('.cell-text').innerHTML = formatValue(newVal);
+        state.save();
+    }
+    closeCellEditor();
+}
+
+function setCellNull() {
+    const { rowId, col, originalValue, td } = editorState;
+    if (!rowId || !col) return;
+    if (originalValue !== null) {
+        if (!state.changes.has(rowId)) state.changes.set(rowId, {});
+        state.changes.get(rowId)[col] = null;
+        if (td) td.classList.add('cell-dirty');
+        document.getElementById('save-btn').style.display = 'inline-flex';
+        if (td) td.querySelector('.cell-text').innerHTML = formatValue(null);
+        state.save();
+    }
+    closeCellEditor();
+}
+
+// Wire popup buttons
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('ced-save')?.addEventListener('click', saveCellEditor);
+    document.getElementById('ced-cancel')?.addEventListener('click', closeCellEditor);
+    document.getElementById('ced-null')?.addEventListener('click', setCellNull);
+    document.getElementById('cell-editor-ta')?.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveCellEditor(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeCellEditor(); }
+    });
+    // Close when clicking outside
+    document.addEventListener('mousedown', e => {
+        const popup = document.getElementById('cell-editor');
+        if (popup.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('td')) {
+            closeCellEditor();
+        }
     });
 });
 
-// Setup
-function setupEventListeners() {
-    const saveBtn = document.getElementById('save-btn');
-    const addBtn = document.getElementById('add-btn');
-    const refreshBtn = document.getElementById('refresh-btn');
-    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
-    const prevBtn = document.getElementById('prev-btn');
-    const nextBtn = document.getElementById('next-btn');
-    const searchTables = document.getElementById('search-tables');
-
-    if (saveBtn) saveBtn.addEventListener('click', saveChanges);
-    if (addBtn) addBtn.addEventListener('click', showAddRowDialog);
-    if (refreshBtn) refreshBtn.addEventListener('click', refreshData);
-    if (deleteSelectedBtn) deleteSelectedBtn.addEventListener('click', deleteSelected);
-    if (prevBtn) prevBtn.addEventListener('click', () => changePage(-1));
-    if (nextBtn) nextBtn.addEventListener('click', () => changePage(1));
-    if (searchTables) searchTables.addEventListener('input', debounce(filterTables, 200));
-    document.addEventListener('keydown', handleKeyDown);
-}
-
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
-}
-
-// Load tables
-async function loadTables() {
-    try {
-        const res = await fetch('/api/tables');
-        const json = await res.json();
-
-        if (json.success) {
-            state.tablesCache = json.data;
-            renderTablesList(json.data);
-        }
-    } catch (err) {
-        console.error('Failed to load tables:', err);
-    }
-}
-
-// Render tables
-function renderTablesList(tables) {
-    const container = document.getElementById('tables-list');
-
-    if (!tables || tables.length === 0) {
-        container.innerHTML = '<div style="padding: 12px; color: #666; font-size: 12px;">No models found</div>';
-        return;
-    }
-
-    container.innerHTML = tables.map(table => `
-        <div class="table-item" data-table="${table.name}" onclick="selectTable('${table.name}')" title="${table.name}">
-            <span class="table-item-name">${table.name}</span>
-            <span class="table-count">${table.row_count}</span>
-        </div>
-    `).join('');
-}
-
-// Filter tables
-function filterTables(e) {
-    const search = e.target.value.toLowerCase();
-    if (!state.tablesCache) return;
-
-    if (!search) {
-        renderTablesList(state.tablesCache);
-        return;
-    }
-
-    const filtered = state.tablesCache.filter(t => t.name.toLowerCase().includes(search));
-    renderTablesList(filtered);
-}
-
-// Select table
-async function selectTable(tableName) {
-    state.currentTable = tableName;
-    state.page = 1;
-    state.changes.clear();
-
-    document.getElementById('current-table').textContent = tableName;
-    document.getElementById('save-btn').style.display = 'none';
-
-    document.querySelectorAll('.table-item').forEach(item => {
-        item.classList.toggle('active', item.dataset.table === tableName);
-    });
-
-    showLoadingSkeleton();
-    await loadTableData();
-}
-
-// Loading skeleton
-function showLoadingSkeleton() {
-    document.getElementById('grid-container').innerHTML = `
-        <div style="padding: 16px;">
-            <div class="skeleton" style="height: 40px; margin-bottom: 8px;"></div>
-            <div class="skeleton" style="height: 300px;"></div>
-        </div>
-    `;
-}
-
-// Load data with server-side filtering
-async function loadTableData() {
-    if (!state.currentTable) return;
-
-    try {
-        // Build URL with filters
-        let url = `/api/tables/${state.currentTable}?page=${state.page}&limit=${state.limit}`;
-
-        // Add filters to request if any exist
-        if (state.filters && state.filters.length > 0) {
-            const filtersJSON = encodeURIComponent(JSON.stringify(state.filters));
-            url += `&filters=${filtersJSON}`;
-        }
-
-        const res = await fetch(url);
-        const json = await res.json();
-
-        if (json.success) {
-            state.data = json.data;
-            const rowCount = json.data.rows ? json.data.rows.length : 0;
-            const totalFiltered = json.data.total || 0;
-            document.getElementById('row-count').textContent = `${rowCount} of ${totalFiltered}`;
-
-            // Deduplicate columns before setting global
-            if (json.data.columns) {
-                const seen = new Set();
-                const uniqueCols = [];
-                json.data.columns.forEach(col => {
-                    if (!seen.has(col.name)) {
-                        seen.add(col.name);
-                        uniqueCols.push(col);
-                    }
-                });
-                currentColumns = uniqueCols;
-            } else {
-                currentColumns = [];
-            }
-
-            renderDataGrid(json.data);
-            updatePagination(json.data);
-        }
-    } catch (err) {
-        console.error('Failed to load data:', err);
-    }
-}
-
-// Render grid
-function renderDataGrid(data) {
-    const container = document.getElementById('grid-container');
-
-    if (!data.rows || data.rows.length === 0) {
-        if (data.columns && data.columns.length > 0) {
-            const schemaInfo = `
-                <div class="table-schema-info">
-                    <div class="schema-title">
-                        <span class="iconify" data-icon="mdi:table" style="font-size: 20px;"></span>
-                        Table Structure: ${state.currentTable}
-                    </div>
-                    <div class="schema-columns-grid">
-                        ${data.columns.map(col => {
-                let badges = [];
-                if (col.primary_key) badges.push('<span class="badge badge-primary">PK</span>');
-                if (col.foreign_key_table) badges.push('<span class="badge badge-purple">FK → ' + col.foreign_key_table + '.' + col.foreign_key_column + '</span>');
-                if (col.isUnique) badges.push('<span class="badge badge-success">Unique</span>');
-                if (col.isAutoIncrement) badges.push('<span class="badge badge-warning">Auto Inc</span>');
-                if (!col.nullable) badges.push('<span class="badge badge-info">NOT NULL</span>');
-                if (col.default !== null && col.default !== undefined && col.default !== '') badges.push('<span class="badge badge-secondary">Default: ' + col.default + '</span>');
-
-                return `
-                                <div class="schema-column-card">
-                                    <div class="schema-column-header">
-                                        <div class="schema-column-main">
-                                            <div class="schema-column-name">${col.name}</div>
-                                            <div class="schema-column-type">${col.type}</div>
-                                        </div>
-                                    </div>
-                                    ${badges.length > 0 ? '<div class="schema-column-badges">' + badges.join('') + '</div>' : ''}
-                                </div>
-                            `;
-            }).join('')}
-                    </div>
-                </div>
-            `;
-
-            container.innerHTML = schemaInfo + `
-                <div class="empty-state">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                    </svg>
-                    <div>No data in this table</div>
-                    <div style="font-size: 12px; color: #666; margin-top: 8px;">Click "Add Record" to insert data</div>
-                </div>
-            `;
-        }
-        return;
-    }
-
-    // Store foreign key info
-    if (data.columns) {
-        const seen = new Set();
-        const orderedCols = [];
-        data.columns.forEach(col => {
-            if (!seen.has(col.name)) {
-                seen.add(col.name);
-                orderedCols.push(col);
-            }
-
-            if (col.foreign_key_table) {
-                state.foreignKeys.set(col.name, {
-                    table: col.foreign_key_table,
-                    column: col.foreign_key_column
-                });
-            }
-        });
-
-        const html = `
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"></th>
-                        ${orderedCols.map(col => `
-                            <th title="${col.name}">
-                                ${col.name}
-                                <span class="type-badge">${col.type}</span>
-                            </th>
-                        `).join('')}
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.rows.map((row, idx) => renderRow(row, idx, orderedCols)).join('')}
-                </tbody>
-            </table>
-        `;
-
-        currentColumns = orderedCols;
-        container.innerHTML = html;
-    }
-}
-
-// Render row
-function renderRow(row, idx, columns) {
-    const rowId = row.id || idx;
-
-    return `
-        <tr>
-            <td>
-                <input type="checkbox" class="row-checkbox" data-row="${rowId}" style="cursor: pointer;" onchange="toggleRowSelection(this)">
-            </td>
-            ${columns.map(col => {
-        const fk = state.foreignKeys.get(col.name);
-        const value = row[col.name];
-        const valueStr = String(value || '');
-
-        // FK cells have special click handler, others are editable
-        const cellClass = fk && value ? 'cell value-fk' : 'cell';
-        const onClick = fk && value ?
-            `onclick="event.stopPropagation(); navigateToForeignKey('${fk.table}', '${fk.column}', '${value}'); return false;"` :
-            `onclick="editCell(this)"`;
-
-        const titleText = fk ? `Click to view ${fk.table}.${fk.column} = ${value}` : valueStr;
-
-        return `
-                    <td class="${cellClass}" data-row="${rowId}" data-column="${col.name}" 
-                        ${onClick} 
-                        title="${titleText.replace(/"/g, '&quot;')}">
-                        ${formatValue(value, fk)}
-                    </td>
-                `;
-    }).join('')}
-        </tr>
-    `;
-}
-
-// foreign key reference - Show popup
-async function navigateToForeignKey(tableName, columnName, value) {
-    console.log(`Showing FK reference: ${tableName}.${columnName} = ${value}`);
-
-    const loadingHtml = `
-        <div style="text-align: center; padding: 40px; color: #888;">
-            <div class="spinner" style="margin: 0 auto 16px;"></div>
-            <div>Loading reference data...</div>
-        </div>
-    `;
-    showModal('Foreign Key Reference', loadingHtml, 'info', false);
-
-    try {
-        const response = await fetch(`/api/tables/${tableName}?page=1&limit=1000`);
-        const json = await response.json();
-
-        if (!json.success || !json.data.rows || json.data.rows.length === 0) {
-            showModal('Foreign Key Reference', `No data found in table ${tableName}`, 'warning', false);
-            return;
-        }
-
-        const row = json.data.rows.find(r => r[columnName] == value);
-        if (!row) {
-            showModal('Foreign Key Reference', `No row found in ${tableName} where ${columnName} = ${value}`, 'warning', false);
-            return;
-        }
-
-        const columns = json.data.columns;
-
-        const tableHtml = `
-            <div style="margin-bottom: 12px; color: #888; font-size: 12px;">
-                Reference: ${tableName}.${columnName} = ${value}
-            </div>
-            <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
-                <table class="data-table" style="background: #1e1e1e; width: max-content; min-width: 100%;">
-                    <thead>
-                        <tr>
-                            ${columns.map(col => `
-                                <th>${col.name} <span class="type-badge">${col.type}</span></th>
-                            `).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            ${columns.map(col => `
-                                <td style="white-space: nowrap;">${formatValue(row[col.name])}</td>
-                            `).join('')}
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div style="margin-top: 16px; display: flex; gap: 8px;">
-                <button class="btn btn-primary" onclick="goToTable('${tableName}', '${columnName}', '${value}')">
-                    Go to ${tableName}
-                </button>
-            </div>
-        `;
-
-        showModal('Foreign Key Reference', tableHtml, 'info', false);
-    } catch (err) {
-        console.error('Failed to fetch FK reference:', err);
-        showModal('Error', 'Failed to fetch foreign key reference', 'error', false);
-    }
-}
-
-// Helper function to navigate to table with filter
-async function goToTable(tableName, columnName, value) {
-    document.querySelectorAll('.custom-modal').forEach(m => m.classList.remove('show'));
-
-    await selectTable(tableName);
-    setTimeout(() => {
-        if (!state.data || !state.data.columns) return;
-        currentColumns = state.data.columns;
-        document.getElementById('filter-rows').innerHTML = '';
-        addFilterRow('where', columnName, 'equals', value);
-        applyFilters();
-    }, 500);
-}
-
-// Toggle select all
-function toggleSelectAll(checkbox) {
-    document.querySelectorAll('.row-checkbox').forEach(cb => {
-        cb.checked = checkbox.checked;
-        toggleRowSelection(cb);
-    });
-}
-
-// Toggle row selection
-function toggleRowSelection(checkbox) {
-    const row = checkbox.closest('tr');
-    if (checkbox.checked) {
-        row.style.background = '#2a3a4a';
-    } else {
-        row.style.background = '';
-    }
-
-    const anyChecked = document.querySelectorAll('.row-checkbox:checked').length > 0;
-    document.getElementById('delete-selected-btn').style.display = anyChecked ? 'block' : 'none';
-}
-
-// Delete selected rows
-async function deleteSelected() {
-    const checked = document.querySelectorAll('.row-checkbox:checked');
-    if (checked.length === 0) return;
-
-    const rowIds = Array.from(checked).map(cb => cb.dataset.row);
-
-    showConfirm(
-        'Confirm Deletion',
-        `Are you sure you want to delete ${checked.length} record(s)? This action cannot be undone.`,
-        async () => {
-            try {
-                const res = await fetch(`/api/tables/${state.currentTable}/delete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ row_ids: rowIds })
-                });
-
-                const json = await res.json();
-
-                if (json.success) {
-                    showModal('Success', json.message, 'success');
-                    refreshData();
-                } else {
-                    showModal('Error', json.message, 'error');
-                }
-            } catch (err) {
-                showModal('Error', 'Failed to delete: ' + err.message, 'error');
-            }
-        }
-    );
-}
-
-// Format value with proper type detection
-function formatValue(value, fk = null) {
-    if (value === null || value === undefined) {
-        return '<span class="value-null">NULL</span>';
-    }
-    if (typeof value === 'boolean') {
-        return `<span class="value-bool">${value}</span>`;
-    }
-    if (typeof value === 'number') {
-        return `<span class="value-number">${value}</span>`;
-    }
+// ===== Format Values =====
+function formatValue(value, fk) {
+    if (value === null || value === undefined) return '<span class="v-null">NULL</span>';
+    if (typeof value === 'boolean') return `<span class="v-bool">${value}</span>`;
+    if (typeof value === 'number') return `<span class="v-number">${value}</span>`;
     if (typeof value === 'object') {
-        // Handle Date objects
-        if (value instanceof Date) {
-            return `<span class="value-date">${value.toISOString()}</span>`;
-        }
-
-        // Handle UUID byte arrays (arrays of 16 numbers 0-255)
         if (Array.isArray(value) && value.length === 16 && value.every(b => typeof b === 'number' && b >= 0 && b <= 255)) {
             const uuid = bytesToUuid(value);
-            return `<span class="value-uuid" data-original-value="${escapeHtmlAttr(uuid)}" title="${uuid}">${escapeHtml(uuid)}</span>`;
+            return `<span class="v-uuid">${escapeHtml(uuid)}</span>`;
         }
-
-        // Handle arrays and objects (JSON)
-        try {
-            const jsonStr = JSON.stringify(value);
-            const escapedJson = escapeHtml(jsonStr);
-            return `<span class="value-json" data-original-value="${escapeHtmlAttr(jsonStr)}" title="${escapedJson}">${escapedJson}</span>`;
-        } catch {
-            return `<span class="value-object">[Object]</span>`;
-        }
+        try { return `<span class="v-json">${escapeHtml(JSON.stringify(value))}</span>`; } catch { return `<span class="v-json">[Object]</span>`; }
     }
-
-    // String value - detect type
-    const strValue = String(value);
-
-    // UUID detection (standard 8-4-4-4-12 format)
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(strValue)) {
-        return `<span class="value-uuid" title="${strValue}">${escapeHtml(strValue)}</span>`;
-    }
-
-    // Datetime detection
-    if (/^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}:\d{2}/.test(strValue)) {
-        return `<span class="value-date">${escapeHtml(strValue)}</span>`;
-    }
-
-    // Email detection
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(strValue)) {
-        return `<span class="value-email">${escapeHtml(strValue)}</span>`;
-    }
-
-    // URL detection
-    if (/^https?:\/\//.test(strValue)) {
-        return `<a href="${escapeHtml(strValue)}" target="_blank" class="value-url">${escapeHtml(strValue)}</a>`;
-    }
-
-    // Foreign key
-    if (fk) {
-        return `<span class="value-fk">${escapeHtml(strValue)}</span>`;
-    }
-
-    // Long text truncation - store original in data attribute
-    if (strValue.length > 100) {
-        const truncated = strValue.substring(0, 100) + '...';
-        return `<span class="value-string value-truncated" data-original-value="${escapeHtmlAttr(strValue)}" title="${escapeHtml(strValue)}">${escapeHtml(truncated)}</span>`;
-    }
-
-    return `<span class="value-string" data-original-value="${escapeHtmlAttr(strValue)}">${escapeHtml(strValue)}</span>`;
+    const s = String(value);
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return `<span class="v-uuid">${escapeHtml(s)}</span>`;
+    if (/^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}:\d{2}/.test(s)) return `<span class="v-date">${escapeHtml(s)}</span>`;
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return `<span class="v-email">${escapeHtml(s)}</span>`;
+    if (/^https?:\/\//.test(s)) return `<a href="${escapeHtml(s)}" target="_blank" class="v-url" onclick="event.stopPropagation()">${escapeHtml(s)}</a>`;
+    if (fk) return `<span class="v-fk">${escapeHtml(s)}</span>`;
+    if (s === 'true' || s === 'false') return `<span class="v-bool">${escapeHtml(s)}</span>`;
+    const truncated = s.length > 120 ? s.slice(0, 120) + '…' : s;
+    return `<span class="v-string">${escapeHtml(truncated)}</span>`;
 }
 
-// Convert byte array to UUID string (8-4-4-4-12 format)
 function bytesToUuid(bytes) {
-    if (!bytes || bytes.length !== 16) return '';
-
-    const hex = bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+    const h = bytes.map(b => b.toString(16).padStart(2,'0')).join('');
+    return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20,32)}`;
 }
 
-// Keyboard handler for collapsing/expanding sidebar
-function handleKeyDown(e) {
-    if (e.key === 'ArrowLeft') collapseSidebar();
-    if (e.key === 'ArrowRight') expandSidebar();
+// ===== Selection =====
+function toggleSelectAll(cb) {
+    document.querySelectorAll('.row-checkbox').forEach(c => { c.checked = cb.checked; toggleRowSelection(c, true); });
+    document.getElementById('delete-selected-btn').style.display = cb.checked ? 'inline-flex' : 'none';
 }
+window.toggleSelectAll = toggleSelectAll;
 
-function collapseSidebar() {
-    const sb = document.querySelector('.sidebar');
-    if (!sb) return;
-    sb.classList.add('collapsed');
-}
-
-function expandSidebar() {
-    const sb = document.querySelector('.sidebar');
-    if (!sb) return;
-    sb.classList.remove('collapsed');
-}
-
-// Edit cell - Fixed to use original value, not truncated display text
-function editCell(cell) {
-    if (cell.querySelector('textarea') || cell.classList.contains('value-fk')) return;
-
-    const rowId = cell.dataset.row;
-    const column = cell.dataset.column;
-
-    // Get the original value from data attribute, not the display text
-    const valueSpan = cell.querySelector('[data-original-value]');
-    let originalValue;
-
-    if (valueSpan && valueSpan.dataset.originalValue !== undefined) {
-        originalValue = valueSpan.dataset.originalValue;
-    } else {
-        // Fallback to text content for non-truncated values
-        originalValue = cell.textContent.trim();
+function toggleRowSelection(cb, skipBtn) {
+    cb.closest('tr').classList.toggle('selected', cb.checked);
+    if (!skipBtn) {
+        const any = !!document.querySelector('.row-checkbox:checked');
+        document.getElementById('delete-selected-btn').style.display = any ? 'inline-flex' : 'none';
     }
-
-    // Handle NULL display
-    if (originalValue === 'NULL' || cell.querySelector('.value-null')) {
-        originalValue = '';
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = originalValue;
-
-    // Store original for cancel operation
-    const storedOriginal = originalValue;
-
-    textarea.addEventListener('blur', () => saveCell(cell, textarea, rowId, column, storedOriginal));
-    textarea.addEventListener('keydown', (e) => {
-        // Ctrl+Enter or Cmd+Enter to save
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-            e.preventDefault();
-            textarea.blur();
-        }
-        // Escape to cancel - restore to original value
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            cell.innerHTML = formatValue(storedOriginal === '' ? null : storedOriginal);
-            cell.classList.remove('cell-editing');
-        }
-    });
-
-    cell.innerHTML = '';
-    cell.appendChild(textarea);
-    cell.classList.add('cell-editing');
-    textarea.focus();
-    textarea.select();
 }
+window.toggleRowSelection = toggleRowSelection;
 
-// Save cell - Updated to compare with original value and persist state
-function saveCell(cell, textarea, rowId, column, originalValue) {
-    const newValue = textarea.value;
-
-    // Compare with original value, not display text
-    if (newValue !== originalValue) {
-        if (!state.changes.has(rowId)) {
-            state.changes.set(rowId, {});
-        }
-        state.changes.get(rowId)[column] = newValue;
-
-        cell.classList.add('cell-dirty');
-        document.getElementById('save-btn').style.display = 'block';
-
-        // Persist changes to session storage
-        state.save();
-    }
-
-    cell.innerHTML = formatValue(newValue === '' ? null : newValue);
-    cell.classList.remove('cell-editing');
-}
-
-// Save changes
+// ===== CRUD =====
 async function saveChanges() {
-    if (state.changes.size === 0) return;
-
-    const saveBtn = document.getElementById('save-btn');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-
+    if (!state.changes.size) return;
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
     const changes = [];
-    state.changes.forEach((cols, rowId) => {
-        Object.entries(cols).forEach(([colName, value]) => {
-            changes.push({
-                row_id: rowId,
-                column: colName,
-                value: value,
-                action: 'update'
-            });
-        });
-    });
-
-    try {
-        const res = await fetch(`/api/tables/${state.currentTable}/save`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ changes })
-        });
-
-        const json = await res.json();
-
-        if (json.success) {
-            state.changes.clear();
-            showModal('Success', json.message, 'success');
-            refreshData();
-        } else {
-            showModal('Error', json.message, 'error');
-        }
-    } catch (err) {
-        showModal('Error', 'Failed to save: ' + err.message, 'error');
-    } finally {
-        saveBtn.disabled = false;
-        saveBtn.textContent = '💾 Save';
-    }
+    state.changes.forEach((cols, rowId) => Object.entries(cols).forEach(([col, val]) => changes.push({ row_id: rowId, column: col, value: val, action: 'update' })));
+    const res = await apiCall(`/api/tables/${state.currentTable}/save`, { method:'POST', body: JSON.stringify({ changes }) }).catch(() => null);
+    if (res?.success) { state.changes.clear(); btn.style.display = 'none'; showToast('Saved', 'success'); refreshData(); }
+    else showToast(res?.message || 'Save failed', 'error');
+    btn.disabled = false;
 }
+window.saveChanges = saveChanges;
 
-// Add row - Show modal with form
-// Add row - single unified function
-function addRow() {
-    if (!state.currentTable || !state.data) return;
+function showAddRowDialog() { if (state.data?.columns) showAddRowModal(state.data.columns, async data => {
+    const res = await apiCall(`/api/tables/${state.currentTable}/add`, { method:'POST', body:JSON.stringify({ data }) }).catch(() => null);
+    if (res?.success) { showToast('Row added', 'success'); refreshData(); } else showToast(res?.message || 'Failed', 'error');
+}); }
+window.showAddRowDialog = showAddRowDialog;
 
-    showAddRowModal(state.data.columns, async (data) => {
-        if (!data || Object.keys(data).length === 0) return;
-        try {
-            const res = await fetch(`/api/tables/${state.currentTable}/add`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data })
-            });
-            const json = await res.json();
-            if (json.success) {
-                showModal('Success', 'Row added successfully', 'success');
-                refreshData();
-            } else {
-                showModal('Error', json.message || 'Failed to add row', 'error');
-            }
-        } catch (err) {
-            showModal('Error', err.message, 'error');
-        }
+async function deleteSelected() {
+    const ids = Array.from(document.querySelectorAll('.row-checkbox:checked')).map(c => c.dataset.row);
+    if (!ids.length) return;
+    showConfirm('Delete rows', `Delete ${ids.length} row(s)?`, async () => {
+        const res = await apiCall(`/api/tables/${state.currentTable}/delete`, { method:'POST', body:JSON.stringify({ row_ids: ids }) }).catch(() => null);
+        if (res?.success) { showToast(`Deleted ${ids.length} row(s)`, 'success'); refreshData(); } else showToast(res?.message || 'Failed', 'error');
     });
 }
+window.deleteSelected = deleteSelected;
 
-// Alias for backwards compatibility
-function showAddRowDialog() {
-    addRow();
-}
-
-// Delete row
-function deleteRow(rowId) {
-    showConfirm('Confirm Delete', 'Delete this row?', async () => {
-        try {
-            const res = await fetch(`/api/tables/${state.currentTable}/rows/${rowId}`, { method: 'DELETE' });
-            const json = await res.json();
-            if (json.success) {
-                showModal('Success', 'Row deleted', 'success');
-                refreshData();
-            } else {
-                showModal('Error', json.message || 'Failed to delete row', 'error');
-            }
-        } catch (err) {
-            showModal('Error', err.message, 'error');
-        }
-    });
-}
-
-// Refresh - clears filters and reloads fresh data
 function refreshData() {
-    if (!state.currentTable) {
-        // If no table is selected, just reload the tables list
-        loadTables();
-        showToast('Tables list refreshed', 'success');
-        return;
-    }
-
-    // Clear changes
+    if (!state.currentTable) { loadTables(); return; }
     state.changes.clear();
     document.getElementById('save-btn').style.display = 'none';
-
-    // Clear dirty cells
     document.querySelectorAll('.cell-dirty').forEach(c => c.classList.remove('cell-dirty'));
-
-    // Clear filter UI without reloading (we'll reload after)
-    const filterRows = document.getElementById('filter-rows');
-    if (filterRows) {
-        filterRows.innerHTML = '';
-    }
-
-    // Clear filters array (defined in index.js)
-    if (typeof filters !== 'undefined') {
-        filters.length = 0; // Clear the array in-place
-    }
-
-    // Update filter badge
-    if (typeof updateFilterCount === 'function') {
-        updateFilterCount();
-    }
-
-    // Close filter panel if open
-    const filterPanel = document.getElementById('filter-panel');
-    if (filterPanel && filterPanel.classList.contains('show')) {
-        filterPanel.classList.remove('show');
-        const filterBtn = document.getElementById('filter-btn');
-        if (filterBtn) filterBtn.classList.remove('active');
-    }
-
-    // Reload data and tables
-    loadTableData();
-    loadTables();
-
-    // Show feedback
-    showToast('Data refreshed', 'success');
+    if (typeof filters !== 'undefined') filters.length = 0;
+    if (typeof updateFilterCount === 'function') updateFilterCount();
+    document.getElementById('filter-panel')?.classList.remove('show');
+    document.getElementById('filter-btn')?.classList.remove('active');
+    loadTableData(); loadTables();
 }
+window.refreshData = refreshData;
 
-// Pagination
-function changePage(delta) {
-    state.page += delta;
-    if (state.page < 1) state.page = 1;
-    showLoadingSkeleton();
-    loadTableData();
+// ===== FK Navigation =====
+async function navigateToForeignKey(table, col, value) {
+    const res = await apiCall(`/api/tables/${table}?page=1&limit=1000`).catch(() => null);
+    if (!res?.success) return;
+    const row = res.data.rows?.find(r => String(r[col]) === String(value));
+    if (!row) { showToast(`No matching row in ${table}`, 'error'); return; }
+    const cols = res.data.columns;
+    const html = `<div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+        <table class="data-table" style="width:max-content;min-width:100%;"><thead><tr>
+        ${cols.map(c => `<th><div class="th-inner"><span class="col-name">${escapeHtml(c.name)}</span><span class="col-type">${escapeHtml(c.type||'')}</span></div></th>`).join('')}
+        </tr></thead><tbody><tr>${cols.map(c => `<td><div class="td-inner"><span class="cell-text">${formatValue(row[c.name])}</span></div></td>`).join('')}</tr></tbody></table>
+    </div><div style="margin-top:12px;"><button class="btn btn-primary" onclick="document.querySelectorAll('.custom-modal').forEach(m=>m.remove());selectTable('${escapeHtml(table)}')">Go to ${escapeHtml(table)}</button></div>`;
+    showModal(`${table}.${col} = ${value}`, html, 'info', false);
 }
+window.navigateToForeignKey = navigateToForeignKey;
+
+// ===== Pagination =====
+function changePage(d) { state.page = Math.max(1, state.page + d); showLoadingSkeleton(); loadTableData(); }
+window.changePage = changePage;
 
 function updatePagination(data) {
-    const pagination = document.getElementById('pagination');
-    const pageInfo = document.getElementById('page-info');
-    const prevBtn = document.getElementById('prev-btn');
-    const nextBtn = document.getElementById('next-btn');
-
-    if (data.total === 0) {
-        pagination.style.display = 'none';
-        return;
-    }
-
-    pagination.style.display = 'flex';
-
-    const start = (data.page - 1) * data.limit + 1;
-    const end = Math.min(data.page * data.limit, data.total);
-    pageInfo.textContent = `${start}-${end} of ${data.total}`;
-
-    prevBtn.disabled = data.page === 1;
-    nextBtn.disabled = end >= data.total;
+    const pg = document.getElementById('pagination');
+    if (!data.total) { pg.style.display = 'none'; return; }
+    pg.style.display = 'flex';
+    const s = (data.page-1)*data.limit+1, e = Math.min(data.page*data.limit, data.total);
+    document.getElementById('page-info').textContent = `${s}–${e} of ${data.total}`;
+    document.getElementById('prev-btn').disabled = data.page === 1;
+    document.getElementById('next-btn').disabled = e >= data.total;
 }
 
-// Modal system - Show a custom modal with title, content, and type
-function showModal(title, content, type = 'info', blocking = false) {
+// ===== Save Changes =====
+async function saveChanges() {
+    if (!state.changes.size) return;
+    const btn = document.getElementById('save-btn'); btn.disabled = true;
+    const changes = [];
+    state.changes.forEach((cols, rowId) => Object.entries(cols).forEach(([col, val]) => changes.push({ row_id: rowId, column: col, value: val, action: 'update' })));
+    const res = await apiCall(`/api/tables/${state.currentTable}/save`, { method:'POST', body:JSON.stringify({ changes }) }).catch(() => null);
+    if (res?.success) { state.changes.clear(); btn.style.display='none'; showToast('Saved', 'success'); refreshData(); }
+    else showToast(res?.message || 'Save failed', 'error');
+    btn.disabled = false;
+}
+
+// ===== Keyboard =====
+function handleGlobalKey(e) {
+    if (e.key === 'Escape') closeCellEditor();
+}
+
+// ===== Modal / Toast helpers (used by index.js too) =====
+function showModal(title, content, type='info', blocking=false) {
     document.querySelectorAll('.custom-modal').forEach(m => m.remove());
-
-    const iconMap = {
-        'info': '<span class="iconify" data-icon="mdi:information" style="color: #4a9eff;"></span>',
-        'success': '<span class="iconify" data-icon="mdi:check-circle" style="color: #10b981;"></span>',
-        'warning': '<span class="iconify" data-icon="mdi:alert" style="color: #f59e0b;"></span>',
-        'error': '<span class="iconify" data-icon="mdi:alert-circle" style="color: #ef4444;"></span>'
-    };
-
-    const modal = document.createElement('div');
-    modal.className = 'custom-modal';
-    modal.innerHTML = `
-        <div class="custom-modal-content">
-            <div class="custom-modal-header">
-                <div class="custom-modal-title">
-                    ${iconMap[type] || iconMap.info}
-                    ${title}
-                </div>
-                <button class="custom-modal-close" onclick="this.closest('.custom-modal').remove()">
-                    <span class="iconify" data-icon="mdi:close"></span>
-                </button>
-            </div>
-            <div class="custom-modal-body">
-                ${content}
-            </div>
+    const icons = { info:'mdi:information', success:'mdi:check-circle', warning:'mdi:alert', error:'mdi:alert-circle' };
+    const colors = { info:'#4a9eff', success:'#4ade80', warning:'#fb923c', error:'#f87171' };
+    const m = document.createElement('div');
+    m.className = 'custom-modal';
+    m.innerHTML = `<div class="custom-modal-content">
+        <div class="custom-modal-header">
+            <div class="custom-modal-title"><span class="iconify" data-icon="${icons[type]||icons.info}" style="color:${colors[type]||colors.info}"></span>${escapeHtml(title)}</div>
+            <button class="custom-modal-close" onclick="this.closest('.custom-modal').remove()">×</button>
         </div>
-    `;
+        <div class="custom-modal-body">${content}</div>
+    </div>`;
+    document.body.appendChild(m);
+    setTimeout(() => m.classList.add('show'), 10);
+    if (!blocking) { m.addEventListener('click', e => { if (e.target===m) m.remove(); }); }
+    const esc = e => { if (e.key==='Escape') { m.remove(); document.removeEventListener('keydown',esc); } };
+    document.addEventListener('keydown', esc);
+}
 
-    document.body.appendChild(modal);
+function showConfirm(title, content, onConfirm) {
+    showModal(title, content + `<div class="custom-modal-footer" style="margin-top:16px;">
+        <button class="btn btn-secondary" onclick="this.closest('.custom-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" id="confirm-ok">Confirm</button>
+    </div>`, 'warning', true);
+    setTimeout(() => {
+        document.getElementById('confirm-ok')?.addEventListener('click', () => {
+            document.querySelectorAll('.custom-modal').forEach(m => m.remove());
+            onConfirm();
+        });
+    }, 20);
+}
 
-    setTimeout(() => modal.classList.add('show'), 10);
+// ===== Sidebar =====
+function toggleMobileSidebar() {
+    document.getElementById('sidebar').classList.toggle('mobile-open');
+    document.getElementById('sidebar-backdrop').classList.toggle('show');
+}
+function closeMobileSidebar() {
+    document.getElementById('sidebar').classList.remove('mobile-open');
+    document.getElementById('sidebar-backdrop').classList.remove('show');
+}
+window.toggleMobileSidebar = toggleMobileSidebar;
+window.closeMobileSidebar = closeMobileSidebar;
 
-    if (!blocking) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-            }
+function showCreateTableForm() { window.location.href = '/schema#create-table'; }
+window.showCreateTableForm = showCreateTableForm;
+
+// ===== Branch =====
+async function loadBranches() {
+    const res = await apiCall('/api/branches').catch(() => null);
+    if (!res) return;
+    const sel = document.getElementById('branch-selector');
+    if (res.branches?.length <= 1) { sel.style.display='none'; return; }
+    sel.style.display='inline-block';
+    sel.innerHTML = res.branches.map(b => `<option value="${escapeHtml(b.name)}" ${b.name===res.current?'selected':''}>${escapeHtml(b.name)}${b.is_default?' (default)':''}</option>`).join('');
+}
+async function switchBranch(name) {
+    if (!name) return;
+    const res = await apiCall('/api/branches/switch', { method:'POST', body:JSON.stringify({ branch: name }) }).catch(() => null);
+    if (res?.success) { showToast(`Switched to ${name}`, 'success'); location.reload(); }
+    else showToast('Failed to switch branch', 'error');
+}
+window.switchBranch = switchBranch;
+document.addEventListener('DOMContentLoaded', loadBranches);
+
+// ===== Dropdown =====
+function toggleDropdown(id) {
+    const d = document.getElementById(id);
+    document.querySelectorAll('.dropdown-menu').forEach(x => { if (x.id!==id) x.classList.remove('show'); });
+    d.classList.toggle('show');
+}
+document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show')); });
+window.toggleDropdown = toggleDropdown;
+
+// ===== Op overlay =====
+function showOpOverlay(title, status, isImport) {
+    document.getElementById('op-title').textContent = title;
+    document.getElementById('op-icon').textContent = isImport ? '📥' : '📤';
+    setOpStatus(status);
+    const bar = document.getElementById('op-bar');
+    bar.className = 'op-progress-bar indeterminate' + (isImport?' import':'');
+    bar.style.width = '';
+    document.getElementById('op-overlay').classList.add('show');
+}
+function setOpStatus(msg) { document.getElementById('op-status').textContent = msg; }
+function setOpProgress(pct) { const b=document.getElementById('op-bar'); b.classList.remove('indeterminate'); b.style.width=Math.min(100,Math.round(pct))+'%'; }
+function hideOpOverlay() { document.getElementById('op-overlay').classList.remove('show'); }
+window.showOpOverlay = showOpOverlay; window.setOpStatus = setOpStatus; window.setOpProgress = setOpProgress; window.hideOpOverlay = hideOpOverlay;
+
+// ===== Context menu =====
+(function() {
+    let menu = null, ctxTable = null;
+    function get() {
+        if (!menu) {
+            menu = document.createElement('div'); menu.className='context-menu';
+            menu.innerHTML=`<button class="context-menu-item" data-a="edit"><span class="iconify" data-icon="mdi:pencil"></span>Edit Schema</button><div class="context-menu-divider"></div><button class="context-menu-item context-menu-item-danger" data-a="delete"><span class="iconify" data-icon="mdi:delete"></span>Drop Table</button>`;
+            menu.addEventListener('click', e => { const b=e.target.closest('[data-a]'); if(!b) return; hide(); if(b.dataset.a==='edit') window.location.href='/schema#edit-'+encodeURIComponent(ctxTable); else if(b.dataset.a==='delete') dropTable(ctxTable); });
+            document.body.appendChild(menu);
+        }
+        return menu;
+    }
+    function show(e, name) { e.preventDefault(); e.stopPropagation(); ctxTable=name; const m=get(); m.style.cssText=`display:block;left:${e.clientX}px;top:${e.clientY}px`; requestAnimationFrame(()=>{ const r=m.getBoundingClientRect(); if(r.right>window.innerWidth) m.style.left=(e.clientX-r.width)+'px'; if(r.bottom>window.innerHeight) m.style.top=(e.clientY-r.height)+'px'; }); }
+    function hide() { if(menu) menu.style.display='none'; }
+    document.addEventListener('DOMContentLoaded', () => { document.getElementById('tables-list').addEventListener('contextmenu', e => { const ti=e.target.closest('.table-item'); if(ti) show(e, ti.dataset.table); }); });
+    document.addEventListener('click', hide); document.addEventListener('scroll', hide, true);
+    async function dropTable(name) {
+        showConfirm('Drop Table', `<p>Drop <strong>${escapeHtml(name)}</strong>? <span style="color:#f87171">All data will be lost.</span></p>`, async () => {
+            const res = await apiCall('/api/schema/apply', { method:'POST', body:JSON.stringify({ type:'drop_table', table:name }) }).catch(()=>null);
+            if (res?.success) { showToast(`Table "${name}" dropped`, 'success'); if(state.currentTable===name) { state.currentTable=null; document.getElementById('current-table').textContent='Select a model'; document.getElementById('grid-container').innerHTML=''; } loadTables(); }
+            else showToast(res?.message||'Failed', 'error');
         });
     }
+})();
 
-    // Close on Escape key
-    const escHandler = (e) => {
-        if (e.key === 'Escape') {
-            modal.remove();
-            document.removeEventListener('keydown', escHandler);
-        }
-    };
-    document.addEventListener('keydown', escHandler);
+// ===== SQL modal =====
+function openSQLModal() { document.getElementById('sql-modal').classList.add('show'); }
+function closeSQLModal() { document.getElementById('sql-modal').classList.remove('show'); }
+window.closeSQLModal = closeSQLModal;
+async function executeSQLQuery() {
+    const q = document.getElementById('sql-query').value.trim();
+    if (!q) return;
+    const res = await apiCall('/api/sql', { method:'POST', body:JSON.stringify({ query:q }) }).catch(()=>null);
+    if (res?.success) { state.data=res.data; renderDataGrid(res.data); closeSQLModal(); }
+    else showToast(res?.message||'Query failed', 'error');
 }
+window.executeSQLQuery = executeSQLQuery;
+
+// ===== cell-dirty style =====
+const style = document.createElement('style');
+style.textContent = `
+.cell-dirty .td-inner { background: #1a2a1a !important; }
+.cell-dirty .td-inner::after { content:''; position:absolute;top:2px;right:2px;width:5px;height:5px;background:#4ade80;border-radius:50%; }
+td.editing .td-inner { background: #1a2535 !important; outline: 1px solid #4a9eff; }
+`;
+document.head.appendChild(style);

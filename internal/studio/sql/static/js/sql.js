@@ -379,7 +379,7 @@ async function runQuery() {
   document.getElementById('results-info').textContent = hasSelection
     ? `Executing selection (lines ${fromLine + 1}-${toLine + 1})...`
     : 'Executing all queries...';
-  document.getElementById('results-body').innerHTML = '<div class="empty-state"><div class="spinner"></div><div>Running query...</div></div>';
+  document.getElementById('results-body').innerHTML = '<div class="sql-empty"><div class="spinner"></div><div>Running query…</div></div>';
 
   const startTime = Date.now();
 
@@ -498,94 +498,76 @@ function formatCellValue(value) {
 function displayResults(data, query, elapsed, runMode, fromLine, toLine) {
   const resultsBody = document.getElementById('results-body');
   const queryType = getQueryType(query);
-  const modeLabel = runMode === 'selection'
-    ? ` (selection: lines ${fromLine + 1}-${toLine + 1})`
-    : '';
+  const modeLabel = runMode === 'selection' ? ` (lines ${fromLine + 1}–${toLine + 1})` : '';
 
-  // Handle non-SELECT queries
   if (!data || !data.rows || data.rows.length === 0) {
-    let message = '';
-    let icon = '✓';
-
-    switch (queryType) {
-      case 'INSERT': message = 'Row(s) inserted successfully'; break;
-      case 'UPDATE': message = 'Row(s) updated successfully'; break;
-      case 'DELETE': message = 'Row(s) deleted successfully'; break;
-      case 'CREATE': message = 'Object created successfully'; break;
-      case 'ALTER': message = 'Object altered successfully'; break;
-      case 'DROP': message = 'Object dropped successfully'; icon = '⚠️'; break;
-      case 'TRUNCATE': message = 'Table truncated successfully'; icon = '⚠️'; break;
-      case 'SET': message = 'Variable set successfully'; break;
-      case 'TRANSACTION': message = 'Transaction started'; break;
-      case 'COMMIT': message = 'Transaction committed'; break;
-      case 'ROLLBACK': message = 'Transaction rolled back'; break;
-      case 'SELECT': message = 'Query executed successfully. No rows returned.'; break;
-      default: message = 'Query executed successfully';
-    }
-
-    document.getElementById('results-info').textContent = `Query completed in ${elapsed}ms${modeLabel}`;
-    resultsBody.innerHTML = `
-      <div class="success-message">
-        <div class="success-icon">${icon}</div>
-        <div class="success-text">${message}</div>
-        <div class="success-details">Execution time: ${elapsed}ms${modeLabel}</div>
-      </div>
-    `;
+    const msgs = { INSERT:'Row(s) inserted', UPDATE:'Row(s) updated', DELETE:'Row(s) deleted', CREATE:'Object created', ALTER:'Object altered', DROP:'Object dropped', TRUNCATE:'Table truncated', SET:'Variable set', TRANSACTION:'Transaction started', COMMIT:'Committed', ROLLBACK:'Rolled back', SELECT:'No rows returned' };
+    const message = msgs[queryType] || 'Query executed successfully';
+    document.getElementById('results-info').textContent = `Completed in ${elapsed}ms${modeLabel}`;
+    resultsBody.innerHTML = `<div class="sql-success"><div class="msg-icon">✓</div><div class="msg-text">${escapeHtml(message)}</div><div class="msg-detail">${elapsed}ms${modeLabel}</div></div>`;
     document.getElementById('export-btn').style.display = 'none';
     return;
   }
 
   const rowCount = data.rows.length;
   document.getElementById('results-info').textContent = `${rowCount} row${rowCount !== 1 ? 's' : ''} returned in ${elapsed}ms${modeLabel}`;
-  document.getElementById('export-btn').style.display = 'block';
+  document.getElementById('export-btn').style.display = 'inline-flex';
 
-  const columns = data.columns && data.columns.length > 0
-    ? data.columns.map(col => col.name || col)
-    : Object.keys(data.rows[0]);
+  const columns = data.columns?.length ? data.columns.map(c => c.name || c) : Object.keys(data.rows[0]);
 
-  let html = '<table class="results-table"><thead><tr>';
-  html += '<th class="row-num-header">#</th>';
+  let html = `<table class="results-table"><thead><tr>
+    <th class="rn-th"><div class="results-th-inner"><span class="results-col-num">#</span></div></th>`;
   columns.forEach(col => {
-    html += `<th>${escapeHtml(col)}</th>`;
+    html += `<th><div class="results-th-inner"><span class="results-col-name">${escapeHtml(col)}</span></div><div class="col-resize-handle"></div></th>`;
   });
   html += '</tr></thead><tbody>';
 
   data.rows.forEach((row, idx) => {
-    html += '<tr>';
-    html += `<td class="row-num">${idx + 1}</td>`;
+    html += `<tr><td class="rn-td"><div class="results-td-inner">${idx + 1}</div></td>`;
     columns.forEach(col => {
-      const value = row[col];
-      html += `<td>${formatCellValue(value)}</td>`;
+      const raw = row[col];
+      html += `<td title="${escapeHtml(raw == null ? 'NULL' : String(raw))}"><div class="results-td-inner"><span class="results-cell">${formatResultValue(raw)}</span></div></td>`;
     });
     html += '</tr>';
   });
-
   html += '</tbody></table>';
   resultsBody.innerHTML = html;
 
-  // Add click-to-copy functionality
-  resultsBody.querySelectorAll('td:not(.row-num)').forEach(td => {
+  // Click to copy cell value
+  resultsBody.querySelectorAll('tbody td:not(.rn-td)').forEach(td => {
     td.addEventListener('click', () => {
-      const text = td.textContent;
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('Copied to clipboard', 'success');
-      }).catch(() => { });
+      navigator.clipboard.writeText(td.title).then(() => showToast('Copied', 'success')).catch(() => {});
     });
-    td.style.cursor = 'pointer';
-    td.title = 'Click to copy';
   });
+
+  setupResultsResize();
+}
+
+function formatResultValue(value) {
+  if (value === null || value === undefined) return '<span class="v-null">NULL</span>';
+  if (typeof value === 'boolean') return `<span class="v-bool">${value}</span>`;
+  if (typeof value === 'number') return `<span class="v-number">${value}</span>`;
+  if (typeof value === 'object') {
+    try { return `<span class="v-json">${escapeHtml(JSON.stringify(value))}</span>`; } catch { return '<span class="v-json">[Object]</span>'; }
+  }
+  const s = String(value);
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) return `<span class="v-uuid">${escapeHtml(s)}</span>`;
+  if (/^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}:\d{2}/.test(s)) return `<span class="v-date">${escapeHtml(s)}</span>`;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return `<span class="v-email">${escapeHtml(s)}</span>`;
+  if (/^https?:\/\//.test(s)) return `<a href="${escapeHtml(s)}" target="_blank" class="v-url">${escapeHtml(s)}</a>`;
+  if (s === 'true' || s === 'false') return `<span class="v-bool">${s}</span>`;
+  const truncated = s.length > 120 ? s.slice(0, 120) + '…' : s;
+  return `<span class="v-string">${escapeHtml(truncated)}</span>`;
 }
 
 function displayError(message) {
   document.getElementById('results-info').textContent = 'Query failed';
-  document.getElementById('results-body').innerHTML = `
-    <div class="error-message">
-      <div class="error-icon">✕</div>
-      <div class="error-title">Query Error</div>
-      <div class="error-text">${escapeHtml(message)}</div>
-      <div class="error-hint">Check your SQL syntax and try again</div>
-    </div>
-  `;
+  document.getElementById('results-body').innerHTML = `<div class="sql-error">
+    <div class="msg-icon">✕</div>
+    <div class="msg-title">Query Error</div>
+    <div class="msg-text">${escapeHtml(message)}</div>
+    <div class="msg-hint">Check your SQL syntax and try again</div>
+  </div>`;
   document.getElementById('export-btn').style.display = 'none';
 }
 
@@ -620,9 +602,28 @@ function exportResults() {
   URL.revokeObjectURL(url);
 }
 
+function setupResultsResize() {
+  document.querySelectorAll('.results-table th:not(.rn-th) .col-resize-handle').forEach(handle => {
+    let startX, startW, th;
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      th = handle.closest('th');
+      startX = e.clientX; startW = th.offsetWidth;
+      handle.classList.add('resizing');
+      const onMove = ev => {
+        const w = Math.max(60, startW + (ev.clientX - startX));
+        th.style.width = w + 'px'; th.style.minWidth = w + 'px';
+      };
+      const onUp = () => { handle.classList.remove('resizing'); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
 function setupResize() {
   const handle = document.getElementById('resize-handle');
-  const editorSection = document.querySelector('.editor-section');
+  const editorPane = document.getElementById('editor-pane');
   let isResizing = false;
 
   handle.addEventListener('mousedown', () => {
@@ -632,13 +633,10 @@ function setupResize() {
 
   document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
-
-    const containerHeight = document.querySelector('.container').offsetHeight;
-    const newHeight = (e.clientY - 44) / containerHeight * 100;
-
-    if (newHeight > 20 && newHeight < 80) {
-      editorSection.style.flex = `0 0 ${newHeight}%`;
-    }
+    const layout = document.querySelector('.sql-layout');
+    const topbarH = 48;
+    const newH = (e.clientY - topbarH) / (layout.offsetHeight - topbarH) * 100;
+    if (newH > 15 && newH < 85) editorPane.style.flex = `0 0 ${newH}%`;
   });
 
   document.addEventListener('mouseup', () => {

@@ -6,7 +6,6 @@
     <title>SQL Editor - FlashORM Studio</title>
     <link rel="icon" type="image/webp" href="/common/static/image/logo.webp">
     <link rel="stylesheet" href="/cdn/fonts/fonts.css">
-
     <link rel="stylesheet" href="/common/static/css/base.css">
     <link rel="stylesheet" href="/static/css/sql.css">
     <script src="/cdn/iconify/iconify.min.js"></script>
@@ -14,56 +13,44 @@
 <body>
     <div class="left-navbar">
         <img src="/common/static/image/logo.webp" alt="FlashORM" class="left-navbar-logo">
-        
-        <a href="/" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:table"></span>
-            <span class="tooltip">Data</span>
-        </a>
-        
-        <a href="/sql" class="left-navbar-link active">
-            <span class="iconify" data-icon="mdi:code-braces"></span>
-            <span class="tooltip">SQL Editor</span>
-        </a>
-        
-        <a href="/schema" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:file-tree"></span>
-            <span class="tooltip">Schema</span>
-        </a>
-        <a href="/metrics" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:chart-line"></span>
-            <span class="tooltip">Metrics</span>
-        </a>
+        <a href="/" class="left-navbar-link"><span class="iconify" data-icon="mdi:table"></span><span class="tooltip">Data</span></a>
+        <a href="/sql" class="left-navbar-link active"><span class="iconify" data-icon="mdi:code-braces"></span><span class="tooltip">SQL Editor</span></a>
+        <a href="/schema" class="left-navbar-link"><span class="iconify" data-icon="mdi:file-tree"></span><span class="tooltip">Schema</span></a>
+        <a href="/metrics" class="left-navbar-link"><span class="iconify" data-icon="mdi:chart-line"></span><span class="tooltip">Metrics</span></a>
     </div>
 
-    <div class="container">
-        <div class="editor-section">
-            <div class="editor-header">
-                <span class="editor-title">SQL Query</span>
-                <div class="editor-actions">
-                    <span class="editor-hint" id="editor-hint">Ctrl+Enter to run all • Select lines to run partial</span>
-                    <button class="btn btn-secondary" onclick="clearEditor()">Clear</button>
-                    <button class="btn btn-primary" id="run-btn" onclick="runQuery()">▶ Run All</button>
-                </div>
-            </div>
-            <div class="editor-wrapper">
-                <div id="sql-editor"></div>
+    <div class="sql-layout">
+        <!-- Top bar -->
+        <div class="sql-topbar">
+            <span class="sql-title">SQL Query</span>
+            <div class="sql-actions">
+                <span class="sql-hint" id="editor-hint">Ctrl+Enter to run all • Select lines to run partial</span>
+                <button class="sqbtn sqbtn-secondary" onclick="clearEditor()">Clear</button>
+                <button class="sqbtn sqbtn-run" id="run-btn" onclick="runQuery()">▶ Run All</button>
             </div>
         </div>
-        
-        <div class="resize-handle" id="resize-handle"></div>
-        
-        <div class="results-section">
-            <div class="results-header">
+
+        <!-- Editor -->
+        <div class="editor-pane" id="editor-pane">
+            <div id="sql-editor"></div>
+        </div>
+
+        <!-- Resize handle -->
+        <div class="sql-resize-handle" id="resize-handle"></div>
+
+        <!-- Results -->
+        <div class="results-pane">
+            <div class="results-topbar">
                 <span class="results-info" id="results-info">Ready to execute query</span>
-                <button class="btn btn-secondary" onclick="exportResults()" id="export-btn" style="display: none;">Export CSV</button>
+                <button class="sqbtn sqbtn-secondary" onclick="exportResults()" id="export-btn" style="display:none;">
+                    <span class="iconify" data-icon="mdi:download"></span> Export CSV
+                </button>
             </div>
             <div class="results-body" id="results-body">
-                <div class="empty-state">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                    </svg>
+                <div class="sql-empty">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="36" height="36"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                     <div>Run a query to see results</div>
-                    <div class="empty-hint">Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> or click Run Query</div>
+                    <div class="sql-empty-hint">Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> or click Run</div>
                 </div>
             </div>
         </div>
