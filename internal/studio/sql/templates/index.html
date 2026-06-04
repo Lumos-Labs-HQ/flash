@@ -11,108 +11,86 @@
     <script src="/cdn/iconify/iconify-v3.min.js"></script>
 </head>
 <body>
-    <!-- Left Vertical Navbar (Supabase style) -->
     <div class="left-navbar">
         <img src="/common/static/image/logo.webp" alt="FlashORM" class="left-navbar-logo">
-        
-        <a href="/" class="left-navbar-link active">
-            <span class="iconify" data-icon="mdi:table"></span>
-            <span class="tooltip">Data</span>
-        </a>
-        
-        <a href="/sql" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:code-braces"></span>
-            <span class="tooltip">SQL Editor</span>
-        </a>
-        
-        <a href="/schema" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:file-tree"></span>
-            <span class="tooltip">Schema</span>
-        </a>
-        <a href="/metrics" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:chart-line"></span>
-            <span class="tooltip">Metrics</span>
-        </a>
+        <a href="/" class="left-navbar-link active"><span class="iconify" data-icon="mdi:table"></span><span class="tooltip">Data</span></a>
+        <a href="/sql" class="left-navbar-link"><span class="iconify" data-icon="mdi:code-braces"></span><span class="tooltip">SQL Editor</span></a>
+        <a href="/schema" class="left-navbar-link"><span class="iconify" data-icon="mdi:file-tree"></span><span class="tooltip">Schema</span></a>
+        <a href="/metrics" class="left-navbar-link"><span class="iconify" data-icon="mdi:chart-line"></span><span class="tooltip">Metrics</span></a>
     </div>
 
-    <!-- Mobile sidebar backdrop -->
     <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
 
     <div class="studio-container">
-        <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-title">All Models</div>
-                <button class="sidebar-add-btn" onclick="showCreateTableForm()" title="Create New Table">
+                <button class="sidebar-add-btn" onclick="showCreateTableForm()" title="New Table">
                     <span class="iconify" data-icon="mdi:plus"></span>
                 </button>
             </div>
-            
             <div class="search-box">
-                <input type="text" id="search-tables" placeholder="Search models">
+                <input type="text" id="search-tables" placeholder="Search models…" oninput="filterTables(event)">
             </div>
-            
             <div class="tables-list" id="tables-list">
-                <div class="skeleton" style="height: 32px; margin: 4px;"></div>
-                <div class="skeleton" style="height: 32px; margin: 4px;"></div>
-                <div class="skeleton" style="height: 32px; margin: 4px;"></div>
+                <div class="skeleton" style="height:28px;margin:4px 4px 2px;"></div>
+                <div class="skeleton" style="height:28px;margin:2px 4px;"></div>
+                <div class="skeleton" style="height:28px;margin:2px 4px;"></div>
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="content">
-            <!-- Top bar -->
             <div class="topbar">
                 <div class="topbar-left">
-                    <button class="mobile-sidebar-toggle" onclick="toggleMobileSidebar()" title="Models">
+                    <button class="mobile-sidebar-toggle" onclick="toggleMobileSidebar()">
                         <span class="iconify" data-icon="mdi:menu"></span>
                     </button>
                     <span class="table-name" id="current-table">Select a model</span>
-                <select id="branch-selector" class="branch-selector" onchange="switchBranch(this.value)" style="display: none; margin-left: 16px; padding: 6px 12px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #e0e0e0; font-size: 14px;"><option value="">Loading...</option></select>
+                    <select id="branch-selector" class="branch-selector" onchange="switchBranch(this.value)" style="display:none;"></select>
                 </div>
                 <div class="topbar-right">
-                    <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()">
-                        <span class="iconify" data-icon="mdi:filter-outline"></span><span class="btn-text">Filters</span>
-                        <span id="filter-count" class="filter-badge" style="display: none;">0</span>
+                    <button id="filter-btn" class="btn btn-filter" onclick="toggleFilters()" style="position:relative;">
+                        <span class="iconify" data-icon="mdi:filter-outline"></span>
+                        <span class="btn-text">Filters</span>
+                        <span id="filter-count" class="filter-badge" style="display:none;">0</span>
                     </button>
 
-                    <!-- Export Dropdown -->
                     <div class="dropdown">
-                        <button id="export-btn" class="btn btn-export dropdown-toggle" onclick="toggleDropdown('export-dropdown')">
+                        <button class="btn btn-export dropdown-toggle" onclick="toggleDropdown('export-dropdown')">
                             <span class="iconify" data-icon="mdi:download"></span>
                             <span class="btn-text">Export</span>
                         </button>
                         <div id="export-dropdown" class="dropdown-menu">
-                            <button class="dropdown-item" onclick="exportDatabase('schema_only')">
-                                <span class="iconify" data-icon="mdi:file-code-outline"></span>
-                                Schema Only
-                            </button>
-                            <button class="dropdown-item" onclick="exportDatabase('data_only')">
-                                <span class="iconify" data-icon="mdi:database-export"></span>
-                                Data Only
-                            </button>
-                            <button class="dropdown-item" onclick="exportDatabase('complete')">
-                                <span class="iconify" data-icon="mdi:package-variant-closed"></span>
-                                Complete (Schema + Data)
-                            </button>
+                            <button class="dropdown-item" onclick="exportDatabase('schema_only')"><span class="iconify" data-icon="mdi:file-code-outline"></span>Schema Only</button>
+                            <button class="dropdown-item" onclick="exportDatabase('data_only')"><span class="iconify" data-icon="mdi:database-export"></span>Data Only</button>
+                            <button class="dropdown-item" onclick="exportDatabase('complete')"><span class="iconify" data-icon="mdi:package-variant-closed"></span>Complete</button>
                         </div>
                     </div>
 
-                    <!-- Import Button -->
-                    <button id="import-btn" class="btn btn-import" onclick="triggerImport()">
+                    <button class="btn btn-import" onclick="triggerImport()">
                         <span class="iconify" data-icon="mdi:upload"></span>
                         <span class="btn-text">Import</span>
                     </button>
-                    <input type="file" id="import-file-input" accept=".json" style="display: none;" onchange="handleImportFile(event)">
+                    <input type="file" id="import-file-input" accept=".json" style="display:none;" onchange="handleImportFile(event)">
 
-                    <button id="delete-selected-btn" class="btn btn-secondary" style="display: none;"><span class="iconify" data-icon="mdi:delete"></span><span class="btn-text">Delete selected</span></button>
-                    <button id="save-btn" class="btn btn-primary" style="display: none;"><span class="iconify" data-icon="mdi:content-save"></span><span class="btn-text">Save changes</span></button>
-                    <button id="add-btn" class="btn btn-success"><span class="iconify" data-icon="mdi:plus"></span><span class="btn-text">Add record</span></button>
-                    <button id="refresh-btn" class="btn btn-secondary"><span class="iconify" data-icon="mdi:refresh"></span></button>
+                    <button id="delete-selected-btn" class="btn btn-secondary" style="display:none;color:#f87171;">
+                        <span class="iconify" data-icon="mdi:delete"></span>
+                        <span class="btn-text">Delete</span>
+                    </button>
+                    <button id="save-btn" class="btn btn-primary" style="display:none;" onclick="saveChanges()">
+                        <span class="iconify" data-icon="mdi:content-save"></span>
+                        <span class="btn-text">Save</span>
+                    </button>
+                    <button id="add-btn" class="btn btn-success" onclick="showAddRowDialog()">
+                        <span class="iconify" data-icon="mdi:plus"></span>
+                        <span class="btn-text">Add record</span>
+                    </button>
+                    <button id="refresh-btn" class="btn btn-secondary" onclick="refreshData()">
+                        <span class="iconify" data-icon="mdi:refresh"></span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Filter Panel -->
             <div id="filter-panel" class="filter-panel">
                 <div class="filter-header">
                     <div class="filter-title">Filter Records</div>
@@ -122,54 +100,71 @@
                 <div class="filter-actions">
                     <button class="btn-sm btn-primary" onclick="addFilterRow()">+ Add filter</button>
                     <button class="btn-sm btn-success" onclick="applyFilters()">Apply</button>
-                    <button class="btn-sm btn-secondary" onclick="clearFilters()">Clear all</button>
+                    <button class="btn-sm btn-secondary" onclick="clearFilters()">Clear</button>
                 </div>
             </div>
 
-            <!-- Toolbar -->
             <div class="toolbar">
-                <div class="toolbar-item">
-                    <span>Showing</span>
-                    <span style="color: #e0e0e0;" id="row-count">0 of 0</span>
-                </div>
+                <span class="toolbar-item" id="row-count">0 of 0</span>
             </div>
 
-            <!-- Data Grid -->
             <div class="data-grid">
-                <div id="grid-container">
+                <div id="grid-container" style="height:100%;display:flex;align-items:center;justify-content:center;">
                     <div class="empty-state">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
-                        </svg>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
                         <div>Select a model to view data</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Pagination -->
-            <div class="pagination" id="pagination" style="display: none;">
-                <div><span id="page-info">0-0 of 0</span></div>
-                <div style="display: flex; gap: 8px;">
-                    <button id="prev-btn">← Previous</button>
-                    <button id="next-btn">Next →</button>
+            <div class="pagination" id="pagination" style="display:none;">
+                <span id="page-info">0–0 of 0</span>
+                <div style="display:flex;gap:6px;">
+                    <button id="prev-btn" onclick="changePage(-1)">← Previous</button>
+                    <button id="next-btn" onclick="changePage(1)">Next →</button>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- SQL Query Modal -->
+    <!-- Cell editor popup -->
+    <div class="cell-editor-popup" id="cell-editor" style="display:none;">
+        <textarea id="cell-editor-ta" rows="4" spellcheck="false"></textarea>
+        <div class="cell-editor-footer">
+            <div class="cell-editor-footer-left">
+                <button class="ced-btn null-btn" id="ced-null">Set NULL</button>
+            </div>
+            <div class="cell-editor-footer-right">
+                <span class="ced-hint">Esc cancel · Ctrl+Enter save</span>
+                <button class="ced-btn" id="ced-cancel">Cancel</button>
+                <button class="ced-btn primary" id="ced-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SQL Modal -->
     <div id="sql-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <div class="modal-title">📝 Execute SQL Query</div>
+                <div class="modal-title">SQL Query</div>
                 <button class="modal-close" onclick="closeSQLModal()">×</button>
             </div>
             <textarea id="sql-query" class="sql-editor" placeholder="SELECT * FROM users WHERE id = 1;"></textarea>
-            <div class="sql-hint">💡 Tip: Write any SELECT query to search your database</div>
-            <div class="filter-actions">
+            <div class="sql-hint">Ctrl+Enter to run</div>
+            <div class="filter-actions" style="margin-top:10px;">
                 <button class="btn btn-primary" onclick="executeSQLQuery()">▶ Execute</button>
                 <button class="btn btn-secondary" onclick="closeSQLModal()">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Op overlay -->
+    <div class="op-overlay" id="op-overlay">
+        <div class="op-card">
+            <div class="op-card-icon" id="op-icon">⏳</div>
+            <div class="op-card-title" id="op-title">Working…</div>
+            <div class="op-card-status" id="op-status"></div>
+            <div class="op-progress-track"><div class="op-progress-bar indeterminate" id="op-bar"></div></div>
         </div>
     </div>
 
@@ -177,17 +172,5 @@
     <script src="/static/js/modal.js"></script>
     <script src="/static/js/studio.js"></script>
     <script src="/static/js/index.js"></script>
-
-    <!-- Operation progress overlay (export / import) -->
-    <div class="op-overlay" id="op-overlay">
-        <div class="op-card">
-            <div class="op-card-icon" id="op-icon">⏳</div>
-            <div class="op-card-title" id="op-title">Working…</div>
-            <div class="op-card-status" id="op-status"></div>
-            <div class="op-progress-track">
-                <div class="op-progress-bar indeterminate" id="op-bar"></div>
-            </div>
-        </div>
-    </div>
 </body>
 </html>

@@ -1,688 +1,155 @@
+// index.js — filter system, export/import only
+// All other functionality is in studio.js
+
 let filters = [];
-let currentColumns = [];
 
-// Mobile sidebar toggle
-function toggleMobileSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const backdrop = document.getElementById('sidebar-backdrop');
-    sidebar.classList.toggle('mobile-open');
-    backdrop.classList.toggle('show');
-}
-
-function closeMobileSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const backdrop = document.getElementById('sidebar-backdrop');
-    sidebar.classList.remove('mobile-open');
-    backdrop.classList.remove('show');
-}
-
-// This function just rebuilds the UI to show the active filters
 function restoreFilters(savedFilters) {
-    if (!savedFilters || savedFilters.length === 0) return;
-
-    // Clear existing filter rows
-    const filterRows = document.getElementById('filter-rows');
-    if (!filterRows) return;
-    filterRows.innerHTML = '';
-
-    // Rebuild filter rows from saved state (UI only)
-    savedFilters.forEach((filter, index) => {
-        const logic = index === 0 ? 'where' : filter.logic;
-        addFilterRow(logic, filter.column, filter.operator, filter.value);
-    });
-
+    if (!savedFilters?.length) return;
+    document.getElementById('filter-rows').innerHTML = '';
+    savedFilters.forEach((f, i) => addFilterRow(i===0?'where':f.logic, f.column, f.operator, f.value));
     filters = savedFilters;
-
     updateFilterCount();
 }
 
 function toggleFilters() {
-    const panel = document.getElementById('filter-panel');
-    const btn = document.getElementById('filter-btn');
-    panel.classList.toggle('show');
-    btn.classList.toggle('active');
+    document.getElementById('filter-panel').classList.toggle('show');
+    document.getElementById('filter-btn').classList.toggle('active');
 }
+window.toggleFilters = toggleFilters;
 
-// Get column type from currentColumns
-function getColumnType(columnName) {
-    const col = currentColumns.find(c => c.name === columnName);
-    if (!col) return 'text';
-
-    const type = (col.type || '').toLowerCase();
-
-    if (type.includes('uuid')) return 'uuid';
-    
-    if (type.includes('int') || type.includes('serial') || type.includes('decimal') ||
-        type.includes('numeric') || type.includes('float') || type.includes('double') ||
-        type.includes('real') || type.includes('money')) return 'number';
-
-    if (type.includes('bool')) return 'boolean';
-
-    if (type.includes('date') || type.includes('time') || type.includes('timestamp')) return 'datetime';
-    
-    if (type.includes('json')) return 'json';
+function getColumnType(colName) {
+    const col = currentColumns.find(c => c.name === colName);
+    const t = (col?.type||'').toLowerCase();
+    if (t.includes('int')||t.includes('serial')||t.includes('decimal')||t.includes('numeric')||t.includes('float')||t.includes('double')||t.includes('real')) return 'number';
+    if (t.includes('bool')) return 'boolean';
+    if (t.includes('date')||t.includes('time')||t.includes('timestamp')) return 'datetime';
+    if (t.includes('uuid')) return 'uuid';
+    if (t.includes('json')) return 'json';
     return 'text';
 }
 
-function addFilterRow(logic = 'where', column = '', operator = 'equals', value = '') {
+function addFilterRow(logic='where', column='', operator='equals', value='') {
     const row = document.createElement('div');
     row.className = 'filter-row';
-
-    const logicSelect = logic === 'where' ?
-        `<select class="filter-logic" disabled><option>where</option></select>` :
-        `<select class="filter-logic"><option value="and" ${logic === 'and' ? 'selected' : ''}>and</option><option value="or" ${logic === 'or' ? 'selected' : ''}>or</option></select>`;
-
-    const columnOptions = currentColumns.map(col =>
-        `<option value="${col.name}" ${col.name === column ? 'selected' : ''}>${col.name} (${col.type || 'text'})</option>`
-    ).join('');
-
-    row.innerHTML = `
-        ${logicSelect}
-        <select class="filter-column" onchange="updateFilterOperators(this)">${columnOptions}</select>
+    const logicHtml = logic==='where'
+        ? `<select class="filter-logic" disabled><option>where</option></select>`
+        : `<select class="filter-logic"><option value="and" ${logic==='and'?'selected':''}>and</option><option value="or" ${logic==='or'?'selected':''}>or</option></select>`;
+    const colOpts = currentColumns.map(c => `<option value="${escapeHtml(c.name)}" ${c.name===column?'selected':''}>${escapeHtml(c.name)} (${escapeHtml(c.type||'')})</option>`).join('');
+    row.innerHTML = `${logicHtml}
+        <select class="filter-column" onchange="updateFilterOperators(this)">${colOpts}</select>
         <select class="filter-operator">
-            <option value="equals" ${operator === 'equals' ? 'selected' : ''}>equals</option>
-            <option value="not_equals" ${operator === 'not_equals' ? 'selected' : ''}>not equals</option>
-            <option value="contains" ${operator === 'contains' ? 'selected' : ''}>contains</option>
-            <option value="not_contains" ${operator === 'not_contains' ? 'selected' : ''}>not contains</option>
-            <option value="starts_with" ${operator === 'starts_with' ? 'selected' : ''}>starts with</option>
-            <option value="ends_with" ${operator === 'ends_with' ? 'selected' : ''}>ends with</option>
-            <option value="gt" ${operator === 'gt' ? 'selected' : ''}>greater than</option>
-            <option value="lt" ${operator === 'lt' ? 'selected' : ''}>less than</option>
-            <option value="gte" ${operator === 'gte' ? 'selected' : ''}>≥</option>
-            <option value="lte" ${operator === 'lte' ? 'selected' : ''}>≤</option>
-            <option value="is_null" ${operator === 'is_null' ? 'selected' : ''}>is null</option>
-            <option value="is_not_null" ${operator === 'is_not_null' ? 'selected' : ''}>is not null</option>
-            <option value="is_empty" ${operator === 'is_empty' ? 'selected' : ''}>is empty</option>
-            <option value="is_not_empty" ${operator === 'is_not_empty' ? 'selected' : ''}>is not empty</option>
+            ${['equals','not_equals','contains','not_contains','starts_with','ends_with','gt','lt','gte','lte','is_null','is_not_null','is_empty','is_not_empty'].map(o=>`<option value="${o}" ${o===operator?'selected':''}>${o.replace(/_/g,' ')}</option>`).join('')}
         </select>
         <input type="text" class="filter-value" value="${escapeHtmlAttr(value)}" placeholder="Value">
-        <button class="filter-remove" onclick="this.parentElement.remove(); updateFilterCount();">✕</button>
-    `;
-
+        <button class="filter-remove" onclick="this.parentElement.remove();updateFilterCount()">✕</button>`;
     document.getElementById('filter-rows').appendChild(row);
     updateFilterCount();
-
-    const columnSelect = row.querySelector('.filter-column');
-    updateFilterOperators(columnSelect);
+    updateFilterOperators(row.querySelector('.filter-column'));
 }
+window.addFilterRow = addFilterRow;
 
-// Update filter operators based on column type
-function updateFilterOperators(selectElement) {
-    const columnName = selectElement.value;
-    const colType = getColumnType(columnName);
-    const operatorSelect = selectElement.parentElement.querySelector('.filter-operator');
-    const valueInput = selectElement.parentElement.querySelector('.filter-value');
-
-    // Enable/disable value input based on operator
-    operatorSelect.addEventListener('change', function () {
-        const op = this.value;
-        if (op === 'is_null' || op === 'is_not_null' || op === 'is_empty' || op === 'is_not_empty') {
-            valueInput.disabled = true;
-            valueInput.value = '';
-            valueInput.placeholder = 'N/A';
-        } else {
-            valueInput.disabled = false;
-            valueInput.placeholder = 'Value';
-        }
+function updateFilterOperators(sel) {
+    const vi = sel.parentElement.querySelector('.filter-value');
+    const op = sel.parentElement.querySelector('.filter-operator');
+    op.addEventListener('change', function() {
+        const noVal = ['is_null','is_not_null','is_empty','is_not_empty'].includes(this.value);
+        vi.disabled = noVal; vi.value = noVal ? '' : vi.value; vi.placeholder = noVal ? 'N/A' : 'Value';
     });
 }
+window.updateFilterOperators = updateFilterOperators;
 
 function updateFilterCount() {
-    const count = document.getElementById('filter-rows').children.length;
-    const badge = document.getElementById('filter-count');
-    if (count > 0) {
-        badge.textContent = count;
-        badge.style.display = 'block';
-    } else {
-        badge.style.display = 'none';
-    }
+    const n = document.getElementById('filter-rows').children.length;
+    const b = document.getElementById('filter-count');
+    b.textContent = n; b.style.display = n > 0 ? 'block' : 'none';
 }
+window.updateFilterCount = updateFilterCount;
 
 function clearFilters() {
     document.getElementById('filter-rows').innerHTML = '';
-    updateFilterCount();
-    filters = [];
-
-    // Clear filters from state
-    if (typeof state !== 'undefined') {
-        state.filters = [];
-        state.page = 1; // Reset to first page
-        if (typeof state.save === 'function') {
-            state.save();
-        }
-    }
-
-    // Reload data without filters
-    if (state.currentTable && typeof loadTableData === 'function') {
-        showLoadingSkeleton();
-        loadTableData();
-    }
+    updateFilterCount(); filters = [];
+    if (typeof state !== 'undefined') { state.filters=[]; state.page=1; state.save?.(); }
+    if (typeof loadTableData === 'function') { showLoadingSkeleton(); loadTableData(); }
 }
+window.clearFilters = clearFilters;
 
 function applyFilters() {
     const rows = document.getElementById('filter-rows').children;
     filters = [];
-
-    for (let row of rows) {
-        const logicSelect = row.querySelector('.filter-logic');
-        const logic = logicSelect ? logicSelect.value : 'where';
+    for (const row of rows) {
+        const logic = row.querySelector('.filter-logic')?.value || 'where';
         const column = row.querySelector('.filter-column').value;
         const operator = row.querySelector('.filter-operator').value;
         const value = row.querySelector('.filter-value').value;
-
-        // For null/empty checks, we don't need a value
-        if (operator === 'is_null' || operator === 'is_not_null' ||
-            operator === 'is_empty' || operator === 'is_not_empty') {
-            if (column) {
-                filters.push({ logic, column, operator, value: '' });
-            }
-        } else if (column && value !== '') {
-            filters.push({ logic, column, operator, value });
-        }
+        const noVal = ['is_null','is_not_null','is_empty','is_not_empty'].includes(operator);
+        if (column && (noVal || value !== '')) filters.push({ logic, column, operator, value: noVal?'':value });
     }
-
     toggleFilters();
-
-    // Store in state for persistence and server-side filtering
-    if (typeof state !== 'undefined') {
-        state.filters = filters;
-        state.page = 1; // Reset to first page when applying filters
-        if (typeof state.save === 'function') {
-            state.save();
-        }
-    }
-    // Reload data with new filters
-    if (typeof loadTableData === 'function') {
-        showLoadingSkeleton();
-        loadTableData();
-    }
+    if (typeof state !== 'undefined') { state.filters=filters; state.page=1; state.save?.(); }
+    if (typeof loadTableData === 'function') { showLoadingSkeleton(); loadTableData(); }
 }
+window.applyFilters = applyFilters;
 
-function openSQLModal() {
-    document.getElementById('sql-modal').classList.add('show');
-}
-
-function closeSQLModal() {
-    document.getElementById('sql-modal').classList.remove('show');
-}
-
-async function executeSQLQuery() {
-    const query = document.getElementById('sql-query').value.trim();
-    if (!query) {
-        showModal('Validation', 'Please enter a SQL query', 'warning');
-        return;
-    }
-
-    try {
-        const res = await fetch('/api/sql', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query })
-        });
-
-        const json = await res.json();
-
-        if (json.success) {
-            state.data = json.data;
-            renderDataGrid(json.data);
-            closeSQLModal();
-            showModal('Query executed', `${json.data.rows.length} rows returned`, 'success');
-        } else {
-            showModal('Error', json.message || 'Failed to execute query', 'error');
-        }
-    } catch (err) {
-        showModal('Error', err.message, 'error');
-    }
-}
-
-// Context Menu for table items
-(function() {
-    let contextMenu = null;
-    let contextTableName = null;
-
-    function createContextMenu() {
-        const menu = document.createElement('div');
-        menu.className = 'context-menu';
-        menu.innerHTML = `
-            <button class="context-menu-item" data-action="edit">
-                <span class="iconify" data-icon="mdi:pencil"></span>
-                Edit Table
-            </button>
-            <div class="context-menu-divider"></div>
-            <button class="context-menu-item context-menu-item-danger" data-action="delete">
-                <span class="iconify" data-icon="mdi:delete"></span>
-                Delete Table
-            </button>
-        `;
-        menu.addEventListener('click', function(e) {
-            const item = e.target.closest('.context-menu-item');
-            if (!item) return;
-            const action = item.dataset.action;
-            hideContextMenu();
-            if (action === 'edit') editTableFromContext();
-            else if (action === 'delete') deleteTableFromContext();
-        });
-        document.body.appendChild(menu);
-        return menu;
-    }
-
-    function showContextMenu(e, tableName) {
-        e.preventDefault();
-        e.stopPropagation();
-        contextTableName = tableName;
-
-        if (!contextMenu) {
-            contextMenu = createContextMenu();
-        }
-
-        contextMenu.style.display = 'block';
-        contextMenu.style.left = e.clientX + 'px';
-        contextMenu.style.top = e.clientY + 'px';
-
-        // Ensure menu stays within viewport
-        requestAnimationFrame(() => {
-            const rect = contextMenu.getBoundingClientRect();
-            if (rect.right > window.innerWidth) {
-                contextMenu.style.left = (e.clientX - rect.width) + 'px';
-            }
-            if (rect.bottom > window.innerHeight) {
-                contextMenu.style.top = (e.clientY - rect.height) + 'px';
-            }
-        });
-    }
-
-    function hideContextMenu() {
-        if (contextMenu) {
-            contextMenu.style.display = 'none';
-        }
-    }
-
-    // Attach right-click handler via event delegation
-    document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('tables-list').addEventListener('contextmenu', function(e) {
-            const tableItem = e.target.closest('.table-item');
-            if (tableItem) {
-                showContextMenu(e, tableItem.dataset.table);
-            }
-        });
-    });
-
-    // Hide context menu on click elsewhere or scroll
-    document.addEventListener('click', hideContextMenu);
-    document.addEventListener('scroll', hideContextMenu, true);
-    document.addEventListener('contextmenu', function(e) {
-        if (!e.target.closest('.table-item')) {
-            hideContextMenu();
-        }
-    });
-
-    // Edit table - navigate to schema visualizer
-    function editTableFromContext() {
-        if (contextTableName) {
-            window.location.href = '/schema#edit-' + encodeURIComponent(contextTableName);
-        }
-    }
-
-    // Delete table
-    function deleteTableFromContext() {
-        if (!contextTableName) return;
-        const tableName = contextTableName;
-
-        showConfirm(
-            'Delete Table',
-            '<p>Are you sure you want to delete the table <strong>' + escapeHtml(tableName) + '</strong>?</p>' +
-            '<p style="color: #ef4444;">This action cannot be undone. All data in this table will be permanently lost.</p>',
-            async () => {
-                try {
-                    const res = await fetch('/api/schema/apply', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ type: 'drop_table', table: tableName })
-                    });
-                    const json = await res.json();
-                    if (json.success) {
-                        showToast('Table "' + tableName + '" deleted successfully', 'success');
-                        if (state.currentTable === tableName) {
-                            state.currentTable = null;
-                            state.data = null;
-                            document.getElementById('current-table').textContent = 'Select a model';
-                            document.getElementById('grid-container').innerHTML =
-                                '<div class="empty-state">' +
-                                    '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
-                                        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>' +
-                                    '</svg>' +
-                                    '<div>Select a model to view data</div>' +
-                                '</div>';
-                        }
-                        loadTables();
-                    } else {
-                        showModal('Error', json.message || 'Failed to delete table', 'error');
-                    }
-                } catch (err) {
-                    showModal('Error', 'Failed to delete table: ' + err.message, 'error');
-                }
-            }
-        );
-    }
-})();
-
-const originalSelectTable = selectTable;
-selectTable = async function (tableName) {
-    closeMobileSidebar();
-    await originalSelectTable(tableName);
-    if (state.data && state.data.columns) {
-        currentColumns = state.data.columns;
-    }
-};
-function filterIndexItems() {
-    const query = document.getElementById('search-tables').value.toLowerCase();
-    const items = document.querySelectorAll('#tables-list .table-item');
-    items.forEach(item => {
-        const name = item.textContent.toLowerCase();
-        item.style.display = name.includes(query) ? 'flex' : 'none';
-    });
-}
-
-function showCreateTableForm() {
-    window.location.href = '/schema#create-table';
-}
-
-// Branch Management
-async function loadBranches() {
-    try {
-        const response = await fetch('/api/branches');
-        const data = await response.json();
-
-        const selector = document.getElementById('branch-selector');
-        selector.innerHTML = '';
-
-        if (data.branches.length === 1) {
-            selector.style.display = 'none';
-            return;
-        }
-
-        selector.style.display = 'inline-block';
-
-        data.branches.forEach(branch => {
-            const option = document.createElement('option');
-            option.value = branch.name;
-            option.textContent = `${branch.name}${branch.is_default ? ' (default)' : ''}`;
-            if (branch.name === data.current) {
-                option.selected = true;
-            }
-            selector.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Failed to load branches:', error);
-    }
-}
-
-async function switchBranch(branchName) {
-    if (!branchName) return;
-
-    try {
-        const response = await fetch('/api/branches/switch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ branch: branchName })
-        });
-
-        if (response.ok) {
-            showToast(`Switched to branch: ${branchName}`, 'success');
-            location.reload(); // Reload to show data from new branch
-        } else {
-            showToast('Failed to switch branch', 'error');
-        }
-    } catch (error) {
-        console.error('Failed to switch branch:', error);
-        showToast('Failed to switch branch', 'error');
-    }
-}
-
-// Load branches on page load
-document.addEventListener('DOMContentLoaded', () => {
-    loadBranches();
-});
-
-// Dropdown toggle
-function toggleDropdown(dropdownId) {
-    const dropdown = document.getElementById(dropdownId);
-    const allDropdowns = document.querySelectorAll('.dropdown-menu');
-
-    // Close all other dropdowns
-    allDropdowns.forEach(d => {
-        if (d.id !== dropdownId) {
-            d.classList.remove('show');
-        }
-    });
-
-    dropdown.classList.toggle('show');
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', (e) => {
-    if (!e.target.closest('.dropdown')) {
-        document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
-    }
-});
-
-// ── Progress overlay helpers ─────────────────────────────────────────────
-function showOpOverlay(title, status, isImport) {
-    document.getElementById('op-title').textContent = title;
-    document.getElementById('op-icon').textContent = isImport ? '📥' : '📤';
-    setOpStatus(status);
-    const bar = document.getElementById('op-bar');
-    bar.className = 'op-progress-bar indeterminate' + (isImport ? ' import' : '');
-    bar.style.width = '';
-    document.getElementById('op-overlay').classList.add('show');
-}
-function setOpStatus(msg) {
-    document.getElementById('op-status').textContent = msg;
-}
-function setOpProgress(pct, isImport) {
-    const bar = document.getElementById('op-bar');
-    bar.classList.remove('indeterminate');
-    bar.className = 'op-progress-bar' + (isImport ? ' import' : '');
-    bar.style.width = Math.min(100, Math.round(pct)) + '%';
-}
-function hideOpOverlay() {
-    document.getElementById('op-overlay').classList.remove('show');
-}
-
-// Export database
+// ===== Export =====
 async function exportDatabase(exportType) {
-    // Close dropdown
     document.querySelectorAll('.dropdown-menu').forEach(d => d.classList.remove('show'));
-
-    const labelMap = { schema_only: 'Schema', data_only: 'Data', complete: 'Schema + Data' };
-    const label = labelMap[exportType] || exportType;
-    showOpOverlay(`Exporting ${label}`, 'Connecting to database…', false);
-
+    const labels = { schema_only:'Schema', data_only:'Data', complete:'Schema + Data' };
+    showOpOverlay(`Exporting ${labels[exportType]||exportType}`, 'Connecting…', false);
     try {
-        setOpStatus('Fetching schema and data…');
-        const response = await fetch(`/api/export/${exportType}`);
-        setOpProgress(80, false);
-        setOpStatus('Processing response…');
-        const responseData = await response.json();
-
-        // Check for error response
-        if (responseData.success === false && responseData.message) {
-            showToast(responseData.message, 'error');
-            return;
-        }
-
-        const exportData = responseData.data ? responseData.data : responseData;
-
-        setOpProgress(95, false);
-        setOpStatus('Preparing download…');
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        setOpStatus('Fetching data…');
+        const resp = await fetch(`/api/export/${exportType}`);
+        setOpProgress(80);
+        const json = await resp.json();
+        if (json.success === false) { showToast(json.message, 'error'); return; }
+        const data = json.data || json;
+        setOpProgress(95); setOpStatus('Preparing download…');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        a.download = `database_export_${exportType}_${timestamp}.json`;
-
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setOpProgress(100, false);
-        const tableCount = exportData.tables ? exportData.tables.length : 0;
-        showToast(`Export complete — ${tableCount} table${tableCount !== 1 ? 's' : ''} exported`, 'success');
-    } catch (err) {
-        console.error('Export failed:', err);
-        showToast('Export failed: ' + err.message, 'error');
-    } finally {
-        setTimeout(hideOpOverlay, 600);
-    }
+        const a = document.createElement('a'); a.href=url;
+        a.download = `database_export_${exportType}_${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+        setOpProgress(100);
+        showToast(`Export complete — ${data.tables?.length||0} tables`, 'success');
+    } catch(e) { showToast('Export failed: '+e.message, 'error'); }
+    finally { setTimeout(hideOpOverlay, 600); }
 }
+window.exportDatabase = exportDatabase;
 
-// Trigger import file selection
-function triggerImport() {
-    document.getElementById('import-file-input').click();
-}
+function triggerImport() { document.getElementById('import-file-input').click(); }
+window.triggerImport = triggerImport;
 
-// Handle import file selection
 async function handleImportFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // Reset file input for future imports
+    const file = event.target.files[0]; if (!file) return;
     event.target.value = '';
-
-    try {
-        const content = await file.text();
-        let importData;
-
-        try {
-            importData = JSON.parse(content);
-        } catch (parseErr) {
-            showToast('Invalid JSON file', 'error');
-            return;
-        }
-
-        // Handle both formats: raw export data OR wrapped with {success, data}
-        // If the file has a "data" wrapper (old format), unwrap it
-        if (importData.success !== undefined && importData.data) {
-            importData = importData.data;
-        }
-
-        // Validate import data structure
-        if (!importData.version || !importData.tables) {
-            showToast('Invalid export file format', 'error');
-            return;
-        }
-
-        // Show confirmation dialog with import details
-        const tableCount = importData.tables.length;
-        const hasSchema = importData.tables.some(t => t.schema);
-        const hasData = importData.tables.some(t => t.data && t.data.length > 0);
-        const enumCount = importData.enum_types ? importData.enum_types.length : 0;
-
-        let details = `<div style="margin-bottom: 16px;">
-            <p><strong>File:</strong> ${file.name}</p>
-            <p><strong>Export Type:</strong> ${importData.export_type || 'unknown'}</p>
-            <p><strong>Database:</strong> ${importData.database_provider || 'unknown'}</p>
-            ${enumCount > 0 ? `<p><strong>Enum Types:</strong> ${enumCount}</p>` : ''}
-            <p><strong>Tables:</strong> ${tableCount}</p>
-            <p><strong>Contains Schema:</strong> ${hasSchema ? 'Yes' : 'No'}</p>
-            <p><strong>Contains Data:</strong> ${hasData ? 'Yes' : 'No'}</p>
-        </div>
-        ${enumCount > 0 ? `<div style="background: #2a2a2a; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-            <strong>Enum types to create:</strong>
-            <ul style="margin: 8px 0 0 20px;">
-                ${importData.enum_types.map(e => `<li>${e.name} (${e.values.length} values)</li>`).join('')}
-            </ul>
-        </div>` : ''}
-        <div style="background: #2a2a2a; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-            <strong>Tables to import:</strong>
-            <ul style="margin: 8px 0 0 20px; max-height: 150px; overflow-y: auto;">
-                ${importData.tables.map(t => `<li>${t.name} ${t.data ? `(${t.data.length} rows)` : '(schema only)'}</li>`).join('')}
-            </ul>
-        </div>
-        <p style="color: #f59e0b;">This will create enum types, tables, and add missing columns/data.</p>`;
-
-        showConfirm('Import Database', details, async () => {
-            await performImport(importData);
-        });
-
-    } catch (err) {
-        console.error('Import failed:', err);
-        showToast('Import failed: ' + err.message, 'error');
-    }
+    let data; try { data = JSON.parse(await file.text()); } catch { showToast('Invalid JSON', 'error'); return; }
+    if (data.success !== undefined && data.data) data = data.data;
+    if (!data.version || !data.tables) { showToast('Invalid export format', 'error'); return; }
+    const tc = data.tables.length, ec = data.enum_types?.length||0;
+    const totalRows = data.tables.reduce((s,t)=>s+(t.data?.length||0),0);
+    const details = `<p><strong>File:</strong> ${escapeHtml(file.name)}</p>
+        <p><strong>Provider:</strong> ${escapeHtml(data.database_provider||'?')}</p>
+        ${ec?`<p><strong>Enum types:</strong> ${ec}</p>`:''}
+        <p><strong>Tables:</strong> ${tc}</p><p><strong>Rows:</strong> ${totalRows}</p>`;
+    showConfirm('Import Database', details, () => performImport(data));
 }
+window.handleImportFile = handleImportFile;
 
-// Perform the actual import
-async function performImport(importData) {
-    const tableCount = importData.tables ? importData.tables.length : 0;
-    const totalRows = importData.tables
-        ? importData.tables.reduce((s, t) => s + (t.data ? t.data.length : 0), 0)
-        : 0;
-    const rowLabel = totalRows > 0 ? ` · ${totalRows.toLocaleString()} row${totalRows !== 1 ? 's' : ''}` : '';
-    showOpOverlay('Importing Database', `Preparing ${tableCount} table${tableCount !== 1 ? 's' : ''}${rowLabel}…`, true);
-
+async function performImport(data) {
+    const tc = data.tables?.length||0, tr = data.tables?.reduce((s,t)=>s+(t.data?.length||0),0)||0;
+    showOpOverlay('Importing', `${tc} tables · ${tr} rows…`, true);
     try {
-        setOpStatus('Sending data to server…');
-        const response = await fetch('/api/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(importData)
-        });
-
-        setOpProgress(85, true);
-        setOpStatus('Applying changes…');
-        const result = await response.json();
-
-        if (!result.success) {
-            showToast(result.message || 'Import failed', 'error');
-            return;
-        }
-
-        setOpProgress(100, true);
-
-        // Show import results
-        const r = result.result;
-        let summary = [];
-
-        if (r.enum_types_created && r.enum_types_created.length > 0) {
-            summary.push(`Enum types created: ${r.enum_types_created.join(', ')}`);
-        }
-        if (r.tables_created && r.tables_created.length > 0) {
-            summary.push(`Tables created: ${r.tables_created.join(', ')}`);
-        }
-        if (r.tables_updated && r.tables_updated.length > 0) {
-            summary.push(`Tables updated: ${r.tables_updated.join(', ')}`);
-        }
-        if (r.columns_added > 0) {
-            summary.push(`Columns added: ${r.columns_added}`);
-        }
-        if (r.rows_inserted > 0) {
-            summary.push(`Rows inserted: ${r.rows_inserted}`);
-        }
-        if (r.rows_updated > 0) {
-            summary.push(`Rows updated: ${r.rows_updated}`);
-        }
-        if (r.errors && r.errors.length > 0) {
-            summary.push(`<span style="color: #ef4444;">Errors: ${r.errors.length}</span>`);
-        }
-
-        const summaryHtml = summary.length > 0
-            ? `<ul style="margin: 0; padding-left: 20px;">${summary.map(s => `<li>${s}</li>`).join('')}</ul>`
-            : 'No changes were made.';
-
-        showModal('Import Complete', summaryHtml, r.errors && r.errors.length > 0 ? 'warning' : 'success');
-
-        // Refresh the data
-        refreshData();
-        loadTables();
-
-    } catch (err) {
-        console.error('Import failed:', err);
-        showToast('Import failed: ' + err.message, 'error');
-    } finally {
-        setTimeout(hideOpOverlay, 600);
-    }
+        setOpStatus('Sending to server…');
+        const res = await apiCall('/api/import', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+        setOpProgress(100);
+        const r = res.result;
+        const lines = [];
+        if (r.enum_types_created?.length) lines.push(`Enums: ${r.enum_types_created.join(', ')}`);
+        if (r.tables_created?.length) lines.push(`Tables created: ${r.tables_created.length}`);
+        if (r.rows_inserted) lines.push(`Rows inserted: ${r.rows_inserted}`);
+        if (r.errors?.length) lines.push(`<span style="color:#f87171">Errors: ${r.errors.length}</span>`);
+        showModal('Import Complete', `<ul style="padding-left:18px;line-height:1.8;">${lines.map(l=>`<li>${l}</li>`).join('')}</ul>`, r.errors?.length?'warning':'success');
+        if (typeof refreshData === 'function') refreshData();
+        if (typeof loadTables === 'function') loadTables();
+    } catch(e) { showToast('Import failed: '+e.message, 'error'); }
+    finally { setTimeout(hideOpOverlay, 600); }
 }

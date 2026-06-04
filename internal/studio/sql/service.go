@@ -178,11 +178,12 @@ func (s *Service) SaveChanges(tableName string, changes []common.RowChange) erro
 	}
 
 	pkColumn := "id"
+	colNullable := make(map[string]bool)
 	for _, col := range schema {
 		if col.IsPrimary {
 			pkColumn = col.Name
-			break
 		}
+		colNullable[col.Name] = col.Nullable
 	}
 
 	for _, change := range changes {
@@ -191,9 +192,16 @@ func (s *Service) SaveChanges(tableName string, changes []common.RowChange) erro
 				return fmt.Errorf("invalid column name: %w", err)
 			}
 
+			// Reject null on NOT NULL columns before hitting the DB
+			if change.Value == nil {
+				if nullable, known := colNullable[change.Column]; known && !nullable {
+					return fmt.Errorf("column \"%s\" does not allow NULL values", change.Column)
+				}
+			}
+
 			query := fmt.Sprintf("UPDATE %s SET %s = %s WHERE %s = %s",
 				s.quote(tableName), s.quote(change.Column),
-				s.placeholder(0), s.quote(pkColumn), s.placeholder(1))
+				s.placeholder(1), s.quote(pkColumn), s.placeholder(2))
 
 			if err := s.adapter.ExecuteDMLWithArgs(s.ctx, query, change.Value, change.RowID); err != nil {
 				return fmt.Errorf("failed to update %s.%s: %w", tableName, change.Column, err)
@@ -225,7 +233,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 
 	for _, rowID := range rowIDs {
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s = %s",
-			s.quote(tableName), s.quote(pkColumn), s.placeholder(0))
+			s.quote(tableName), s.quote(pkColumn), s.placeholder(1))
 		if err := s.adapter.ExecuteDMLWithArgs(s.ctx, query, rowID); err != nil {
 			return fmt.Errorf("failed to delete row %s: %w", rowID, err)
 		}
@@ -278,7 +286,7 @@ func (s *Service) DeleteRow(tableName, rowID string) error {
 
 	schema, err := s.adapter.GetTableColumns(s.ctx, tableName)
 	if err != nil {
-		query := fmt.Sprintf("DELETE FROM %s WHERE id = %s", s.quote(tableName), s.placeholder(0))
+		query := fmt.Sprintf("DELETE FROM %s WHERE id = %s", s.quote(tableName), s.placeholder(1))
 		return s.adapter.ExecuteDMLWithArgs(s.ctx, query, rowID)
 	}
 
@@ -291,7 +299,7 @@ func (s *Service) DeleteRow(tableName, rowID string) error {
 	}
 
 	query := fmt.Sprintf("DELETE FROM %s WHERE %s = %s",
-		s.quote(tableName), s.quote(pkColumn), s.placeholder(0))
+		s.quote(tableName), s.quote(pkColumn), s.placeholder(1))
 	return s.adapter.ExecuteDMLWithArgs(s.ctx, query, rowID)
 }
 
