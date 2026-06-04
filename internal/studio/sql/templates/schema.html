@@ -3,46 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schema Visualization</title>
+    <title>Schema - FlashORM Studio</title>
     <link rel="icon" type="image/webp" href="/common/static/image/logo.webp">
     <link rel="stylesheet" href="/cdn/fonts/fonts.css">
     <link rel="stylesheet" href="/common/static/css/base.css">
-    <link rel="stylesheet" href="/static/css/index.css">
     <link rel="stylesheet" href="/static/css/schema.css">
     <script src="/cdn/iconify/iconify.min.js"></script>
 </head>
 <body>
     <div class="left-navbar">
         <img src="/common/static/image/logo.webp" alt="FlashORM" class="left-navbar-logo">
-        
-        <a href="/" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:table"></span>
-            <span class="tooltip">Data</span>
-        </a>
-        
-        <a href="/sql" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:code-braces"></span>
-            <span class="tooltip">SQL Editor</span>
-        </a>
-        
-        <a href="/schema" class="left-navbar-link active">
-            <span class="iconify" data-icon="mdi:file-tree"></span>
-            <span class="tooltip">Schema</span>
-        </a>
-        <a href="/metrics" class="left-navbar-link">
-            <span class="iconify" data-icon="mdi:chart-line"></span>
-            <span class="tooltip">Metrics</span>
-        </a>
+        <a href="/" class="left-navbar-link"><span class="iconify" data-icon="mdi:table"></span><span class="tooltip">Data</span></a>
+        <a href="/sql" class="left-navbar-link"><span class="iconify" data-icon="mdi:code-braces"></span><span class="tooltip">SQL Editor</span></a>
+        <a href="/schema" class="left-navbar-link active"><span class="iconify" data-icon="mdi:file-tree"></span><span class="tooltip">Schema</span></a>
+        <a href="/metrics" class="left-navbar-link"><span class="iconify" data-icon="mdi:chart-line"></span><span class="tooltip">Metrics</span></a>
     </div>
-    
-    <div class="topbar">
-        <h1>Database Schema</h1>
-        <div class="topbar-center">
-            <input type="text" id="table-search" placeholder="Search tables..." style="padding: 6px 12px; border-radius: 6px; border: 1px solid #3a3a3a; background: #1a1a1a; color: #e0e0e0; width: 300px; font-size: 13px;">
+
+    <div class="schema-topbar">
+        <span class="schema-title">Database Schema</span>
+        <div class="schema-topbar-center">
+            <input type="text" id="table-search" class="schema-search" placeholder="Search tables…">
         </div>
-        <div class="topbar-right">
-            <span id="stats" class="stats">Loading...</span>
-            <select id="layout-selector" class="btn" onchange="schemaCanvas?.organizeLayout(this.value)" title="Change Layout">
+        <div class="schema-topbar-right">
+            <span id="stats" class="schema-stats">Loading…</span>
+            <select id="layout-selector" class="scbtn" onchange="schemaCanvas?.organizeLayout(this.value)" title="Layout">
                 <option value="" disabled selected>Layout</option>
                 <option value="hierarchical">Hierarchical</option>
                 <option value="grid">Grid</option>
@@ -51,36 +35,28 @@
                 <option value="horizontal">Horizontal</option>
                 <option value="compact">Compact</option>
             </select>
-            <button class="btn" onclick="schemaCanvas?.zoomIn()" title="Zoom In">
-                <span class="iconify" data-icon="mdi:magnify-plus"></span>
-            </button>
-            <button class="btn" onclick="schemaCanvas?.zoomOut()" title="Zoom Out">
-                <span class="iconify" data-icon="mdi:magnify-minus"></span>
-            </button>
-            <button class="btn" onclick="schemaCanvas?.resetView()" title="Fit to Screen">
-                <span class="iconify" data-icon="mdi:fit-to-screen"></span>
-            </button>
-            <button class="btn" onclick="window.location.reload()">
-                <span class="iconify" data-icon="mdi:refresh"></span> Refresh
-            </button>
+            <button class="scbtn" onclick="schemaCanvas?.zoomIn()" title="Zoom In"><span class="iconify" data-icon="mdi:magnify-plus"></span></button>
+            <button class="scbtn" onclick="schemaCanvas?.zoomOut()" title="Zoom Out"><span class="iconify" data-icon="mdi:magnify-minus"></span></button>
+            <button class="scbtn" onclick="schemaCanvas?.resetView()" title="Fit to screen"><span class="iconify" data-icon="mdi:fit-to-screen"></span></button>
+            <button class="scbtn" onclick="window.location.reload()"><span class="iconify" data-icon="mdi:refresh"></span></button>
         </div>
     </div>
-    
+
     <div id="root">
-        <div class="loading">
+        <div class="schema-loading">
             <div class="spinner"></div>
-            <div>Loading schema...</div>
+            <div>Loading schema…</div>
         </div>
     </div>
 
     <!-- Context Menu -->
-    <div id="context-menu" style="display: none; position: fixed; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 6px; padding: 4px; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-        <div class="context-item" onclick="schemaCanvas?.organizeLayout('hierarchical')">Hierarchical Layout</div>
-        <div class="context-item" onclick="schemaCanvas?.organizeLayout('grid')">Grid Layout</div>
-        <div class="context-item" onclick="schemaCanvas?.organizeLayout('circular')">Circular Layout</div>
-        <div class="context-item" onclick="schemaCanvas?.organizeLayout('force')">Force-Directed Layout</div>
-        <div class="context-item" onclick="schemaCanvas?.organizeLayout('horizontal')">Horizontal Layout</div>
-        <div class="context-item" onclick="schemaCanvas?.organizeLayout('compact')">Compact Layout</div>
+    <div id="context-menu" class="schema-context-menu" style="display:none;">
+        <div class="ctx-item" onclick="schemaCanvas?.organizeLayout('hierarchical')">Hierarchical</div>
+        <div class="ctx-item" onclick="schemaCanvas?.organizeLayout('grid')">Grid</div>
+        <div class="ctx-item" onclick="schemaCanvas?.organizeLayout('circular')">Circular</div>
+        <div class="ctx-item" onclick="schemaCanvas?.organizeLayout('force')">Force-Directed</div>
+        <div class="ctx-item" onclick="schemaCanvas?.organizeLayout('horizontal')">Horizontal</div>
+        <div class="ctx-item" onclick="schemaCanvas?.organizeLayout('compact')">Compact</div>
     </div>
 
     <!-- Edit Panel -->
@@ -92,9 +68,7 @@
             </div>
             <button class="panel-close" onclick="closeEditPanel()">×</button>
         </div>
-        <div class="panel-content" id="panel-content">
-            <!-- Content will be dynamically loaded -->
-        </div>
+        <div class="panel-content" id="panel-content"></div>
     </div>
 
     <script src="/common/static/js/common.js"></script>
