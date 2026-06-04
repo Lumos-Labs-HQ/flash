@@ -7,7 +7,7 @@ description: Real-time database monitoring and performance metrics in FlashORM S
 
 FlashORM Studio includes a built-in **Metrics** dashboard that gives you real-time visibility into your database's health, performance, and activity — without any external monitoring tools.
 
-![Metrics Dashboard](../public/metics-img.png)
+![Metrics Dashboard](/metics-img.png)
 
 ## Accessing Metrics
 
@@ -85,7 +85,7 @@ Shows **inserts, updates, and deletes per poll interval** (delta, not cumulative
 
 ## Active Queries
 
-![Active Queries](../public/query.png)
+![Active Queries](/active-queries.png)
 
 Shows all queries **currently executing** on the database:
 
@@ -106,7 +106,7 @@ SELECT pg_terminate_backend(PID);
 
 ## Query Performance
 
-![Query Performance](../public/query_perfomence.png)
+![Query Performance](/system-operations.png)
 
 Shows the **top 10 slowest queries** ranked by mean execution time.
 
