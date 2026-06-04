@@ -132,7 +132,7 @@ Click on any table to see:
 - **Sorting**: Click column headers to sort
 - **Pagination**: Navigate through large datasets
 
-![alt text](../public/studio-1.png)
+![Data Viewer](/studio-1.png)
 
 ## Data Editor
 
@@ -150,7 +150,7 @@ Click on any table to see:
 - **Bulk Delete**: Delete selected records
 - **Export Selected**: Export selected data
 
-![alt text](../public/studio-3.png)
+![Schema Visualizer](/studio-3.png)
 
 ### Adding Records
 
@@ -159,7 +159,7 @@ Click on any table to see:
 - **Default Values**: Respects column defaults
 - **Required Fields**: Highlights mandatory fields
 
-![alt text](../public/studio-2.png)
+![SQL Editor](/studio-2.png)
 
 ### Data Types Support
 
@@ -203,7 +203,7 @@ Studio handles all database types:
 - **Sharing**: Share queries with team members
 - **Templates**: Pre-built query templates
 
-![alt text](../public/studio-4.png)
+![Schema Editor](/studio-4.png)
 
 ## Schema Visualizer
 
@@ -227,7 +227,7 @@ Studio handles all database types:
 - **Visual Diff**: See what changed between versions
 - **Migration Preview**: See what migrations would be generated
 
-![alt text](../public/studio-5.png)
+![Metrics Dashboard](/studio-5.png)
 
 ## Migration Management
 

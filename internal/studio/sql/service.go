@@ -256,7 +256,7 @@ func (s *Service) AddRow(tableName string, data map[string]any) error {
 	placeholders := []string{}
 	args := []any{}
 
-	n := 0
+	n := 1
 	for col, val := range data {
 		if err := common.ValidateIdentifier(col); err != nil {
 			return fmt.Errorf("invalid column name: %w", err)
@@ -340,7 +340,7 @@ func (s *Service) buildWhereClause(filters []common.Filter, columnTypes map[stri
 	var conditions []string
 	var currentGroup []string
 	var allArgs []any
-	argOffset := 0
+	argOffset := 1 // PostgreSQL placeholders are 1-based ($1, $2, ...)
 
 	for i, filter := range filters {
 		if filter.Column == "" {
@@ -820,7 +820,7 @@ func (s *Service) UpdateRow(table string, id interface{}, data map[string]interf
 
 	var setClauses []string
 	var args []any
-	n := 0
+	n := 1
 	for col, val := range data {
 		if err := common.ValidateIdentifier(col); err != nil {
 			return fmt.Errorf("invalid column name: %w", err)
@@ -857,7 +857,7 @@ func (s *Service) InsertRow(table string, data map[string]interface{}) error {
 	var columns []string
 	var placeholders []string
 	var args []any
-	n := 0
+	n := 1
 	for col, val := range data {
 		if err := common.ValidateIdentifier(col); err != nil {
 			return fmt.Errorf("invalid column name: %w", err)

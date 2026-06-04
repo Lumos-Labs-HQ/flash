@@ -67,7 +67,7 @@ body { font-family: 'Inter', sans-serif; background: #0f0f0f; color: #e0e0e0; he
 .table-item.active .table-count { color: #5a7a9a; }
 
 /* ===== Main Content ===== */
-.content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #0f0f0f; }
+.content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #0f0f0f; position: relative; }
 
 /* ===== Topbar ===== */
 .topbar {
@@ -130,25 +130,30 @@ body { font-family: 'Inter', sans-serif; background: #0f0f0f; color: #e0e0e0; he
 
 /* ===== Filter Panel ===== */
 .filter-panel {
-    background: #111; border-bottom: 1px solid #1e1e1e; padding: 10px 14px;
-    display: none; flex-shrink: 0;
+    position: absolute; top: 48px; left: 0; right: 0;
+    background: #151515; border-bottom: 1px solid #252525;
+    padding: 14px 16px; display: none; flex-shrink: 0;
+    z-index: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .filter-panel.show { display: block; }
-.filter-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.filter-title { font-size: 12px; font-weight: 500; color: #ccc; }
-.filter-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
-.filter-row select, .filter-row input {
-    padding: 4px 8px; background: #161616; border: 1px solid #252525; border-radius: 4px;
-    color: #ccc; font-size: 11px; outline: none;
+.filter-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.filter-title { font-size: 12px; font-weight: 600; color: #e0e0e0; text-transform: uppercase; letter-spacing: 0.4px; }
+.filter-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    background: #111; border: 1px solid #1e1e1e; border-radius: 6px; padding: 8px 10px;
 }
-.filter-row select:focus, .filter-row input:focus { border-color: #333; }
-.filter-logic { width: 64px; }
-.filter-column { width: 130px; }
-.filter-operator { width: 110px; }
-.filter-value { width: 140px; }
-.filter-remove { background: none; border: none; color: #555; cursor: pointer; font-size: 13px; padding: 2px 4px; }
-.filter-remove:hover { color: #e0e0e0; }
-.filter-actions { display: flex; gap: 6px; margin-top: 8px; }
+.filter-row select, .filter-row input {
+    padding: 5px 8px; background: #0f0f0f; border: 1px solid #252525; border-radius: 4px;
+    color: #ccc; font-size: 12px; outline: none; font-family: inherit;
+}
+.filter-row select:focus, .filter-row input:focus { border-color: #4a9eff44; }
+.filter-logic { width: 68px; }
+.filter-column { width: 140px; }
+.filter-operator { width: 120px; }
+.filter-value { flex: 1; min-width: 120px; }
+.filter-remove { background: none; border: none; color: #444; cursor: pointer; font-size: 14px; padding: 2px 4px; margin-left: auto; flex-shrink: 0; }
+.filter-remove:hover { color: #f87171; }
+.filter-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #1e1e1e; }
 
 /* ===== Toolbar ===== */
 .toolbar {
@@ -314,7 +319,7 @@ input[type="checkbox"] {
 .custom-modal.show { display: flex; }
 .custom-modal-content {
     background: #151515; border: 1px solid #252525; border-radius: 8px;
-    width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto;
+    width: 92%; max-width: 860px; max-height: 88vh; overflow-y: auto;
     box-shadow: 0 16px 48px rgba(0,0,0,0.7);
 }
 .custom-modal-header {

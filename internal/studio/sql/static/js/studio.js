@@ -415,14 +415,33 @@ async function navigateToForeignKey(table, col, value) {
     const row = res.data.rows?.find(r => String(r[col]) === String(value));
     if (!row) { showToast(`No matching row in ${table}`, 'error'); return; }
     const cols = res.data.columns;
-    const html = `<div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+    const html = `<div style="overflow-x:auto;overflow-y:auto;max-height:60vh;">
         <table class="data-table" style="width:max-content;min-width:100%;"><thead><tr>
         ${cols.map(c => `<th><div class="th-inner"><span class="col-name">${escapeHtml(c.name)}</span><span class="col-type">${escapeHtml(c.type||'')}</span></div></th>`).join('')}
         </tr></thead><tbody><tr>${cols.map(c => `<td><div class="td-inner"><span class="cell-text">${formatValue(row[c.name])}</span></div></td>`).join('')}</tr></tbody></table>
-    </div><div style="margin-top:12px;"><button class="btn btn-primary" onclick="document.querySelectorAll('.custom-modal').forEach(m=>m.remove());selectTable('${escapeHtml(table)}')">Go to ${escapeHtml(table)}</button></div>`;
-    showModal(`${table}.${col} = ${value}`, html, 'info', false);
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="gotoTableWithFilter('${escapeHtml(table)}','${escapeHtml(col)}','${escapeHtml(String(value))}')">
+            <span class='iconify' data-icon='mdi:arrow-right'></span> Go to ${escapeHtml(table)}
+        </button>
+    </div>`;
+    showModal(`${table} · ${col} = ${value}`, html, 'info', false);
 }
 window.navigateToForeignKey = navigateToForeignKey;
+
+async function gotoTableWithFilter(table, col, value) {
+    document.querySelectorAll('.custom-modal').forEach(m => m.remove());
+    await selectTable(table);
+    // Apply filter after table + columns are loaded
+    setTimeout(() => {
+        if (typeof addFilterRow === 'function') {
+            document.getElementById('filter-rows').innerHTML = '';
+            addFilterRow('where', col, 'equals', value);
+            if (typeof applyFilters === 'function') applyFilters();
+        }
+    }, 300);
+}
+window.gotoTableWithFilter = gotoTableWithFilter;
 
 // ===== Pagination =====
 function changePage(d) { state.page = Math.max(1, state.page + d); showLoadingSkeleton(); loadTableData(); }
