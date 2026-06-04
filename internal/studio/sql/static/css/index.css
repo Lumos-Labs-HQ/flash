@@ -74,7 +74,7 @@
 .sidebar.collapsed .table-item .table-count { margin-left: 0; }
 .sidebar-title { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; flex: 1; }
 .sidebar-add-btn { 
-    background: #10b981; 
+    background: #4a9eff; 
     color: #fff; 
     border: none; 
     border-radius: 4px; 
@@ -87,7 +87,7 @@
     font-size: 14px;
 }
 .sidebar-add-btn:hover { 
-    background: #059669; 
+    background: #3d8ae0; 
     transform: scale(1.05);
 }
 
@@ -166,11 +166,14 @@
     margin-left: 2px;
 }
 .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-.btn-primary { background: #4a9eff; color: #fff; }
-.btn-success { background: #10b981; color: #fff; }
-.btn-secondary { background: #3a3a3a; color: #e0e0e0; }
+.btn-primary { background: #1c1c1c; color: #e0e0e0; border: 1px solid #3a3a3a; }
+.btn-primary:hover { background: #2a2a2a; border-color: #4a4a4a; }
+.btn-success { background: #1c1c1c; color: #e0e0e0; border: 1px solid #3a3a3a; }
+.btn-success:hover { background: #2a2a2a; border-color: #4a4a4a; }
+.btn-secondary { background: #1c1c1c; color: #aaa; border: 1px solid #2a2a2a; }
+.btn-secondary:hover { background: #242424; color: #e0e0e0; }
 .btn-block { width: 100%; justify-content: center; }
-.btn-filter { background: #3a3a3a; color: #e0e0e0; }
+.btn-filter { background: #1c1c1c; color: #aaa; border: 1px solid #2a2a2a; }
 .btn-filter.active { background: #4a9eff; color: #fff; }
 .filter-badge {
     position: absolute; top: -6px; right: -6px; background: #ef4444; color: #fff;
@@ -211,19 +214,19 @@
     font-weight: 500;
 }
 .btn-sm.btn-primary {
-    background: #667eea;
-    color: #fff;
-    border: none;
+    background: #1c1c1c;
+    color: #e0e0e0;
+    border: 1px solid #3a3a3a;
 }
 .btn-sm.btn-success {
-    background: #10b981;
-    color: #fff;
-    border: none;
+    background: #1c1c1c;
+    color: #e0e0e0;
+    border: 1px solid #3a3a3a;
 }
 .btn-sm.btn-secondary {
-    background: #3a3a3a;
-    color: #e0e0e0;
-    border: 1px solid #4a4a4a;
+    background: #1c1c1c;
+    color: #aaa;
+    border: 1px solid #2a2a2a;
 }
 
 .modal {
@@ -343,7 +346,7 @@
 }
 .data-table tbody tr.selected {
     background: #2a3a4a;
-    border-left: 2px solid #10b981;
+    border-left: 2px solid #4a9eff;
 }
 .cell { 
     cursor: pointer; 
@@ -587,28 +590,26 @@
     overflow: hidden;
 }
 .btn-export {
-    background: linear-gradient(135deg, #4a9eff, #3d8ae0);
-    color: #fff;
-    border: none;
+    background: #1c1c1c;
+    color: #e0e0e0;
+    border: 1px solid #3a3a3a;
 }
 .btn-export:hover {
-    background: linear-gradient(135deg, #5eaaff, #4a9eff);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+    background: #2a2a2a;
+    border-color: #4a4a4a;
 }
 .btn-import {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: #fff;
-    border: none;
+    background: #1c1c1c;
+    color: #e0e0e0;
+    border: 1px solid #3a3a3a;
 }
 .btn-import:hover {
-    background: linear-gradient(135deg, #34d399, #10b981);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    background: #2a2a2a;
+    border-color: #4a4a4a;
 }
 .btn-export .iconify,
 .btn-import .iconify {
-    font-size: 18px;
+    font-size: 16px;
 }
 /* Dropdown styles */
 .dropdown {
@@ -925,7 +926,7 @@
     background: linear-gradient(90deg, #4a9eff, #3d8ae0);
 }
 .op-progress-bar.import {
-    background: linear-gradient(90deg, #10b981, #059669);
+    background: linear-gradient(90deg, #4a9eff, #3d8ae0);
 }
 .op-progress-bar.indeterminate {
     width: 40% !important;

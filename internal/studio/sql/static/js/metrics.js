@@ -92,7 +92,10 @@ function toSeries(arr, label, color, dashed) {
   return { label, color, dashed, data: arr.map((v, i) => ({ label: history.timestamps[i] || '', value: v })) };
 }
 
+let lastMetrics = null;
+
 function renderAll(m) {
+  lastMetrics = m;
   const isSQLite = m.provider === 'sqlite' || m.provider === 'sqlite3';
   document.getElementById('metrics-provider').textContent = 'Provider: ' + (m.provider || '—');
 
@@ -161,7 +164,7 @@ function makeSVGChart(id, series, opts = {}) {
   const ch = H - pad.top - pad.bottom;
   const ns = 'http://www.w3.org/2000/svg';
 
-  if (opts.bar) { drawBarSVG(wrap, series, W, H, pad, cw, ch, ns, opts); return; }
+  if (opts.bar) { drawBarSVG(id, wrap, series, W, H, pad, cw, ch, ns, opts); return; }
 
   const allVals = series.flatMap(s => s.data.map(d => d.value));
   const rawMin = opts.yMin != null ? opts.yMin : Math.min(...allVals, 0);
@@ -259,28 +262,32 @@ function makeSVGChart(id, series, opts = {}) {
   wrap.appendChild(svg);
 }
 
-function drawBarSVG(wrap, series, W, H, pad, cw, ch, ns, opts) {
+function drawBarSVG(id, wrap, series, W, H, pad, cw, ch, ns, opts) {
   const items = series[0]?.data || [];
   if (!items.length) return;
 
+  const minBarW = 36;
+  const gap = Math.max(cw / items.length, minBarW + 8);
+  const totalW = Math.max(W, pad.left + gap * items.length + pad.right);
+  const bw = Math.min(gap * 0.6, 40);
+
+  // Make wrap scrollable if content wider than container
+  wrap.style.overflowX = totalW > W ? 'auto' : '';
+
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('width', '100%'); svg.setAttribute('height', H);
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.style.display = 'block';
+  svg.setAttribute('width', totalW); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${totalW} ${H}`);
+  svg.style.display = 'block'; svg.style.minWidth = totalW + 'px';
 
   const maxV = Math.max(...items.map(i => i.value), 1);
   const cols = Object.values(C);
 
-  // Y grid
   [0, 0.5, 1].forEach(r => {
     const y = pad.top + ch - r * ch;
-    svg.appendChild(el(ns, 'line', { x1: pad.left, x2: pad.left + cw, y1: y, y2: y, stroke: '#222', 'stroke-width': 1 }));
+    svg.appendChild(el(ns, 'line', { x1: pad.left, x2: pad.left + gap * items.length, y1: y, y2: y, stroke: '#222', 'stroke-width': 1 }));
     const t = el(ns, 'text', { x: pad.left - 6, y: y + 4, 'text-anchor': 'end', fill: '#666', 'font-size': 11 });
     t.textContent = fmtAxisVal(maxV * r); svg.appendChild(t);
   });
-
-  const gap = cw / items.length;
-  const bw = Math.min(gap * 0.55, 50);
 
   items.forEach((item, i) => {
     const bh = Math.max(2, (item.value / maxV) * ch);
@@ -288,24 +295,29 @@ function drawBarSVG(wrap, series, W, H, pad, cw, ch, ns, opts) {
     const y = pad.top + ch - bh;
     const color = item.color || cols[i % cols.length] || C.sky;
 
-    // Defs gradient
     const defs = document.createElementNS(ns, 'defs');
     const g = document.createElementNS(ns, 'linearGradient');
-    g.setAttribute('id', `bg-${i}`); g.setAttribute('x1','0'); g.setAttribute('y1','0'); g.setAttribute('x2','0'); g.setAttribute('y2','1');
+    g.setAttribute('id', `bg-${id}-${i}`); g.setAttribute('x1','0'); g.setAttribute('y1','0'); g.setAttribute('x2','0'); g.setAttribute('y2','1');
     const s1 = document.createElementNS(ns, 'stop'); s1.setAttribute('offset','0%'); s1.setAttribute('stop-color', color);
     const s2 = document.createElementNS(ns, 'stop'); s2.setAttribute('offset','100%'); s2.setAttribute('stop-color', color); s2.setAttribute('stop-opacity','0.5');
     g.appendChild(s1); g.appendChild(s2); defs.appendChild(g); svg.appendChild(defs);
 
-    const rect = el(ns, 'rect', { x, y, width: bw, height: bh, fill: `url(#bg-${i})`, rx: 3, ry: 3 });
+    const rect = el(ns, 'rect', { x, y, width: bw, height: bh, fill: `url(#bg-${id}-${i})`, rx: 3, ry: 3 });
+    const title = document.createElementNS(ns, 'title');
+    title.textContent = `${item.label}: ${fmtAxisVal(item.value)}`;
+    rect.appendChild(title);
     svg.appendChild(rect);
 
-    // Value label
-    const vt = el(ns, 'text', { x: x + bw/2, y: y - 4, 'text-anchor': 'middle', fill: '#ccc', 'font-size': 11, 'font-weight': 'bold' });
+    const vt = el(ns, 'text', { x: x + bw/2, y: y - 4, 'text-anchor': 'middle', fill: '#ccc', 'font-size': 10 });
     vt.textContent = fmtAxisVal(item.value); svg.appendChild(vt);
 
-    // X label
+    // Truncate label to fit, show full name on <title>
+    const maxLabelChars = Math.max(3, Math.floor(bw / 6));
     const lt = el(ns, 'text', { x: x + bw/2, y: H - 6, 'text-anchor': 'middle', fill: '#666', 'font-size': 10 });
-    lt.textContent = item.label.length > 10 ? item.label.slice(0,9)+'…' : item.label;
+    lt.textContent = item.label.length > maxLabelChars ? item.label.slice(0, maxLabelChars - 1) + '…' : item.label;
+    const lt2 = document.createElementNS(ns, 'title');
+    lt2.textContent = item.label;
+    lt.appendChild(lt2);
     svg.appendChild(lt);
   });
 
@@ -408,10 +420,9 @@ function renderTableSizes(tables) {
   const tbody = document.querySelector('#table-sizes tbody');
   if (!tables.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty-cell">No tables.</td></tr>'; return; }
   const max = Math.max(...tables.map(t => t.size_mb || t.row_count), 0.001);
-  tbody.innerHTML = tables.map(t => `<tr>
-    <td>${escapeHtml(t.name)}</td><td>${formatMB(t.size_mb)}</td>
-    <td><div class="size-bar-track"><div class="size-bar-fill" style="width:${Math.max(((t.size_mb||t.row_count)/max)*100,2)}%"></div></div></td>
-    <td>${fmtNum(t.row_count)}</td></tr>`).join('');
+  tbody.innerHTML = tables.map(t =>
+    `<tr><td>${escapeHtml(t.name)}</td><td>${formatMB(t.size_mb)}</td><td><div class="size-bar-track"><div class="size-bar-fill" style="width:${Math.max(((t.size_mb||t.row_count)/max)*100,2)}%"></div></div></td><td>${fmtNum(t.row_count)}</td></tr>`
+  ).join('');
 }
 
 function switchSection(name) {
@@ -421,6 +432,8 @@ function switchSection(name) {
     document.getElementById('section-' + s).style.display = s === name ? 'block' : 'none');
   document.getElementById('section-title').textContent =
     { metrics:'Metrics', queries:'Active Queries', slow:'Query Performance', tables:'System Operations' }[name];
+  // Re-render charts when returning to metrics tab so clientWidth is correct
+  if (name === 'metrics' && lastMetrics) renderAll(lastMetrics);
 }
 
 function setRange(btn, range) {

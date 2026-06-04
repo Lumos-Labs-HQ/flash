@@ -219,8 +219,7 @@ func (s *Service) getPostgresMetrics(ctx context.Context, m *DBMetrics) (*DBMetr
 				   CAST(pg_total_relation_size(relid) AS float8) / 1048576.0 AS size_mb,
 				   CAST(n_live_tup AS bigint) AS row_count
 			FROM pg_stat_user_tables
-			ORDER BY pg_total_relation_size(relid) DESC
-			LIMIT 20`)
+			ORDER BY pg_total_relation_size(relid) DESC`)
 		if err == nil {
 			var ts []TableSize
 			for _, row := range r.Rows {
@@ -367,7 +366,7 @@ func (s *Service) getMySQLMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics
 				   COALESCE(table_rows, 0) AS row_count
 			FROM information_schema.TABLES
 			WHERE table_schema = DATABASE()
-			ORDER BY (data_length + index_length) DESC LIMIT 20`)
+			ORDER BY (data_length + index_length) DESC`)
 		if err == nil {
 			var ts []TableSize
 			for _, row := range r.Rows {
