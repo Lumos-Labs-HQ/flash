@@ -270,15 +270,18 @@ func (p *Adapter) GenerateDropColumnSQL(tableName, columnName string) string {
 }
 
 func (p *Adapter) GenerateAlterColumnSQL(tableName string, column types.SchemaColumn, oldType string) string {
-	// PostgreSQL: ALTER COLUMN TYPE handles the type change.
-	// Other property changes (nullable, default, etc.) are not handled here yet.
 	if column.Type == oldType {
 		return ""
 	}
-	// SERIAL is a pseudo-type macro only valid in CREATE TABLE.
 	newType := column.Type
-	if strings.EqualFold(newType, "SERIAL") {
+	// SERIAL/BIGSERIAL/SMALLSERIAL are pseudo-types only valid in CREATE TABLE.
+	switch strings.ToUpper(newType) {
+	case "SERIAL":
 		newType = "INTEGER"
+	case "BIGSERIAL":
+		newType = "BIGINT"
+	case "SMALLSERIAL":
+		newType = "SMALLINT"
 	}
 	return fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" TYPE %s;", tableName, column.Name, newType)
 }
@@ -289,7 +292,11 @@ func (p *Adapter) GenerateAddIndexSQL(index types.SchemaIndex) string {
 		unique = "UNIQUE "
 	}
 	columns := strings.Join(index.Columns, ", ")
-	sql := fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\" (%s)", unique, index.Name, index.Table, columns)
+	method := ""
+	if index.Method != "" && index.Method != "btree" {
+		method = fmt.Sprintf(" USING %s", strings.ToUpper(index.Method))
+	}
+	sql := fmt.Sprintf("CREATE %sINDEX \"%s\" ON \"%s\"%s (%s)", unique, index.Name, index.Table, method, columns)
 	if index.Where != "" {
 		sql += fmt.Sprintf(" WHERE %s", index.Where)
 	}
@@ -302,31 +309,41 @@ func (p *Adapter) GenerateDropIndexSQL(index types.SchemaIndex) string {
 
 func (p *Adapter) FormatColumnType(column types.SchemaColumn) string {
 	var parts []string
+
+	// IDENTITY columns (PostgreSQL modern primary key)
+	if column.IsIdentity {
+		parts = append(parts, column.Type)
+		parts = append(parts, "GENERATED ALWAYS AS IDENTITY PRIMARY KEY")
+		return strings.Join(parts, " ")
+	}
+
 	parts = append(parts, column.Type)
 
 	if column.IsPrimary {
 		parts = append(parts, "PRIMARY KEY")
 	}
-
 	if column.IsUnique && !column.IsPrimary {
 		parts = append(parts, "UNIQUE")
 	}
-
 	if !column.Nullable && !column.IsPrimary {
 		parts = append(parts, "NOT NULL")
 	}
-
 	if column.ForeignKeyTable != "" && column.ForeignKeyColumn != "" {
-		parts = append(parts, fmt.Sprintf("REFERENCES \"%s\"(\"%s\")", column.ForeignKeyTable, column.ForeignKeyColumn))
+		ref := fmt.Sprintf("REFERENCES \"%s\"(\"%s\")", column.ForeignKeyTable, column.ForeignKeyColumn)
 		if column.OnDeleteAction != "" {
-			parts = append(parts, fmt.Sprintf("ON DELETE %s", column.OnDeleteAction))
+			ref += fmt.Sprintf(" ON DELETE %s", column.OnDeleteAction)
 		}
+		if column.OnUpdateAction != "" {
+			ref += fmt.Sprintf(" ON UPDATE %s", column.OnUpdateAction)
+		}
+		parts = append(parts, ref)
 	}
-
 	if column.Default != "" && !strings.Contains(column.Default, "nextval") {
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", column.Default))
 	}
-
+	if column.Generated != "" {
+		parts = append(parts, fmt.Sprintf("GENERATED ALWAYS AS (%s) STORED", column.Generated))
+	}
 	if column.Check != "" {
 		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}

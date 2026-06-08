@@ -42,28 +42,35 @@ func (s *Service) createDirBackup(schemaDir string) error {
 }
 
 func (s *Service) getTableIndexes(ctx context.Context, tables []types.SchemaTable) (map[string][]types.SchemaIndex, error) {
-	result := make(map[string][]types.SchemaIndex)
+	result := make(map[string][]types.SchemaIndex, len(tables))
 
-	type IndexFetcher interface {
-		GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)
+	// First, use indexes already attached to tables from PullCompleteSchema (zero extra queries)
+	for _, table := range tables {
+		if len(table.Indexes) > 0 {
+			result[table.Name] = table.Indexes
+		}
 	}
 
-	fetcher, ok := s.adapter.(IndexFetcher)
-	if !ok {
+	// For adapters that support batch index fetching, fill in any missing tables
+	type BatchIndexFetcher interface {
+		GetAllTablesIndexes(ctx context.Context, tableNames []string) (map[string][]types.SchemaIndex, error)
+	}
+	if fetcher, ok := s.adapter.(BatchIndexFetcher); ok {
+		// Only query tables that didn't already have indexes from PullCompleteSchema
+		var missing []string
 		for _, table := range tables {
-			if len(table.Indexes) > 0 {
-				result[table.Name] = table.Indexes
+			if _, has := result[table.Name]; !has {
+				missing = append(missing, table.Name)
 			}
 		}
-		return result, nil
-	}
-
-	for _, table := range tables {
-		indexes, err := fetcher.GetTableIndexes(ctx, table.Name)
-		if err != nil {
-			continue
+		if len(missing) > 0 {
+			batchResult, err := fetcher.GetAllTablesIndexes(ctx, missing)
+			if err == nil {
+				for name, indexes := range batchResult {
+					result[name] = indexes
+				}
+			}
 		}
-		result[table.Name] = indexes
 	}
 
 	return result, nil

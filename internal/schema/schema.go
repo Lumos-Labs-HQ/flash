@@ -12,7 +12,7 @@ import (
 )
 
 type foreignKeyConstraint struct {
-	ColumnName, ReferencedTable, ReferencedColumn, OnDeleteAction string
+	ColumnName, ReferencedTable, ReferencedColumn, OnDeleteAction, OnUpdateAction string
 }
 
 type SchemaManager struct {

@@ -639,8 +639,17 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		baseType = "bool"
 	case strings.Contains(sqlTypeLower, "time") || strings.Contains(sqlTypeLower, "date"):
 		baseType = "time.Time"
-	case strings.Contains(sqlTypeLower, "json"):
-		baseType = "[]byte"
+	case strings.Contains(sqlTypeLower, "jsonb") || strings.Contains(sqlTypeLower, "json"):
+		if g.Config.Gen.Go.Driver == "pgx" {
+			baseType = "map[string]interface{}"
+		} else {
+			baseType = "[]byte"
+		}
+	case strings.HasSuffix(sqlTypeLower, "[]"):
+		// Array types: TEXT[], INTEGER[], etc.
+		elemType := strings.TrimSuffix(sqlTypeLower, "[]")
+		elemGo := g.mapSQLTypeToGo(elemType, false)
+		return "[]" + elemGo
 	case strings.Contains(sqlTypeLower, "uuid"):
 		baseType = "string"
 	// ClickHouse-specific types

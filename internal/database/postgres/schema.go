@@ -179,7 +179,7 @@ func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 		FROM information_schema.columns c
 		WHERE c.table_name = ANY($1)
 		  AND c.table_schema IN (current_schema(), 'public')
-		ORDER BY c.table_name, c.column_name, c.table_schema
+		ORDER BY c.table_name, c.column_name, c.table_schema, c.ordinal_position
 	`
 
 	rows, err := p.pool.Query(ctx, columnsQuery, tableNames)
@@ -279,14 +279,27 @@ func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 			  AND ns.nspname IN (current_schema(), 'public')
 			  AND con.contype IN ('p', 'u')
 		)
-		SELECT table_name, column_name, 'PK' as constraint_type, NULL as foreign_table_name, NULL as foreign_column_name, NULL as on_delete_action
+		SELECT table_name, column_name, 'PK' as constraint_type, NULL as foreign_table_name, NULL as foreign_column_name, NULL as on_delete_action, NULL as check_expr
 		FROM pk_uk_columns WHERE constraint_type = 'PRIMARY KEY'
 		UNION ALL
-		SELECT table_name, column_name, 'UQ' as constraint_type, NULL, NULL, NULL
+		SELECT table_name, column_name, 'UQ' as constraint_type, NULL, NULL, NULL, NULL
 		FROM pk_uk_columns WHERE constraint_type = 'UNIQUE'
 		UNION ALL
-		SELECT table_name, column_name, 'FK' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action
+		SELECT table_name, column_name, 'FK' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action, NULL
 		FROM fk_columns
+		UNION ALL
+		SELECT
+			src_table.relname, src_attr.attname, 'CK',
+			NULL, NULL, NULL,
+			pg_get_constraintdef(con.oid, true)
+		FROM pg_constraint con
+		JOIN pg_class src_table ON con.conrelid = src_table.oid
+		JOIN pg_namespace ns ON src_table.relnamespace = ns.oid
+		CROSS JOIN LATERAL UNNEST(con.conkey) AS cols(src_col)
+		JOIN pg_attribute src_attr ON src_attr.attrelid = src_table.oid AND src_attr.attnum = cols.src_col
+		WHERE src_table.relname = ANY($1)
+		  AND ns.nspname IN (current_schema(), 'public')
+		  AND con.contype = 'c'
 	`
 
 	conRows, err := p.pool.Query(ctx, constraintsQuery, tableNames)
@@ -297,9 +310,9 @@ func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 
 	for conRows.Next() {
 		var tableName, columnName, constraintType string
-		var foreignTable, foreignColumn, onDeleteAction sql.NullString
+		var foreignTable, foreignColumn, onDeleteAction, checkExpr sql.NullString
 
-		err := conRows.Scan(&tableName, &columnName, &constraintType, &foreignTable, &foreignColumn, &onDeleteAction)
+		err := conRows.Scan(&tableName, &columnName, &constraintType, &foreignTable, &foreignColumn, &onDeleteAction, &checkExpr)
 		if err != nil {
 			continue
 		}
@@ -318,6 +331,12 @@ func (p *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 						if onDeleteAction.Valid {
 							col.OnDeleteAction = onDeleteAction.String
 						}
+					}
+				case "CK":
+					if checkExpr.Valid {
+						// pg_get_constraintdef returns e.g. "CHECK ((age >= 18))"
+						// Strip outer CHECK (...) wrapper to get just the expression
+						col.Check = stripCheckWrapper(checkExpr.String)
 					}
 				}
 			}
@@ -432,7 +451,7 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		FROM information_schema.columns c
 		WHERE c.table_name = ANY($1)
 		  AND c.table_schema IN (current_schema(), 'public')
-		ORDER BY c.table_name, c.column_name, c.table_schema
+		ORDER BY c.table_name, c.column_name, c.table_schema, c.ordinal_position
 	`
 
 	rows, err := p.pool.Query(ctx, columnsQuery, tableNames)
@@ -529,14 +548,27 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 			  AND ns.nspname IN (current_schema(), 'public')
 			  AND con.contype IN ('p', 'u')
 		)
-		SELECT table_name, column_name, 'PK' as constraint_type, NULL as foreign_table_name, NULL as foreign_column_name, NULL as on_delete_action
+		SELECT table_name, column_name, 'PK' as constraint_type, NULL as foreign_table_name, NULL as foreign_column_name, NULL as on_delete_action, NULL as check_expr
 		FROM pk_uk_columns WHERE constraint_type = 'PRIMARY KEY'
 		UNION ALL
-		SELECT table_name, column_name, 'UQ' as constraint_type, NULL, NULL, NULL
+		SELECT table_name, column_name, 'UQ' as constraint_type, NULL, NULL, NULL, NULL
 		FROM pk_uk_columns WHERE constraint_type = 'UNIQUE'
 		UNION ALL
-		SELECT table_name, column_name, 'FK' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action
+		SELECT table_name, column_name, 'FK' as constraint_type, foreign_table_name, foreign_column_name, on_delete_action, NULL
 		FROM fk_columns
+		UNION ALL
+		SELECT
+			src_table.relname, src_attr.attname, 'CK',
+			NULL, NULL, NULL,
+			pg_get_constraintdef(con.oid, true)
+		FROM pg_constraint con
+		JOIN pg_class src_table ON con.conrelid = src_table.oid
+		JOIN pg_namespace ns ON src_table.relnamespace = ns.oid
+		CROSS JOIN LATERAL UNNEST(con.conkey) AS cols(src_col)
+		JOIN pg_attribute src_attr ON src_attr.attrelid = src_table.oid AND src_attr.attnum = cols.src_col
+		WHERE src_table.relname = ANY($1)
+		  AND ns.nspname IN (current_schema(), 'public')
+		  AND con.contype = 'c'
 	`
 
 	conRows, err := p.pool.Query(ctx, constraintsQuery, tableNames)
@@ -547,9 +579,9 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 
 	for conRows.Next() {
 		var tableName, columnName, constraintType string
-		var foreignTable, foreignColumn, onDeleteAction sql.NullString
+		var foreignTable, foreignColumn, onDeleteAction, checkExpr sql.NullString
 
-		err := conRows.Scan(&tableName, &columnName, &constraintType, &foreignTable, &foreignColumn, &onDeleteAction)
+		err := conRows.Scan(&tableName, &columnName, &constraintType, &foreignTable, &foreignColumn, &onDeleteAction, &checkExpr)
 		if err != nil {
 			continue
 		}
@@ -559,7 +591,6 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 				switch constraintType {
 				case "PK":
 					col.IsPrimary = true
-					// For integer PKs, always treat as SERIAL — the sequence is implicit
 					switch p.reverseMapType(col.Type) {
 					case "int4":
 						col.Type = "SERIAL"
@@ -579,6 +610,10 @@ func (p *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 						if onDeleteAction.Valid {
 							col.OnDeleteAction = onDeleteAction.String
 						}
+					}
+				case "CK":
+					if checkExpr.Valid {
+						col.Check = stripCheckWrapper(checkExpr.String)
 					}
 				}
 			}
@@ -750,4 +785,38 @@ func (p *Adapter) formatDefaultValue(defaultVal string) string {
 	}
 
 	return cleaned
+}
+
+// stripCheckWrapper strips the "CHECK ((...))  " wrapper from pg_get_constraintdef output.
+// e.g. "CHECK ((age >= 18))" → "age >= 18"
+func stripCheckWrapper(expr string) string {
+	expr = strings.TrimSpace(expr)
+	upper := strings.ToUpper(expr)
+	if strings.HasPrefix(upper, "CHECK") {
+		expr = strings.TrimSpace(expr[5:])
+	}
+	// Strip outer parens (PostgreSQL wraps in double parens)
+	for strings.HasPrefix(expr, "(") && strings.HasSuffix(expr, ")") {
+		inner := expr[1 : len(expr)-1]
+		// Make sure parens are balanced before stripping
+		depth := 0
+		balanced := true
+		for _, c := range inner {
+			if c == '(' {
+				depth++
+			} else if c == ')' {
+				depth--
+				if depth < 0 {
+					balanced = false
+					break
+				}
+			}
+		}
+		if balanced && depth == 0 {
+			expr = strings.TrimSpace(inner)
+		} else {
+			break
+		}
+	}
+	return expr
 }
