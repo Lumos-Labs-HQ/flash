@@ -117,7 +117,6 @@ func (s *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 }
 
 func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
-	// SECURITY: Validate table name before using in PRAGMA
 	if err := s.validateTableName(tableName); err != nil {
 		return nil, err
 	}
@@ -128,7 +127,6 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 	}
 	defer rows.Close()
 
-	// Fetch unique columns once per table to avoid N+1 PRAGMA queries.
 	uniqueColumns := s.getUniqueColumnsForTable(ctx, tableName)
 
 	var columns []types.SchemaColumn
@@ -140,8 +138,7 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 		var defaultValue sql.NullString
 		var pk int
 
-		err := rows.Scan(&cid, &column.Name, &dataType, &notNull, &defaultValue, &pk)
-		if err != nil {
+		if err := rows.Scan(&cid, &column.Name, &dataType, &notNull, &defaultValue, &pk); err != nil {
 			continue
 		}
 
@@ -149,41 +146,103 @@ func (s *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 		column.Nullable = notNull == 0
 		column.IsPrimary = pk > 0
 		column.IsAutoIncrement = pk > 0 && strings.ToUpper(dataType) == "INTEGER"
-
 		if defaultValue.Valid {
 			column.Default = defaultValue.String
 		}
-
-		// Use pre-fetched unique column map instead of N+1 queries
 		column.IsUnique = uniqueColumns[column.Name]
 		columns = append(columns, column)
 	}
 
+	// Fetch FK info
 	fkRows, err := s.db.QueryContext(ctx, fmt.Sprintf("PRAGMA foreign_key_list(\"%s\")", tableName))
 	if err == nil {
 		defer fkRows.Close()
-
 		for fkRows.Next() {
 			var id, seq int
 			var table, from, to, onUpdate, onDelete, match string
-
-			err := fkRows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match)
-			if err != nil {
+			if err := fkRows.Scan(&id, &seq, &table, &from, &to, &onUpdate, &onDelete, &match); err != nil {
 				continue
 			}
-
 			for i := range columns {
 				if columns[i].Name == from {
 					columns[i].ForeignKeyTable = table
 					columns[i].ForeignKeyColumn = to
-					columns[i].OnDeleteAction = onDelete
+					if onDelete != "" && onDelete != "NO ACTION" {
+						columns[i].OnDeleteAction = onDelete
+					}
+					if onUpdate != "" && onUpdate != "NO ACTION" {
+						columns[i].OnUpdateAction = onUpdate
+					}
 					break
 				}
 			}
 		}
 	}
 
+	// Extract CHECK constraints from CREATE TABLE SQL in sqlite_master
+	checks := s.extractCheckConstraints(ctx, tableName)
+	for i := range columns {
+		if chk, ok := checks[columns[i].Name]; ok {
+			columns[i].Check = chk
+		}
+	}
+
 	return columns, nil
+}
+
+// extractCheckConstraints parses sqlite_master to find inline CHECK constraints per column.
+func (s *Adapter) extractCheckConstraints(ctx context.Context, tableName string) map[string]string {
+	result := make(map[string]string)
+
+	var ddl string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT sql FROM sqlite_master WHERE type='table' AND name=?", tableName,
+	).Scan(&ddl)
+	if err != nil || ddl == "" {
+		return result
+	}
+
+	// Pattern: column_name ... CHECK (expr)
+	// We look for "WORD ... CHECK (" and capture the balanced expression
+	checkRe := regexp.MustCompile(`(?i)(\w+)\s+\w[^,)]*CHECK\s*\(`)
+	matches := checkRe.FindAllStringIndex(ddl, -1)
+
+	for _, loc := range matches {
+		segment := ddl[loc[0]:loc[1]]
+		// Extract column name (first word)
+		firstWord := regexp.MustCompile(`^(\w+)`).FindString(segment)
+		if firstWord == "" {
+			continue
+		}
+
+		// Find CHECK( position and extract balanced expression
+		checkStart := strings.Index(strings.ToUpper(ddl[loc[0]:]), "CHECK")
+		if checkStart == -1 {
+			continue
+		}
+		absStart := loc[0] + checkStart
+		parenIdx := strings.Index(ddl[absStart:], "(")
+		if parenIdx == -1 {
+			continue
+		}
+		start := absStart + parenIdx + 1
+		depth, end := 1, start
+		for end < len(ddl) && depth > 0 {
+			if ddl[end] == '(' {
+				depth++
+			} else if ddl[end] == ')' {
+				depth--
+			}
+			if depth > 0 {
+				end++
+			}
+		}
+		if depth == 0 {
+			result[firstWord] = strings.TrimSpace(ddl[start:end])
+		}
+	}
+
+	return result
 }
 
 func (s *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error) {

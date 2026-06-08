@@ -22,11 +22,14 @@ type SchemaColumn struct {
 	Default          string
 	IsPrimary        bool
 	IsUnique         bool
-	IsAutoIncrement  bool // NEW: Indicates if column is auto-increment (SERIAL, AUTO_INCREMENT, etc.)
+	IsAutoIncrement  bool
 	ForeignKeyTable  string
 	ForeignKeyColumn string
 	OnDeleteAction   string
-	Check            string // CHECK constraint expression
+	OnUpdateAction   string // ON UPDATE action for FK
+	Check            string
+	Generated        string // GENERATED ALWAYS AS expression
+	IsIdentity       bool   // GENERATED ALWAYS AS IDENTITY (PostgreSQL)
 }
 
 type SchemaIndex struct {
@@ -34,35 +37,64 @@ type SchemaIndex struct {
 	Table   string
 	Columns []string
 	Unique  bool
-	Where   string // Partial index WHERE clause (PostgreSQL)
+	Where   string   // Partial index WHERE clause
+	Method  string   // USING btree|hash|gin|gist|brin|spgist (PostgreSQL)
+	Expr    []string // Expression index columns e.g. lower(email)
+}
+
+type SchemaConstraint struct {
+	Name    string
+	Table   string
+	Type    string // CHECK, UNIQUE, EXCLUDE
+	Expr    string // for CHECK constraints
+	Columns []string
 }
 
 type SchemaDiff struct {
-	NewTables      []SchemaTable
-	DroppedTables  []string
-	ModifiedTables []TableDiff
-	NewIndexes     []SchemaIndex
-	DroppedIndexes []SchemaIndex // Changed from []string to include table name for MySQL DROP INDEX
-	NewEnums       []SchemaEnum
-	DroppedEnums   []string
+	NewTables          []SchemaTable
+	DroppedTables      []string
+	ModifiedTables     []TableDiff
+	NewIndexes         []SchemaIndex
+	DroppedIndexes     []SchemaIndex
+	NewEnums           []SchemaEnum
+	DroppedEnums       []string
+	ModifiedEnums      []EnumDiff    // enum value additions
+	RenamedColumns     []RenameOp    // RENAME COLUMN
+	RenamedTables      []RenameOp    // RENAME TABLE
+	NewConstraints     []SchemaConstraint
+	DroppedConstraints []SchemaConstraint
+}
+
+type EnumDiff struct {
+	Name      string
+	AddValues []string // values to ADD
+}
+
+type RenameOp struct {
+	Table   string
+	OldName string
+	NewName string
 }
 
 type TableDiff struct {
 	Name            string
 	NewColumns      []SchemaColumn
-	DroppedColumns  []SchemaColumn // Changed from []string to preserve column info for DOWN migration
+	DroppedColumns  []SchemaColumn
 	ModifiedColumns []ColumnDiff
-	OldTable        SchemaTable // Full old table schema (for SQLite table recreation)
-	NewTable        SchemaTable // Full new table schema (for SQLite table recreation)
+	OldTable        SchemaTable
+	NewTable        SchemaTable
 }
 
 type ColumnDiff struct {
-	Name      string
-	OldType   string
-	NewType   string
-	Changes   []string
-	OldColumn SchemaColumn
-	NewColumn SchemaColumn
+	Name             string
+	OldType          string
+	NewType          string
+	Changes          []string
+	OldColumn        SchemaColumn
+	NewColumn        SchemaColumn
+	NullableChanged  bool
+	DefaultChanged   bool
+	GeneratedChanged bool
 }
 
 type MigrationConflict struct {

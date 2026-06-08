@@ -113,7 +113,7 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	var sqlContent string
 	// Check for index changes too, not just tables and enums.
 	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
-		len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 &&
+		len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 && len(diff.ModifiedEnums) == 0 &&
 		len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
@@ -261,32 +261,137 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		if len(tableDiff.ModifiedColumns) > 0 {
 			if m.provider == "sqlite" || m.provider == "sqlite3" {
 				if needsSQLiteRecreate {
-					// SQLite does not support ALTER COLUMN. Recreate the table.
-					// Table recreation inherently handles added/dropped columns too,
-					// so we skip individual ALTER TABLE statements above when
-					// needsSQLiteRecreate is true.
 					recreateSQL := m.generateSQLiteTableRecreateSQL(tableDiff.OldTable, tableDiff.NewTable)
 					if recreateSQL != "" {
 						upStatements = append(upStatements, recreateSQL)
 						hasExecutableSQL = true
-						// DOWN: reverse recreation
 						downRecreate := m.generateSQLiteTableRecreateSQL(tableDiff.NewTable, tableDiff.OldTable)
 						downStatements = append([]string{downRecreate}, downStatements...)
 					}
 				}
-				// else: cosmetic type changes (e.g. TEXT → VARCHAR(255)) are ignored
-				// for SQLite since they have no semantic effect.
 			} else {
 				for _, colDiff := range tableDiff.ModifiedColumns {
-					sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
-					if sql != "" {
-						upStatements = append(upStatements, sql)
-						hasExecutableSQL = true
-						// DOWN: Revert to old column definition
-						revertSQL := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.OldColumn, colDiff.NewType)
-						if revertSQL != "" {
-							downStatements = append([]string{revertSQL}, downStatements...)
+					// 1. Type change
+					if colDiff.OldType != colDiff.NewType {
+						sql := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.NewColumn, colDiff.OldType)
+						if sql != "" {
+							upStatements = append(upStatements, sql)
+							hasExecutableSQL = true
+							revertSQL := m.adapter.GenerateAlterColumnSQL(tableDiff.Name, colDiff.OldColumn, colDiff.NewType)
+							if revertSQL != "" {
+								downStatements = append([]string{revertSQL}, downStatements...)
+							}
 						}
+					}
+
+					// 2. Nullable change (PostgreSQL / MySQL)
+					if colDiff.NullableChanged {
+						var nullSQL, nullDownSQL string
+						switch m.provider {
+						case "postgresql", "postgres":
+							if colDiff.NewColumn.Nullable {
+								nullSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP NOT NULL;", tableDiff.Name, colDiff.Name)
+								nullDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET NOT NULL;", tableDiff.Name, colDiff.Name)
+							} else {
+								nullSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET NOT NULL;", tableDiff.Name, colDiff.Name)
+								nullDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP NOT NULL;", tableDiff.Name, colDiff.Name)
+							}
+						case "mysql":
+							// MySQL MODIFY COLUMN already handles nullable in GenerateAlterColumnSQL
+						}
+						if nullSQL != "" {
+							upStatements = append(upStatements, nullSQL)
+							hasExecutableSQL = true
+							downStatements = append([]string{nullDownSQL}, downStatements...)
+						}
+					}
+
+					// 3. Default change (PostgreSQL / MySQL)
+					if colDiff.DefaultChanged {
+						var defSQL, defDownSQL string
+						switch m.provider {
+						case "postgresql", "postgres":
+							if colDiff.NewColumn.Default != "" {
+								defSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET DEFAULT %s;", tableDiff.Name, colDiff.Name, colDiff.NewColumn.Default)
+								if colDiff.OldColumn.Default != "" {
+									defDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET DEFAULT %s;", tableDiff.Name, colDiff.Name, colDiff.OldColumn.Default)
+								} else {
+									defDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP DEFAULT;", tableDiff.Name, colDiff.Name)
+								}
+							} else {
+								defSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" DROP DEFAULT;", tableDiff.Name, colDiff.Name)
+								if colDiff.OldColumn.Default != "" {
+									defDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN \"%s\" SET DEFAULT %s;", tableDiff.Name, colDiff.Name, colDiff.OldColumn.Default)
+								}
+							}
+						case "mysql":
+							// MySQL MODIFY COLUMN already handles default in GenerateAlterColumnSQL
+						}
+						if defSQL != "" {
+							upStatements = append(upStatements, defSQL)
+							hasExecutableSQL = true
+							if defDownSQL != "" {
+								downStatements = append([]string{defDownSQL}, downStatements...)
+							}
+						}
+					}
+
+					// 4. CHECK constraint change
+					if colDiff.OldColumn.Check != colDiff.NewColumn.Check {
+						constraintName := fmt.Sprintf("%s_%s_check", tableDiff.Name, colDiff.Name)
+						switch m.provider {
+						case "postgresql", "postgres":
+							if colDiff.OldColumn.Check != "" {
+								// Drop old CHECK
+								dropCheck := fmt.Sprintf("ALTER TABLE \"%s\" DROP CONSTRAINT IF EXISTS \"%s\";", tableDiff.Name, constraintName)
+								upStatements = append(upStatements, dropCheck)
+								hasExecutableSQL = true
+								if colDiff.NewColumn.Check == "" {
+									downStatements = append([]string{fmt.Sprintf("ALTER TABLE \"%s\" ADD CONSTRAINT \"%s\" CHECK (%s);", tableDiff.Name, constraintName, colDiff.OldColumn.Check)}, downStatements...)
+								}
+							}
+							if colDiff.NewColumn.Check != "" {
+								// Add new CHECK
+								addCheck := fmt.Sprintf("ALTER TABLE \"%s\" ADD CONSTRAINT \"%s\" CHECK (%s);", tableDiff.Name, constraintName, colDiff.NewColumn.Check)
+								upStatements = append(upStatements, addCheck)
+								hasExecutableSQL = true
+								downStatements = append([]string{fmt.Sprintf("ALTER TABLE \"%s\" DROP CONSTRAINT IF EXISTS \"%s\";", tableDiff.Name, constraintName)}, downStatements...)
+							}
+						case "mysql":
+							if colDiff.OldColumn.Check != "" {
+								upStatements = append(upStatements, fmt.Sprintf("ALTER TABLE `%s` DROP CHECK `%s`;", tableDiff.Name, constraintName))
+								hasExecutableSQL = true
+							}
+							if colDiff.NewColumn.Check != "" {
+								upStatements = append(upStatements, fmt.Sprintf("ALTER TABLE `%s` ADD CONSTRAINT `%s` CHECK (%s);", tableDiff.Name, constraintName, colDiff.NewColumn.Check))
+								hasExecutableSQL = true
+							}
+						}
+					}
+
+					// 5. UNIQUE change (PostgreSQL / MySQL — SQLite handled by table recreate)
+					if !colDiff.OldColumn.IsUnique && colDiff.NewColumn.IsUnique {
+						indexName := fmt.Sprintf("%s_%s_key", tableDiff.Name, colDiff.Name)
+						switch m.provider {
+						case "postgresql", "postgres":
+							upStatements = append(upStatements, fmt.Sprintf("ALTER TABLE \"%s\" ADD CONSTRAINT \"%s\" UNIQUE (\"%s\");", tableDiff.Name, indexName, colDiff.Name))
+							downStatements = append([]string{fmt.Sprintf("ALTER TABLE \"%s\" DROP CONSTRAINT IF EXISTS \"%s\";", tableDiff.Name, indexName)}, downStatements...)
+						case "mysql":
+							upStatements = append(upStatements, fmt.Sprintf("ALTER TABLE `%s` ADD UNIQUE INDEX `%s` (`%s`);", tableDiff.Name, indexName, colDiff.Name))
+							downStatements = append([]string{fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`;", tableDiff.Name, indexName)}, downStatements...)
+						}
+						hasExecutableSQL = true
+					} else if colDiff.OldColumn.IsUnique && !colDiff.NewColumn.IsUnique {
+						indexName := fmt.Sprintf("%s_%s_key", tableDiff.Name, colDiff.Name)
+						switch m.provider {
+						case "postgresql", "postgres":
+							upStatements = append(upStatements, fmt.Sprintf("ALTER TABLE \"%s\" DROP CONSTRAINT IF EXISTS \"%s\";", tableDiff.Name, indexName))
+							downStatements = append([]string{fmt.Sprintf("ALTER TABLE \"%s\" ADD CONSTRAINT \"%s\" UNIQUE (\"%s\");", tableDiff.Name, indexName, colDiff.Name)}, downStatements...)
+						case "mysql":
+							upStatements = append(upStatements, fmt.Sprintf("ALTER TABLE `%s` DROP INDEX `%s`;", tableDiff.Name, indexName))
+							downStatements = append([]string{fmt.Sprintf("ALTER TABLE `%s` ADD UNIQUE INDEX `%s` (`%s`);", tableDiff.Name, indexName, colDiff.Name)}, downStatements...)
+						}
+						hasExecutableSQL = true
 					}
 				}
 			}
@@ -309,6 +414,19 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
 		hasExecutableSQL = true
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
+	}
+
+	// UP: Add values to existing enums (PostgreSQL only — ALTER TYPE ... ADD VALUE)
+	for _, enumDiff := range diff.ModifiedEnums {
+		for _, val := range enumDiff.AddValues {
+			escaped := strings.ReplaceAll(val, "'", "''")
+			if m.provider == "postgresql" || m.provider == "postgres" {
+				sql := fmt.Sprintf("ALTER TYPE \"%s\" ADD VALUE IF NOT EXISTS '%s';", enumDiff.Name, escaped)
+				upStatements = append(upStatements, sql)
+				hasExecutableSQL = true
+				downStatements = append([]string{fmt.Sprintf("-- Cannot remove enum value '%s' from \"%s\" (PostgreSQL limitation)", val, enumDiff.Name)}, downStatements...)
+			}
+		}
 	}
 
 	// Handle standalone index changes (drop first to avoid conflicts).
@@ -463,7 +581,6 @@ func (m *Migrator) hasSignificantSQLiteModifications(tableDiff types.TableDiff) 
 		if oldNorm != newNorm {
 			return true
 		}
-		// Also check for non-type changes (nullable, default, primary key, etc.)
 		if col.OldColumn.Nullable != col.NewColumn.Nullable {
 			return true
 		}
@@ -474,6 +591,9 @@ func (m *Migrator) hasSignificantSQLiteModifications(tableDiff types.TableDiff) 
 			return true
 		}
 		if col.OldColumn.IsUnique != col.NewColumn.IsUnique {
+			return true
+		}
+		if col.OldColumn.Check != col.NewColumn.Check {
 			return true
 		}
 		if col.OldColumn.ForeignKeyTable != col.NewColumn.ForeignKeyTable {

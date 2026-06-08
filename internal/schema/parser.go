@@ -8,12 +8,14 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
-// Package-level pre-compiled regexes for column/constraint parsing.
 var (
-	parserFKRegex         = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
+	parserFKRegex         = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\(\s*(\w+)\s*\)\s+REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)(?:\s+ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?(?:\s+ON\s+UPDATE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION))?`)
 	parserReferencesRegex = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
 	parserOnDeleteRegex   = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
+	parserOnUpdateRegex   = regexp.MustCompile(`(?i)ON\s+UPDATE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
 	parserDefaultRegex    = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
+	parserGeneratedRegex  = regexp.MustCompile(`(?i)GENERATED\s+ALWAYS\s+AS\s*\(([^)]+)\)\s*(STORED|VIRTUAL)?`)
+	parserIdentityRegex   = regexp.MustCompile(`(?i)GENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY`)
 )
 
 func (sm *SchemaManager) cleanSQL(sql string) string {
@@ -42,11 +44,18 @@ func (sm *SchemaManager) isCreateIndexStatement(stmt string) bool {
 }
 
 func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaIndex, error) {
-	// Extract WHERE clause separately before applying the main regex,
-	// because the WHERE expression may contain parentheses.
 	whereClause := ""
 	if whereMatch := indexWhereRegex.FindStringSubmatch(stmt); len(whereMatch) > 1 {
 		whereClause = strings.TrimSpace(whereMatch[1])
+		// strip WHERE part from stmt before further parsing
+		stmt = stmt[:strings.Index(strings.ToUpper(stmt), " WHERE")]
+	}
+
+	method := ""
+	if usingMatch := indexUsingRegex.FindStringSubmatch(stmt); len(usingMatch) > 1 {
+		method = strings.ToLower(usingMatch[1])
+		// strip USING part
+		stmt = indexUsingRegex.ReplaceAllString(stmt, "")
 	}
 
 	matches := indexRegex.FindStringSubmatch(stmt)
@@ -55,26 +64,28 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 	}
 
 	isUnique := strings.TrimSpace(matches[1]) != ""
-
-	// Extract index name (could be in matches[2] or matches[3])
 	indexName := matches[2]
 	if indexName == "" {
 		indexName = matches[3]
 	}
-
-	// Extract table name (could be in matches[4] or matches[5])
 	tableName := matches[4]
 	if tableName == "" {
 		tableName = matches[5]
 	}
 
-	// Extract columns
 	columnsStr := matches[6]
 	columnParts := strings.Split(columnsStr, ",")
 	var columns []string
+	var exprs []string
 	for _, col := range columnParts {
-		// Clean up column name (remove quotes, ASC/DESC, etc.)
 		col = strings.TrimSpace(col)
+		// Expression index: contains ( or is a function call
+		if strings.Contains(col, "(") {
+			exprs = append(exprs, col)
+			// use a placeholder name derived from expression
+			columns = append(columns, col)
+			continue
+		}
 		col = strings.Trim(col, `"'`)
 		col = indexOrderRegex.ReplaceAllString(col, "")
 		col = strings.TrimSpace(col)
@@ -89,6 +100,8 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 		Columns: columns,
 		Unique:  isUnique,
 		Where:   whereClause,
+		Method:  method,
+		Expr:    exprs,
 	}, nil
 }
 
@@ -172,6 +185,7 @@ func (sm *SchemaManager) applyForeignKeys(columns []types.SchemaColumn, foreignK
 				columns[i].ForeignKeyTable = fk.ReferencedTable
 				columns[i].ForeignKeyColumn = fk.ReferencedColumn
 				columns[i].OnDeleteAction = fk.OnDeleteAction
+				columns[i].OnUpdateAction = fk.OnUpdateAction
 				break
 			}
 		}
@@ -206,7 +220,6 @@ func (sm *SchemaManager) parseColumnDefinitionsAndConstraints(columnDefs string)
 
 func (sm *SchemaManager) parseForeignKeyConstraint(constraint string) *foreignKeyConstraint {
 	matches := parserFKRegex.FindStringSubmatch(constraint)
-
 	if len(matches) >= 4 {
 		fk := &foreignKeyConstraint{
 			ColumnName:       matches[1],
@@ -215,6 +228,9 @@ func (sm *SchemaManager) parseForeignKeyConstraint(constraint string) *foreignKe
 		}
 		if len(matches) >= 5 && matches[4] != "" {
 			fk.OnDeleteAction = strings.ToUpper(matches[4])
+		}
+		if len(matches) >= 6 && matches[5] != "" {
+			fk.OnUpdateAction = strings.ToUpper(matches[5])
 		}
 		return fk
 	}
@@ -334,29 +350,43 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		"NOT NULL":       func() { column.Nullable = false },
 		"PRIMARY KEY":    func() { column.IsPrimary = true },
 		"UNIQUE":         func() { column.IsUnique = true },
-		"AUTOINCREMENT":  func() { column.IsPrimary = true },
-		"AUTO_INCREMENT": func() { column.IsPrimary = true },
-		"SERIAL":         func() { column.IsPrimary = true },
-		"BIGSERIAL":      func() { column.IsPrimary = true },
-		"SMALLSERIAL":    func() { column.IsPrimary = true },
+		"AUTOINCREMENT":  func() { column.IsPrimary = true; column.IsAutoIncrement = true },
+		"AUTO_INCREMENT": func() { column.IsPrimary = true; column.IsAutoIncrement = true },
+		"SERIAL":         func() { column.IsPrimary = true; column.IsAutoIncrement = true },
+		"BIGSERIAL":      func() { column.IsPrimary = true; column.IsAutoIncrement = true },
+		"SMALLSERIAL":    func() { column.IsPrimary = true; column.IsAutoIncrement = true },
 	}
-
 	for constraint, action := range constraints {
 		if strings.Contains(defUpper, constraint) {
 			action()
 		}
 	}
 
+	// GENERATED ALWAYS AS IDENTITY (PostgreSQL)
+	if parserIdentityRegex.MatchString(colDef) {
+		column.IsIdentity = true
+		column.IsAutoIncrement = true
+		column.IsPrimary = true
+	}
+
+	// GENERATED ALWAYS AS (expr) STORED|VIRTUAL
+	if m := parserGeneratedRegex.FindStringSubmatch(colDef); len(m) > 1 {
+		column.Generated = strings.TrimSpace(m[1])
+		column.Nullable = true // generated columns are implicitly nullable in reads
+	}
+
 	if matches := parserReferencesRegex.FindStringSubmatch(colDef); len(matches) >= 3 {
 		column.ForeignKeyTable = matches[1]
 		column.ForeignKeyColumn = matches[2]
-
 		if onDeleteMatches := parserOnDeleteRegex.FindStringSubmatch(colDef); len(onDeleteMatches) >= 2 {
 			column.OnDeleteAction = strings.ToUpper(onDeleteMatches[1])
 		}
+		if onUpdateMatches := parserOnUpdateRegex.FindStringSubmatch(colDef); len(onUpdateMatches) >= 2 {
+			column.OnUpdateAction = strings.ToUpper(onUpdateMatches[1])
+		}
 	}
 
-	// Extract CHECK constraint with balanced parentheses
+	// CHECK constraint with balanced parentheses
 	checkStart := -1
 	if idx := strings.Index(strings.ToUpper(colDef), "CHECK("); idx != -1 {
 		checkStart = idx

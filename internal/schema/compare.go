@@ -89,12 +89,15 @@ func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable)
 			hasChanges = true
 		} else if !sm.columnsEqual(currentCol, targetCol) {
 			tableDiff.ModifiedColumns = append(tableDiff.ModifiedColumns, types.ColumnDiff{
-				Name:      targetCol.Name,
-				OldType:   currentCol.Type,
-				NewType:   targetCol.Type,
-				Changes:   sm.getColumnChanges(currentCol, targetCol),
-				OldColumn: currentCol,
-				NewColumn: targetCol,
+				Name:             targetCol.Name,
+				OldType:          currentCol.Type,
+				NewType:          targetCol.Type,
+				Changes:          sm.getColumnChanges(currentCol, targetCol),
+				OldColumn:        currentCol,
+				NewColumn:        targetCol,
+				NullableChanged:  currentCol.Nullable != targetCol.Nullable,
+				DefaultChanged:   currentCol.Default != targetCol.Default,
+				GeneratedChanged: currentCol.Generated != targetCol.Generated,
 			})
 			hasChanges = true
 		}
@@ -162,25 +165,40 @@ func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, dif
 }
 
 func (sm *SchemaManager) compareEnums(current, target []types.SchemaEnum, diff *types.SchemaDiff) {
-	// Pre-allocate maps for efficiency.
 	currentMap := make(map[string]types.SchemaEnum, len(current))
 	targetMap := make(map[string]types.SchemaEnum, len(target))
-
-	for _, enum := range current {
-		currentMap[enum.Name] = enum
+	for _, e := range current {
+		currentMap[e.Name] = e
 	}
-	for _, enum := range target {
-		targetMap[enum.Name] = enum
+	for _, e := range target {
+		targetMap[e.Name] = e
 	}
 
-	// Find new enums
 	for _, targetEnum := range target {
-		if _, exists := currentMap[targetEnum.Name]; !exists {
+		cur, exists := currentMap[targetEnum.Name]
+		if !exists {
 			diff.NewEnums = append(diff.NewEnums, targetEnum)
+			continue
+		}
+		// Check for added values (PostgreSQL supports ADD VALUE)
+		curVals := make(map[string]bool, len(cur.Values))
+		for _, v := range cur.Values {
+			curVals[v] = true
+		}
+		var added []string
+		for _, v := range targetEnum.Values {
+			if !curVals[v] {
+				added = append(added, v)
+			}
+		}
+		if len(added) > 0 {
+			diff.ModifiedEnums = append(diff.ModifiedEnums, types.EnumDiff{
+				Name:      targetEnum.Name,
+				AddValues: added,
+			})
 		}
 	}
 
-	// Find dropped enums
 	for _, currentEnum := range current {
 		if _, exists := targetMap[currentEnum.Name]; !exists {
 			diff.DroppedEnums = append(diff.DroppedEnums, currentEnum.Name)
@@ -226,6 +244,15 @@ func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
 		bOnDelete = ""
 	}
 
+	aOnUpdate := a.OnUpdateAction
+	bOnUpdate := b.OnUpdateAction
+	if aOnUpdate == "NO ACTION" {
+		aOnUpdate = ""
+	}
+	if bOnUpdate == "NO ACTION" {
+		bOnUpdate = ""
+	}
+
 	return a.Name == b.Name &&
 		aTypeNorm == bTypeNorm &&
 		aNullable == bNullable &&
@@ -234,7 +261,10 @@ func (sm *SchemaManager) columnsEqual(a, b types.SchemaColumn) bool {
 		a.IsUnique == b.IsUnique &&
 		a.ForeignKeyTable == b.ForeignKeyTable &&
 		a.ForeignKeyColumn == b.ForeignKeyColumn &&
-		aOnDelete == bOnDelete
+		aOnDelete == bOnDelete &&
+		aOnUpdate == bOnUpdate &&
+		a.Generated == b.Generated &&
+		a.Check == b.Check
 }
 
 func (sm *SchemaManager) getColumnChanges(old, new types.SchemaColumn) []string {
@@ -247,11 +277,13 @@ func (sm *SchemaManager) getColumnChanges(old, new types.SchemaColumn) []string 
 		{old.Type != new.Type, fmt.Sprintf("type changed from %s to %s", old.Type, new.Type)},
 		{old.Nullable && !new.Nullable, "made not nullable"},
 		{!old.Nullable && new.Nullable, "made nullable"},
-		{old.Default != new.Default, fmt.Sprintf("default changed from %s to %s", old.Default, new.Default)},
+		{old.Default != new.Default, fmt.Sprintf("default changed from %q to %q", old.Default, new.Default)},
 		{!old.IsPrimary && new.IsPrimary, "made primary key"},
 		{old.IsPrimary && !new.IsPrimary, "removed primary key"},
 		{!old.IsUnique && new.IsUnique, "made unique"},
 		{old.IsUnique && !new.IsUnique, "removed unique constraint"},
+		{old.Generated != new.Generated, fmt.Sprintf("generated expression changed from %q to %q", old.Generated, new.Generated)},
+		{old.Check != new.Check, "check constraint changed"},
 	}
 
 	for _, check := range changeChecks {
@@ -267,9 +299,11 @@ func (sm *SchemaManager) getColumnChanges(old, new types.SchemaColumn) []string 
 			changes = append(changes, "removed foreign key reference")
 		}
 	}
-
 	if old.OnDeleteAction != new.OnDeleteAction {
-		changes = append(changes, fmt.Sprintf("foreign key action changed from %s to %s", old.OnDeleteAction, new.OnDeleteAction))
+		changes = append(changes, fmt.Sprintf("ON DELETE changed from %s to %s", old.OnDeleteAction, new.OnDeleteAction))
+	}
+	if old.OnUpdateAction != new.OnUpdateAction {
+		changes = append(changes, fmt.Sprintf("ON UPDATE changed from %s to %s", old.OnUpdateAction, new.OnUpdateAction))
 	}
 
 	return changes
