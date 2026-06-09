@@ -36,7 +36,6 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) ||
 				strings.EqualFold(col.Name, strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")) {
-				// Return raw SQL type from schema
 				return col.Type
 			}
 		}
@@ -47,12 +46,13 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		return "INTEGER"
 	}
 
-	numericAliasPattern := fmt.Sprintf(`(?i)\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w*\.(count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)_?\w*`, paramIndex, paramIndex)
+	// CTE alias numeric column comparisons: ups.total_posts > $1
+	numericAliasPattern := fmt.Sprintf(`(?i)\w+\.(total_posts|published_posts|draft_posts|total_comments|posts_commented_on|categories_used|engagement_score|count|sum|avg|total|min|max|num|qty|quantity|amount|cnt|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\w+\.(total_posts|published_posts|draft_posts|total_comments|posts_commented_on|categories_used|engagement_score|count|sum|avg|total|min|max|num|qty|quantity|amount|cnt)`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(numericAliasPattern, sql); matched {
 		return "INTEGER"
 	}
 
-	coalescePattern := fmt.Sprintf(`(?i)COALESCE\([^,)]*\.(cnt|count|sum|avg|total|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)[^)]*\)\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*COALESCE\([^,)]*\.(cnt|count|sum|avg|total|total_cnt|post_cnt|comment_cnt|pub_cnt|draft_cnt|posts_cnt|cat_cnt)[^)]*\)`, paramIndex, paramIndex)
+	coalescePattern := fmt.Sprintf(`(?i)COALESCE\([^)]*\.(cnt|count|sum|avg|total|total_\w+|post\w*|comment\w*|pub\w*|draft\w*|posts\w*|cat\w*|unique\w*|engagement\w*|categories\w*)[^)]*\)\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*COALESCE\([^)]*\.(cnt|count|sum|avg|total)`, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(coalescePattern, sql); matched {
 		return "INTEGER"
 	}
@@ -62,7 +62,6 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, match[1]) {
-				// Return raw SQL type from schema
 				return col.Type
 			}
 		}
@@ -76,7 +75,6 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 				colName := strings.TrimSpace(colNames[paramIndex-1])
 				for _, col := range table.Columns {
 					if strings.EqualFold(col.Name, colName) {
-						// Return raw SQL type from schema
 						return col.Type
 					}
 				}
@@ -89,7 +87,6 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	if match := setRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, match[1]) {
-				// Return raw SQL type from schema
 				return col.Type
 			}
 		}
@@ -110,7 +107,6 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	if match := betweenRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, match[1]) {
-				// Return raw SQL type from schema
 				return col.Type
 			}
 		}
@@ -122,19 +118,29 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		if match := betweenStartRe.FindStringSubmatch(sql); len(match) > 1 {
 			for _, col := range table.Columns {
 				if strings.EqualFold(col.Name, match[1]) {
-					// Return raw SQL type from schema
 					return col.Type
 				}
 			}
 		}
 	}
 
-	datePattern := fmt.Sprintf(`(?i)(created_at|updated_at|date|time)\s*[<>=]+\s*\$%d`, paramIndex)
+	datePattern := fmt.Sprintf(`(?i)(created_at|updated_at|deleted_at|published_at|date|time)\s*[<>=]+\s*\$%d`, paramIndex)
 	if matched, _ := regexp.MatchString(datePattern, sql); matched {
 		return "TIMESTAMP"
 	}
 
-	return "TEXT" // Default to TEXT (generic string type)
+	// WHERE alias.col > $N — unqualified comparison fallback
+	compQualPattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*[<>=!]+\s*\$%d`, paramIndex)
+	compQualRe := regexp.MustCompile(compQualPattern)
+	if match := compQualRe.FindStringSubmatch(sql); len(match) > 1 {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, match[1]) {
+				return col.Type
+			}
+		}
+	}
+
+	return "TEXT"
 }
 
 func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {

@@ -309,6 +309,10 @@ func (sm *SchemaManager) parseColumnDefinition(colDef string) (types.SchemaColum
 		column.Type = "TIMESTAMP WITH TIME ZONE"
 	} else if strings.HasPrefix(restUpper, "TIMESTAMP WITHOUT TIME ZONE") {
 		column.Type = "TIMESTAMP WITHOUT TIME ZONE"
+	} else if strings.HasPrefix(restUpper, "TIME WITH TIME ZONE") {
+		column.Type = "TIME WITH TIME ZONE"
+	} else if strings.HasPrefix(restUpper, "TIME WITHOUT TIME ZONE") {
+		column.Type = "TIME WITHOUT TIME ZONE"
 	} else if strings.HasPrefix(restUpper, "DOUBLE PRECISION") {
 		column.Type = "DOUBLE PRECISION"
 	} else if strings.HasPrefix(restUpper, "CHARACTER VARYING") {
