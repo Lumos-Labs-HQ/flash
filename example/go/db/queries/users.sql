@@ -134,3 +134,36 @@ LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id
 WHERE ups.total_posts > $1 OR ucs.total_comments > $2
 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST
 LIMIT $3;
+
+-- name: GetUsersByDateRange :many
+SELECT * FROM users
+WHERE created_at BETWEEN $1 AND $2
+ORDER BY created_at DESC;
+
+-- name: GetRecentUsers :many
+SELECT * FROM users
+WHERE created_at > $1
+LIMIT $2 OFFSET $3;
+
+-- name: CountUsersByRole :one
+SELECT COUNT(*) FROM users
+WHERE role = $1;
+
+-- name: GetUsersWithNullAddress :many
+SELECT id, name, email FROM users
+WHERE address IS NULL;
+
+-- name: UpdateUserRole :exec
+UPDATE users SET role = $1, updated_at = NOW()
+WHERE id = $2;
+
+-- name: DeleteOldUsers :exec
+DELETE FROM users
+WHERE created_at < $1 AND isadmin = false;
+
+-- name: UpsertUser :one
+INSERT INTO users (name, email, role)
+VALUES ($1, $2, $3)
+ON CONFLICT (email) DO UPDATE
+SET name = EXCLUDED.name, updated_at = NOW()
+RETURNING *;

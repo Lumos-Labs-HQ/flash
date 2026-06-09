@@ -42,19 +42,19 @@ export interface GetComplexUserAnalyticsResult {
   email: string;
   role: 'admin' | 'moderator' | 'user' | 'guest';
   isadmin: boolean;
-  user_created_at: string;
-  total_posts: string;
-  published_posts: string;
-  draft_posts: string;
-  total_comments: string;
-  posts_commented_on: string;
-  categories_used: string;
+  user_created_at: Date;
+  total_posts: number;
+  published_posts: number;
+  draft_posts: number;
+  total_comments: number;
+  posts_commented_on: number;
+  categories_used: number;
   category_names: string;
-  last_post_date: string;
-  last_comment_date: string;
+  last_post_date: Date | null;
+  last_comment_date: Date | null;
   avg_post_length: number;
   activity_level: string;
-  engagement_score: string;
+  engagement_score: number;
 }
 
 export interface GetPostWithCommentsResult {

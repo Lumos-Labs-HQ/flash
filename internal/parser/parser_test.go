@@ -232,3 +232,85 @@ func TestTypeInferrer_Cache(t *testing.T) {
 		t.Errorf("cache inconsistency: %q != %q", first, second)
 	}
 }
+
+// ── Edge case query parsing ───────────────────────────────────────────────────
+
+func TestTypeInferrer_Between(t *testing.T) {
+	ti := NewTypeInferrer()
+	table := &Table{Name: "users", Columns: []*Column{
+		{Name: "created_at", Type: "TIMESTAMP WITH TIME ZONE"},
+	}}
+	sql := `SELECT * FROM users WHERE created_at BETWEEN $1 AND $2`
+	if name := ti.InferParamName(sql, 1); name != "created_at_start" {
+		t.Errorf("param1 name = %q, want created_at_start", name)
+	}
+	if name := ti.InferParamName(sql, 2); name != "created_at_end" {
+		t.Errorf("param2 name = %q, want created_at_end", name)
+	}
+	if typ := ti.InferParamType(sql, 1, table, "created_at_start"); typ != "TIMESTAMP WITH TIME ZONE" {
+		t.Errorf("param1 type = %q, want TIMESTAMP WITH TIME ZONE", typ)
+	}
+}
+
+func TestTypeInferrer_LimitOffset(t *testing.T) {
+	ti := NewTypeInferrer()
+	table := &Table{Name: "users", Columns: []*Column{}}
+	sql := `SELECT * FROM users LIMIT $1 OFFSET $2`
+	if typ := ti.InferParamType(sql, 1, table, "limit"); typ != "INTEGER" {
+		t.Errorf("limit type = %q, want INTEGER", typ)
+	}
+	if typ := ti.InferParamType(sql, 2, table, "offset"); typ != "INTEGER" {
+		t.Errorf("offset type = %q, want INTEGER", typ)
+	}
+}
+
+func TestTypeInferrer_UpdateWithTimestamp(t *testing.T) {
+	ti := NewTypeInferrer()
+	table := &Table{Name: "users", Columns: []*Column{
+		{Name: "role", Type: "user_role"},
+		{Name: "id", Type: "SERIAL"},
+	}}
+	sql := `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`
+	if name := ti.InferParamName(sql, 1); name != "role" {
+		t.Errorf("param1 name = %q, want role", name)
+	}
+	if typ := ti.InferParamType(sql, 1, table, "role"); typ != "user_role" {
+		t.Errorf("param1 type = %q, want user_role", typ)
+	}
+	if name := ti.InferParamName(sql, 2); name != "id" {
+		t.Errorf("param2 name = %q, want id", name)
+	}
+}
+
+func TestTypeInferrer_DeleteWithDate(t *testing.T) {
+	ti := NewTypeInferrer()
+	table := &Table{Name: "users", Columns: []*Column{
+		{Name: "created_at", Type: "TIMESTAMP WITH TIME ZONE"},
+	}}
+	sql := `DELETE FROM users WHERE created_at < $1 AND isadmin = false`
+	if typ := ti.InferParamType(sql, 1, table, "created_at"); typ != "TIMESTAMP WITH TIME ZONE" {
+		t.Errorf("type = %q, want TIMESTAMP WITH TIME ZONE", typ)
+	}
+}
+
+func TestTypeInferrer_CountQuery(t *testing.T) {
+	ti := NewTypeInferrer()
+	table := &Table{Name: "users", Columns: []*Column{
+		{Name: "role", Type: "user_role"},
+	}}
+	sql := `SELECT COUNT(*) FROM users WHERE role = $1`
+	if typ := ti.InferParamType(sql, 1, table, "role"); typ != "user_role" {
+		t.Errorf("type = %q, want user_role", typ)
+	}
+}
+
+func TestTypeInferrer_MySQLQuestionMark(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `INSERT INTO users (name, email) VALUES (?, ?)`
+	if got := ti.InferParamName(sql, 1); got != "name" {
+		t.Errorf("param1 name = %q, want name", got)
+	}
+	if got := ti.InferParamName(sql, 2); got != "email" {
+		t.Errorf("param2 name = %q, want email", got)
+	}
+}
