@@ -8,6 +8,7 @@ const (
 	SQLite     DatabaseType = "sqlite"
 	PostgreSQL DatabaseType = "postgresql"
 	MySQL      DatabaseType = "mysql"
+	ClickHouse DatabaseType = "clickhouse"
 )
 
 type ProjectTemplate struct {
@@ -65,6 +66,18 @@ var dbConfigs = map[DatabaseType]dbConfig{
 		queryParam:       "$1",
 		returnType:       ":one",
 		envExample:       "postgres://username:password@localhost:5432/database_name",
+	},
+	ClickHouse: {
+		provider:         "clickhouse",
+		engine:           "clickhouse",
+		primaryKey:       "UInt64",
+		autoIncrement:    "",
+		textType:         "String",
+		timestampType:    "DateTime",
+		timestampDefault: "now()",
+		queryParam:       "?",
+		returnType:       ":exec",
+		envExample:       "clickhouse://username:password@localhost:9000/database_name",
 	},
 }
 
@@ -155,6 +168,7 @@ func ValidateDatabaseType(dbType string) DatabaseType {
 		"mysql":      MySQL,
 		"postgresql": PostgreSQL,
 		"postgres":   PostgreSQL,
+		"clickhouse": ClickHouse,
 	}
 
 	if dt, exists := types[dbType]; exists {
@@ -198,6 +212,12 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Go:     "database/sql" (mattn/go-sqlite3, modernc.org/sqlite)
 #   JS:     "better-sqlite3" | "bun:sqlite"
 #   Python: "sqlite3" (sync) | "aiosqlite" (async)
+# Add driver = "<name>" inside the [gen.*] block below.`
+	case ClickHouse:
+		return `# FlashORM — ClickHouse Drivers
+#   Go:     "clickhouse-go/v2"
+#   JS:     "@clickhouse/client"
+#   Python: "clickhouse-driver" (sync) | "asynch" (async)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	default:
 		return `# FlashORM — See docs for available drivers per database.`

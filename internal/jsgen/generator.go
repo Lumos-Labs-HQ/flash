@@ -469,6 +469,19 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 		return "Date"
 	case strings.Contains(sqlTypeLower, "bytea"), strings.Contains(sqlTypeLower, "blob"):
 		return "Uint8Array"
+	// ClickHouse-specific types
+	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64",
+		sqlTypeLower == "int8", sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64",
+		sqlTypeLower == "float32", sqlTypeLower == "float64":
+		return "number"
+	case strings.HasPrefix(sqlTypeLower, "fixedstring"), sqlTypeLower == "string":
+		return "string"
+	case strings.HasPrefix(sqlTypeLower, "nullable("):
+		inner := sqlTypeLower[9 : len(sqlTypeLower)-1]
+		return g.mapSQLTypeToJS(inner) + " | null"
+	case strings.HasPrefix(sqlTypeLower, "array("):
+		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
+		return g.mapSQLTypeToJS(inner) + "[]"
 	default:
 		return "string"
 	}

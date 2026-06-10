@@ -675,6 +675,21 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		pyType = "datetime"
 	case strings.Contains(sqlTypeLower, "json"):
 		pyType = "dict"
+	// ClickHouse-specific types
+	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64",
+		sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64":
+		pyType = "int"
+	case sqlTypeLower == "float32", sqlTypeLower == "float64":
+		pyType = "float"
+	case sqlTypeLower == "string", strings.HasPrefix(sqlTypeLower, "fixedstring"):
+		pyType = "str"
+	case strings.HasPrefix(sqlTypeLower, "nullable("):
+		inner := sqlTypeLower[9 : len(sqlTypeLower)-1]
+		return g.sqlTypeToPython(inner, true)
+	case strings.HasPrefix(sqlTypeLower, "array("):
+		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
+		elemType := g.sqlTypeToPython(inner, false)
+		pyType = "List[" + elemType + "]"
 	default:
 		pyType = "str"
 	}
