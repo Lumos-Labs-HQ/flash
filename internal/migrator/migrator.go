@@ -156,6 +156,8 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) (str
 			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
 		case "mysql":
 			return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
+		case "clickhouse":
+			return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
 		default:
 			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\" CASCADE;", tableName)
 		}
@@ -190,6 +192,9 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 			continue
 		} else if m.provider == "sqlite" || m.provider == "sqlite3" {
 			// SQLite does not support user-defined types; skip enum SQL generation
+			continue
+		} else if m.provider == "clickhouse" {
+			// ClickHouse does not support user-defined enum types at the database level
 			continue
 		}
 	}
@@ -298,9 +303,11 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 
 	// UP: Drop enums
 	for _, enumName := range diff.DroppedEnums {
+		if m.provider == "clickhouse" || m.provider == "sqlite" || m.provider == "sqlite3" || m.provider == "mysql" {
+			continue
+		}
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
 		hasExecutableSQL = true
-		// DOWN: We can't fully restore dropped enums
 		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
 	}
 

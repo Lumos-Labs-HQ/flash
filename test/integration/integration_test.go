@@ -35,6 +35,10 @@ func getDatabases() []Database {
 			Name: "sqlite",
 			URL:  getEnv("SQLITE_URL", "sqlite://./test.db"),
 		},
+		{
+			Name: "clickhouse",
+			URL:  getEnv("CLICKHOUSE_URL", "clickhouse://testuser:testpass@localhost:9000/testdb"),
+		},
 	}
 }
 

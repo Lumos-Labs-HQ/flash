@@ -657,5 +657,8 @@ func (m *Migrator) isDatabaseEmpty(ctx context.Context) (bool, error) {
 // clearMigrationRecords deletes all rows from _flash_migrations so migrations
 // can be re-applied from scratch.
 func (m *Migrator) clearMigrationRecords(ctx context.Context) error {
+	if m.provider == "clickhouse" {
+		return m.adapter.ExecuteMigration(ctx, "ALTER TABLE _flash_migrations DELETE WHERE 1=1")
+	}
 	return m.adapter.ExecuteMigration(ctx, "DELETE FROM _flash_migrations")
 }

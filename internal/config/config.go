@@ -256,7 +256,7 @@ func (c *Config) EnsureDirectories() error {
 }
 
 func (c *Config) Validate() error {
-	supportedProviders := []string{"postgresql", "postgres", "mysql", "sqlite", "sqlite3"}
+	supportedProviders := []string{"postgresql", "postgres", "mysql", "sqlite", "sqlite3", "clickhouse"}
 	supported := false
 	for _, provider := range supportedProviders {
 		if c.Database.Provider == provider {
@@ -287,6 +287,8 @@ func (c *Config) GetSqlcEngine() string {
 		return "mysql"
 	case "sqlite", "sqlite3":
 		return "sqlite"
+	case "clickhouse":
+		return "clickhouse"
 	default:
 		return "postgresql"
 	}

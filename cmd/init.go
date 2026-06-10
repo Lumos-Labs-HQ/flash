@@ -18,6 +18,7 @@ func init() {
 	initCmd.Flags().Bool("postgresql", false, "Initialize project for PostgreSQL database")
 	initCmd.Flags().Bool("postgres", false, "Initialize project for PostgreSQL database (alias)")
 	initCmd.Flags().Bool("mysql", false, "Initialize project for MySQL database")
+	initCmd.Flags().Bool("clickhouse", false, "Initialize project for ClickHouse database")
 }
 
 var initCmd = &cobra.Command{
@@ -49,9 +50,13 @@ func runInit(cmd *cobra.Command, args []string) {
 		dbType = tmpl.MySQL
 		flagCount++
 	}
+	if cmd.Flags().Changed("clickhouse") {
+		dbType = tmpl.ClickHouse
+		flagCount++
+	}
 
 	if flagCount > 1 {
-		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, or --mysql)")
+		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, --mysql, or --clickhouse)")
 		os.Exit(1)
 	}
 
