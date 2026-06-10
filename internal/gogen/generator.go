@@ -643,10 +643,23 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		baseType = "[]byte"
 	case strings.Contains(sqlTypeLower, "uuid"):
 		baseType = "string"
+	// ClickHouse-specific types
+	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64":
+		baseType = "uint64"
+	case sqlTypeLower == "int8", sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64":
+		baseType = "int64"
+	case sqlTypeLower == "float32":
+		baseType = "float32"
+	case sqlTypeLower == "float64":
+		baseType = "float64"
+	case sqlTypeLower == "string", strings.HasPrefix(sqlTypeLower, "fixedstring"):
+		baseType = "string"
+	case strings.HasPrefix(sqlTypeLower, "nullable("):
+		inner := sqlTypeLower[9 : len(sqlTypeLower)-1]
+		return g.mapSQLTypeToGo(inner, true)
 	default:
 		baseType = "string"
 	}
-
 	if nullable {
 		switch baseType {
 		case "int64":

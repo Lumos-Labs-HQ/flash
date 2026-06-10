@@ -67,7 +67,11 @@ Examples:
 				mongoServer := mongodb.NewServer(cfg, port, host, authToken)
 				return mongoServer.Start(browser)
 			default:
-				fmt.Printf("🗄️  Starting SQL Studio: %s\n", maskDBURL(url))
+				label := "🗄️  Starting SQL Studio"
+				if strings.HasPrefix(strings.ToLower(url), "clickhouse://") {
+					label = "🟡 Starting ClickHouse Studio"
+				}
+				fmt.Printf("%s: %s\n", label, maskDBURL(url))
 				provider := detectProvider(url)
 				cfg := &config.Config{
 					Database: config.Database{
@@ -97,7 +101,11 @@ Examples:
 			return mongoServer.Start(browser)
 		}
 
-		fmt.Println("🗄️  Starting SQL Studio...")
+		if cfg.Database.Provider == "clickhouse" {
+			fmt.Println("🟡 Starting ClickHouse Studio...")
+		} else {
+			fmt.Println("🗄️  Starting SQL Studio...")
+		}
 		server := studio.New(cfg, port, host, authToken)
 		return server.Start(browser)
 	},
@@ -135,24 +143,27 @@ func detectStudioType(url string) string {
 func detectProvider(dbURL string) string {
 	lower := strings.ToLower(dbURL)
 
-	// Check for MongoDB first
-	if strings.HasPrefix(lower, "mongodb://") || strings.HasPrefix(lower, "mongodb+srv://") {
-		return "mongodb"
-	}
-
-	// Check other databases
 	switch {
-	case len(lower) >= 10 && (lower[:10] == "postgres://" || lower[:10] == "postgresql"):
+	case strings.HasPrefix(lower, "mongodb://") || strings.HasPrefix(lower, "mongodb+srv://"):
+		return "mongodb"
+	case strings.HasPrefix(lower, "postgres://") || strings.HasPrefix(lower, "postgresql://"):
 		return "postgresql"
-	case len(lower) >= 8 && lower[:8] == "mysql://":
+	case strings.HasPrefix(lower, "mysql://"):
 		return "mysql"
-	case len(lower) >= 9 && lower[:9] == "sqlite://":
+	case strings.HasPrefix(lower, "sqlite://"):
 		return "sqlite"
+	case strings.HasPrefix(lower, "clickhouse://"):
+		return "clickhouse"
+	// http/https on port 8123 is the ClickHouse HTTP interface
+	case strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://"):
+		return "clickhouse"
 	default:
 		if strings.Contains(lower, "mongodb") {
 			return "mongodb"
 		} else if strings.Contains(lower, "postgres") {
 			return "postgresql"
+		} else if strings.Contains(lower, "clickhouse") {
+			return "clickhouse"
 		}
 		return "postgresql"
 	}
