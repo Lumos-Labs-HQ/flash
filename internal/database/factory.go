@@ -1,6 +1,7 @@
 package database
 
 import (
+	"github.com/Lumos-Labs-HQ/flash/internal/database/clickhouse"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/mongodb"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/mysql"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/postgres"
@@ -17,6 +18,8 @@ func NewAdapter(provider string) DatabaseAdapter {
 		return sqlite.New()
 	case "mongodb", "mongo":
 		return mongodb.New()
+	case "clickhouse":
+		return clickhouse.New()
 	default:
 		return postgres.New()
 	}
