@@ -72,6 +72,9 @@ func (s *Service) ensureCorrectSchema() error {
 		query := fmt.Sprintf("USE %s", s.quote(currentBranch.Schema))
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
+	case "scylla", "scylladb", "cassandra":
+		// ScyllaDB uses SetActiveSchema (keyspace switch) via adapter
+		return nil
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
@@ -944,6 +947,10 @@ func (s *Service) SwitchBranch(branchName string) error {
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to switch database: %w", err)
 		}
+	case "scylla", "scylladb", "cassandra":
+		if err := s.adapter.SetActiveSchema(ctx, branchSchema); err != nil {
+			return fmt.Errorf("failed to switch keyspace: %w", err)
+		}
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
@@ -1504,8 +1511,8 @@ func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) 
 			_ = s.adapter.ExecuteMigration(ctx, "PRAGMA foreign_keys = ON")
 		}
 
-	case "clickhouse":
-		// ClickHouse has no FK constraints
+	case "clickhouse", "scylla", "scylladb", "cassandra":
+		// ClickHouse/ScyllaDB have no FK constraints
 		return func() {}
 
 	default: // postgresql, postgres
@@ -1662,6 +1669,11 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 		return s.createTableClickHouse(ctx, tableName, schema)
 	}
 
+	// Use CQL DDL for ScyllaDB
+	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		return s.createTableScylla(ctx, tableName, schema)
+	}
+
 	var columnDefs []string
 	var pkCols []string
 
@@ -1814,6 +1826,43 @@ func (s *Service) createTableClickHouse(ctx context.Context, tableName string, s
 	}
 
 	return nil
+}
+
+// createTableScylla creates a table using CQL syntax for ScyllaDB
+func (s *Service) createTableScylla(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	var columnDefs []string
+	var pkCols []string
+
+	for _, col := range schema.Columns {
+		if col.PrimaryKey {
+			pkCols = append(pkCols, col.Name)
+		}
+	}
+
+	for _, col := range schema.Columns {
+		colType := normalizeColType(col.Type)
+		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
+		columnDefs = append(columnDefs, def)
+	}
+
+	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  %s\n  PRIMARY KEY (%s)\n)",
+		common.QuoteIdentifier(tableName),
+		strings.Join(columnDefs, ",\n  "),
+		func() string {
+			if len(pkCols) > 0 {
+				quoted := make([]string, len(pkCols))
+				for i, c := range pkCols {
+					quoted[i] = common.QuoteIdentifier(c)
+				}
+				return strings.Join(quoted, ", ")
+			}
+			if len(schema.Columns) > 0 {
+				return common.QuoteIdentifier(schema.Columns[0].Name)
+			}
+			return "id"
+		}())
+
+	return s.adapter.ExecuteMigration(ctx, query)
 }
 
 // buildCreateIndexSQL generates CREATE INDEX DDL from export data

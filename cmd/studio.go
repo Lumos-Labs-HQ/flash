@@ -103,6 +103,8 @@ Examples:
 
 		if cfg.Database.Provider == "clickhouse" {
 			fmt.Println("🟡 Starting ClickHouse Studio...")
+		} else if cfg.Database.Provider == "scylla" || cfg.Database.Provider == "scylladb" || cfg.Database.Provider == "cassandra" {
+			fmt.Println("🔵 Starting ScyllaDB Studio...")
 		} else {
 			fmt.Println("🗄️  Starting SQL Studio...")
 		}
@@ -154,6 +156,8 @@ func detectProvider(dbURL string) string {
 		return "sqlite"
 	case strings.HasPrefix(lower, "clickhouse://"):
 		return "clickhouse"
+	case strings.HasPrefix(lower, "scylla://") || strings.HasPrefix(lower, "cassandra://"):
+		return "scylla"
 	// http/https on port 8123 is the ClickHouse HTTP interface
 	case strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://"):
 		return "clickhouse"

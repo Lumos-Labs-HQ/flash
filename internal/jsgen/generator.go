@@ -484,6 +484,15 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	case strings.HasPrefix(sqlTypeLower, "array("):
 		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
 		return g.mapSQLTypeToJS(inner) + "[]"
+	// ScyllaDB/Cassandra CQL types
+	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid", sqlTypeLower == "inet":
+		return "string"
+	case sqlTypeLower == "varint", sqlTypeLower == "counter", sqlTypeLower == "duration":
+		return "number"
+	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
+		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
+		strings.HasPrefix(sqlTypeLower, "tuple<"):
+		return "any"
 	default:
 		return "string"
 	}
