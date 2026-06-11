@@ -1183,18 +1183,17 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		provider = s.cfg.Database.Provider
 	}
 
-	// Fetch the full schema once — avoids N per-table GetTableColumns queries.
 	var tableNames []string
-	var colsByTable map[string][]types.SchemaColumn // may be nil on fallback
+	var schemaTables []types.SchemaTable 
 
 	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-		schemaTables, err := s.adapter.GetCurrentSchema(ctx)
-		if err == nil {
-			colsByTable = make(map[string][]types.SchemaColumn, len(schemaTables))
-			for _, t := range schemaTables {
-				tableNames = append(tableNames, t.Name)
-				colsByTable[t.Name] = t.Columns
-			}
+		var err error
+		schemaTables, err = s.adapter.PullCompleteSchema(ctx)
+		if err != nil {
+			schemaTables, _ = s.adapter.GetCurrentSchema(ctx)
+		}
+		for _, t := range schemaTables {
+			tableNames = append(tableNames, t.Name)
 		}
 	}
 
@@ -1206,7 +1205,14 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		}
 	}
 
-	sortedTables, err := s.sortTablesByDependency(ctx, tableNames, colsByTable)
+	// Build table → schema lookup for quick access
+	schemaMap := make(map[string]*types.SchemaTable, len(schemaTables))
+	for i := range schemaTables {
+		t := &schemaTables[i]
+		schemaMap[t.Name] = t
+	}
+
+	sortedTables, err := s.sortTablesByDependency(ctx, tableNames, nil)
 	if err != nil {
 		sortedTables = tableNames
 	}
@@ -1221,11 +1227,9 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 
 	// Export ENUM types for schema exports (PostgreSQL)
 	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-		if provider == "postgresql" {
-			enumTypes, err := s.getEnumTypes(ctx)
-			if err == nil && len(enumTypes) > 0 {
-				exportData.EnumTypes = enumTypes
-			}
+		enumTypes, err := s.getEnumTypes(ctx)
+		if err == nil && len(enumTypes) > 0 {
+			exportData.EnumTypes = enumTypes
 		}
 	}
 
@@ -1239,8 +1243,8 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		}
 
 		if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-			if cols, ok := colsByTable[tableName]; ok {
-				exportTable.Schema = s.buildTableSchemaFromCols(cols)
+			if tbl, ok := schemaMap[tableName]; ok {
+				exportTable.Schema = s.buildTableSchemaFromTable(tbl)
 			} else {
 				schema, err := s.getTableSchema(ctx, tableName)
 				if err != nil {
@@ -1264,11 +1268,11 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 	return exportData, nil
 }
 
-// buildTableSchemaFromCols builds an ExportTableSchema from pre-fetched column info.
-func (s *Service) buildTableSchemaFromCols(columns []types.SchemaColumn) *common.ExportTableSchema {
-	exportColumns := make([]common.ExportColumn, 0, len(columns))
-	seen := make(map[string]bool, len(columns))
-	for _, col := range columns {
+// buildTableSchemaFromTable builds an ExportTableSchema from a full SchemaTable (includes indexes).
+func (s *Service) buildTableSchemaFromTable(t *types.SchemaTable) *common.ExportTableSchema {
+	exportColumns := make([]common.ExportColumn, 0, len(t.Columns))
+	seen := make(map[string]bool, len(t.Columns))
+	for _, col := range t.Columns {
 		if seen[col.Name] {
 			continue
 		}
@@ -1283,12 +1287,34 @@ func (s *Service) buildTableSchemaFromCols(columns []types.SchemaColumn) *common
 			Unique:           col.IsUnique,
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
+			OnDeleteAction:   col.OnDeleteAction,
+			OnUpdateAction:   col.OnUpdateAction,
+			Check:            col.Check,
+			Generated:        col.Generated,
+			IsIdentity:       col.IsIdentity,
 		})
 	}
-	return &common.ExportTableSchema{Columns: exportColumns}
+
+	// Include indexes
+	var exportIndexes []common.ExportIndex
+	if len(t.Indexes) > 0 {
+		exportIndexes = make([]common.ExportIndex, 0, len(t.Indexes))
+		for _, idx := range t.Indexes {
+			exportIndexes = append(exportIndexes, common.ExportIndex{
+				Name:    idx.Name,
+				Columns: idx.Columns,
+				Unique:  idx.Unique,
+				Where:   idx.Where,
+				Method:  idx.Method,
+				Expr:    idx.Expr,
+			})
+		}
+	}
+
+	return &common.ExportTableSchema{Columns: exportColumns, Indexes: exportIndexes}
 }
 
-// getTableSchema returns the schema for a table
+// getTableSchema returns the schema for a table (fallback when PullCompleteSchema unavailable)
 func (s *Service) getTableSchema(ctx context.Context, tableName string) (*common.ExportTableSchema, error) {
 	columns, err := s.adapter.GetTableColumns(ctx, tableName)
 	if err != nil {
@@ -1314,6 +1340,11 @@ func (s *Service) getTableSchema(ctx context.Context, tableName string) (*common
 			Unique:           col.IsUnique,
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
+			OnDeleteAction:   col.OnDeleteAction,
+			OnUpdateAction:   col.OnUpdateAction,
+			Check:            col.Check,
+			Generated:        col.Generated,
+			IsIdentity:       col.IsIdentity,
 		})
 	}
 
@@ -1543,40 +1574,18 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 	// Sort tables by dependency order
 	sortedTables := s.sortImportTablesByDependency(importData.Tables)
 
-	// Collect FK constraints to add after all tables are created
-	type fkConstraint struct {
-		tableName string
-		colName   string
-		fkTable   string
-		fkColumn  string
-	}
-	var pendingFKs []fkConstraint
-
-	// Phase 1: Create tables WITHOUT foreign key constraints
+	// Phase 1: Create tables (FKs included inline via REFERENCES)
 	for _, table := range sortedTables {
 		tableExists := existingTableMap[table.Name]
 
 		if table.Schema != nil {
 			if !tableExists {
-				// Create the table without FK constraints
 				if err := s.createTableFromSchemaNoFK(ctx, table.Name, table.Schema); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("Failed to create table %s: %v", table.Name, err))
 					continue
 				}
 				result.TablesCreated = append(result.TablesCreated, table.Name)
 				existingTableMap[table.Name] = true
-
-				// Collect FK constraints to add later
-				for _, col := range table.Schema.Columns {
-					if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
-						pendingFKs = append(pendingFKs, fkConstraint{
-							tableName: table.Name,
-							colName:   col.Name,
-							fkTable:   col.ForeignKeyTable,
-							fkColumn:  col.ForeignKeyColumn,
-						})
-					}
-				}
 			} else {
 				// Update existing table - add missing columns
 				added, err := s.updateTableSchema(ctx, table.Name, table.Schema)
@@ -1606,22 +1615,6 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 		}
 	}
 	restoreFK()
-
-	// Phase 3: Add foreign key constraints (after all data is in place)
-	for _, fk := range pendingFKs {
-		if !existingTableMap[fk.fkTable] {
-			continue
-		}
-
-		query := fmt.Sprintf("ALTER TABLE %s ADD FOREIGN KEY (%s) REFERENCES %s(%s)",
-			common.QuoteIdentifier(fk.tableName),
-			common.QuoteIdentifier(fk.colName),
-			common.QuoteIdentifier(fk.fkTable),
-			common.QuoteIdentifier(fk.fkColumn))
-
-		// FK failures (no unique constraint on target, already exists, etc.) are non-fatal — skip silently
-		_ = s.adapter.ExecuteMigration(ctx, query)
-	}
 
 	return result, nil
 }
@@ -1660,6 +1653,26 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 
 	for _, col := range schema.Columns {
 		colType := normalizeColType(col.Type)
+
+		// GENERATED ALWAYS AS (computed columns) 
+		if col.Generated != "" {
+			def := fmt.Sprintf("%s %s GENERATED ALWAYS AS (%s) STORED",
+				common.QuoteIdentifier(col.Name), colType, col.Generated)
+			columnDefs = append(columnDefs, def)
+			continue
+		}
+
+		// GENERATED ALWAYS AS IDENTITY (PostgreSQL)
+		if col.IsIdentity {
+			def := fmt.Sprintf("%s %s GENERATED ALWAYS AS IDENTITY",
+				common.QuoteIdentifier(col.Name), colType)
+			if col.PrimaryKey && !compositePK {
+				def += " PRIMARY KEY"
+			}
+			columnDefs = append(columnDefs, def)
+			continue
+		}
+
 		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
 
 		if col.PrimaryKey && !compositePK {
@@ -1682,6 +1695,24 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 				def += fmt.Sprintf(" DEFAULT %s", normalized)
 			}
 		}
+		if col.Check != "" {
+			def += fmt.Sprintf(" CHECK (%s)", col.Check)
+		}
+
+		// ON DELETE / ON UPDATE for self-referencing or dependent tables
+		// when dependency order guarantees the ref table exists first.
+		if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
+			ref := fmt.Sprintf(" REFERENCES %s(%s)",
+				common.QuoteIdentifier(col.ForeignKeyTable),
+				common.QuoteIdentifier(col.ForeignKeyColumn))
+			if col.OnDeleteAction != "" {
+				ref += fmt.Sprintf(" ON DELETE %s", col.OnDeleteAction)
+			}
+			if col.OnUpdateAction != "" {
+				ref += fmt.Sprintf(" ON UPDATE %s", col.OnUpdateAction)
+			}
+			def += ref
+		}
 
 		columnDefs = append(columnDefs, def)
 	}
@@ -1694,7 +1725,63 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 		common.QuoteIdentifier(tableName),
 		strings.Join(columnDefs, ",\n  "))
 
-	return s.adapter.ExecuteMigration(ctx, query)
+	if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+		return err
+	}
+
+	// Create indexes defined on the table
+	if len(schema.Indexes) > 0 {
+		for _, idx := range schema.Indexes {
+			if sql := s.buildCreateIndexSQL(tableName, idx); sql != "" {
+				_ = s.adapter.ExecuteMigration(ctx, sql)
+			}
+		}
+	}
+
+	return nil
+}
+
+// buildCreateIndexSQL generates CREATE INDEX DDL from export data
+func (s *Service) buildCreateIndexSQL(tableName string, idx common.ExportIndex) string {
+	if idx.Unique && idx.Name == "" {
+		return ""
+	}
+
+	createClause := "CREATE"
+	if idx.Unique {
+		createClause = "CREATE UNIQUE"
+	}
+
+	nameClause := ""
+	if idx.Name != "" {
+		nameClause = fmt.Sprintf(" %s", common.QuoteIdentifier(idx.Name))
+	}
+
+	methodClause := ""
+	if idx.Method != "" {
+		methodClause = fmt.Sprintf(" USING %s", idx.Method)
+	}
+
+	var colExprs []string
+	if len(idx.Expr) > 0 {
+		for _, e := range idx.Expr {
+			colExprs = append(colExprs, fmt.Sprintf("(%s)", e))
+		}
+	}
+	for _, c := range idx.Columns {
+		colExprs = append(colExprs, common.QuoteIdentifier(c))
+	}
+
+	query := fmt.Sprintf("%s INDEX%s ON %s%s (%s)",
+		createClause, nameClause,
+		common.QuoteIdentifier(tableName),
+		methodClause,
+		strings.Join(colExprs, ", "))
+
+	if idx.Where != "" {
+		query += fmt.Sprintf(" WHERE %s", idx.Where)
+	}
+	return query
 }
 
 // updateTableSchema updates an existing table by adding missing columns
@@ -1723,7 +1810,6 @@ func (s *Service) updateTableSchema(ctx context.Context, tableName string, schem
 			if col.Default != "" {
 				def += fmt.Sprintf(" DEFAULT %s", col.Default)
 			}
-			// Don't add NOT NULL when adding column without default to avoid errors
 		}
 		if col.Unique {
 			def += " UNIQUE"
