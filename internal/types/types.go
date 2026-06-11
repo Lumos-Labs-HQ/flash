@@ -58,9 +58,9 @@ type SchemaDiff struct {
 	DroppedIndexes     []SchemaIndex
 	NewEnums           []SchemaEnum
 	DroppedEnums       []string
-	ModifiedEnums      []EnumDiff    // enum value additions
-	RenamedColumns     []RenameOp    // RENAME COLUMN
-	RenamedTables      []RenameOp    // RENAME TABLE
+	ModifiedEnums      []EnumDiff // enum value additions
+	RenamedColumns     []RenameOp // RENAME COLUMN
+	RenamedTables      []RenameOp // RENAME TABLE
 	NewConstraints     []SchemaConstraint
 	DroppedConstraints []SchemaConstraint
 }

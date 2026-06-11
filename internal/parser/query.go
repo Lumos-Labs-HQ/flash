@@ -20,10 +20,9 @@ var (
 	returningRegex *regexp.Regexp
 	asRegex        *regexp.Regexp
 	// Pre-compiled for inferTypeFromExpression
-	windowFuncRe   *regexp.Regexp
+	windowFuncRe    *regexp.Regexp
 	numericCTEColRe *regexp.Regexp
-	pgCastRe       *regexp.Regexp
-	unqualifiedColRe *regexp.Regexp
+	pgCastRe        *regexp.Regexp
 )
 
 func init() {
@@ -34,7 +33,6 @@ func init() {
 	windowFuncRe = regexp.MustCompile(`(?i)^(ROW_NUMBER|RANK|DENSE_RANK|NTILE|PERCENT_RANK|CUME_DIST|LEAD|LAG|FIRST_VALUE|LAST_VALUE)\s*\(`)
 	numericCTEColRe = regexp.MustCompile(`(?i)\.(cnt|count|total|total_posts|published_posts|draft_posts|total_comments|posts_commented_on|categories_used|engagement_score|num|qty|quantity|amount|unique_\w+)`)
 	pgCastRe = regexp.MustCompile(`(?i)::[a-zA-Z][a-zA-Z0-9_]*(\([^)]*\))?$`)
-	unqualifiedColRe = regexp.MustCompile(`^\w+$`)
 }
 
 // stripPGCast removes PostgreSQL cast suffix like ::TEXT or ::NUMERIC(10,2)
@@ -823,8 +821,8 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 	// Match aggregate functions — use [^,)]+ but allow balanced parens via suffix match
 	// Using a broader pattern that handles ORDER BY inside aggregates
 	aggPatterns := []struct {
-		re      *regexp.Regexp
-		sqlType string
+		re       *regexp.Regexp
+		sqlType  string
 		nullable bool
 	}{
 		{regexp.MustCompile(fmt.Sprintf(`(?i)COUNT\([^)]*\)(?:\s+FILTER\s*\([^)]*\))?\s+(?:AS\s+)?%s\b`, cteColumn)), "INTEGER", false},
@@ -1099,7 +1097,9 @@ func renumberParams(sql string, orderedNums []int) string {
 	re := regexp.MustCompile(`\$(\d+)`)
 	return re.ReplaceAllStringFunc(sql, func(match string) string {
 		var n int
-		fmt.Sscanf(match[1:], "%d", &n)
+		if _, err := fmt.Sscanf(match[1:], "%d", &n); err != nil {
+			return match
+		}
 		if newNum, ok := mapping[n]; ok {
 			return fmt.Sprintf("$%d", newNum)
 		}
@@ -1116,7 +1116,9 @@ func extractOrderedParamNums(sql string) []int {
 	for _, m := range matches {
 		if len(m) > 1 {
 			var n int
-			fmt.Sscanf(m[1], "%d", &n)
+			if _, err := fmt.Sscanf(m[1], "%d", &n); err != nil {
+				continue
+			}
 			if !seen[n] {
 				seen[n] = true
 				result = append(result, n)

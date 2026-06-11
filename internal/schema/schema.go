@@ -303,7 +303,6 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 		currentEnums = snap.Enums
 		// Fold standalone indexes from the snapshot into their respective tables
 		// so the diff sees them as already existing and doesn't regenerate them.
-		currentIndexes = snap.Indexes
 		for i, table := range currentTables {
 			for _, idx := range snap.Indexes {
 				if strings.EqualFold(idx.Table, table.Name) {

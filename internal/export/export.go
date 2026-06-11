@@ -146,17 +146,17 @@ func buildSchemaDDL(tables []types.SchemaTable, enums []types.SchemaEnum, indexM
 			cols := make([]map[string]interface{}, len(t.Columns))
 			for j, c := range t.Columns {
 				cols[j] = map[string]interface{}{
-					"name":              c.Name,
-					"type":              c.Type,
-					"nullable":          c.Nullable,
-					"default":           c.Default,
-					"is_primary":        c.IsPrimary,
-					"is_unique":         c.IsUnique,
-					"check":             c.Check,
-					"generated":         c.Generated,
+					"name":               c.Name,
+					"type":               c.Type,
+					"nullable":           c.Nullable,
+					"default":            c.Default,
+					"is_primary":         c.IsPrimary,
+					"is_unique":          c.IsUnique,
+					"check":              c.Check,
+					"generated":          c.Generated,
 					"foreign_key_table":  c.ForeignKeyTable,
 					"foreign_key_column": c.ForeignKeyColumn,
-					"on_delete":         c.OnDeleteAction,
+					"on_delete":          c.OnDeleteAction,
 				}
 			}
 			idxList := indexMap[t.Name]

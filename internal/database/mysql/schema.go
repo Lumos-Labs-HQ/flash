@@ -564,8 +564,6 @@ func extractColumnFromCheckName(constraintName, tableName string) string {
 	if strings.HasPrefix(name, strings.ToLower(prefix)) {
 		name = name[len(prefix):]
 	}
-	if strings.HasSuffix(name, suffix) {
-		name = name[:len(name)-len(suffix)]
-	}
+	name = strings.TrimSuffix(name, suffix)
 	return name
 }
