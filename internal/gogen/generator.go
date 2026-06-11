@@ -668,6 +668,21 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	case strings.HasPrefix(sqlTypeLower, "nullable("):
 		inner := sqlTypeLower[9 : len(sqlTypeLower)-1]
 		return g.mapSQLTypeToGo(inner, true)
+	// ScyllaDB/Cassandra CQL types
+	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid":
+		baseType = "string"
+	case sqlTypeLower == "inet":
+		baseType = "string"
+	case sqlTypeLower == "varint":
+		baseType = "int64"
+	case sqlTypeLower == "counter":
+		baseType = "int64"
+	case sqlTypeLower == "duration":
+		baseType = "int64"
+	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
+		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
+		strings.HasPrefix(sqlTypeLower, "tuple<"):
+		baseType = "string"
 	default:
 		baseType = "string"
 	}

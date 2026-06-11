@@ -9,7 +9,6 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
-
 func (a *Adapter) CreateMigrationsTable(ctx context.Context) error             { return nil }
 func (a *Adapter) EnsureMigrationTableCompatibility(ctx context.Context) error { return nil }
 func (a *Adapter) CleanupBrokenMigrationRecords(ctx context.Context) error     { return nil }

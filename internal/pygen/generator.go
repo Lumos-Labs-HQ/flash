@@ -692,6 +692,15 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
 		elemType := g.sqlTypeToPython(inner, false)
 		pyType = "List[" + elemType + "]"
+	// ScyllaDB/Cassandra CQL types
+	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid", sqlTypeLower == "inet":
+		pyType = "str"
+	case sqlTypeLower == "varint", sqlTypeLower == "counter", sqlTypeLower == "duration":
+		pyType = "int"
+	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
+		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
+		strings.HasPrefix(sqlTypeLower, "tuple<"):
+		pyType = "Any"
 	default:
 		pyType = "str"
 	}
