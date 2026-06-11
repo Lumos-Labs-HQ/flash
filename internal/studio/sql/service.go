@@ -68,6 +68,10 @@ func (s *Service) ensureCorrectSchema() error {
 		query := fmt.Sprintf("SET search_path TO %s, public", s.quote(currentBranch.Schema))
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
+	case "clickhouse":
+		query := fmt.Sprintf("USE %s", s.quote(currentBranch.Schema))
+		_, err = s.adapter.ExecuteQuery(s.ctx, query)
+		return err
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
@@ -935,6 +939,11 @@ func (s *Service) SwitchBranch(branchName string) error {
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to set search_path: %w", err)
 		}
+	case "clickhouse":
+		query := fmt.Sprintf("USE %s", s.quote(branchSchema))
+		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
+			return fmt.Errorf("failed to switch database: %w", err)
+		}
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
@@ -1484,10 +1493,8 @@ func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) 
 	case "sqlite", "sqlite3":
 		res, err := s.adapter.ExecuteQuery(ctx, "PRAGMA foreign_keys")
 		if err == nil && len(res.Rows) > 0 {
-			// PRAGMA returns "foreign_keys" column with 0 or 1
 			for _, v := range res.Rows[0] {
 				if fmt.Sprintf("%v", v) == "0" {
-					// Already disabled
 					return func() {}
 				}
 			}
@@ -1496,6 +1503,10 @@ func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) 
 		return func() {
 			_ = s.adapter.ExecuteMigration(ctx, "PRAGMA foreign_keys = ON")
 		}
+
+	case "clickhouse":
+		// ClickHouse has no FK constraints
+		return func() {}
 
 	default: // postgresql, postgres
 		var original string
@@ -1641,6 +1652,16 @@ func normalizeDefault(def, colType string) string {
 
 // createTableFromSchemaNoFK creates a new table from the export schema WITHOUT foreign key constraints
 func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	provider := ""
+	if s.cfg != nil {
+		provider = s.cfg.Database.Provider
+	}
+
+	// Use adapter-native DDL for ClickHouse (MergeTree, no SQL constraints)
+	if provider == "clickhouse" {
+		return s.createTableClickHouse(ctx, tableName, schema)
+	}
+
 	var columnDefs []string
 	var pkCols []string
 
@@ -1679,7 +1700,7 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 			def += " PRIMARY KEY"
 		}
 		if col.AutoIncrement {
-			if s.cfg != nil && s.cfg.Database.Provider == "mysql" {
+			if provider == "mysql" {
 				def += " AUTO_INCREMENT"
 			}
 		}
@@ -1700,7 +1721,6 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 		}
 
 		// ON DELETE / ON UPDATE for self-referencing or dependent tables
-		// when dependency order guarantees the ref table exists first.
 		if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
 			ref := fmt.Sprintf(" REFERENCES %s(%s)",
 				common.QuoteIdentifier(col.ForeignKeyTable),
@@ -1735,6 +1755,61 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 			if sql := s.buildCreateIndexSQL(tableName, idx); sql != "" {
 				_ = s.adapter.ExecuteMigration(ctx, sql)
 			}
+		}
+	}
+
+	return nil
+}
+
+// createTableClickHouse creates a table using MergeTree engine for ClickHouse
+func (s *Service) createTableClickHouse(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	var columnDefs []string
+	var pkCols []string
+
+	for _, col := range schema.Columns {
+		if col.PrimaryKey {
+			pkCols = append(pkCols, common.QuoteIdentifier(col.Name))
+		}
+	}
+
+	for _, col := range schema.Columns {
+		colType := normalizeColType(col.Type)
+		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
+		if col.Default != "" {
+			def += fmt.Sprintf(" DEFAULT %s", col.Default)
+		}
+		columnDefs = append(columnDefs, def)
+	}
+
+	orderCols := pkCols
+	if len(orderCols) == 0 && len(schema.Columns) > 0 {
+		orderCols = []string{common.QuoteIdentifier(schema.Columns[0].Name)}
+	}
+	if len(orderCols) == 0 {
+		orderCols = []string{"tuple()"}
+	}
+
+	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  %s\n) ENGINE = MergeTree() ORDER BY (%s)",
+		common.QuoteIdentifier(tableName),
+		strings.Join(columnDefs, ",\n  "),
+		strings.Join(orderCols, ", "))
+
+	if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+		return err
+	}
+
+	// Add data-skipping indexes
+	if len(schema.Indexes) > 0 {
+		for _, idx := range schema.Indexes {
+			idxType := "minmax"
+			if idx.Unique {
+				idxType = "bloom_filter"
+			}
+			cols := strings.Join(idx.Columns, ", ")
+			idxSQL := fmt.Sprintf("ALTER TABLE %s ADD INDEX %s (%s) TYPE %s GRANULARITY 1",
+				common.QuoteIdentifier(tableName),
+				common.QuoteIdentifier(idx.Name), cols, idxType)
+			_ = s.adapter.ExecuteMigration(ctx, idxSQL)
 		}
 	}
 

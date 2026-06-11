@@ -8,6 +8,7 @@ import (
 	"time"
 
 	chdriver "github.com/ClickHouse/clickhouse-go/v2"
+
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
@@ -28,10 +29,10 @@ var typeMap = map[string]string{
 	"string": "STRING", "fixedstring": "FIXEDSTRING",
 	"date": "DATE", "date32": "DATE32",
 	"datetime": "DATETIME", "datetime64": "DATETIME64",
-	"uuid": "UUID",
+	"uuid":    "UUID",
 	"boolean": "BOOLEAN", "bool": "BOOLEAN",
 	"decimal": "DECIMAL",
-	"json": "JSON",
+	"json":    "JSON",
 }
 
 func (a *Adapter) Connect(ctx context.Context, url string) error {
@@ -251,7 +252,7 @@ func (a *Adapter) GetCurrentEnums(_ context.Context) ([]types.SchemaEnum, error)
 func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
 	db := a.currentDatabase(ctx)
 	rows, err := a.db.QueryContext(ctx,
-		`SELECT name, type, default_expression FROM system.columns WHERE database = ? AND table = ? ORDER BY position`,
+		`SELECT name, type, default_expression, is_in_primary_key FROM system.columns WHERE database = ? AND table = ? ORDER BY position`,
 		db, tableName)
 	if err != nil {
 		return nil, err
@@ -261,14 +262,16 @@ func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 	var cols []types.SchemaColumn
 	for rows.Next() {
 		var name, chType, defaultExpr string
-		if err := rows.Scan(&name, &chType, &defaultExpr); err != nil {
+		var isPK uint8
+		if err := rows.Scan(&name, &chType, &defaultExpr, &isPK); err != nil {
 			continue
 		}
 		cols = append(cols, types.SchemaColumn{
-			Name:     name,
-			Type:     chType,
-			Nullable: strings.HasPrefix(strings.ToLower(chType), "nullable("),
-			Default:  defaultExpr,
+			Name:      name,
+			Type:      chType,
+			Nullable:  strings.HasPrefix(strings.ToLower(chType), "nullable("),
+			Default:   defaultExpr,
+			IsPrimary: isPK > 0,
 		})
 	}
 	return cols, rows.Err()
@@ -282,7 +285,7 @@ func (a *Adapter) GetTableIndexes(_ context.Context, _ string) ([]types.SchemaIn
 func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	db := a.currentDatabase(ctx)
 	rows, err := a.db.QueryContext(ctx,
-		`SELECT table, name, type, default_expression
+		`SELECT table, name, type, default_expression, is_in_primary_key
 		 FROM system.columns
 		 WHERE database = ? AND table NOT LIKE '_flash_%'
 		 ORDER BY table, position`,
@@ -297,7 +300,8 @@ func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 
 	for rows.Next() {
 		var tableName, colName, chType, defaultExpr string
-		if err := rows.Scan(&tableName, &colName, &chType, &defaultExpr); err != nil {
+		var isPK uint8
+		if err := rows.Scan(&tableName, &colName, &chType, &defaultExpr, &isPK); err != nil {
 			continue
 		}
 		if _, ok := tableMap[tableName]; !ok {
@@ -305,10 +309,11 @@ func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 			order = append(order, tableName)
 		}
 		tableMap[tableName].Columns = append(tableMap[tableName].Columns, types.SchemaColumn{
-			Name:     colName,
-			Type:     chType,
-			Nullable: strings.HasPrefix(strings.ToLower(chType), "nullable("),
-			Default:  defaultExpr,
+			Name:      colName,
+			Type:      chType,
+			Nullable:  strings.HasPrefix(strings.ToLower(chType), "nullable("),
+			Default:   defaultExpr,
+			IsPrimary: isPK > 0,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -549,7 +554,7 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceDB, targetDB st
 
 func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchDB string) ([]types.SchemaTable, error) {
 	rows, err := a.db.QueryContext(ctx,
-		`SELECT table, name, type FROM system.columns WHERE database = ? ORDER BY table, position`, branchDB)
+		`SELECT table, name, type, is_in_primary_key FROM system.columns WHERE database = ? ORDER BY table, position`, branchDB)
 	if err != nil {
 		return nil, err
 	}
