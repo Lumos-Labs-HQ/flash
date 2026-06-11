@@ -414,11 +414,11 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
 	w.WriteString(" * @returns {Queries}\n")
 	w.WriteString(" */\n")
-	w.WriteString("function New(db) {\n")
+	w.WriteString("function Newq(db) {\n")
 	w.WriteString("  return new Queries(db);\n")
 	w.WriteString("}\n\n")
 
-	w.WriteString("module.exports = { New, Queries };\n")
+	w.WriteString("module.exports = { Newq, Queries };\n")
 
 	path := filepath.Join(g.Config.Gen.JS.Out, "index.js")
 	return os.WriteFile(path, []byte(w.String()), 0644)
@@ -622,7 +622,7 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 	}
 
 	w.WriteString("}\n\n")
-	w.WriteString("export function New(db: any): Queries;\n")
+	w.WriteString("export function Newq(db: any): Queries;\n")
 
 	path := filepath.Join(g.Config.Gen.JS.Out, "index.d.ts")
 	return os.WriteFile(path, []byte(w.String()), 0644)

@@ -32,8 +32,9 @@ type Query struct {
 }
 
 type Param struct {
-	Name string
-	Type string
+	Name     string
+	Type     string
+	ParamNum int // the actual $N number in SQL (1-based)
 }
 
 type QueryColumn struct {

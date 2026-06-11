@@ -420,7 +420,7 @@ type GetusersbydaterangeRow struct {
 	Role UserRole `json:"role"`
 }
 
-func (q *Queries) Getrecentusers(created_at time.Time, limit int64, param3 int64) ([]GetrecentusersRow, error) {
+func (q *Queries) Getrecentusers(created_at time.Time, limit int64, offset int64) ([]GetrecentusersRow, error) {
 	const query = `SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getrecentusers_stmt"]
 	if stmt == nil {
@@ -431,7 +431,7 @@ func (q *Queries) Getrecentusers(created_at time.Time, limit int64, param3 int64
 		}
 		q.stmts["Getrecentusers_stmt"] = stmt
 	}
-	args := []interface{}{created_at, limit, param3}
+	args := []interface{}{created_at, limit, offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -597,5 +597,237 @@ type UpsertuserRow struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Role UserRole `json:"role"`
+}
+
+func (q *Queries) Getuseragestats() (GetuseragestatsRow, error) {
+	const query = `SELECT MIN(created_at) as first_joined, MAX(created_at) as last_joined, COUNT(*) as total, AVG(LENGTH(name)) as avg_name_length FROM users;`
+	stmt := q.stmts["Getuseragestats_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetuseragestatsRow{}, err
+		}
+		q.stmts["Getuseragestats_stmt"] = stmt
+	}
+
+	var result GetuseragestatsRow
+	rows, err := stmt.Query()
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.FirstJoined, &result.LastJoined, &result.Total, &result.AvgNameLength)
+	return result, err
+}
+
+type GetuseragestatsRow struct {
+	FirstJoined sql.NullTime `json:"first_joined"`
+	LastJoined sql.NullTime `json:"last_joined"`
+	Total int64 `json:"total"`
+	AvgNameLength sql.NullFloat64 `json:"avg_name_length"`
+}
+
+type SearchusersParams struct {
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Searchusers(arg SearchusersParams) ([]SearchusersRow, error) {
+	const query = `SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $2 ORDER BY name ASC LIMIT $3 OFFSET $4;`
+	args := []interface{}{arg.Name, arg.Email, arg.Limit, arg.Offset}
+
+	rows, err := q.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]SearchusersRow, 0, 8) 
+	for rows.Next() {
+		var item SearchusersRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type SearchusersRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+}
+
+func (q *Queries) Getusersinids(param1 string) ([]GetusersinidsRow, error) {
+	const query = `SELECT * FROM users WHERE id = ANY($1::bigint[]);`
+	stmt := q.stmts["Getusersinids_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getusersinids_stmt"] = stmt
+	}
+	args := []interface{}{param1}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetusersinidsRow, 0, 8) 
+	for rows.Next() {
+		var item GetusersinidsRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Address, &item.Isadmin, &item.Email, &item.CreatedAt, &item.UpdatedAt, &item.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetusersinidsRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Address sql.NullString `json:"address"`
+	Isadmin bool `json:"isadmin"`
+	Email string `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Role UserRole `json:"role"`
+}
+
+func (q *Queries) Getuserrolecount() ([]GetuserrolecountRow, error) {
+	const query = `SELECT role, COUNT(*) as count FROM users GROUP BY role ORDER BY count DESC;`
+	stmt := q.stmts["Getuserrolecount_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getuserrolecount_stmt"] = stmt
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetuserrolecountRow, 0, 8) 
+	for rows.Next() {
+		var item GetuserrolecountRow
+		if err := rows.Scan(&item.Role, &item.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetuserrolecountRow struct {
+	Role UserRole `json:"role"`
+	Count int64 `json:"count"`
+}
+
+func (q *Queries) Getpostcountbyuser(user_id int64) (GetpostcountbyuserRow, error) {
+	const query = `SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) as post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) as comment_count;`
+	stmt := q.stmts["Getpostcountbyuser_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetpostcountbyuserRow{}, err
+		}
+		q.stmts["Getpostcountbyuser_stmt"] = stmt
+	}
+	args := []interface{}{user_id}
+
+	var result GetpostcountbyuserRow
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.PostCount, &result.CommentCount)
+	return result, err
+}
+
+type GetpostcountbyuserRow struct {
+	PostCount int64 `json:"post_count"`
+	CommentCount int64 `json:"comment_count"`
+}
+
+func (q *Queries) Updateusertimestamp(updated_at time.Time, id int64) (error) {
+	const query = `UPDATE users SET updated_at = $1 WHERE id = $2;`
+	stmt := q.stmts["Updateusertimestamp_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Updateusertimestamp_stmt"] = stmt
+	}
+	args := []interface{}{updated_at, id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Getuserscreatedbetween(created_at time.Time, created_at2 time.Time, limit int64) ([]GetuserscreatedbetweenRow, error) {
+	const query = `SELECT id, name, email, created_at FROM users WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC LIMIT $3;`
+	stmt := q.stmts["Getuserscreatedbetween_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getuserscreatedbetween_stmt"] = stmt
+	}
+	args := []interface{}{created_at, created_at2, limit}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetuserscreatedbetweenRow, 0, 8) 
+	for rows.Next() {
+		var item GetuserscreatedbetweenRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Email, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetuserscreatedbetweenRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Email string `json:"email"`
+	CreatedAt time.Time `json:"created_at"`
 }
 

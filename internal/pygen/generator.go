@@ -567,7 +567,7 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 		w.WriteString("        raise AttributeError(f\"'{type(self).__name__}' object has no attribute '{name}'\")\n")
 	}
 
-	w.WriteString("\ndef new(db: Any) -> Queries:\n")
+	w.WriteString("\ndef newq(db: Any) -> Queries:\n")
 	w.WriteString("    \"\"\"\n")
 	w.WriteString("    Create a new database client.\n")
 	w.WriteString("    \n")

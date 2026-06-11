@@ -167,3 +167,37 @@ VALUES ($1, $2, $3)
 ON CONFLICT (email) DO UPDATE
 SET name = EXCLUDED.name, updated_at = NOW()
 RETURNING *;
+
+-- name: GetUserAgeStats :one
+SELECT MIN(created_at) as first_joined, MAX(created_at) as last_joined,
+       COUNT(*) as total, AVG(LENGTH(name)) as avg_name_length
+FROM users;
+
+-- name: SearchUsers :many
+SELECT id, name, email FROM users
+WHERE name ILIKE $1 OR email ILIKE $2
+ORDER BY name ASC
+LIMIT $3 OFFSET $4;
+
+-- name: GetUsersInIds :many
+SELECT * FROM users
+WHERE id = ANY($1::bigint[]);
+
+-- name: GetUserRoleCount :many
+SELECT role, COUNT(*) as count
+FROM users
+GROUP BY role
+ORDER BY count DESC;
+
+-- name: GetPostCountByUser :one
+SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) as post_count,
+       (SELECT COUNT(*) FROM comments WHERE user_id = $1) as comment_count;
+
+-- name: UpdateUserTimestamp :exec
+UPDATE users SET updated_at = $1 WHERE id = $2;
+
+-- name: GetUsersCreatedBetween :many
+SELECT id, name, email, created_at FROM users
+WHERE created_at >= $1 AND created_at <= $2
+ORDER BY created_at DESC
+LIMIT $3;
