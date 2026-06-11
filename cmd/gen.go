@@ -55,8 +55,7 @@ Configuration is read from flash.toml`,
 			generated = true
 		}
 
-		// Generate Go (default if nothing else enabled)
-		if !generated {
+		if cfg.Gen.Go.Enabled || !generated {
 			fmt.Println("🔨 Generating Go code...")
 			generator := gogen.New(cfg)
 			if err := generator.Generate(); err != nil {

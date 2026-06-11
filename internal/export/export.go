@@ -31,6 +31,22 @@ func PerformExport(ctx context.Context, adapter database.DatabaseAdapter, export
 		return "", nil
 	}
 
+	// Fetch full schema for type-aware export
+	schemaTables, err := adapter.PullCompleteSchema(ctx)
+	if err != nil {
+		log.Printf("Warning: could not pull schema for export: %v", err)
+		schemaTables = nil
+	}
+	schemaEnums, err := adapter.GetCurrentEnums(ctx)
+	if err != nil {
+		schemaEnums = nil
+	}
+
+	indexMap := make(map[string][]types.SchemaIndex)
+	for _, t := range schemaTables {
+		indexMap[t.Name] = t.Indexes
+	}
+
 	exportData := types.BackupData{
 		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
 		Version:   "1.0",
@@ -78,17 +94,28 @@ func PerformExport(ctx context.Context, adapter database.DatabaseAdapter, export
 		}
 	}
 
+	// Build column type map from schema for type-aware export
+	colTypeMap := make(map[string]map[string]string) // table → col → type
+	if schemaTables != nil {
+		for _, t := range schemaTables {
+			colTypeMap[t.Name] = make(map[string]string, len(t.Columns))
+			for _, c := range t.Columns {
+				colTypeMap[t.Name][c.Name] = c.Type
+			}
+		}
+	}
+
 	switch format {
 	case "csv":
 		return exportToCSV(exportData, exportPath)
 	case "sqlite":
-		return exportToSQLite(ctx, adapter, exportData, exportPath)
+		return exportToSQLite(ctx, adapter, exportData, exportPath, colTypeMap)
 	default:
-		return exportToJSON(exportData, exportPath)
+		return exportToJSON(exportData, exportPath, schemaTables, schemaEnums, indexMap)
 	}
 }
 
-func exportToJSON(data types.BackupData, exportPath string) (string, error) {
+func exportToJSON(data types.BackupData, exportPath string, schemaTables []types.SchemaTable, schemaEnums []types.SchemaEnum, indexMap map[string][]types.SchemaIndex) (string, error) {
 	if err := os.MkdirAll(exportPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create export directory: %w", err)
 	}
@@ -96,7 +123,21 @@ func exportToJSON(data types.BackupData, exportPath string) (string, error) {
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
 	filePath := filepath.Join(exportPath, fmt.Sprintf("export_%s.json", timestamp))
 
-	jsonData, err := json.MarshalIndent(data, "", "  ")
+	// Build schema-aware export payload
+	payload := map[string]interface{}{
+		"version":   "2.0",
+		"timestamp": data.Timestamp,
+		"comment":   data.Comment,
+		"data":      data.Tables,
+	}
+
+	// Include full schema DDL if available
+	if schemaTables != nil || schemaEnums != nil {
+		schema := buildSchemaDDL(schemaTables, schemaEnums, indexMap)
+		payload["schema"] = schema
+	}
+
+	jsonData, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal data: %w", err)
 	}
@@ -106,6 +147,56 @@ func exportToJSON(data types.BackupData, exportPath string) (string, error) {
 	}
 
 	return filePath, nil
+}
+
+// buildSchemaDDL generates a JSON-serializable schema representation
+func buildSchemaDDL(tables []types.SchemaTable, enums []types.SchemaEnum, indexMap map[string][]types.SchemaIndex) map[string]interface{} {
+	schema := map[string]interface{}{}
+
+	if enums != nil {
+		enumList := make([]map[string]interface{}, len(enums))
+		for i, e := range enums {
+			enumList[i] = map[string]interface{}{
+				"name":   e.Name,
+				"values": e.Values,
+			}
+		}
+		schema["enums"] = enumList
+	}
+
+	if tables != nil {
+		tableList := make([]map[string]interface{}, len(tables))
+		for i, t := range tables {
+			if strings.HasPrefix(t.Name, "_flash_") {
+				continue
+			}
+			cols := make([]map[string]interface{}, len(t.Columns))
+			for j, c := range t.Columns {
+				cols[j] = map[string]interface{}{
+					"name":            c.Name,
+					"type":            c.Type,
+					"nullable":        c.Nullable,
+					"default":         c.Default,
+					"is_primary":      c.IsPrimary,
+					"is_unique":       c.IsUnique,
+					"check":           c.Check,
+					"generated":       c.Generated,
+					"foreign_key_table":  c.ForeignKeyTable,
+					"foreign_key_column": c.ForeignKeyColumn,
+					"on_delete":       c.OnDeleteAction,
+				}
+			}
+			idxList := indexMap[t.Name]
+			tableList[i] = map[string]interface{}{
+				"name":    t.Name,
+				"columns": cols,
+				"indexes": idxList,
+			}
+		}
+		schema["tables"] = tableList
+	}
+
+	return schema
 }
 
 func exportToCSV(data types.BackupData, exportPath string) (string, error) {
@@ -158,7 +249,7 @@ func exportToCSV(data types.BackupData, exportPath string) (string, error) {
 	return dirPath, nil
 }
 
-func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data types.BackupData, exportPath string) (string, error) {
+func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data types.BackupData, exportPath string, colTypeMap map[string]map[string]string) (string, error) {
 	if err := os.MkdirAll(exportPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to create export directory: %w", err)
 	}
@@ -178,14 +269,16 @@ func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data 
 			continue
 		}
 
-		// Sort columns for deterministic SQLite schema.
+		// Sort columns for deterministic schema
 		columns := make([]string, 0, len(rows[0]))
 		for key := range rows[0] {
 			columns = append(columns, key)
 		}
 		sort.Strings(columns)
 
-		createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", tableName, buildColumnDefs(columns))
+		// Use real column types from schema when available
+		createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", tableName,
+			buildColumnDefsWithTypes(columns, colTypeMap[tableName]))
 		if _, err := db.Exec(createSQL); err != nil {
 			return "", fmt.Errorf("failed to create table %s: %w", tableName, err)
 		}
@@ -203,6 +296,48 @@ func exportToSQLite(ctx context.Context, adapter database.DatabaseAdapter, data 
 	}
 
 	return filePath, nil
+}
+
+// buildColumnDefsWithTypes generates column definitions using real types from schema
+func buildColumnDefsWithTypes(columns []string, colTypes map[string]string) string {
+	defs := make([]string, len(columns))
+	for i, col := range columns {
+		sqlType := "TEXT"
+		if mapped, ok := colTypes[col]; ok && mapped != "" {
+			sqlType = mapTypeToSQLite(mapped)
+		}
+		defs[i] = fmt.Sprintf("%s %s", col, sqlType)
+	}
+	return strings.Join(defs, ", ")
+}
+
+// mapTypeToSQLite converts PostgreSQL/MySQL types to SQLite-compatible types
+func mapTypeToSQLite(dbType string) string {
+	upper := strings.ToUpper(dbType)
+	switch {
+	case strings.Contains(upper, "SERIAL"), strings.Contains(upper, "BIGINT"),
+		strings.Contains(upper, "INT"), strings.Contains(upper, "INTEGER"):
+		return "INTEGER"
+	case strings.Contains(upper, "FLOAT"), strings.Contains(upper, "DOUBLE"),
+		strings.Contains(upper, "REAL"), strings.Contains(upper, "NUMERIC"),
+		strings.Contains(upper, "DECIMAL"):
+		return "REAL"
+	case strings.Contains(upper, "BOOL"):
+		return "INTEGER"
+	case strings.Contains(upper, "TIMESTAMP"), strings.Contains(upper, "DATE"),
+		strings.Contains(upper, "TIME"):
+		return "TEXT"
+	case upper == "JSONB", upper == "JSON":
+		return "TEXT"
+	case upper == "INET", upper == "UUID":
+		return "TEXT"
+	case strings.Contains(upper, "[]"):
+		return "TEXT"
+	case strings.Contains(upper, "ENUM"), strings.Contains(upper, "ENUM"):
+		return "TEXT"
+	default:
+		return "TEXT"
+	}
 }
 
 func buildColumnDefs(columns []string) string {

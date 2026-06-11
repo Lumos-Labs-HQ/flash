@@ -32,7 +32,7 @@ func TestExportToJSON_CreatesFile(t *testing.T) {
 		"users": {{"id": 1, "email": "a@b.com"}},
 	})
 
-	path, err := exportToJSON(data, dir)
+	path, err := exportToJSON(data, dir, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("exportToJSON error: %v", err)
 	}
@@ -50,13 +50,13 @@ func TestExportToJSON_ValidJSON(t *testing.T) {
 		"users": {{"id": 1, "name": "Alice"}},
 	})
 
-	path, err := exportToJSON(data, dir)
+	path, err := exportToJSON(data, dir, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("exportToJSON error: %v", err)
 	}
 
 	raw, _ := os.ReadFile(path)
-	var parsed types.BackupData
+	var parsed map[string]interface{}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		t.Errorf("output is not valid JSON: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestExportToJSON_ValidJSON(t *testing.T) {
 func TestExportToJSON_EmptyTables(t *testing.T) {
 	dir := t.TempDir()
 	data := makeBackup(nil)
-	path, err := exportToJSON(data, dir)
+	path, err := exportToJSON(data, dir, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("exportToJSON error: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestExportToSQLite_CreatesDB(t *testing.T) {
 		"users": {{"id": "1", "email": "a@b.com"}},
 	})
 
-	path, err := exportToSQLite(context.TODO(), nil, data, dir)
+	path, err := exportToSQLite(context.TODO(), nil, data, dir, nil)
 	if err != nil {
 		t.Fatalf("exportToSQLite error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestBuildInsertSQL(t *testing.T) {
 func TestExportToJSON_CreatesExportDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "new", "nested", "dir")
 	data := makeBackup(nil)
-	_, err := exportToJSON(data, dir)
+	_, err := exportToJSON(data, dir, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("should create nested dirs: %v", err)
 	}

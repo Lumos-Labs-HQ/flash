@@ -276,6 +276,8 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 	query.Params = make([]*Param, paramCount)
 	usedParamNames := make(map[string]int)
+	// Extract ordered actual param numbers from the SQL so we map
+	orderedParamNums := extractOrderedParamNums(query.SQL)
 
 	// Validate INSERT/UPDATE columns exist in the schema.
 	if table != nil {
@@ -292,16 +294,22 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	}
 
 	for i := 0; i < paramCount; i++ {
+		// Use the actual $N number from the SQL if available,
+		// falling back to i+1 for ?-style parameters.
+		paramNum := i + 1
+		if i < len(orderedParamNums) && orderedParamNums[i] > 0 {
+			paramNum = orderedParamNums[i]
+		}
 		paramName := fmt.Sprintf("param%d", i+1)
 		paramType := "any"
 
 		if table != nil {
-			inferredName := p.typeInferrer.InferParamName(query.SQL, i+1)
+			inferredName := p.typeInferrer.InferParamName(query.SQL, paramNum)
 			if inferredName != "" && inferredName != paramName {
 				paramName = inferredName
 			}
 
-			paramType = p.typeInferrer.InferParamType(query.SQL, i+1, table, paramName)
+			paramType = p.typeInferrer.InferParamType(query.SQL, paramNum, table, paramName)
 		}
 
 		if count, exists := usedParamNames[paramName]; exists {
@@ -312,9 +320,16 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 
 		query.Params[i] = &Param{
-			Name: paramName,
-			Type: paramType,
+			Name:     paramName,
+			Type:     paramType,
+			ParamNum: paramNum,
 		}
+	}
+
+	// Renumber $N placeholders to sequential $1, $2, ... so generated
+	// when $1 is absent from the query.
+	if len(orderedParamNums) > 0 {
+		query.SQL = renumberParams(query.SQL, orderedParamNums)
 	}
 
 	sqlUpper := strings.ToUpper(query.SQL)
@@ -850,7 +865,7 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 	// Generic subquery: (SELECT ...) AS col
 	if strings.Contains(cteQuery, fmt.Sprintf("AS %s", cteColumn)) ||
 		strings.Contains(cteQuery, fmt.Sprintf("as %s", cteColumn)) {
-		subMatch := regexp.MustCompile(fmt.Sprintf(`(?i)\(\s*SELECT\s+(COUNT|SUM|AVG|MAX|MIN)\(`))
+		subMatch := regexp.MustCompile(`(?i)\(\s*SELECT\s+(COUNT|SUM|AVG|MAX|MIN)\(`)
 		if sm := subMatch.FindStringSubmatch(cteQuery); len(sm) > 1 {
 			agg := strings.ToUpper(sm[1])
 			switch agg {
@@ -864,7 +879,7 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 		}
 	}
 	// ARRAY_LENGTH in CTE: ARRAY_LENGTH(col, 1) AS tag_count
-	if strings.Contains(cteQuery, fmt.Sprintf("ARRAY_LENGTH")) &&
+	if strings.Contains(cteQuery, "ARRAY_LENGTH") &&
 		strings.Contains(cteQuery, fmt.Sprintf("AS %s", cteColumn)) {
 		return "INTEGER", false, true
 	}
@@ -1073,4 +1088,40 @@ func extractBalancedParens(s string, startPos int) string {
 		}
 	}
 	return ""
+}
+
+// renumberParams rewrites $N placeholders from original numbers to sequential
+func renumberParams(sql string, orderedNums []int) string {
+	mapping := make(map[int]int, len(orderedNums))
+	for i, orig := range orderedNums {
+		mapping[orig] = i + 1
+	}
+	re := regexp.MustCompile(`\$(\d+)`)
+	return re.ReplaceAllStringFunc(sql, func(match string) string {
+		var n int
+		fmt.Sscanf(match[1:], "%d", &n)
+		if newNum, ok := mapping[n]; ok {
+			return fmt.Sprintf("$%d", newNum)
+		}
+		return match
+	})
+}
+
+// extractOrderedParamNums returns deduped ordered $N numbers from SQL.
+func extractOrderedParamNums(sql string) []int {
+	re := regexp.MustCompile(`\$(\d+)`)
+	matches := re.FindAllStringSubmatch(sql, -1)
+	seen := make(map[int]bool, len(matches))
+	result := make([]int, 0, len(matches))
+	for _, m := range matches {
+		if len(m) > 1 {
+			var n int
+			fmt.Sscanf(m[1], "%d", &n)
+			if !seen[n] {
+				seen[n] = true
+				result = append(result, n)
+			}
+		}
+	}
+	return result
 }
