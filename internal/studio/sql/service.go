@@ -1184,7 +1184,7 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 	}
 
 	var tableNames []string
-	var schemaTables []types.SchemaTable 
+	var schemaTables []types.SchemaTable
 
 	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
 		var err error
@@ -1654,7 +1654,7 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 	for _, col := range schema.Columns {
 		colType := normalizeColType(col.Type)
 
-		// GENERATED ALWAYS AS (computed columns) 
+		// GENERATED ALWAYS AS (computed columns)
 		if col.Generated != "" {
 			def := fmt.Sprintf("%s %s GENERATED ALWAYS AS (%s) STORED",
 				common.QuoteIdentifier(col.Name), colType, col.Generated)

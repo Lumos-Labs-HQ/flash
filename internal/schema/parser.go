@@ -14,7 +14,6 @@ var (
 	parserOnDeleteRegex   = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
 	parserOnUpdateRegex   = regexp.MustCompile(`(?i)ON\s+UPDATE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
 	parserDefaultRegex    = regexp.MustCompile(`(?i)\bDEFAULT\s+('[^']*'|\([^)]*\)|[^,\s]+)`)
-	parserGeneratedRegex  = regexp.MustCompile(`(?i)GENERATED\s+ALWAYS\s+AS\s*\(([^)]+)\)\s*(STORED|VIRTUAL)?`)
 	parserIdentityRegex   = regexp.MustCompile(`(?i)GENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY`)
 )
 

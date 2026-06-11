@@ -18,13 +18,6 @@ var (
 	createIndexStmtRegex = regexp.MustCompile(`(?i)^\s*CREATE\s+(UNIQUE\s+)?INDEX`)
 	createTypeStmtRegex  = regexp.MustCompile(`(?i)^\s*CREATE\s+TYPE\s+\w+\s+AS\s+ENUM`)
 
-	// ALTER TABLE statements for schema-level changes
-	alterTableRenameColRegex   = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(?:"?(\w+)"?)\s+RENAME\s+COLUMN\s+(?:"?(\w+)"?)\s+TO\s+(?:"?(\w+)"?)`)
-	alterTableRenameTableRegex = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(?:"?(\w+)"?)\s+RENAME\s+TO\s+(?:"?(\w+)"?)`)
-	alterTableSetNotNullRegex  = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(?:"?(\w+)"?)\s+ALTER\s+COLUMN\s+(?:"?(\w+)"?)\s+(SET\s+NOT\s+NULL|DROP\s+NOT\s+NULL)`)
-	alterTableSetDefaultRegex  = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(?:"?(\w+)"?)\s+ALTER\s+COLUMN\s+(?:"?(\w+)"?)\s+SET\s+DEFAULT\s+(.+)`)
-	alterTableDropDefaultRegex = regexp.MustCompile(`(?i)ALTER\s+TABLE\s+(?:"?(\w+)"?)\s+ALTER\s+COLUMN\s+(?:"?(\w+)"?)\s+DROP\s+DEFAULT`)
-
 	commentRegex    = regexp.MustCompile(`--.*|/\*[\s\S]*?\*/`)
 	whitespaceRegex = regexp.MustCompile(`\s+`)
 	enumValueRegex  = regexp.MustCompile(`'([^']+)'`)

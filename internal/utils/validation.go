@@ -558,7 +558,7 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 							}
 						}
 
-										return fmt.Errorf("# package flash\ndb\\queries\\%s.sql:%d:%d: column \"%s\" does not exist in table \"%s\"",
+						return fmt.Errorf("# package flash\ndb\\queries\\%s.sql:%d:%d: column \"%s\" does not exist in table \"%s\"",
 							sourceFile, lineNum, colPos, colName, primaryTable.name)
 					}
 				}

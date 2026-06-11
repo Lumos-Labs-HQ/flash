@@ -513,15 +513,15 @@ func TestParseAllDateTimeTypes_PostgreSQL(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"ts_tz":   "TIMESTAMP WITH TIME ZONE",
-		"ts_notz": "TIMESTAMP WITHOUT TIME ZONE",
+		"ts_tz":    "TIMESTAMP WITH TIME ZONE",
+		"ts_notz":  "TIMESTAMP WITHOUT TIME ZONE",
 		"ts_plain": "TIMESTAMP",
-		"ts_tz2":  "TIMESTAMPTZ",
-		"d":       "DATE",
-		"t":       "TIME",
-		"t_tz":    "TIME WITH TIME ZONE",
-		"iv":      "INTERVAL",
-		"ts_def":  "TIMESTAMP WITH TIME ZONE",
+		"ts_tz2":   "TIMESTAMPTZ",
+		"d":        "DATE",
+		"t":        "TIME",
+		"t_tz":     "TIME WITH TIME ZONE",
+		"iv":       "INTERVAL",
+		"ts_def":   "TIMESTAMP WITH TIME ZONE",
 	}
 
 	cols := make(map[string]string)
@@ -704,7 +704,7 @@ func TestSchemaDiff_NullableAndDefaultChange(t *testing.T) {
 		Name: "users",
 		Columns: []types.SchemaColumn{
 			{Name: "id", Type: "SERIAL", IsPrimary: true},
-			{Name: "email", Type: "TEXT", Nullable: false}, // made NOT NULL
+			{Name: "email", Type: "TEXT", Nullable: false},                    // made NOT NULL
 			{Name: "score", Type: "INTEGER", Nullable: false, Default: "100"}, // default changed
 		},
 	}}
@@ -848,4 +848,3 @@ func TestParseOnUpdateFK(t *testing.T) {
 }
 
 // ── Date/Time type parsing ────────────────────────────────────────────────────
-
