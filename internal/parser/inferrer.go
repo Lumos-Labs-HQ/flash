@@ -145,23 +145,30 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	}
 
 	// WHERE alias.col > $N — unqualified comparison fallback in primary table
-	compQualPattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*[<>=!]+\s*\$%d`, paramIndex)
+	compQualPattern := fmt.Sprintf(`(?i)(?:(\w+)\.)?(\w+)\s*[<>=!]+\s*\$%d`, paramIndex)
 	compQualRe := regexp.MustCompile(compQualPattern)
 	if match := compQualRe.FindStringSubmatch(sql); len(match) > 1 {
-		colName := match[1]
+		tableQual := match[1]
+		colName := match[2]
 		// Search primary table first
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, colName) {
 				return col.Type
 			}
 		}
-		// Cross-table lookup — param may be in a subquery referencing another table
+		// Cross-table lookup
 		if ti.schema != nil {
 			for _, t := range ti.schema.Tables {
 				for _, col := range t.Columns {
 					if strings.EqualFold(col.Name, colName) {
 						return col.Type
 					}
+				}
+			}
+			// CTE resolution: ct.depth — if there's a table qualifier, try resolving via CTE
+			if tableQual != "" {
+				if cteType, _, found := ti.resolveCTEColumn(sql, tableQual, colName); found {
+					return cteType
 				}
 			}
 		}
@@ -244,4 +251,58 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	return fmt.Sprintf("param%d", paramIndex)
+}
+
+// resolveCTEColumn resolves the type of a CTE column (e.g. "ct" → "depth")
+// by scanning the SQL for "ct AS (" and finding "0 as depth" or "ct.depth + 1" inside.
+func (ti *TypeInferrer) resolveCTEColumn(sql string, cteAlias string, colName string) (string, bool, bool) {
+	if ti.schema == nil {
+		return "", false, false
+	}
+
+	// Find CTE definition: "cteAlias AS ("
+	searchRe := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s+AS\s*\(`, regexp.QuoteMeta(cteAlias)))
+	loc := searchRe.FindStringIndex(sql)
+	if loc == nil {
+		// Try resolving via FROM alias: "FROM cteName cteAlias"
+		aliasRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:FROM|JOIN)\s+(\w+)\s+%s\b`, regexp.QuoteMeta(cteAlias)))
+		if am := aliasRe.FindStringSubmatch(sql); len(am) > 1 {
+			return ti.resolveCTEColumn(sql, am[1], colName)
+		}
+		return "", false, false
+	}
+
+	// Extract CTE body (balanced parens)
+	openPos := strings.Index(sql[loc[1]-1:], "(") + loc[1] - 1
+	cteBody := extractBalancedParens(sql, openPos)
+	if cteBody == "" {
+		return "", false, false
+	}
+
+	// Detect arithmetic: ct.depth + 1 AS depth
+	arithRe := regexp.MustCompile(fmt.Sprintf(`(?i)\+.*?\s+(?:AS\s+)?%s\b`, regexp.QuoteMeta(colName)))
+	if arithRe.MatchString(cteBody) {
+		return "INTEGER", false, true
+	}
+
+	// Integer literal: 0 as depth
+	intRe := regexp.MustCompile(fmt.Sprintf(`(?i)\b\d+\s+(?:AS\s+)?%s\b`, regexp.QuoteMeta(colName)))
+	if intRe.MatchString(cteBody) {
+		return "INTEGER", false, true
+	}
+
+	// Simple column alias: score AS base_score
+	colRefRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:(\w+)\.)?(\w+)\s+[Aa][Ss]\s+%s\b`, regexp.QuoteMeta(colName)))
+	if m := colRefRe.FindStringSubmatch(cteBody); len(m) >= 3 {
+		srcCol := m[2]
+		for _, t := range ti.schema.Tables {
+			for _, c := range t.Columns {
+				if strings.EqualFold(c.Name, srcCol) {
+					return c.Type, c.Nullable, true
+				}
+			}
+		}
+	}
+
+	return "", false, false
 }
