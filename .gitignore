@@ -58,7 +58,7 @@ not_tests
 
 testss/
 test/speed_test
-
+build/
 
 .exe
 
