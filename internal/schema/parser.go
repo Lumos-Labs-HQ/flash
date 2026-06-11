@@ -13,7 +13,7 @@ var (
 	parserReferencesRegex = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
 	parserOnDeleteRegex   = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
 	parserOnUpdateRegex   = regexp.MustCompile(`(?i)ON\s+UPDATE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
-	parserDefaultRegex    = regexp.MustCompile(`(?i)\bDEFAULT\s+([^,\s]+|'[^']*'|\([^)]*\))`)
+	parserDefaultRegex    = regexp.MustCompile(`(?i)\bDEFAULT\s+('[^']*'|\([^)]*\)|[^,\s]+)`)
 	parserGeneratedRegex  = regexp.MustCompile(`(?i)GENERATED\s+ALWAYS\s+AS\s*\(([^)]+)\)\s*(STORED|VIRTUAL)?`)
 	parserIdentityRegex   = regexp.MustCompile(`(?i)GENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY`)
 )
@@ -374,9 +374,36 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 	}
 
 	// GENERATED ALWAYS AS (expr) STORED|VIRTUAL
-	if m := parserGeneratedRegex.FindStringSubmatch(colDef); len(m) > 1 {
-		column.Generated = strings.TrimSpace(m[1])
-		column.Nullable = true // generated columns are implicitly nullable in reads
+	genIdx := strings.Index(defUpper, "GENERATED")
+	if genIdx != -1 {
+		asIdx := strings.Index(defUpper[genIdx:], "AS")
+		if asIdx != -1 {
+			rest := colDef[genIdx+asIdx+2:] // skip "AS"
+			rest = strings.TrimSpace(rest)
+			if len(rest) > 0 && rest[0] == '(' {
+				depth := 0
+				end := 0
+				for end < len(rest) {
+					if rest[end] == '(' {
+						depth++
+					} else if rest[end] == ')' {
+						depth--
+						if depth == 0 {
+							end++
+							break
+						}
+					}
+					end++
+				}
+				if depth == 0 && end > 1 {
+					column.Generated = strings.TrimSpace(rest[1 : end-1])
+					// Generated columns are nullable only if explicitly stated
+					if !strings.Contains(defUpper, "NOT NULL") && !strings.Contains(defUpper, "PRIMARY KEY") {
+						column.Nullable = true
+					}
+				}
+			}
+		}
 	}
 
 	if matches := parserReferencesRegex.FindStringSubmatch(colDef); len(matches) >= 3 {

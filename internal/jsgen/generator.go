@@ -467,6 +467,8 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 		return "Object"
 	case strings.Contains(sqlTypeLower, "timestamp"), strings.Contains(sqlTypeLower, "date"), strings.Contains(sqlTypeLower, "time"):
 		return "Date"
+	case sqlTypeLower == "interval":
+		return "number" // interval as milliseconds
 	case strings.Contains(sqlTypeLower, "bytea"), strings.Contains(sqlTypeLower, "blob"):
 		return "Uint8Array"
 	// ClickHouse-specific types

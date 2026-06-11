@@ -393,6 +393,35 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 						}
 						hasExecutableSQL = true
 					}
+
+					// 6. GENERATED expression change (PostgreSQL only)
+					if colDiff.GeneratedChanged {
+						switch m.provider {
+						case "postgresql", "postgres":
+							// Drop the old generated column and re-add with new expression
+							dropSQL := m.adapter.GenerateDropColumnSQL(tableDiff.Name, colDiff.Name)
+							upStatements = append(upStatements, dropSQL)
+							hasExecutableSQL = true
+							addSQL := m.adapter.GenerateAddColumnSQL(tableDiff.Name, colDiff.NewColumn)
+							if addSQL != "" {
+								upStatements = append(upStatements, addSQL)
+							}
+							// DOWN: drop new and re-add old
+							downStatements = append([]string{
+								m.adapter.GenerateDropColumnSQL(tableDiff.Name, colDiff.Name),
+								m.adapter.GenerateAddColumnSQL(tableDiff.Name, colDiff.OldColumn),
+							}, downStatements...)
+						case "mysql":
+							// MySQL: MODIFY COLUMN with GENERATED ALWAYS AS
+							genSQL := fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s GENERATED ALWAYS AS (%s) STORED;",
+								tableDiff.Name, colDiff.Name, colDiff.NewColumn.Type, colDiff.NewColumn.Generated)
+							upStatements = append(upStatements, genSQL)
+							hasExecutableSQL = true
+							genDown := fmt.Sprintf("ALTER TABLE `%s` MODIFY COLUMN `%s` %s GENERATED ALWAYS AS (%s) STORED;",
+								tableDiff.Name, colDiff.Name, colDiff.OldColumn.Type, colDiff.OldColumn.Generated)
+							downStatements = append([]string{genDown}, downStatements...)
+						}
+					}
 				}
 			}
 		}

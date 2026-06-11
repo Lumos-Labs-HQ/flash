@@ -301,7 +301,25 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 	if snap != nil && err == nil {
 		currentTables = snap.Tables
 		currentEnums = snap.Enums
-		_ = snap.Indexes // indexes from snapshot not used in diff; live DB path populates currentIndexes
+		// Fold standalone indexes from the snapshot into their respective tables
+		// so the diff sees them as already existing and doesn't regenerate them.
+		currentIndexes = snap.Indexes
+		for i, table := range currentTables {
+			for _, idx := range snap.Indexes {
+				if strings.EqualFold(idx.Table, table.Name) {
+					dup := false
+					for _, existing := range table.Indexes {
+						if existing.Name == idx.Name {
+							dup = true
+							break
+						}
+					}
+					if !dup {
+						currentTables[i].Indexes = append(currentTables[i].Indexes, idx)
+					}
+				}
+			}
+		}
 	} else {
 		// 2. Snapshot missing or invalid → fall back to live database introspection.
 		currentTables, err = sm.adapter.GetCurrentSchema(ctx)
