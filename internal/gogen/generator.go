@@ -639,6 +639,8 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		baseType = "bool"
 	case strings.Contains(sqlTypeLower, "time") || strings.Contains(sqlTypeLower, "date"):
 		baseType = "time.Time"
+	case sqlTypeLower == "interval":
+		baseType = "time.Duration"
 	case strings.Contains(sqlTypeLower, "jsonb") || strings.Contains(sqlTypeLower, "json"):
 		if g.Config.Gen.Go.Driver == "pgx" {
 			baseType = "map[string]interface{}"

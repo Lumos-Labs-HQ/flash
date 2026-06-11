@@ -7,13 +7,16 @@ import (
 )
 
 type TypeInferrer struct {
-	cache map[string]string
+	cache  map[string]string
+	schema *Schema
 }
 
 func NewTypeInferrer() *TypeInferrer {
-	return &TypeInferrer{
-		cache: make(map[string]string, 64),
-	}
+	return &TypeInferrer{cache: make(map[string]string, 64)}
+}
+
+func NewTypeInferrerWithSchema(schema *Schema) *TypeInferrer {
+	return &TypeInferrer{cache: make(map[string]string, 64), schema: schema}
 }
 
 func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table, paramName string) string {
@@ -65,6 +68,18 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 				return col.Type
 			}
 		}
+	}
+
+	// ILIKE / SIMILAR TO / LIKE patterns: WHERE col ILIKE $N
+	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\$%d`, paramIndex)
+	likeRe := regexp.MustCompile(likePattern)
+	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, match[1]) {
+				return col.Type
+			}
+		}
+		return "TEXT" // default for LIKE params
 	}
 
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
@@ -129,13 +144,25 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		return "TIMESTAMP"
 	}
 
-	// WHERE alias.col > $N — unqualified comparison fallback
+	// WHERE alias.col > $N — unqualified comparison fallback in primary table
 	compQualPattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*[<>=!]+\s*\$%d`, paramIndex)
 	compQualRe := regexp.MustCompile(compQualPattern)
 	if match := compQualRe.FindStringSubmatch(sql); len(match) > 1 {
+		colName := match[1]
+		// Search primary table first
 		for _, col := range table.Columns {
-			if strings.EqualFold(col.Name, match[1]) {
+			if strings.EqualFold(col.Name, colName) {
 				return col.Type
+			}
+		}
+		// Cross-table lookup — param may be in a subquery referencing another table
+		if ti.schema != nil {
+			for _, t := range ti.schema.Tables {
+				for _, col := range t.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						return col.Type
+					}
+				}
 			}
 		}
 	}
@@ -173,6 +200,13 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		return match[1]
 	}
 
+	// ILIKE / LIKE / SIMILAR TO
+	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\$%d`, paramIndex)
+	likeRe := regexp.MustCompile(likePattern)
+	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
 	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)
 	setRe := regexp.MustCompile(setPattern)
 	if match := setRe.FindStringSubmatch(sql); len(match) > 1 {
@@ -182,6 +216,11 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	limitPattern := fmt.Sprintf(`(?i)LIMIT\s+\$%d`, paramIndex)
 	if matched, _ := regexp.MatchString(limitPattern, sql); matched {
 		return "limit"
+	}
+
+	offsetPattern := fmt.Sprintf(`(?i)OFFSET\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(offsetPattern, sql); matched {
+		return "offset"
 	}
 
 	betweenPattern := fmt.Sprintf(`(?i)(\w+)\s+BETWEEN\s+\$%d`, paramIndex)
@@ -198,7 +237,7 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 	}
 
-	compPattern := fmt.Sprintf(`(?i)(\w+)\s*[<>=]+\s*\$%d`, paramIndex)
+	compPattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+(?:\w+\.)?(\w+)\s*[<>=!]+\s*\$%d`, paramIndex)
 	compRe := regexp.MustCompile(compPattern)
 	if match := compRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]

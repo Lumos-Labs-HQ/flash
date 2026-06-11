@@ -188,6 +188,42 @@ func extractColumnsFromSelect(sql string, selectIdx int) string {
 		start++
 	}
 
+	// Skip DISTINCT ON (col1, col2) — it's not part of the column list
+	restUpper := sqlUpper[start:]
+	if strings.HasPrefix(restUpper, "DISTINCT") {
+		distinctEnd := start + 8 // "DISTINCT"
+		after := distinctEnd
+		for after < len(sql) && (sql[after] == ' ' || sql[after] == '\t' || sql[after] == '\n') {
+			after++
+		}
+		if after+2 < len(sql) && strings.ToUpper(sql[after:after+2]) == "ON" {
+			// Skip "ON (col1, col2)"
+			after += 2
+			for after < len(sql) && (sql[after] == ' ' || sql[after] == '\t' || sql[after] == '\n') {
+				after++
+			}
+			if after < len(sql) && sql[after] == '(' {
+				depth := 0
+				for after < len(sql) {
+					if sql[after] == '(' {
+						depth++
+					} else if sql[after] == ')' {
+						depth--
+						if depth == 0 {
+							after++
+							break
+						}
+					}
+					after++
+				}
+				start = after
+				for start < len(sql) && (sql[start] == ' ' || sql[start] == '\t' || sql[start] == '\n') {
+					start++
+				}
+			}
+		}
+	}
+
 	parenDepth := 0
 	fromIdx := -1
 
@@ -265,14 +301,21 @@ func isAlphaNum(ch byte) bool {
 var sqlKeywords = map[string]bool{
 	"SELECT": true, "FROM": true, "WHERE": true, "JOIN": true, "INNER": true,
 	"LEFT": true, "RIGHT": true, "OUTER": true, "ON": true, "AND": true,
-	"OR": true, "NOT": true, "IN": true, "LIKE": true, "BETWEEN": true,
-	"IS": true, "NULL": true, "GROUP": true, "BY": true, "HAVING": true,
+	"OR": true, "NOT": true, "IN": true, "LIKE": true, "ILIKE": true, "SIMILAR": true,
+	"BETWEEN": true, "IS": true, "NULL": true, "GROUP": true, "BY": true, "HAVING": true,
 	"ORDER": true, "ASC": true, "DESC": true, "LIMIT": true, "OFFSET": true,
 	"INSERT": true, "UPDATE": true, "DELETE": true, "CREATE": true, "DROP": true,
 	"ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true, "AS": true,
 	"DISTINCT": true, "COUNT": true, "SUM": true, "AVG": true, "MIN": true,
 	"MAX": true, "CASE": true, "WHEN": true, "THEN": true, "ELSE": true,
-	"END": true, "WITH": true, "RECURSIVE": true,
+	"END": true, "WITH": true, "RECURSIVE": true, "ANY": true, "ALL": true,
+	"EXISTS": true, "NULLS": true, "LAST": true, "FIRST": true, "FILTER": true,
+	"OVER": true, "PARTITION": true, "ROWS": true, "RANGE": true, "FOLLOWING": true,
+	"PRECEDING": true, "UNBOUNDED": true, "CURRENT": true, "ROW": true,
+	"LATERAL": true, "PLAINTO_TSQUERY": true, "TS_RANK": true,
+	"UNNEST": true, "INTERVAL": true,
+	"EXCEPT": true, "INTERSECT": true, "UNION": true, "RETURNING": true,
+	"CONFLICT": true, "DO": true, "NOTHING": true, "EXCLUDED": true,
 }
 
 func IsSQLKeyword(word string) bool {

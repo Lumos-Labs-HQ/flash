@@ -37,8 +37,10 @@ type Param struct {
 }
 
 type QueryColumn struct {
-	Name     string
-	Type     string
-	Table    string
-	Nullable bool
+	Name         string
+	Type         string
+	Table        string
+	Nullable     bool
+	IsComputed   bool   // true if Name came from an expression, not a bare column ref
+	OriginalExpr string // the raw expression (e.g. "preferences->'key'", "RANK() OVER (...)")
 }
