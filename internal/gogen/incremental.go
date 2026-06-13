@@ -128,6 +128,7 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	imports := []string{}
 	if isScylla {
 		imports = append(imports, "\"context\"")
+		imports = append(imports, "\"fmt\"")
 		imports = append(imports, "\"github.com/apache/cassandra-gocql-driver/v2\"")
 	} else if isPGX {
 		imports = append(imports, "\"context\"")

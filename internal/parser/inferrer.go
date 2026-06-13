@@ -83,15 +83,18 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	}
 
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
-		insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
-		if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
-			colNames := strings.Split(match[1], ",")
-			if paramIndex <= len(colNames) {
-				colName := strings.TrimSpace(colNames[paramIndex-1])
-				for _, col := range table.Columns {
-					if strings.EqualFold(col.Name, colName) {
-						return col.Type
-					}
+		insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\S+\s*\(([\s\S]*?)\)\s*VALUES`)
+		allInsertCols := []string{}
+		for _, match := range insertColRegex.FindAllStringSubmatch(sql, -1) {
+			for _, c := range strings.Split(match[1], ",") {
+				allInsertCols = append(allInsertCols, strings.TrimSpace(c))
+			}
+		}
+		if paramIndex <= len(allInsertCols) {
+			colName := allInsertCols[paramIndex-1]
+			for _, col := range table.Columns {
+				if strings.EqualFold(col.Name, colName) {
+					return col.Type
 				}
 			}
 		}
@@ -103,6 +106,22 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, match[1]) {
 				return col.Type
+			}
+		}
+	}
+	// SET with ? params — extract by using same logic as InferParamName
+	if strings.Contains(sql, "?") {
+		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
+		if setMatch := setColPattern.FindStringSubmatch(sql); len(setMatch) > 1 {
+			colPattern := regexp.MustCompile(`(\w+)\s*=\s*\?`)
+			matches := colPattern.FindAllStringSubmatch(setMatch[1], -1)
+			if paramIndex <= len(matches) {
+				colName := matches[paramIndex-1][1]
+				for _, col := range table.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						return col.Type
+					}
+				}
 			}
 		}
 	}
@@ -178,25 +197,59 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 }
 
 func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
-	// Check for INSERT statement first (works for both ? and $n)
-	if strings.Contains(strings.ToUpper(sql), "INSERT") {
-		insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\w+\s*\(([\s\S]*?)\)\s*VALUES`)
-		if match := insertColRegex.FindStringSubmatch(sql); len(match) > 1 {
-			colNames := strings.Split(match[1], ",")
-			if paramIndex <= len(colNames) {
-				return strings.TrimSpace(colNames[paramIndex-1])
-			}
+	// Check for INSERT statement first — collect ALL column names from every INSERT in multi-statement SQL
+	insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\S+\s*\(([\s\S]*?)\)\s*VALUES`)
+	allInsertCols := []string{}
+	for _, match := range insertColRegex.FindAllStringSubmatch(sql, -1) {
+		for _, c := range strings.Split(match[1], ",") {
+			allInsertCols = append(allInsertCols, strings.TrimSpace(c))
 		}
+	}
+	if paramIndex <= len(allInsertCols) {
+		return allInsertCols[paramIndex-1]
 	}
 
 	if strings.Contains(sql, "?") {
-		whereRegex := regexp.MustCompile(`(?i)WHERE\s+(.+?)(?:LIMIT|ORDER|GROUP|HAVING|$)`)
+		// SET clause with ? params: SET col = ?, col2 = ?
+		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
+		if setMatch := setColPattern.FindStringSubmatch(sql); len(setMatch) > 1 {
+			setClause := setMatch[1]
+			colPattern := regexp.MustCompile(`(\w+)\s*=\s*\?`)
+			allSetMatches := colPattern.FindAllStringSubmatch(setClause, -1)
+			setCols := []string{}
+			for _, m := range allSetMatches {
+				setCols = append(setCols, m[1])
+			}
+			if paramIndex <= len(setCols) {
+				return setCols[paramIndex-1]
+			}
+			// Offset index past SET params for WHERE matching
+			paramIndex = paramIndex - len(setCols)
+		}
+
+		// WHERE clause with ? params
+		whereRegex := regexp.MustCompile(`(?i)WHERE\s+(.+?)(?:LIMIT|ORDER|GROUP|HAVING|ALLOW|$)`)
 		if whereMatch := whereRegex.FindStringSubmatch(sql); len(whereMatch) > 1 {
 			whereClause := whereMatch[1]
 			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*\?`)
 			matches := colPattern.FindAllStringSubmatch(whereClause, -1)
 			if paramIndex <= len(matches) && len(matches[paramIndex-1]) > 1 {
 				return matches[paramIndex-1][1]
+			}
+
+			// CONTAINS ? pattern
+			containsPattern := regexp.MustCompile(`(?i)(\w+)\s+CONTAINS\s+\?`)
+			allContains := containsPattern.FindAllStringSubmatch(whereClause, -1)
+			// Only match if this paramIndex maps to a CONTAINS position
+			if paramIndex <= len(allContains) {
+				return allContains[paramIndex-1][1]
+			}
+			// Also match >= AND <= BETWEEN-style
+			whereParamIndex := paramIndex
+			rangePattern := regexp.MustCompile(`(?i)(\w+)\s*(>=|<=|>|<)\s*\?`)
+			rangeMatches := rangePattern.FindAllStringSubmatch(whereClause, -1)
+			if whereParamIndex <= len(rangeMatches) {
+				return rangeMatches[whereParamIndex-1][1]
 			}
 		}
 	}
