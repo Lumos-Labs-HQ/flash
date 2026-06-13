@@ -11,7 +11,7 @@ func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	ks := a.currentKeyspace()
 	iter := a.session.Query(
 		`SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? ALLOW FILTERING`, ks,
-	).WithContext(ctx).Iter()
+	).IterContext(ctx)
 	defer iter.Close()
 
 	var names []string
@@ -43,7 +43,7 @@ func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 	iter := a.session.Query(
 		`SELECT column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ? ALLOW FILTERING`,
 		ks, tableName,
-	).WithContext(ctx).Iter()
+	).IterContext(ctx)
 	defer iter.Close()
 
 	var cols []types.SchemaColumn
@@ -67,7 +67,7 @@ func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 	ks := a.currentKeyspace()
 	iter := a.session.Query(
 		`SELECT table_name, column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? ALLOW FILTERING`, ks,
-	).WithContext(ctx).Iter()
+	).IterContext(ctx)
 	defer iter.Close()
 
 	tableMap := make(map[string]*types.SchemaTable)

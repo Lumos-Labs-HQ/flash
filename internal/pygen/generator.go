@@ -151,6 +151,8 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	provider := g.Config.Database.Provider
 	driver := g.Config.Gen.Python.Driver
 	switch provider {
+	case "scylla", "scylladb", "cassandra":
+		g.generateScyllaExecution(w, paramNames, query)
 	case "sqlite", "sqlite3":
 		if driver == "sqlite3" {
 			g.generateSQLite3Execution(w, paramNames, query)
@@ -420,6 +422,49 @@ func (g *Generator) generatePyMySQLExecution(w *strings.Builder, paramNames []st
 	defer func() { g.Config.Gen.Python.Async = saved }()
 	g.Config.Gen.Python.Async = false
 	g.generateMySQLExecution(w, paramNames, query)
+}
+
+func (g *Generator) generateScyllaExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
+	isAsync := g.Config.Gen.Python.Async
+	isSingleColumn := len(query.Columns) == 1 && query.Columns[0].Name != "*"
+	hasColumns := len(query.Columns) > 0
+	prefix := "await "
+	if !isAsync {
+		prefix = ""
+	}
+
+	if query.Cmd == ":exec" {
+		if len(paramNames) > 0 {
+			w.WriteString(fmt.Sprintf("        %sself.db.session.execute(stmt, (%s,))\n", prefix, strings.Join(paramNames, ", ")))
+		} else {
+			w.WriteString(fmt.Sprintf("        %sself.db.session.execute(stmt)\n", prefix))
+		}
+		w.WriteString("        return 1\n")
+		return
+	}
+
+	if len(paramNames) > 0 {
+		w.WriteString(fmt.Sprintf("        %sresult = self.db.session.execute(stmt, (%s,))\n", prefix, strings.Join(paramNames, ", ")))
+	} else {
+		w.WriteString(fmt.Sprintf("        %sresult = self.db.session.execute(stmt)\n", prefix))
+	}
+
+	switch query.Cmd {
+	case ":one":
+		if hasColumns {
+			w.WriteString("        return result.one() if result else None\n")
+		} else {
+			w.WriteString("        return result.one() if result else None\n")
+		}
+	case ":many":
+		if isSingleColumn && hasColumns {
+			w.WriteString(fmt.Sprintf("        return [r.%s for r in result]\n", query.Columns[0].Name))
+		} else {
+			w.WriteString("        return list(result)\n")
+		}
+	default:
+		w.WriteString("        return result\n")
+	}
 }
 
 func (g *Generator) generatePsycopg3Execution(w *strings.Builder, paramNames []string, query *parser.Query) {

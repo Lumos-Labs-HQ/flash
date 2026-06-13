@@ -10,10 +10,10 @@ import (
 // Pre-compiled regex patterns for SQL parsing (performance optimization)
 var (
 	blockCommentRegex   = regexp.MustCompile(`/\*[\s\S]*?\*/`)
-	insertIntoRegex     = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-	fromTableRegex      = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-	updateTableRegex    = regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-	deleteFromRegex     = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`)
+	insertIntoRegex     = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\S+)`)
+	fromTableRegex      = regexp.MustCompile(`(?i)FROM\s+(\S+)`)
+	updateTableRegex    = regexp.MustCompile(`(?i)UPDATE\s+(\S+)`)
+	deleteFromRegex     = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\S+)`)
 	modifyingQueryRegex = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE)\b`)
 )
 
@@ -332,27 +332,37 @@ func ValidateSchemaSyntax(content, filePath string) error {
 	for lineNum, line := range lines {
 		lineNumber := lineNum + 1
 		trimmed := strings.TrimSpace(line)
+		upper := strings.ToUpper(trimmed)
 
-		if strings.Contains(strings.ToUpper(trimmed), "CREATE TABLE") {
+		if strings.Contains(upper, "CREATE TABLE") {
 			inCreateTable = true
 			tableStartLine = lineNumber
 			parenDepth = 0
 		}
 
-		for _, ch := range line {
-			switch ch {
-			case '(':
-				parenDepth++
-			case ')':
-				parenDepth--
+		// Track paren depth inside CREATE TABLE
+		if inCreateTable {
+			for _, ch := range line {
+				switch ch {
+				case '(':
+					parenDepth++
+				case ')':
+					parenDepth--
+				}
 			}
 		}
 
-		if inCreateTable && parenDepth == 0 && strings.Contains(trimmed, ");") {
+		// End of CREATE TABLE: look for ");
+		if inCreateTable && strings.Contains(trimmed, ");") {
 			for i := lineNum - 1; i >= 0; i-- {
 				prevLine := strings.TrimSpace(lines[i])
+				prevUpper := strings.ToUpper(prevLine)
 				if prevLine == "" {
 					continue
+				}
+				// CQL-compatible: skip PRIMARY KEY lines (trailing commas required in CQL)
+				if strings.HasPrefix(prevUpper, "PRIMARY KEY") {
+					break
 				}
 				if strings.HasSuffix(prevLine, ",") {
 					relPath := filepath.Base(filePath)
@@ -361,9 +371,14 @@ func ValidateSchemaSyntax(content, filePath string) error {
 				break
 			}
 			inCreateTable = false
+			parenDepth = 0
 		}
 
-		if parenDepth < 0 {
+		// Only check for unmatched ')' when NOT inside a CREATE TABLE.
+		// CQL uses nested parens for composite partition keys like
+		// PRIMARY KEY ((col1, col2), col3) which naturally resolves
+		// multiple paren levels in one line.
+		if parenDepth < 0 && !inCreateTable {
 			relPath := filepath.Base(filePath)
 			return fmt.Errorf("# package flash\n%s:%d:2: syntax error: unexpected ')'", relPath, lineNumber)
 		}

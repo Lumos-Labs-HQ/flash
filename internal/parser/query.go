@@ -26,7 +26,7 @@ var (
 )
 
 func init() {
-	fromRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
+	fromRegex = regexp.MustCompile(`(?i)FROM\s+([^\s;]+)`)
 	paramRegex = regexp.MustCompile(`\$\d+|\?`)
 	returningRegex = regexp.MustCompile(`(?i)RETURNING\s+(.+?)(?:;|\z)`)
 	asRegex = regexp.MustCompile(`(?i)\s+AS\s+`)
@@ -51,9 +51,9 @@ type QueryParser struct {
 func NewQueryParser(cfg *config.Config) *QueryParser {
 	return &QueryParser{
 		Config:       cfg,
-		insertRegex:  regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`),
-		updateRegex:  regexp.MustCompile(`(?i)UPDATE\s+(\w+)`),
-		deleteRegex:  regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`),
+		insertRegex:  regexp.MustCompile(`(?i)INSERT\s+INTO\s+([^\s;]+)`),
+		updateRegex:  regexp.MustCompile(`(?i)UPDATE\s+([^\s;]+)`),
+		deleteRegex:  regexp.MustCompile(`(?i)DELETE\s+FROM\s+([^\s;]+)`),
 		typeInferrer: NewTypeInferrer(),
 	}
 }
@@ -224,26 +224,41 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	var tableName string
 	if match := fromRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-		tableName = match[1]
+		tableName = stripIdentQuotes(match[1])
 	}
 
 	if tableName == "" {
 		if match := p.insertRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-			tableName = match[1]
+			tableName = stripIdentQuotes(match[1])
 		}
 	}
 	if tableName == "" {
 		if match := p.updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
-			tableName = match[1]
+			tableName = stripIdentQuotes(match[1])
 		}
 	}
 
-	// Use indexed lookup for O(1) performance
+	// Normalize keyspace-qualified names: "ks"."tbl" → ks.tbl, ks.tbl → ks.tbl
+	// Match against schema table names which may be keyspace-qualified or plain.
 	var table *Table
 	for _, t := range schema.Tables {
-		if strings.EqualFold(t.Name, tableName) {
+		if matchesTableName(t.Name, tableName) {
 			table = t
 			break
+		}
+	}
+
+	// Fallback: strip keyspace prefix and retry.
+	// e.g. query says "myapp.users" but schema has "users" (ScyllaDB single-keyspace mode)
+	if table == nil && tableName != "" {
+		if dotIdx := strings.LastIndex(tableName, "."); dotIdx >= 0 {
+			stripped := tableName[dotIdx+1:]
+			for _, t := range schema.Tables {
+				if strings.EqualFold(t.Name, stripped) {
+					table = t
+					break
+				}
+			}
 		}
 	}
 
@@ -1056,6 +1071,46 @@ func (p *QueryParser) splitSetClause(setClause string) []string {
 	}
 
 	return result
+}
+
+// stripIdentQuotes removes surrounding double-quotes and backticks from identifiers.
+func stripIdentQuotes(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '`' && s[len(s)-1] == '`') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+// matchesTableName compares a schema table name with a query table reference.
+// Handles keyspace-qualified names: "ks"."tbl" = ks.tbl
+func matchesTableName(schemaName, queryName string) bool {
+	// Exact match
+	if strings.EqualFold(schemaName, queryName) {
+		return true
+	}
+	// If the query reference is ks.tbl, extract just the table part and match
+	if dotIdx := strings.LastIndex(queryName, "."); dotIdx >= 0 {
+		tbl := queryName[dotIdx+1:]
+		// Match against plain table name
+		if strings.EqualFold(schemaName, tbl) {
+			return true
+		}
+		// Match against ks.tbl form
+		if strings.EqualFold(schemaName, queryName) {
+			return true
+		}
+	}
+	// Schema name might be ks.tbl, query might be plain tbl
+	if dotIdx := strings.LastIndex(schemaName, "."); dotIdx >= 0 {
+		tbl := schemaName[dotIdx+1:]
+		if strings.EqualFold(tbl, queryName) {
+			return true
+		}
+	}
+	return false
 }
 
 // getColumnNames returns a list of column names from a table for error messages

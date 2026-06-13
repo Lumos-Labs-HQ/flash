@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -111,10 +112,11 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	filepath := filepath.Join(m.migrationsDir, filename)
 
 	var sqlContent string
-	// Check for index changes too, not just tables and enums.
+	// Check for index changes and keyspace changes too, not just tables and enums.
 	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
 		len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 && len(diff.ModifiedEnums) == 0 &&
-		len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 {
+		len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 &&
+		len(diff.NewKeyspaces) == 0 && len(diff.DroppedKeyspaces) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -127,14 +129,12 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 
 	// After generating the migration, update the snapshot so the next
 	// generation diffs against this new schema state.
-	targetTables, targetEnums, targetIndexes, err := m.schemaManager.ParseSchemaPath(schemaPath)
+	targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs, err := m.schemaManager.ParseSchemaPathAllV2(schemaPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse target schema for snapshot: %w", err)
 	}
 
-	// Include standalone indexes in the snapshot so they are not regenerated
-	// on every subsequent migration.
-	if err := schema.SaveSchemaSnapshot(snapshotPath, targetTables, targetEnums, targetIndexes); err != nil {
+	if err := schema.SaveSchemaSnapshotFullV2(snapshotPath, targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs); err != nil {
 		return fmt.Errorf("failed to save schema snapshot: %w", err)
 	}
 
@@ -152,16 +152,35 @@ func (m *Migrator) generateSQLFromDiff(diff *types.SchemaDiff, name string) (str
 
 	dropTableSQL := func(tableName string) string {
 		switch m.provider {
-		case "sqlite", "sqlite3":
-			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
-		case "mysql":
-			return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
-		case "clickhouse":
-			return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
 		case "scylla", "scylladb", "cassandra":
-			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
+			// ScyllaDB uses keyspace-qualified names (ks.table). If the name
+			// already has a dot, quote each part separately.
+			if idx := strings.Index(tableName, "."); idx >= 0 {
+				ks := strings.TrimSpace(tableName[:idx])
+				tbl := strings.TrimSpace(tableName[idx+1:])
+				return fmt.Sprintf(`DROP TABLE IF EXISTS "%s"."%s";`, strings.Trim(ks, `"`), strings.Trim(tbl, `"`))
+			}
+			return fmt.Sprintf(`DROP TABLE IF EXISTS "%s"."%s";`, m.adapter.QuoteIdentifier(tableName), tableName)
 		default:
-			return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\" CASCADE;", tableName)
+			switch m.provider {
+			case "sqlite", "sqlite3":
+				return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\";", tableName)
+			case "mysql":
+				return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
+			case "clickhouse":
+				return fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", tableName)
+			default:
+				return fmt.Sprintf("DROP TABLE IF EXISTS \"%s\" CASCADE;", tableName)
+			}
+		}
+	}
+
+	dropIndexSQL := func(index types.SchemaIndex) string {
+		switch m.provider {
+		case "scylla", "scylladb", "cassandra":
+			return m.adapter.GenerateDropIndexSQL(index)
+		default:
+			return fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)
 		}
 	}
 
@@ -204,8 +223,58 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		}
 	}
 
-	// UP: Create new tables and their indexes
+	// UP: Create new CQL UDTs (ScyllaDB/Cassandra) — must be before tables that reference them
+	for _, udt := range diff.NewUDTs {
+		var fields []string
+		for _, f := range udt.Fields {
+			fields = append(fields, fmt.Sprintf("%s %s", f.Name, f.Type))
+		}
+		udtSQL := fmt.Sprintf("CREATE TYPE IF NOT EXISTS %s (%s);", udt.Name, strings.Join(fields, ", "))
+		upStatements = append(upStatements, udtSQL)
+		hasExecutableSQL = true
+		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS %s;", udt.Name)}, downStatements...)
+	}
+
+	// UP: Create new keyspaces (ScyllaDB/Cassandra)
+	for _, ks := range diff.NewKeyspaces {
+		ksSQL := fmt.Sprintf("CREATE KEYSPACE IF NOT EXISTS \"%s\" WITH REPLICATION = %s", ks.Name, ks.Replication)
+		if ks.DurableWrites != nil && !*ks.DurableWrites {
+			ksSQL += " AND DURABLE_WRITES = false"
+		}
+		ksSQL += ";"
+		upStatements = append(upStatements, ksSQL)
+		hasExecutableSQL = true
+		downStatements = append([]string{fmt.Sprintf("DROP KEYSPACE IF EXISTS \"%s\";", ks.Name)}, downStatements...)
+	}
+
+	// UP: Create new tables and their indexes.
+	// Defer MATERIALIZED VIEWs — they must be created AFTER the tables they reference.
+	var viewUpStatements []string
+	var viewDownStatements []string
 	for _, table := range diff.NewTables {
+		if len(table.Columns) == 1 && strings.HasPrefix(table.Columns[0].Name, "/* MATERIALIZED VIEW */") {
+			viewUpStatements = append(viewUpStatements, table.Columns[0].Type)
+			viewDownStatements = append(viewDownStatements, fmt.Sprintf("DROP MATERIALIZED VIEW IF EXISTS \"%s\";", table.Name))
+			// Ensure referenced tables exist: parse the view SQL for table names
+			// and emit CREATE TABLE IF NOT EXISTS for any that aren't in newTables.
+			if m.provider == "scylla" || m.provider == "scylladb" || m.provider == "cassandra" {
+				viewSQL := table.Columns[0].Type
+				for _, refName := range extractRefTables(viewSQL) {
+					if !isTableInNewTables(refName, diff.NewTables) {
+						refTable := findTableInSchema(refName, m.schemaManager, m.schemaPath)
+						if refTable != nil {
+							sql := m.adapter.GenerateCreateTableSQL(*refTable)
+							if sql != "" {
+								upStatements = append(upStatements, sql)
+								hasExecutableSQL = true
+							}
+						}
+					}
+				}
+			}
+			continue
+		}
+
 		sql := m.adapter.GenerateCreateTableSQL(table)
 		if sql != "" {
 			upStatements = append(upStatements, sql)
@@ -228,9 +297,13 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 			if strings.HasPrefix(index.Name, "sqlite_") {
 				continue
 			}
-			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
+			downStatements = append([]string{dropIndexSQL(index)}, downStatements...)
 		}
 	}
+	// Append views after all tables
+	upStatements = append(upStatements, viewUpStatements...)
+	hasExecutableSQL = hasExecutableSQL || len(viewUpStatements) > 0
+	downStatements = append(viewDownStatements, downStatements...)
 
 	// UP: Modify existing tables
 	for _, tableDiff := range diff.ModifiedTables {
@@ -651,6 +724,71 @@ func (m *Migrator) GenerateEmptyMigration(ctx context.Context, name string) erro
 	}
 
 	fmt.Printf("Generated empty migration: %s\n", filename)
+	return nil
+}
+
+// extractRefTables extracts table names from a CREATE MATERIALIZED VIEW statement's SELECT clause.
+func extractRefTables(viewSQL string) []string {
+	upper := strings.ToUpper(viewSQL)
+	var tables []string
+	seen := map[string]bool{}
+	fromRe := regexp.MustCompile(`(?i)\bFROM\s+(\S+)`)
+	for _, m := range fromRe.FindAllStringSubmatch(viewSQL, -1) {
+		name := strings.TrimSpace(m[1])
+		if !seen[name] {
+			seen[name] = true
+			tables = append(tables, name)
+		}
+	}
+	joinRe := regexp.MustCompile(`(?i)\bJOIN\s+(\S+)`)
+	for _, m := range joinRe.FindAllStringSubmatch(upper, -1) {
+		name := strings.TrimSpace(m[1])
+		if !seen[name] {
+			seen[name] = true
+			tables = append(tables, name)
+		}
+	}
+	return tables
+}
+
+// isTableInNewTables checks if a table is already being created in this migration.
+func isTableInNewTables(name string, newTables []types.SchemaTable) bool {
+	for _, t := range newTables {
+		if strings.EqualFold(t.Name, name) {
+			return true
+		}
+		if dotIdx := strings.LastIndex(t.Name, "."); dotIdx >= 0 {
+			if strings.EqualFold(t.Name[dotIdx+1:], name) {
+				return true
+			}
+		}
+		if dotIdx := strings.LastIndex(name, "."); dotIdx >= 0 {
+			if strings.EqualFold(t.Name, name[dotIdx+1:]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// findTableInSchema finds a table from the schema files by name.
+func findTableInSchema(name string, sm *schema.SchemaManager, schemaPath string) *types.SchemaTable {
+	tables, _, _, _, _ := sm.ParseSchemaPathAll(schemaPath)
+	for _, t := range tables {
+		if strings.EqualFold(t.Name, name) {
+			return &t
+		}
+		if dotIdx := strings.LastIndex(t.Name, "."); dotIdx >= 0 {
+			if strings.EqualFold(t.Name[dotIdx+1:], name) {
+				return &t
+			}
+		}
+		if dotIdx := strings.LastIndex(name, "."); dotIdx >= 0 {
+			if strings.EqualFold(t.Name, name[dotIdx+1:]) {
+				return &t
+			}
+		}
+	}
 	return nil
 }
 

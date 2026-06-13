@@ -126,7 +126,7 @@ func exportToJSON(data types.BackupData, exportPath string, schemaTables []types
 func buildSchemaDDL(tables []types.SchemaTable, enums []types.SchemaEnum, indexMap map[string][]types.SchemaIndex) map[string]interface{} {
 	schema := map[string]interface{}{}
 
-	if enums != nil {
+	if len(enums) > 0 {
 		enumList := make([]map[string]interface{}, len(enums))
 		for i, e := range enums {
 			enumList[i] = map[string]interface{}{
@@ -145,19 +145,25 @@ func buildSchemaDDL(tables []types.SchemaTable, enums []types.SchemaEnum, indexM
 			}
 			cols := make([]map[string]interface{}, len(t.Columns))
 			for j, c := range t.Columns {
-				cols[j] = map[string]interface{}{
-					"name":               c.Name,
-					"type":               c.Type,
-					"nullable":           c.Nullable,
-					"default":            c.Default,
-					"is_primary":         c.IsPrimary,
-					"is_unique":          c.IsUnique,
-					"check":              c.Check,
-					"generated":          c.Generated,
-					"foreign_key_table":  c.ForeignKeyTable,
-					"foreign_key_column": c.ForeignKeyColumn,
-					"on_delete":          c.OnDeleteAction,
+				col := map[string]interface{}{
+					"name":       c.Name,
+					"type":       c.Type,
+					"nullable":   c.Nullable,
+					"default":    c.Default,
+					"is_primary": c.IsPrimary,
+					"is_unique":  c.IsUnique,
+					"check":      c.Check,
+					"generated":  c.Generated,
 				}
+				// Only include FK fields if they have values (not noise)
+				if c.ForeignKeyTable != "" {
+					col["foreign_key_table"] = c.ForeignKeyTable
+					col["foreign_key_column"] = c.ForeignKeyColumn
+					if c.OnDeleteAction != "" && c.OnDeleteAction != "NO ACTION" {
+						col["on_delete"] = c.OnDeleteAction
+					}
+				}
+				cols[j] = col
 			}
 			idxList := indexMap[t.Name]
 			tableList = append(tableList, map[string]interface{}{

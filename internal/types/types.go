@@ -50,6 +50,12 @@ type SchemaConstraint struct {
 	Columns []string
 }
 
+type SchemaKeyspace struct {
+	Name          string
+	Replication   string
+	DurableWrites *bool
+}
+
 type SchemaDiff struct {
 	NewTables          []SchemaTable
 	DroppedTables      []string
@@ -58,16 +64,30 @@ type SchemaDiff struct {
 	DroppedIndexes     []SchemaIndex
 	NewEnums           []SchemaEnum
 	DroppedEnums       []string
-	ModifiedEnums      []EnumDiff // enum value additions
-	RenamedColumns     []RenameOp // RENAME COLUMN
-	RenamedTables      []RenameOp // RENAME TABLE
+	ModifiedEnums      []EnumDiff
+	RenamedColumns     []RenameOp
+	RenamedTables      []RenameOp
 	NewConstraints     []SchemaConstraint
 	DroppedConstraints []SchemaConstraint
+	NewKeyspaces       []SchemaKeyspace
+	DroppedKeyspaces   []string
+	NewUDTs            []SchemaUDT // CQL user-defined types (ScyllaDB/Cassandra)
+	DroppedUDTs        []string    // CQL UDT names to drop
+}
+
+type SchemaUDT struct {
+	Name   string
+	Fields []SchemaUDTField
+}
+
+type SchemaUDTField struct {
+	Name string
+	Type string
 }
 
 type EnumDiff struct {
 	Name      string
-	AddValues []string // values to ADD
+	AddValues []string
 }
 
 type RenameOp struct {

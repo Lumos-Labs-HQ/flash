@@ -12,12 +12,12 @@ func (a *Adapter) CreateBranchSchema(ctx context.Context, branchName string) err
 	ks := sanitizeKeyspace(branchName)
 	return a.session.Query(fmt.Sprintf(
 		`CREATE KEYSPACE IF NOT EXISTS "%s" WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}`, ks,
-	)).WithContext(ctx).Exec()
+	)).ExecContext(ctx)
 }
 
 func (a *Adapter) DropBranchSchema(ctx context.Context, branchName string) error {
 	ks := sanitizeKeyspace(branchName)
-	return a.session.Query(fmt.Sprintf(`DROP KEYSPACE IF EXISTS "%s"`, ks)).WithContext(ctx).Exec()
+	return a.session.Query(fmt.Sprintf(`DROP KEYSPACE IF EXISTS "%s"`, ks)).ExecContext(ctx)
 }
 
 func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceDB, targetDB string) error {
@@ -30,7 +30,7 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceDB, targetDB st
 
 	iter := a.session.Query(
 		`SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? ALLOW FILTERING`, sourceDB,
-	).WithContext(ctx).Iter()
+	).IterContext(ctx)
 	defer iter.Close()
 
 	var tables []string
@@ -47,7 +47,7 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceDB, targetDB st
 	for _, tbl := range tables {
 		q := fmt.Sprintf(`CREATE TABLE "%s"."%s" AS SELECT * FROM "%s"."%s" WHERE 1=0`,
 			targetDB, tbl, sourceDB, tbl)
-		if err := a.session.Query(q).WithContext(ctx).Exec(); err != nil {
+		if err := a.session.Query(q).ExecContext(ctx); err != nil {
 			return fmt.Errorf("failed to clone table %s: %w", tbl, err)
 		}
 	}
@@ -58,7 +58,7 @@ func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchDB string) ([]ty
 	ks := sanitizeKeyspace(branchDB)
 	iter := a.session.Query(
 		`SELECT table_name, column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? ALLOW FILTERING`, ks,
-	).WithContext(ctx).Iter()
+	).IterContext(ctx)
 	defer iter.Close()
 
 	tableMap := make(map[string]*types.SchemaTable)
@@ -89,8 +89,7 @@ func (a *Adapter) GetSchemaForBranch(ctx context.Context, branchDB string) ([]ty
 }
 
 func (a *Adapter) SetActiveSchema(_ context.Context, schemaName string) error {
-	ks := sanitizeKeyspace(schemaName)
-	a.keyspace = ks
+	a.keyspace = sanitizeKeyspace(schemaName)
 	return nil
 }
 
@@ -98,7 +97,7 @@ func (a *Adapter) GetTableNamesInSchema(ctx context.Context, dbName string) ([]s
 	ks := sanitizeKeyspace(dbName)
 	iter := a.session.Query(
 		`SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? ALLOW FILTERING`, ks,
-	).WithContext(ctx).Iter()
+	).IterContext(ctx)
 	defer iter.Close()
 
 	var names []string

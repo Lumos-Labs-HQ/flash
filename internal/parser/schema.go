@@ -14,12 +14,14 @@ import (
 
 var (
 	createTableRegex *regexp.Regexp
+	createViewRegex  *regexp.Regexp
 	enumRegex        *regexp.Regexp
 	regexOnce        sync.Once
 )
 
 func initRegex() {
-	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(([\s\S]*?)\);`)
+	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s*\(([\s\S]*?)\);`)
+	createViewRegex = regexp.MustCompile(`(?i)CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT`)
 	enumRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 }
 
@@ -62,6 +64,8 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 
 				tables := p.parseCreateTables(string(content))
 				schema.Tables = append(schema.Tables, tables...)
+				views := p.parseCreateViews(string(content))
+				schema.Tables = append(schema.Tables, views...)
 				enums := p.parseCreateEnums(string(content))
 				schema.Enums = append(schema.Enums, enums...)
 			}
@@ -90,6 +94,8 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 
 		tables := p.parseCreateTables(string(content))
 		schema.Tables = append(schema.Tables, tables...)
+		views := p.parseCreateViews(string(content))
+		schema.Tables = append(schema.Tables, views...)
 		enums := p.parseCreateEnums(string(content))
 		schema.Enums = append(schema.Enums, enums...)
 	}
@@ -109,7 +115,7 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 		}
 
 		table := &Table{
-			Name:    match[1],
+			Name:    stripTableNameQuotes(match[1]),
 			Columns: make([]*Column, 0, 16),
 		}
 
@@ -127,7 +133,8 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 				strings.HasPrefix(lineUpper, "CHECK") ||
 				strings.HasPrefix(lineUpper, "CONSTRAINT") ||
 				strings.HasPrefix(lineUpper, "INDEX") ||
-				strings.HasPrefix(lineUpper, "KEY") {
+				strings.HasPrefix(lineUpper, "KEY") ||
+				strings.HasPrefix(lineUpper, "STATIC") {
 				continue
 			}
 
@@ -143,24 +150,28 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 			colName = line[:spaceIdx]
 			rest := strings.TrimSpace(line[spaceIdx+1:])
 
-			// Extract type (handle parentheses for types like DECIMAL(10, 2))
+			// Extract type (handle parens + angle brackets for CQL types)
 			parenDepth := 0
+			angleDepth := 0
 			typeEnd := 0
 			for i, ch := range rest {
-				if ch == '(' {
+				switch ch {
+				case '(':
 					parenDepth++
-				} else if ch == ')' {
+				case ')':
 					parenDepth--
-					if parenDepth == 0 {
-						typeEnd = i + 1
-						break
+				case '<':
+					angleDepth++
+				case '>':
+					angleDepth--
+				case ' ', '\t':
+					if parenDepth <= 0 && angleDepth <= 0 {
+						typeEnd = i
+						goto typeEndFound
 					}
-				} else if parenDepth == 0 && (ch == ' ' || ch == '\t') {
-					typeEnd = i
-					break
 				}
 			}
-
+		typeEndFound:
 			if typeEnd == 0 {
 				typeEnd = len(rest)
 			}
@@ -184,6 +195,23 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 	}
 
 	return tables
+}
+
+func (p *SchemaParser) parseCreateViews(sql string) []*Table {
+	sql = utils.RemoveComments(sql)
+	matches := createViewRegex.FindAllStringSubmatch(sql, -1)
+
+	views := make([]*Table, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		views = append(views, &Table{
+			Name:    stripTableNameQuotes(match[1]),
+			Columns: []*Column{{Name: "id", Type: "text", Nullable: false}},
+		})
+	}
+	return views
 }
 
 func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {
@@ -218,4 +246,12 @@ func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {
 	}
 
 	return enums
+}
+
+func stripTableNameQuotes(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) >= 2 && name[0] == '"' && name[len(name)-1] == '"' {
+		return name[1 : len(name)-1]
+	}
+	return name
 }
