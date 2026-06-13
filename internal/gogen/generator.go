@@ -634,7 +634,8 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
 			fieldName := utils.ToPascalCase(col.Name)
-			goType := g.mapColumnTypeToGo(col.Type, col.Nullable)
+			// Gocql Row types use value types not pointers (assigned via fmt.Sprint)
+			goType := g.mapSQLTypeToGo(col.Type, false)
 			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))
 		}
 		code.WriteString("}\n\n")
@@ -808,6 +809,16 @@ func (g *Generator) mapParamTypeToGo(paramType string) string {
 			if strings.EqualFold(enum.Name, paramType) {
 				return utils.ToPascalCase(enum.Name)
 			}
+		}
+	}
+
+	// For gocql, collection types map to []string (gocql handles the conversion)
+	provider := g.Config.Database.Provider
+	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
+	if isScylla {
+		lower := strings.ToLower(paramType)
+		if strings.HasPrefix(lower, "set<") || strings.HasPrefix(lower, "list<") {
+			return "[]string"
 		}
 	}
 
@@ -1005,6 +1016,13 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	cmd := strings.ToLower(query.Cmd)
 	isModifying := utils.IsModifyingQuery(query.SQL)
 
+	// CQL does not support RETURNING — treat INSERT/UPDATE with RETURNING as :exec
+	if strings.Contains(strings.ToUpper(query.SQL), "RETURNING") {
+		if cmd == ":one" || cmd == ":many" {
+			cmd = ":exec"
+		}
+	}
+
 	code.WriteString(fmt.Sprintf("func (q *Queries) %s(ctx context.Context, ", methodName))
 	if len(query.Params) > 0 {
 		if useStructParams {
@@ -1041,6 +1059,10 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	code.WriteString(") {\n")
 
 	cleanSQL := strings.TrimSpace(query.SQL)
+	// CQL does not support RETURNING
+	if idx := strings.LastIndex(strings.ToUpper(cleanSQL), "RETURNING"); idx >= 0 {
+		cleanSQL = strings.TrimSpace(cleanSQL[:idx])
+	}
 	if strings.Contains(cleanSQL, "`") {
 		parts := strings.Split(cleanSQL, "`")
 		code.WriteString("\tconst query = `")
@@ -1076,25 +1098,24 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 			code.WriteString("\n\treturn nil, fmt.Errorf(\"query has no return columns\")\n")
 		} else if len(columns) > 1 {
 			code.WriteString(fmt.Sprintf("\n\tvar result %sRow\n", methodName))
+			code.WriteString("\trow := make(map[string]interface{})\n")
 			code.WriteString("\titer := q.db.Query(query")
 			if len(query.Params) > 0 {
 				code.WriteString(", args...")
 			}
 			code.WriteString(").WithContext(ctx).Iter()\n")
 			code.WriteString("\tdefer iter.Close()\n")
-			code.WriteString("\tif !iter.Scan(")
-			for i, col := range columns {
-				if i > 0 {
-					code.WriteString(", ")
-				}
-				code.WriteString(fmt.Sprintf("&result.%s", utils.ToPascalCase(col.Name)))
-			}
-			code.WriteString(") {\n")
+			code.WriteString("\tif !iter.MapScan(row) {\n")
 			code.WriteString("\t\tif err := iter.Close(); err != nil {\n")
 			code.WriteString("\t\t\treturn result, err\n")
 			code.WriteString("\t\t}\n")
 			code.WriteString("\t\treturn result, gocql.ErrNotFound\n")
 			code.WriteString("\t}\n")
+			for _, col := range columns {
+				goType := g.mapSQLTypeToGo(col.Type, false)
+				code.WriteString(fmt.Sprintf("\tif v, ok := row[\"%s\"]; ok { result.%s = %s }\n",
+					col.Name, utils.ToPascalCase(col.Name), gocqlCastExpr(col.Type, goType, false)))
+			}
 			code.WriteString("\treturn result, iter.Close()\n")
 		} else {
 			code.WriteString("\n\tvar result ")
@@ -1122,15 +1143,14 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 			code.WriteString(").WithContext(ctx).Iter()\n")
 			code.WriteString("\tdefer iter.Close()\n")
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\tfor {\n\t\tvar item %sRow\n", methodName))
-				code.WriteString("\t\tif !iter.Scan(")
-				for i, col := range columns {
-					if i > 0 {
-						code.WriteString(", ")
-					}
-					code.WriteString(fmt.Sprintf("&item.%s", utils.ToPascalCase(col.Name)))
+				code.WriteString("\tfor {\n")
+				code.WriteString("\t\trow := make(map[string]interface{})\n")
+				code.WriteString("\t\tif !iter.MapScan(row) {\n\t\t\tbreak\n\t\t}\n")
+				code.WriteString(fmt.Sprintf("\t\tvar item %sRow\n", methodName))
+				for _, col := range columns {
+					code.WriteString(fmt.Sprintf("\t\tif v, ok := row[\"%s\"]; ok { item.%s = %s }\n",
+						col.Name, utils.ToPascalCase(col.Name), gocqlCastExpr(col.Type, "string", false)))
 				}
-				code.WriteString(") {\n\t\t\tbreak\n\t\t}\n")
 				code.WriteString("\t\titems = append(items, item)\n\t}\n")
 			} else {
 				code.WriteString("\tfor {\n\t\tvar item ")
@@ -1153,13 +1173,18 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
 			fieldName := utils.ToPascalCase(col.Name)
-			goType := g.mapColumnTypeToGo(col.Type, col.Nullable)
-			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))
+			// All gocql MapScan values converted via fmt.Sprint — use string for everything
+			code.WriteString(fmt.Sprintf("\t%s string `json:\"%s\"`\n", fieldName, utils.ToSnakeCase(col.Name)))
 		}
 		code.WriteString("}\n\n")
 	}
 
 	return nil
+}
+
+// gocqlCastExpr returns a Go cast expression from MapScan interface{} to target type.
+func gocqlCastExpr(cqlType, goType string, nullable bool) string {
+	return "fmt.Sprint(v)"
 }
 
 func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.Query) error {

@@ -81,10 +81,11 @@ func RemoveComments(sql string) string {
 // SplitColumns splits a comma-separated column string, respecting parentheses depth.
 // This handles cases like "col1, COALESCE(a, b), col2" correctly.
 func SplitColumns(columnsStr string) []string {
-	result := make([]string, 0, 8) // Pre-allocate with reasonable capacity
+	result := make([]string, 0, 8)
 	var current strings.Builder
-	current.Grow(64) // Pre-allocate buffer for column strings
+	current.Grow(64)
 	parenDepth := 0
+	angleDepth := 0
 
 	for _, char := range columnsStr {
 		switch char {
@@ -94,11 +95,19 @@ func SplitColumns(columnsStr string) []string {
 		case ')':
 			parenDepth--
 			current.WriteRune(char)
+		case '<':
+			angleDepth++
+			current.WriteRune(char)
+		case '>':
+			if angleDepth > 0 {
+				angleDepth--
+			}
+			current.WriteRune(char)
 		case ',':
-			if parenDepth == 0 {
+			if parenDepth == 0 && angleDepth == 0 {
 				result = append(result, current.String())
 				current.Reset()
-				current.Grow(64) // Reset with pre-allocation
+				current.Grow(64)
 			} else {
 				current.WriteRune(char)
 			}
