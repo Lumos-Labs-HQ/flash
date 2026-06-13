@@ -116,7 +116,8 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 	if len(diff.NewTables) == 0 && len(diff.DroppedTables) == 0 && len(diff.ModifiedTables) == 0 &&
 		len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 && len(diff.ModifiedEnums) == 0 &&
 		len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 &&
-		len(diff.NewKeyspaces) == 0 && len(diff.DroppedKeyspaces) == 0 {
+		len(diff.NewKeyspaces) == 0 && len(diff.DroppedKeyspaces) == 0 &&
+		len(diff.NewUDTs) == 0 && len(diff.DroppedUDTs) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -223,6 +224,18 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		}
 	}
 
+	// UP: Create new keyspaces FIRST (ScyllaDB/Cassandra) — UDTs and tables live inside keyspaces
+	for _, ks := range diff.NewKeyspaces {
+		ksSQL := fmt.Sprintf("CREATE KEYSPACE IF NOT EXISTS \"%s\" WITH REPLICATION = %s", ks.Name, ks.Replication)
+		if ks.DurableWrites != nil && !*ks.DurableWrites {
+			ksSQL += " AND DURABLE_WRITES = false"
+		}
+		ksSQL += ";"
+		upStatements = append(upStatements, ksSQL)
+		hasExecutableSQL = true
+		downStatements = append([]string{fmt.Sprintf("DROP KEYSPACE IF EXISTS \"%s\";", ks.Name)}, downStatements...)
+	}
+
 	// UP: Create new CQL UDTs (ScyllaDB/Cassandra) — must be before tables that reference them
 	for _, udt := range diff.NewUDTs {
 		var fields []string
@@ -235,31 +248,24 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS %s;", udt.Name)}, downStatements...)
 	}
 
-	// UP: Create new keyspaces (ScyllaDB/Cassandra)
-	for _, ks := range diff.NewKeyspaces {
-		ksSQL := fmt.Sprintf("CREATE KEYSPACE IF NOT EXISTS \"%s\" WITH REPLICATION = %s", ks.Name, ks.Replication)
-		if ks.DurableWrites != nil && !*ks.DurableWrites {
-			ksSQL += " AND DURABLE_WRITES = false"
-		}
-		ksSQL += ";"
-		upStatements = append(upStatements, ksSQL)
-		hasExecutableSQL = true
-		downStatements = append([]string{fmt.Sprintf("DROP KEYSPACE IF EXISTS \"%s\";", ks.Name)}, downStatements...)
-	}
-
 	// UP: Create new tables and their indexes.
 	// Defer MATERIALIZED VIEWs — they must be created AFTER the tables they reference.
 	var viewUpStatements []string
 	var viewDownStatements []string
 	for _, table := range diff.NewTables {
 		if len(table.Columns) == 1 && strings.HasPrefix(table.Columns[0].Name, "/* MATERIALIZED VIEW */") {
-			viewUpStatements = append(viewUpStatements, table.Columns[0].Type)
+			viewSQL := table.Columns[0].Type
+			// Inject IF NOT EXISTS for idempotent apply
+			if !strings.Contains(strings.ToUpper(viewSQL), "IF NOT EXISTS") {
+				viewSQL = strings.Replace(viewSQL, "CREATE MATERIALIZED VIEW", "CREATE MATERIALIZED VIEW IF NOT EXISTS", 1)
+			}
+			viewUpStatements = append(viewUpStatements, viewSQL)
 			viewDownStatements = append(viewDownStatements, fmt.Sprintf("DROP MATERIALIZED VIEW IF EXISTS \"%s\";", table.Name))
 			// Ensure referenced tables exist: parse the view SQL for table names
 			// and emit CREATE TABLE IF NOT EXISTS for any that aren't in newTables.
 			if m.provider == "scylla" || m.provider == "scylladb" || m.provider == "cassandra" {
-				viewSQL := table.Columns[0].Type
-				for _, refName := range extractRefTables(viewSQL) {
+				rawViewSQL := table.Columns[0].Type
+				for _, refName := range extractRefTables(rawViewSQL) {
 					if !isTableInNewTables(refName, diff.NewTables) {
 						refTable := findTableInSchema(refName, m.schemaManager, m.schemaPath)
 						if refTable != nil {

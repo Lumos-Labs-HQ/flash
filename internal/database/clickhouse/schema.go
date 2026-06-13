@@ -7,6 +7,10 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
+func (a *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	db := a.currentDatabase(ctx)
 	rows, err := a.db.QueryContext(ctx,

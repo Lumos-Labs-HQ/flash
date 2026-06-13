@@ -130,6 +130,10 @@ func (p *Adapter) parseIndexDef(indexName, tableName, indexDef string) types.Sch
 	return index
 }
 
+func (p *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (p *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	query := `
 		SELECT tablename 

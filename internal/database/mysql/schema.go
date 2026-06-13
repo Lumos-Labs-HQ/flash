@@ -324,6 +324,10 @@ func (m *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 	return result, nil
 }
 
+func (m *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (m *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	rows, err := m.db.QueryContext(ctx, `
 		SELECT table_name FROM information_schema.tables 

@@ -394,6 +394,20 @@ func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPat
 			return nil, fmt.Errorf("failed to get current schema: %w", err)
 		}
 
+		// Filter system tables for ScyllaDB/Cassandra (internal keyspace tables)
+		filtered := make([]types.SchemaTable, 0, len(currentTables))
+		for _, t := range currentTables {
+			name := strings.ToLower(t.Name)
+			if strings.HasPrefix(name, "system.") || strings.HasPrefix(name, "system_") {
+				continue
+			}
+			if name == "indexinfo" || name == "batchlog" || name == "batchlog_v2" {
+				continue
+			}
+			filtered = append(filtered, t)
+		}
+		currentTables = filtered
+
 		currentEnums, err = sm.adapter.GetCurrentEnums(ctx)
 		if err != nil {
 			currentEnums = []types.SchemaEnum{}

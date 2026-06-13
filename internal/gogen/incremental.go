@@ -106,6 +106,7 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 
 	needsTime, needsSQL, needsPGConn := false, false, false
 	isPGX := g.Config.Gen.Go.Driver == "pgx"
+	isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
 	for _, query := range fileQueries {
 		for _, col := range query.Columns {
 			colType := g.mapColumnTypeToGo(col.Type, col.Nullable)
@@ -116,7 +117,7 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 				needsSQL = true
 			}
 		}
-		if strings.ToLower(query.Cmd) == ":one" && !isPGX {
+		if strings.ToLower(query.Cmd) == ":one" && !isPGX && !isScylla {
 			needsSQL = true
 		}
 		if strings.ToLower(query.Cmd) == ":execresult" && isPGX {
@@ -125,7 +126,10 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	}
 
 	imports := []string{}
-	if isPGX {
+	if isScylla {
+		imports = append(imports, "\"context\"")
+		imports = append(imports, "\"github.com/apache/cassandra-gocql-driver/v2\"")
+	} else if isPGX {
 		imports = append(imports, "\"context\"")
 	}
 	if needsSQL {
