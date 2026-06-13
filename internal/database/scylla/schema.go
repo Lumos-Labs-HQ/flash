@@ -8,26 +8,43 @@ import (
 )
 
 func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
-	ks := a.currentKeyspace()
-	iter := a.session.Query(
-		`SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? ALLOW FILTERING`, ks,
-	).IterContext(ctx)
+	// ScyllaDB tables contain a dot prefix for keyspace qualifying.
+	keyspace := a.keyspace
+	query := "SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?"
+	iter := a.session.Query(query, keyspace).IterContext(ctx)
 	defer iter.Close()
 
 	var names []string
-	var table string
-	for iter.Scan(&table) {
-		if !strings.HasPrefix(table, "_flash_") {
-			names = append(names, table)
+	for {
+		var name string
+		if !iter.Scan(&name) {
+			break
 		}
+		names = append(names, keyspace+"."+name)
 	}
 	if err := iter.Close(); err != nil {
-		if strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "not found") {
-			return nil, nil
-		}
-		return nil, err
+		return names, err
 	}
 	return names, nil
+}
+
+func (a *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	query := "SELECT keyspace_name FROM system_schema.keyspaces"
+	iter := a.session.Query(query).IterContext(ctx)
+	defer iter.Close()
+
+	var keyspaces []string
+	for {
+		var ks string
+		if !iter.Scan(&ks) {
+			break
+		}
+		keyspaces = append(keyspaces, ks)
+	}
+	if err := iter.Close(); err != nil {
+		return keyspaces, err
+	}
+	return keyspaces, nil
 }
 
 func (a *Adapter) GetCurrentSchema(ctx context.Context) ([]types.SchemaTable, error) {
@@ -65,6 +82,9 @@ func (a *Adapter) GetTableIndexes(_ context.Context, _ string) ([]types.SchemaIn
 
 func (a *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error) {
 	ks := a.currentKeyspace()
+	if ks == "" || ks == "system" {
+		return nil, nil
+	}
 	iter := a.session.Query(
 		`SELECT table_name, column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? ALLOW FILTERING`, ks,
 	).IterContext(ctx)

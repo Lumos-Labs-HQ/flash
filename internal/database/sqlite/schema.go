@@ -282,6 +282,10 @@ func (s *Adapter) GetTableIndexes(ctx context.Context, tableName string) ([]type
 	return indexes, nil
 }
 
+func (s *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (s *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		"SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")

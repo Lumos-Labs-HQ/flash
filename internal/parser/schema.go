@@ -13,16 +13,20 @@ import (
 )
 
 var (
-	createTableRegex *regexp.Regexp
-	createViewRegex  *regexp.Regexp
-	enumRegex        *regexp.Regexp
-	regexOnce        sync.Once
+	createTableRegex    *regexp.Regexp
+	createViewRegex     *regexp.Regexp
+	enumRegex           *regexp.Regexp
+	createKeyspaceRegex *regexp.Regexp
+	createUDTRegex      *regexp.Regexp
+	regexOnce           sync.Once
 )
 
 func initRegex() {
 	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s*\(([\s\S]*?)\);`)
 	createViewRegex = regexp.MustCompile(`(?i)CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT`)
 	enumRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
+	createKeyspaceRegex = regexp.MustCompile(`(?i)CREATE\s+KEYSPACE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)`)
+	createUDTRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\S+)\s*\(([\s\S]*?)\);`)
 }
 
 type SchemaParser struct {
@@ -68,6 +72,11 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 				schema.Tables = append(schema.Tables, views...)
 				enums := p.parseCreateEnums(string(content))
 				schema.Enums = append(schema.Enums, enums...)
+				udts := p.parseCreateUDTs(string(content))
+				schema.UDTs = append(schema.UDTs, udts...)
+				if ks := p.parseCreateKeyspace(string(content)); ks != "" && schema.Keyspace == "" {
+					schema.Keyspace = ks
+				}
 			}
 			return schema, nil
 		}
@@ -98,6 +107,11 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 		schema.Tables = append(schema.Tables, views...)
 		enums := p.parseCreateEnums(string(content))
 		schema.Enums = append(schema.Enums, enums...)
+		udts := p.parseCreateUDTs(string(content))
+		schema.UDTs = append(schema.UDTs, udts...)
+		if ks := p.parseCreateKeyspace(string(content)); ks != "" && schema.Keyspace == "" {
+			schema.Keyspace = ks
+		}
 	}
 
 	return schema, nil
@@ -119,7 +133,12 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 			Columns: make([]*Column, 0, 16),
 		}
 
-		lines := utils.SplitColumns(match[2])
+		body := match[2]
+		// Strip CQL WITH clause — may follow after a newline/space
+		withStripper := regexp.MustCompile(`(?i)\)?\s*WITH\s+(CLUSTERING|COMPACT|compression)[\s\S]*$`)
+		body = withStripper.ReplaceAllString(body, "")
+
+		lines := utils.SplitColumns(body)
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if line == "" {
@@ -246,6 +265,40 @@ func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {
 	}
 
 	return enums
+}
+
+func (p *SchemaParser) parseCreateUDTs(sql string) []*UDT {
+	sql = utils.RemoveComments(sql)
+	matches := createUDTRegex.FindAllStringSubmatch(sql, -1)
+
+	udts := make([]*UDT, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 3 {
+			continue
+		}
+		udt := &UDT{
+			Name:   match[1],
+			Fields: make([]*UDTField, 0),
+		}
+		// Parse fields: each is "name type" separated by commas
+		for _, field := range strings.Split(match[2], ",") {
+			field = strings.TrimSpace(field)
+			parts := strings.SplitN(field, " ", 2)
+			if len(parts) == 2 {
+				udt.Fields = append(udt.Fields, &UDTField{Name: parts[0], Type: parts[1]})
+			}
+		}
+		udts = append(udts, udt)
+	}
+	return udts
+}
+
+func (p *SchemaParser) parseCreateKeyspace(sql string) string {
+	match := createKeyspaceRegex.FindStringSubmatch(sql)
+	if len(match) >= 2 {
+		return match[1]
+	}
+	return ""
 }
 
 func stripTableNameQuotes(name string) string {

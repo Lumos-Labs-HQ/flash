@@ -163,6 +163,26 @@ func (g *Generator) generateModels() error {
 		code.WriteString(")\n\n")
 	}
 
+	// Generate CQL UDT structs (ScyllaDB/Cassandra)
+	isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
+	if isScylla && g.schema != nil {
+		for _, udt := range g.schema.UDTs {
+			// Use bare name (without keyspace prefix) for struct naming
+			bareName := udt.Name
+			if dotIdx := strings.LastIndex(udt.Name, "."); dotIdx >= 0 {
+				bareName = udt.Name[dotIdx+1:]
+			}
+			structName := utils.ToPascalCase(bareName)
+			code.WriteString(fmt.Sprintf("type %s struct {\n", structName))
+			for _, f := range udt.Fields {
+				fieldName := utils.ToPascalCase(f.Name)
+				goType := g.mapSQLTypeToGoWithEnumMap(f.Type, false, enumTypeMap)
+				code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(f.Name)))
+			}
+			code.WriteString("}\n\n")
+		}
+	}
+
 	for _, table := range g.schema.Tables {
 		structName := utils.ToPascalCase(table.Name)
 		code.WriteString(fmt.Sprintf("type %s struct {\n", structName))
@@ -695,6 +715,29 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	case strings.HasPrefix(sqlTypeLower, "nullable("):
 		inner := sqlTypeLower[9 : len(sqlTypeLower)-1]
 		return g.mapSQLTypeToGo(inner, true)
+	// ScyllaDB/Cassandra collection and UDT types
+	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
+		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
+		strings.HasPrefix(sqlTypeLower, "tuple<"):
+		// Check if wrapped type is a known UDT
+		if isScylla && g.schema != nil {
+			udtType := extractUDTName(sqlTypeLower)
+			for _, udt := range g.schema.UDTs {
+				// UDTs may be keyspace-qualified (ap.address) but column types are bare (address)
+				bareName := udt.Name
+				if dotIdx := strings.LastIndex(udt.Name, "."); dotIdx >= 0 {
+					bareName = udt.Name[dotIdx+1:]
+				}
+				if strings.EqualFold(bareName, udtType) || strings.EqualFold(udt.Name, udtType) {
+					goName := utils.ToPascalCase(bareName)
+					if nullable {
+						return "*" + goName
+					}
+					return goName
+				}
+			}
+		}
+		baseType = "string"
 	// ScyllaDB/Cassandra CQL types
 	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid":
 		baseType = "string"
@@ -711,6 +754,22 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		strings.HasPrefix(sqlTypeLower, "tuple<"):
 		baseType = "string"
 	default:
+		// Check if bare CQL UDT name (not wrapped in frozen<>)
+		if isScylla && g.schema != nil {
+			for _, udt := range g.schema.UDTs {
+				bareName := udt.Name
+				if dotIdx := strings.LastIndex(udt.Name, "."); dotIdx >= 0 {
+					bareName = udt.Name[dotIdx+1:]
+				}
+				if strings.EqualFold(bareName, sqlTypeLower) || strings.EqualFold(udt.Name, sqlTypeLower) {
+					goName := utils.ToPascalCase(bareName)
+					if nullable {
+						return "*" + goName
+					}
+					return goName
+				}
+			}
+		}
 		baseType = "string"
 	}
 	provider = g.Config.Database.Provider
@@ -863,6 +922,69 @@ func extractEnumValues(columnType string) []string {
 	}
 
 	return result
+}
+
+// extractCQLInner extracts the inner type from a CQL collection wrapper like frozen<X> or list<X>.
+func extractCQLInner(typ, wrapper string) (string, bool) {
+	prefix := wrapper + "<"
+	if strings.HasPrefix(typ, prefix) && strings.HasSuffix(typ, ">") {
+		inner := typ[len(prefix) : len(typ)-1]
+		return strings.TrimSpace(inner), true
+	}
+	return "", false
+}
+
+// extractCQLMap extracts key and value types from a CQL map<key,value>.
+func extractCQLMap(typ string) (string, string, bool) {
+	if !strings.HasPrefix(typ, "map<") || !strings.HasSuffix(typ, ">") {
+		return "", "", false
+	}
+	inner := typ[4 : len(typ)-1]
+	angle := 0
+	for i, ch := range inner {
+		switch ch {
+		case '<':
+			angle++
+		case '>':
+			angle--
+		case ',':
+			if angle == 0 {
+				key := strings.TrimSpace(inner[:i])
+				val := strings.TrimSpace(inner[i+1:])
+				return key, val, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+// extractUDTName strips CQL collection wrappers to find the inner UDT name.
+// "frozen<social_link>" → "social_link", "list<frozen<social_link>>" → "social_link"
+func extractUDTName(cqlType string) string {
+	for {
+		inner, ok := extractCQLInner(cqlType, "frozen")
+		if ok {
+			cqlType = inner
+			continue
+		}
+		inner, ok = extractCQLInner(cqlType, "list")
+		if ok {
+			cqlType = inner
+			continue
+		}
+		inner, ok = extractCQLInner(cqlType, "set")
+		if ok {
+			cqlType = inner
+			continue
+		}
+		_, inner, ok = extractCQLMap(cqlType)
+		if ok {
+			cqlType = inner
+			continue
+		}
+		break
+	}
+	return cqlType
 }
 
 func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parser.Query) error {

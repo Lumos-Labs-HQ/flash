@@ -105,6 +105,26 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	}
 
 	cluster := gocql.NewCluster(hostList...)
+
+	// If no keyspace was specified in the URL, create one using the schema default.
+	// CQL requires a keyspace — without one, every unqualified statement fails.
+	if keyspace == "" {
+		keyspace = "flash"
+		session, err := cluster.CreateSession()
+		if err != nil {
+			return fmt.Errorf("failed to connect to ScyllaDB: %w", err)
+		}
+		createKS := fmt.Sprintf(
+			"CREATE KEYSPACE IF NOT EXISTS \"%s\" WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
+			keyspace,
+		)
+		if err := session.Query(createKS).ExecContext(ctx); err != nil {
+			session.Close()
+			return fmt.Errorf("failed to create default keyspace '%s': %w", keyspace, err)
+		}
+		session.Close()
+	}
+
 	cluster.Keyspace = keyspace
 	cluster.Consistency = gocql.Quorum
 	cluster.Timeout = 30 * time.Second

@@ -78,6 +78,10 @@ func (a *Adapter) Ping(ctx context.Context) error {
 	return a.client.Ping(ctx, nil)
 }
 
+func (a *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	db := a.currentDB()
 	if db == nil {
