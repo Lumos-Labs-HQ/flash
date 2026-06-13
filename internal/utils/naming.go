@@ -34,7 +34,7 @@ func toTitleCase(s string) string {
 
 func ToPascalCase(s string) string {
 	words := strings.FieldsFunc(s, func(r rune) bool {
-		return r == '_' || r == '-' || r == ' '
+		return r == '_' || r == '-' || r == ' ' || r == '.'
 	})
 	for i, word := range words {
 		words[i] = toTitleCase(word)

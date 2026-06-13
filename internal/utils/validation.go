@@ -67,13 +67,13 @@ var (
 
 func init() {
 	ctePatternRegex = regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
-	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
-	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
-	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([^\s;]+)`)
+	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+([^\s;]+)\s+(\w+)`)
+	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+([^\s;]+)\s+(\w+)`)
 	columnRefPatternRegex = regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
-	aliasExtractPatternRegex = regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
-	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+(\w+)`)
-	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+(\w+)`)
+	aliasExtractPatternRegex = regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+([^\s;]+)(?:\s+(?:AS\s+)?(\w+))?`)
+	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+([^\s;]+)`)
+	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+([^\s;]+)`)
 	joinCheckRegex = regexp.MustCompile(`(?i)\bJOIN\b`)
 	whereClauseRegex = regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`)
 	setClauseRegex = regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`)
@@ -136,6 +136,14 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 
 		// Check if table exists in schema
 		tableExists := tableNames[strings.ToLower(tableName)]
+
+		// Auto-detect: strip keyspace prefix and retry.
+		// e.g. "myapp.users" in query, but schema only has "users" (single-keyspace ScyllaDB mode)
+		if !tableExists && strings.Contains(tableName, ".") {
+			dotIdx := strings.LastIndex(tableName, ".")
+			stripped := strings.ToLower(tableName[dotIdx+1:])
+			tableExists = tableNames[stripped]
+		}
 
 		if !tableExists {
 			lines := strings.Split(sql, "\n")
@@ -380,10 +388,17 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 			columnsField := tablePtr.FieldByName("Columns")
 
 			if nameField.IsValid() && nameField.Kind() == reflect.String {
-				tableName := strings.ToLower(nameField.String())
+				key := strings.ToLower(nameField.String())
 				tblInfo := &tableInfo{
 					name:    nameField.String(),
 					columns: make(map[string]bool),
+				}
+
+				// Register both keyspace-qualified and plain name for ScyllaDB auto-detection.
+				// e.g. "ap.users" → both "ap.users" and "users" match.
+				tables[key] = tblInfo
+				if dotIdx := strings.LastIndex(key, "."); dotIdx >= 0 {
+					tables[key[dotIdx+1:]] = tblInfo
 				}
 
 				if columnsField.IsValid() && columnsField.Kind() == reflect.Slice {
@@ -400,7 +415,6 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 						}
 					}
 				}
-				tables[tableName] = tblInfo
 			}
 		}
 	}

@@ -46,42 +46,32 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 	whereClause := ""
 	if whereMatch := indexWhereRegex.FindStringSubmatch(stmt); len(whereMatch) > 1 {
 		whereClause = strings.TrimSpace(whereMatch[1])
-		// strip WHERE part from stmt before further parsing
 		stmt = stmt[:strings.Index(strings.ToUpper(stmt), " WHERE")]
 	}
 
 	method := ""
 	if usingMatch := indexUsingRegex.FindStringSubmatch(stmt); len(usingMatch) > 1 {
 		method = strings.ToLower(usingMatch[1])
-		// strip USING part
 		stmt = indexUsingRegex.ReplaceAllString(stmt, "")
 	}
 
 	matches := indexRegex.FindStringSubmatch(stmt)
-	if len(matches) < 7 {
+	if len(matches) < 5 {
 		return types.SchemaIndex{}, fmt.Errorf("could not parse CREATE INDEX statement: %s", stmt)
 	}
 
 	isUnique := strings.TrimSpace(matches[1]) != ""
-	indexName := matches[2]
-	if indexName == "" {
-		indexName = matches[3]
-	}
-	tableName := matches[4]
-	if tableName == "" {
-		tableName = matches[5]
-	}
+	indexName := stripNameQuotes(matches[2])
+	tableName := stripNameQuotes(matches[3])
+	columnsStr := matches[4]
 
-	columnsStr := matches[6]
 	columnParts := strings.Split(columnsStr, ",")
 	var columns []string
 	var exprs []string
 	for _, col := range columnParts {
 		col = strings.TrimSpace(col)
-		// Expression index: contains ( or is a function call
 		if strings.Contains(col, "(") {
 			exprs = append(exprs, col)
-			// use a placeholder name derived from expression
 			columns = append(columns, col)
 			continue
 		}
@@ -104,8 +94,111 @@ func (sm *SchemaManager) parseCreateIndexStatement(stmt string) (types.SchemaInd
 	}, nil
 }
 
+func stripNameQuotes(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) >= 2 && name[0] == '"' && name[len(name)-1] == '"' {
+		name = name[1 : len(name)-1]
+	}
+	if len(name) >= 2 && name[0] == '`' && name[len(name)-1] == '`' {
+		name = name[1 : len(name)-1]
+	}
+	return name
+}
+
 func (sm *SchemaManager) isCreateTypeStatement(stmt string) bool {
 	return createTypeStmtRegex.MatchString(stmt)
+}
+
+func (sm *SchemaManager) isCreateViewStatement(stmt string) bool {
+	return createViewStmtRegex.MatchString(stmt)
+}
+
+func (sm *SchemaManager) parseCreateViewStatement(stmt string) (string, string, error) {
+	matches := createViewRegex.FindStringSubmatch(stmt)
+	if len(matches) < 2 {
+		return "", "", fmt.Errorf("could not parse CREATE MATERIALIZED VIEW: %s", stmt)
+	}
+	return stripNameQuotes(matches[1]), strings.TrimSpace(stmt), nil
+}
+
+func (sm *SchemaManager) isCreateUDTStatement(stmt string) bool {
+	return createUDTStmtRegex.MatchString(stmt) && !createTypeStmtRegex.MatchString(stmt)
+}
+
+func (sm *SchemaManager) parseCreateUDTStatement(stmt string) (types.SchemaUDT, error) {
+	matches := createUDTFullRegex.FindStringSubmatch(stmt)
+	if len(matches) < 3 {
+		return types.SchemaUDT{}, fmt.Errorf("could not parse CREATE TYPE (UDT): %s", stmt)
+	}
+	name := stripNameQuotes(matches[1])
+	fieldsStr := matches[2]
+
+	// Split fields by comma, respecting angle brackets
+	var fields []types.SchemaUDTField
+	var current strings.Builder
+	angleLevel := 0
+	for _, ch := range fieldsStr {
+		switch ch {
+		case '<':
+			angleLevel++
+			current.WriteRune(ch)
+		case '>':
+			angleLevel--
+			current.WriteRune(ch)
+		case ',':
+			if angleLevel == 0 {
+				field := strings.TrimSpace(current.String())
+				if field != "" {
+					if fld, err := sm.parseUDTField(field); err == nil {
+						fields = append(fields, fld)
+					}
+				}
+				current.Reset()
+			} else {
+				current.WriteRune(ch)
+			}
+		default:
+			current.WriteRune(ch)
+		}
+	}
+	if field := strings.TrimSpace(current.String()); field != "" {
+		if fld, err := sm.parseUDTField(field); err == nil {
+			fields = append(fields, fld)
+		}
+	}
+
+	return types.SchemaUDT{Name: name, Fields: fields}, nil
+}
+
+func (sm *SchemaManager) parseUDTField(field string) (types.SchemaUDTField, error) {
+	spaceIdx := strings.IndexAny(field, " \t")
+	if spaceIdx == -1 {
+		return types.SchemaUDTField{}, fmt.Errorf("invalid UDT field: %s", field)
+	}
+	return types.SchemaUDTField{
+		Name: strings.TrimSpace(field[:spaceIdx]),
+		Type: strings.TrimSpace(field[spaceIdx+1:]),
+	}, nil
+}
+
+func (sm *SchemaManager) isCreateKeyspaceStatement(stmt string) bool {
+	return createKeyspaceRegex.MatchString(stmt)
+}
+
+func (sm *SchemaManager) parseCreateKeyspaceStatement(stmt string) (types.SchemaKeyspace, error) {
+	matches := createKeyspaceRegex.FindStringSubmatch(stmt)
+	if len(matches) < 3 {
+		return types.SchemaKeyspace{}, fmt.Errorf("could not parse CREATE KEYSPACE: %s", stmt)
+	}
+	ks := types.SchemaKeyspace{
+		Name:        stripNameQuotes(matches[1]),
+		Replication: strings.TrimSpace(matches[2]),
+	}
+	if len(matches) >= 4 && matches[3] != "" {
+		dw := strings.EqualFold(matches[3], "true")
+		ks.DurableWrites = &dw
+	}
+	return ks, nil
 }
 
 func (sm *SchemaManager) parseCreateTypeStatement(stmt string) (types.SchemaEnum, error) {
@@ -144,17 +237,25 @@ func (sm *SchemaManager) parseCreateTableStatement(stmt string) (types.SchemaTab
 		return types.SchemaTable{}, fmt.Errorf("could not extract table name from: %s", stmt)
 	}
 
-	tableName := sm.extractTableName(matches)
+	tableName := stripNameQuotes(matches[1])
 	if tableName == "" {
 		return types.SchemaTable{}, fmt.Errorf("could not extract table name")
 	}
 
-	start, end := strings.Index(stmt, "("), strings.LastIndex(stmt, ")")
-	if start == -1 || end == -1 {
+	// Find the true closing paren of column definitions.
+	// CQL has extra parens in: WITH CLUSTERING ORDER BY (col DESC)
+	// and: PRIMARY KEY ((col1, col2), col3)
+	// We track paren depth from the first ( after CREATE TABLE to find the matching ).
+	start := strings.Index(stmt, "(")
+	if start == -1 {
 		return types.SchemaTable{}, fmt.Errorf("invalid CREATE TABLE syntax")
 	}
+	parenEnd := findMatchingParen(stmt, start)
+	if parenEnd == -1 {
+		return types.SchemaTable{}, fmt.Errorf("unclosed parenthesis in: %s", stmt)
+	}
 
-	columns, foreignKeys, err := sm.parseColumnDefinitionsAndConstraints(stmt[start+1 : end])
+	columns, foreignKeys, err := sm.parseColumnDefinitionsAndConstraints(stmt[start+1 : parenEnd])
 	if err != nil {
 		return types.SchemaTable{}, err
 	}
@@ -168,13 +269,23 @@ func (sm *SchemaManager) parseCreateTableStatement(stmt string) (types.SchemaTab
 	}, nil
 }
 
-func (sm *SchemaManager) extractTableName(matches []string) string {
-	for i := 1; i < len(matches); i++ {
-		if matches[i] != "" {
-			return matches[i]
+func findMatchingParen(s string, start int) int {
+	if start >= len(s) || s[start] != '(' {
+		return -1
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
 		}
 	}
-	return ""
+	return -1
 }
 
 func (sm *SchemaManager) applyForeignKeys(columns []types.SchemaColumn, foreignKeys []foreignKeyConstraint) {
@@ -240,6 +351,7 @@ func (sm *SchemaManager) splitColumnDefinitions(defs string) []string {
 	var result []string
 	var current strings.Builder
 	parenLevel := 0
+	angleLevel := 0
 
 	for _, char := range defs {
 		switch char {
@@ -249,8 +361,16 @@ func (sm *SchemaManager) splitColumnDefinitions(defs string) []string {
 		case ')':
 			parenLevel--
 			current.WriteRune(char)
+		case '<':
+			angleLevel++
+			current.WriteRune(char)
+		case '>':
+			if angleLevel > 0 {
+				angleLevel--
+			}
+			current.WriteRune(char)
 		case ',':
-			if parenLevel == 0 {
+			if parenLevel == 0 && angleLevel == 0 {
 				result = append(result, current.String())
 				current.Reset()
 			} else {
@@ -269,7 +389,7 @@ func (sm *SchemaManager) splitColumnDefinitions(defs string) []string {
 
 func (sm *SchemaManager) isTableConstraint(def string) bool {
 	def = strings.ToUpper(strings.TrimSpace(def))
-	prefixes := []string{"PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "CONSTRAINT"}
+	prefixes := []string{"PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK", "CONSTRAINT", "STATIC"}
 
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(def, prefix) {
@@ -301,6 +421,7 @@ func (sm *SchemaManager) parseColumnDefinition(colDef string) (types.SchemaColum
 	}
 
 	// Extract type - handle parentheses for types like DECIMAL(10, 2)
+	// Also handle CQL types: frozen<type>, set<type>, list<type>, map<k,v>, tuple<a,b,c>
 	restUpper := strings.ToUpper(rest)
 
 	// Handle multi-word types first
@@ -317,29 +438,33 @@ func (sm *SchemaManager) parseColumnDefinition(colDef string) (types.SchemaColum
 	} else if strings.HasPrefix(restUpper, "CHARACTER VARYING") {
 		column.Type = "CHARACTER VARYING"
 	} else {
-		// Extract type including parentheses content
+		// Extract type: handles parens (), angle brackets <>, and simple types
+		// CQL types: frozen<address>, set<text>, map<text,text>, list<frozen<x>>, tuple<text,int,double>
 		parenDepth := 0
+		angleDepth := 0
 		typeEnd := 0
 		for i, ch := range rest {
-			if ch == '(' {
+			switch ch {
+			case '(':
 				parenDepth++
-			} else if ch == ')' {
+			case ')':
 				parenDepth--
-				if parenDepth == 0 {
-					typeEnd = i + 1
-					break
+			case '<':
+				angleDepth++
+			case '>':
+				angleDepth--
+			case ' ', '\t':
+				if parenDepth <= 0 && angleDepth <= 0 {
+					typeEnd = i
+					goto typeDone
 				}
-			} else if parenDepth == 0 && (ch == ' ' || ch == '\t') {
-				typeEnd = i
-				break
 			}
 		}
-
+	typeDone:
 		if typeEnd == 0 {
 			typeEnd = len(rest)
 		}
-
-		column.Type = rest[:typeEnd]
+		column.Type = strings.TrimSuffix(rest[:typeEnd], ",")
 	}
 
 	sm.parseColumnConstraints(&column, colDef)

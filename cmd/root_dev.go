@@ -7,14 +7,16 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
 )
 
 var (
 	cfgFile string
+	envName string
 	Version = "2.4.21-beta-dev"
 )
 
@@ -92,15 +94,17 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./flash.toml)")
+	rootCmd.PersistentFlags().StringVar(&envName, "env", "", "environment name to load (loads .env.{name}, e.g. --env prod loads .env.prod)")
 	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
 	rootCmd.Flags().BoolP("version", "v", false, "Show CLI version")
 }
 
 func initConfig() {
-	if err := godotenv.Load(); err != nil {
-		godotenv.Load(".env")
-		godotenv.Load(".env.local")
+	if envName != "" {
+		godotenv.Load(".env." + envName)
 	}
+	godotenv.Load(".env")
+	godotenv.Load(".env.local")
 
 	config.ConfigFile = cfgFile
 }

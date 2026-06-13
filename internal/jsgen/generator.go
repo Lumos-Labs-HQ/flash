@@ -122,11 +122,30 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 		} else {
 			g.generateMySQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 		}
+	case "scylla", "scylladb", "cassandra":
+		g.generateScyllaExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 	default:
 		g.generatePostgreSQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns, isHotQuery)
 	}
 
 	w.WriteString("  }\n\n")
+}
+
+func (g *Generator) generateScyllaExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
+	if len(paramNames) > 0 {
+		w.WriteString("    const r = await this.db.execute(stmt, [" + strings.Join(paramNames, ", ") + "], { prepare: true });\n")
+	} else {
+		w.WriteString("    const r = await this.db.execute(stmt, [], { prepare: true });\n")
+	}
+	if hasColumns {
+		if cmd == ":one" {
+			w.WriteString("    return r.first() || null;\n")
+		} else {
+			w.WriteString("    return r.rows;\n")
+		}
+	} else {
+		w.WriteString("    return r;\n")
+	}
 }
 
 func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn, isHotQuery bool) {
@@ -411,7 +430,12 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	w.WriteString("/**\n")
 	w.WriteString(" * Create a new database client\n")
-	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
+	provider := g.Config.Database.Provider
+	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		w.WriteString(" * @param {Object} db - ScyllaDB/Cassandra client (from cassandra-driver)\n")
+	} else {
+		w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
+	}
 	w.WriteString(" * @returns {Queries}\n")
 	w.WriteString(" */\n")
 	w.WriteString("function Newq(db) {\n")
