@@ -4,6 +4,8 @@ package common
 type TableInfo struct {
 	Name     string `json:"name"`
 	RowCount int    `json:"row_count"`
+	Keyspace string `json:"keyspace,omitempty"`  // CQL keyspace (ScyllaDB/Cassandra)
+	FullName string `json:"full_name,omitempty"` // Keyspace-qualified name for API queries
 }
 
 // ColumnInfo represents column metadata
