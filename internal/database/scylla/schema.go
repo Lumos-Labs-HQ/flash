@@ -7,8 +7,16 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
 
+// resolveTable splits a potentially keyspace-qualified name into (keyspace, tablename).
+// If no keyspace prefix, fall back to adapter's current keyspace.
+func (a *Adapter) resolveTable(tableName string) (string, string) {
+	if idx := strings.Index(tableName, "."); idx >= 0 {
+		return tableName[:idx], tableName[idx+1:]
+	}
+	return a.currentKeyspace(), tableName
+}
+
 func (a *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
-	// ScyllaDB tables contain a dot prefix for keyspace qualifying.
 	keyspace := a.keyspace
 	query := "SELECT table_name FROM system_schema.tables WHERE keyspace_name = ?"
 	iter := a.session.Query(query, keyspace).IterContext(ctx)
@@ -56,10 +64,10 @@ func (a *Adapter) GetCurrentEnums(_ context.Context) ([]types.SchemaEnum, error)
 }
 
 func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
-	ks := a.currentKeyspace()
+	ks, tbl := a.resolveTable(tableName)
 	iter := a.session.Query(
 		`SELECT column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ? ALLOW FILTERING`,
-		ks, tableName,
+		ks, tbl,
 	).IterContext(ctx)
 	defer iter.Close()
 

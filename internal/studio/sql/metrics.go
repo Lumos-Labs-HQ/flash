@@ -65,6 +65,8 @@ func (s *Service) GetMetrics(ctx context.Context) (*DBMetrics, error) {
 		return s.getMySQLMetrics(ctx, m)
 	case "sqlite", "sqlite3":
 		return s.getSQLiteMetrics(ctx, m)
+	case "scylla", "scylladb", "cassandra":
+		return s.getScyllaMetrics(ctx, m)
 	default:
 		return m, nil
 	}
@@ -420,6 +422,46 @@ func (s *Service) getSQLiteMetrics(ctx context.Context, m *DBMetrics) (*DBMetric
 	m.TotalConnections = 1
 	m.ActiveConnections = 1
 
+	return m, nil
+}
+
+func (s *Service) getScyllaMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
+	tables, err := s.adapter.GetAllTableNames(ctx)
+	if err != nil {
+		return m, nil
+	}
+
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	run := func(fn func()) {
+		wg.Add(1)
+		go func() { defer wg.Done(); fn() }()
+	}
+
+	// Table sizes + row counts
+	for _, table := range tables {
+		if table == "_flash_migrations" {
+			continue
+		}
+		tbl := table
+		run(func() {
+			r, err := s.adapter.ExecuteQueryWithArgs(ctx,
+				fmt.Sprintf("SELECT COUNT(*) AS cnt FROM %s", s.quote(tbl)))
+			if err == nil && len(r.Rows) > 0 {
+				cnt := toInt64(r.Rows[0]["cnt"])
+				mu.Lock()
+				m.TableSizes = append(m.TableSizes, TableSize{
+					Name:     tbl,
+					RowCount: cnt,
+				})
+				m.RowsFetched += cnt
+				mu.Unlock()
+			}
+		})
+	}
+
+	wg.Wait()
 	return m, nil
 }
 

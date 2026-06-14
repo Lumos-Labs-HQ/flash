@@ -73,7 +73,14 @@ func (s *Service) ensureCorrectSchema() error {
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
 	case "scylla", "scylladb", "cassandra":
-		// ScyllaDB uses SetActiveSchema (keyspace switch) via adapter
+		if currentBranch.Schema != "" {
+			type SchemaSwitcher interface {
+				SetActiveSchema(ctx context.Context, schema string) error
+			}
+			if switcher, ok := s.adapter.(SchemaSwitcher); ok {
+				return switcher.SetActiveSchema(s.ctx, currentBranch.Schema)
+			}
+		}
 		return nil
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
@@ -88,6 +95,42 @@ func (s *Service) ensureCorrectSchema() error {
 
 func (s *Service) GetTables() ([]common.TableInfo, error) {
 	_ = s.ensureCorrectSchema()
+
+	// ScyllaDB/Cassandra — return keyspace-grouped tables from all user keyspaces
+	if s.adapter.ProviderName() == "scylla" || s.adapter.ProviderName() == "scylladb" || s.adapter.ProviderName() == "cassandra" {
+		ks, err := s.adapter.GetKeyspaces(s.ctx)
+		if err != nil {
+			return nil, err
+		}
+		type SchemaSwitcher interface {
+			SetActiveSchema(ctx context.Context, schema string) error
+		}
+		var result []common.TableInfo
+		for _, k := range ks {
+			if k == "system" || k == "system_schema" || k == "system_auth" || k == "system_distributed" || k == "system_traces" {
+				continue
+			}
+			if sw, ok := s.adapter.(SchemaSwitcher); ok {
+				_ = sw.SetActiveSchema(s.ctx, k)
+			}
+			tables, _ := s.adapter.GetAllTableNames(s.ctx)
+			for _, t := range tables {
+				if t == "_flash_migrations" {
+					continue
+				}
+				displayName := t
+				if idx := strings.Index(t, "."); idx >= 0 {
+					displayName = t[idx+1:]
+				}
+				c, _ := s.adapter.GetTableRowCount(s.ctx, t)
+				result = append(result, common.TableInfo{
+					Name: displayName, FullName: t, RowCount: c, Keyspace: k,
+				})
+			}
+		}
+		return result, nil
+	}
+
 	tables, err := s.adapter.GetAllTableNames(s.ctx)
 	if err != nil {
 		return nil, err
@@ -518,6 +561,24 @@ func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[str
 }
 
 func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string, args []any) ([]map[string]any, error) {
+	// ScyllaDB does not support LIMIT/OFFSET in CQL the same way as SQL.
+	// Use GetTableData which returns all rows, then paginate in-memory.
+	if s.adapter.ProviderName() == "scylla" || s.adapter.ProviderName() == "scylladb" || s.adapter.ProviderName() == "cassandra" {
+		data, err := s.adapter.GetTableData(s.ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		start := offset
+		end := offset + limit
+		if start > len(data) {
+			return []map[string]any{}, nil
+		}
+		if end > len(data) {
+			end = len(data)
+		}
+		return data[start:end], nil
+	}
+
 	var query string
 	if whereClause != "" {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT %d OFFSET %d",
@@ -584,23 +645,52 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 
-	// Use PullCompleteSchema directly to avoid N per-table index queries
 	type SchemaFetcher interface {
 		PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
 	}
-	var tables []types.SchemaTable
-	var err error
-	if fetcher, ok := s.adapter.(SchemaFetcher); ok {
-		tables, err = fetcher.PullCompleteSchema(ctx)
+
+	var allTables []types.SchemaTable
+
+	// ScyllaDB/Cassandra — iterate all user keyspaces
+	if s.adapter.ProviderName() == "scylla" || s.adapter.ProviderName() == "scylladb" || s.adapter.ProviderName() == "cassandra" {
+		type SchemaSwitcher interface {
+			SetActiveSchema(ctx context.Context, schema string) error
+		}
+		keyspaces, err := s.adapter.GetKeyspaces(s.ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, ks := range keyspaces {
+			if ks == "system" || ks == "system_schema" || ks == "system_auth" || ks == "system_distributed" || ks == "system_traces" {
+				continue
+			}
+			if sw, ok := s.adapter.(SchemaSwitcher); ok {
+				_ = sw.SetActiveSchema(ctx, ks)
+			}
+			if fetcher, ok := s.adapter.(SchemaFetcher); ok {
+				tbls, _ := fetcher.PullCompleteSchema(ctx)
+				for i := range tbls {
+					tbls[i].Name = ks + "." + tbls[i].Name
+				}
+				allTables = append(allTables, tbls...)
+			}
+		}
 	} else {
-		tables, err = s.adapter.GetCurrentSchema(ctx)
-	}
-	if err != nil {
-		return nil, err
+		var err error
+		if fetcher, ok := s.adapter.(SchemaFetcher); ok {
+			allTables, err = fetcher.PullCompleteSchema(ctx)
+		} else {
+			allTables, err = s.adapter.GetCurrentSchema(ctx)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	enums, _ := s.adapter.GetCurrentEnums(ctx)
+	_ = enums
 
+	tables := allTables
 	nodes := make([]map[string]any, 0, len(tables))
 	nodeIndex := make(map[string]string, len(tables))
 
@@ -641,8 +731,9 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 			nodes = append(nodes, map[string]any{
 				"id": nodeID,
 				"data": map[string]any{
-					"label":   table.Name,
-					"columns": columns,
+					"label":    table.Name,
+					"columns":  columns,
+					"keyspace": extractKeyspace(table.Name),
 				},
 				"position": map[string]int{
 					"x": 100 + (j%4)*300,
@@ -803,6 +894,13 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 		Page:    1,
 		Limit:   0,
 	}, nil
+}
+
+func extractKeyspace(name string) string {
+	if idx := strings.Index(name, "."); idx >= 0 {
+		return name[:idx]
+	}
+	return ""
 }
 
 func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
@@ -1241,11 +1339,13 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		Tables:           make([]common.ExportTable, 0),
 	}
 
-	// Export ENUM types for schema exports (PostgreSQL)
-	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-		enumTypes, err := s.getEnumTypes(ctx)
-		if err == nil && len(enumTypes) > 0 {
-			exportData.EnumTypes = enumTypes
+	// Export ENUM types for schema exports (PostgreSQL only)
+	if provider != "scylla" && provider != "scylladb" && provider != "cassandra" {
+		if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
+			enumTypes, err := s.getEnumTypes(ctx)
+			if err == nil && len(enumTypes) > 0 {
+				exportData.EnumTypes = enumTypes
+			}
 		}
 	}
 
