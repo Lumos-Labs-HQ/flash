@@ -6,22 +6,55 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	gocql "github.com/apache/cassandra-gocql-driver/v2"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
+	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
+
+type schemaCache struct {
+	mu      sync.RWMutex
+	tables  map[string][]types.SchemaColumn
+	expires time.Time
+}
+
+func (c *schemaCache) get(key string) ([]types.SchemaColumn, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if time.Now().After(c.expires) {
+		return nil, false
+	}
+	cols, ok := c.tables[key]
+	return cols, ok
+}
+
+func (c *schemaCache) set(key string, cols []types.SchemaColumn) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.tables == nil {
+		c.tables = make(map[string][]types.SchemaColumn)
+	}
+	c.tables[key] = cols
+	c.expires = time.Now().Add(10 * time.Second)
+}
+
+func (c *schemaCache) invalidate() {
+	c.mu.Lock()
+	c.tables = nil
+	c.mu.Unlock()
+}
 
 type Adapter struct {
 	session  *gocql.Session
 	cluster  *gocql.ClusterConfig
 	keyspace string
+	cache    schemaCache
 }
 
-func New() *Adapter {
-	return &Adapter{}
-}
+func New() *Adapter { return &Adapter{} }
 
 var typeMap = map[string]string{
 	"ascii": "ASCII", "text": "TEXT", "varchar": "VARCHAR",
@@ -35,52 +68,26 @@ var typeMap = map[string]string{
 	"set": "SET", "tuple": "TUPLE", "frozen": "FROZEN",
 }
 
-// Connect establishes a connection to a ScyllaDB/Cassandra cluster.
+// Connect establishes a connection to ScyllaDB/Cassandra.
 //
-// URL formats (all query params are optional):
+// URL: scylla://[user:pass@]host:9042[,host2:9042]/keyspace[?params]
 //
-//	# Single host
-//	scylla://host:9042/keyspace
+// Params: consistency, dc, token_aware, num_conns, page_size, timeout,
 //
-//	# Multi-host cluster with auth, datacenter-aware routing, and token-aware
-//	scylla://user:pass@192.168.1.10:9042,192.168.1.11:9042,192.168.1.12:9042/keyspace?dc=us-east&token_aware=true&num_conns=4
-//
-//	# Cross-DC deployment with TLS
-//	scylla://user:pass@dc1-host:9042,dc2-host:9042/keyspace?dc=dc1&token_aware=true&ssl=true&protocol_version=4
-//
-//	# Minimal: defaults to single host, no auth, quorum consistency
-//	scylla://localhost:9042/keyspace
-//
-// Query parameters:
-//
-//	consistency       — one|two|three|quorum|all|local_quorum|each_quorum|local_one|any (default: quorum)
-//	dc                — datacenter name for DC-aware routing (enables DCAwareRoundRobinPolicy)
-//	token_aware       — enable token-aware host policy for partition-key routing (default: true)
-//	num_conns         — connections per host (default: 2)
-//	page_size         — default query page size (default: 5000)
-//	timeout           — query timeout in seconds (default: 30)
-//	connect_timeout   — connection timeout in seconds (default: 10)
-//	keepalive         — TCP keepalive in seconds (default: 0, disabled)
-//	protocol_version  — CQL protocol version: 3 or 4 (default: 4)
-//	ssl               — enable TLS (default: false)
-//	disable_host_lookup — disable initial host lookup (default: true)
+//	connect_timeout, keepalive, protocol_version, ssl, disable_host_lookup
 func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	cleanURL := strings.TrimPrefix(urlStr, "scylla://")
 
-	var username, password string
-	var hosts, keyspace string
+	var username, password, hosts, keyspace string
 	queryParams := url.Values{}
 
-	parsed, err := url.Parse("scylla://" + cleanURL)
-	if err == nil && parsed.Host != "" {
+	if parsed, err := url.Parse("scylla://" + cleanURL); err == nil && parsed.Host != "" {
 		hosts = parsed.Host
 		if parsed.User != nil {
 			username = parsed.User.Username()
 			password, _ = parsed.User.Password()
 		}
-		if parsed.Path != "" {
-			keyspace = strings.TrimPrefix(parsed.Path, "/")
-		}
+		keyspace = strings.TrimPrefix(parsed.Path, "/")
 		queryParams = parsed.Query()
 	} else {
 		if idx := strings.Index(cleanURL, "/"); idx >= 0 {
@@ -88,9 +95,7 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 			hosts = cleanURL[:idx]
 			if qIdx := strings.Index(path, "?"); qIdx >= 0 {
 				keyspace = path[:qIdx]
-				if qs := path[qIdx+1:]; qs != "" {
-					queryParams, _ = url.ParseQuery(qs)
-				}
+				queryParams, _ = url.ParseQuery(path[qIdx+1:])
 			} else {
 				keyspace = path
 			}
@@ -105,30 +110,13 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	}
 
 	cluster := gocql.NewCluster(hostList...)
-
-	// If no keyspace was specified in the URL, create one using the schema default.
-	// CQL requires a keyspace — without one, every unqualified statement fails.
-	if keyspace == "" {
-		keyspace = "flash"
-		session, err := cluster.CreateSession()
-		if err != nil {
-			return fmt.Errorf("failed to connect to ScyllaDB: %w", err)
-		}
-		createKS := fmt.Sprintf(
-			"CREATE KEYSPACE IF NOT EXISTS \"%s\" WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}",
-			keyspace,
-		)
-		if err := session.Query(createKS).ExecContext(ctx); err != nil {
-			session.Close()
-			return fmt.Errorf("failed to create default keyspace '%s': %w", keyspace, err)
-		}
-		session.Close()
-	}
-
-	cluster.Keyspace = keyspace
 	cluster.Consistency = gocql.Quorum
-	cluster.Timeout = 30 * time.Second
-	cluster.ConnectTimeout = 10 * time.Second
+	cluster.Timeout = 10 * time.Second
+	cluster.ConnectTimeout = 3 * time.Second
+	cluster.NumConns = 1
+	// Skip peer discovery — saves a round-trip on every connect.
+	cluster.DisableInitialHostLookup = true
+	cluster.IgnorePeerAddr = true
 
 	applyIntParam(queryParams, "protocol_version", func(v int) { cluster.ProtoVersion = v })
 	applyDurationParam(queryParams, "timeout", func(d time.Duration) { cluster.Timeout = d })
@@ -136,12 +124,10 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	applyDurationParam(queryParams, "keepalive", func(d time.Duration) { cluster.SocketKeepalive = d })
 	applyIntParam(queryParams, "num_conns", func(v int) { cluster.NumConns = v })
 	applyIntParam(queryParams, "page_size", func(v int) { cluster.PageSize = v })
-	applyBoolParam(queryParams, "disable_host_lookup", func(v bool) { cluster.DisableInitialHostLookup = v })
-
-	if cluster.DisableInitialHostLookup {
-		cluster.IgnorePeerAddr = true
-	}
-
+	applyBoolParam(queryParams, "disable_host_lookup", func(v bool) {
+		cluster.DisableInitialHostLookup = v
+		cluster.IgnorePeerAddr = v
+	})
 	if c := queryParams.Get("consistency"); c != "" {
 		cluster.Consistency = parseConsistency(c)
 	}
@@ -151,18 +137,38 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	cluster.PoolConfig.HostSelectionPolicy = buildHostSelectionPolicy(dc, tokenAware)
 
 	if username != "" {
-		cluster.Authenticator = gocql.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		}
+		cluster.Authenticator = gocql.PasswordAuthenticator{Username: username, Password: password}
 	}
-
 	if parseBoolDefault(queryParams.Get("ssl"), false) {
-		cluster.SslOpts = &gocql.SslOptions{
-			EnableHostVerification: false,
-		}
+		cluster.SslOpts = &gocql.SslOptions{EnableHostVerification: false}
 	}
 
+	// If no keyspace given, auto-create "flash".
+	// Connect without keyspace, create it, reconnect with keyspace set.
+	needsAutoKeyspace := keyspace == ""
+	if needsAutoKeyspace {
+		keyspace = "flash"
+	}
+
+	if needsAutoKeyspace {
+		// First session: no keyspace, just create the keyspace then close.
+		s0, err := cluster.CreateSession()
+		if err != nil {
+			return fmt.Errorf("failed to connect to ScyllaDB: %w", err)
+		}
+		err = s0.Query(fmt.Sprintf(
+			`CREATE KEYSPACE IF NOT EXISTS "%s" WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}`,
+			keyspace,
+		)).ExecContext(ctx)
+		s0.Close()
+		if err != nil {
+			return fmt.Errorf("failed to create keyspace '%s': %w", keyspace, err)
+		}
+		// TokenAwareHostPolicy cannot be reused across sessions — rebuild it.
+		cluster.PoolConfig.HostSelectionPolicy = buildHostSelectionPolicy(dc, tokenAware)
+	}
+
+	cluster.Keyspace = keyspace
 	session, err := cluster.CreateSession()
 	if err != nil {
 		return fmt.Errorf("failed to connect to ScyllaDB: %w", err)
@@ -175,9 +181,8 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 }
 
 func parseHosts(raw string) []string {
-	parts := strings.Split(raw, ",")
 	var result []string
-	for _, p := range parts {
+	for _, p := range strings.Split(raw, ",") {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
@@ -227,8 +232,6 @@ func parseConsistency(c string) gocql.Consistency {
 		return gocql.Two
 	case "three":
 		return gocql.Three
-	case "quorum":
-		return gocql.Quorum
 	case "all":
 		return gocql.All
 	case "localquorum", "local_quorum":
@@ -265,9 +268,6 @@ func (a *Adapter) Close() error {
 }
 
 func (a *Adapter) Ping(ctx context.Context) error {
-	if a.session == nil {
-		return fmt.Errorf("not connected")
-	}
 	return a.session.Query("SELECT release_version FROM system.local").ExecContext(ctx)
 }
 
@@ -280,16 +280,34 @@ func (a *Adapter) CreateMigrationsTable(ctx context.Context) error {
 func (a *Adapter) EnsureMigrationTableCompatibility(_ context.Context) error { return nil }
 
 func (a *Adapter) CleanupBrokenMigrationRecords(ctx context.Context) error {
-	return a.session.Query(
-		`DELETE FROM "_flash_migrations" WHERE finished_at IS NULL AND started_at < ?`,
-		time.Now().Add(-1*time.Hour),
-	).ExecContext(ctx)
+	iter := a.session.Query(`SELECT id, started_at, finished_at FROM "_flash_migrations"`).IterContext(ctx)
+	defer iter.Close()
+
+	staleThreshold := time.Now().Add(-1 * time.Hour)
+	var stale []string
+	var id string
+	var startedAt, finishedAt time.Time
+	for iter.Scan(&id, &startedAt, &finishedAt) {
+		if finishedAt.IsZero() && startedAt.Before(staleThreshold) {
+			stale = append(stale, id)
+		}
+	}
+	if err := iter.Close(); err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			return nil
+		}
+		return err
+	}
+	for _, sid := range stale {
+		if err := a.session.Query(`DELETE FROM "_flash_migrations" WHERE id = ?`, sid).ExecContext(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *Adapter) GetAppliedMigrations(ctx context.Context) (map[string]*time.Time, error) {
-	iter := a.session.Query(
-		`SELECT id, finished_at FROM "_flash_migrations"`,
-	).IterContext(ctx)
+	iter := a.session.Query(`SELECT id, finished_at FROM "_flash_migrations"`).IterContext(ctx)
 	defer iter.Close()
 
 	applied := make(map[string]*time.Time)
@@ -320,22 +338,66 @@ func (a *Adapter) RecordMigration(ctx context.Context, migrationID, name, checks
 }
 
 func (a *Adapter) RemoveMigrationRecord(ctx context.Context, migrationID string) error {
-	return a.session.Query(
-		`DELETE FROM "_flash_migrations" WHERE id = ?`, migrationID,
-	).ExecContext(ctx)
+	return a.session.Query(`DELETE FROM "_flash_migrations" WHERE id = ?`, migrationID).ExecContext(ctx)
 }
 
 func (a *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) error {
-	for _, stmt := range common.ParseSQLStatements(migrationSQL) {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
+	stmts := common.ParseSQLStatements(migrationSQL)
+	var filtered []string
+	for _, s := range stmts {
+		if s = strings.TrimSpace(s); s != "" {
+			filtered = append(filtered, s)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	type group struct {
+		parallel bool
+		stmts    []string
+	}
+	groups := []group{{parallel: isIndependentDDL(filtered[0]), stmts: []string{filtered[0]}}}
+	for _, stmt := range filtered[1:] {
+		ind := isIndependentDDL(stmt)
+		last := &groups[len(groups)-1]
+		if last.parallel == ind {
+			last.stmts = append(last.stmts, stmt)
+		} else {
+			groups = append(groups, group{parallel: ind, stmts: []string{stmt}})
+		}
+	}
+
+	for _, g := range groups {
+		if !g.parallel || len(g.stmts) == 1 {
+			for _, stmt := range g.stmts {
+				if err := a.session.Query(stmt).ExecContext(ctx); err != nil {
+					return fmt.Errorf("scylla: %w", err)
+				}
+			}
 			continue
 		}
-		if err := a.session.Query(stmt).ExecContext(ctx); err != nil {
-			return fmt.Errorf("scylla: failed to execute %q: %w", stmt, err)
+		errCh := make(chan error, len(g.stmts))
+		for _, stmt := range g.stmts {
+			go func(s string) { errCh <- a.session.Query(s).ExecContext(ctx) }(stmt)
+		}
+		for range g.stmts {
+			if err := <-errCh; err != nil {
+				return fmt.Errorf("scylla: %w", err)
+			}
 		}
 	}
 	return nil
+}
+
+func isIndependentDDL(stmt string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(stmt))
+	for _, prefix := range []string{"CREATE TABLE", "CREATE INDEX", "DROP TABLE", "DROP INDEX", "CREATE TYPE", "DROP TYPE", "CREATE MATERIALIZED VIEW"} {
+		if strings.HasPrefix(upper, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum, migrationSQL string) error {
@@ -344,6 +406,7 @@ func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, na
 			return err
 		}
 	}
+	a.cache.invalidate()
 	return a.RecordMigration(ctx, migrationID, name, checksum)
 }
 
@@ -389,8 +452,8 @@ func (a *Adapter) ProviderName() string { return "scylla" }
 func (a *Adapter) MapColumnType(dbType string) string {
 	t := strings.TrimSpace(dbType)
 	if idx := strings.Index(t, "<"); idx >= 0 {
-		base := strings.ToUpper(t[:idx])
-		if mapped, ok := typeMap[strings.ToLower(base)]; ok {
+		base := strings.ToLower(t[:idx])
+		if mapped, ok := typeMap[base]; ok {
 			return mapped + t[idx:]
 		}
 		return strings.ToUpper(base) + t[idx:]

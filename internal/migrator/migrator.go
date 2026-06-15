@@ -76,6 +76,11 @@ func (m *Migrator) loadMigrationsFromDir() ([]types.Migration, error) {
 }
 
 func (m *Migrator) hasConflicts(ctx context.Context, pendingMigrations []types.Migration) (bool, []types.MigrationConflict, error) {
+	// ScyllaDB/Cassandra has no NOT NULL constraint enforcement — skip conflict detection entirely.
+	if m.provider == "scylla" || m.provider == "scylladb" || m.provider == "cassandra" {
+		return false, nil, nil
+	}
+
 	var allConflicts []types.MigrationConflict
 
 	for _, migration := range pendingMigrations {

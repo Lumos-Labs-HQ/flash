@@ -65,6 +65,12 @@ func (a *Adapter) GetCurrentEnums(_ context.Context) ([]types.SchemaEnum, error)
 
 func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) {
 	ks, tbl := a.resolveTable(tableName)
+	cacheKey := ks + "." + tbl
+
+	if cols, ok := a.cache.get(cacheKey); ok {
+		return cols, nil
+	}
+
 	iter := a.session.Query(
 		`SELECT column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? AND table_name = ? ALLOW FILTERING`,
 		ks, tbl,
@@ -81,7 +87,11 @@ func (a *Adapter) GetTableColumns(ctx context.Context, tableName string) ([]type
 			IsPrimary: kind == "partition_key" || kind == "clustering",
 		})
 	}
-	return cols, iter.Close()
+	if err := iter.Close(); err != nil {
+		return nil, err
+	}
+	a.cache.set(cacheKey, cols)
+	return cols, nil
 }
 
 func (a *Adapter) GetTableIndexes(_ context.Context, _ string) ([]types.SchemaIndex, error) {
