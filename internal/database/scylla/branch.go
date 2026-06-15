@@ -28,26 +28,55 @@ func (a *Adapter) CloneSchemaToBranch(ctx context.Context, sourceDB, targetDB st
 		return err
 	}
 
+	// Fetch column definitions from source keyspace
 	iter := a.session.Query(
-		`SELECT table_name FROM system_schema.tables WHERE keyspace_name = ? ALLOW FILTERING`, sourceDB,
+		`SELECT table_name, column_name, type, kind FROM system_schema.columns WHERE keyspace_name = ? ALLOW FILTERING`, sourceDB,
 	).IterContext(ctx)
 	defer iter.Close()
 
-	var tables []string
-	var t string
-	for iter.Scan(&t) {
-		if !strings.HasPrefix(t, "_flash_") {
-			tables = append(tables, t)
+	type colInfo struct {
+		kind    string
+		cqlType string
+	}
+	tableMap := make(map[string]map[string]colInfo)
+	tableOrder := []string{}
+
+	var tblName, colName, cqlType, kind string
+	for iter.Scan(&tblName, &colName, &cqlType, &kind) {
+		if strings.HasPrefix(tblName, "_flash_") {
+			continue
 		}
+		if _, ok := tableMap[tblName]; !ok {
+			tableMap[tblName] = make(map[string]colInfo)
+			tableOrder = append(tableOrder, tblName)
+		}
+		tableMap[tblName][colName] = colInfo{kind: kind, cqlType: cqlType}
 	}
 	if err := iter.Close(); err != nil {
 		return err
 	}
 
-	for _, tbl := range tables {
-		q := fmt.Sprintf(`CREATE TABLE "%s"."%s" AS SELECT * FROM "%s"."%s" WHERE 1=0`,
-			targetDB, tbl, sourceDB, tbl)
-		if err := a.session.Query(q).ExecContext(ctx); err != nil {
+	for _, tbl := range tableOrder {
+		cols := tableMap[tbl]
+		var pkPart, clusterPart, colDefs []string
+		for col, info := range cols {
+			colDefs = append(colDefs, fmt.Sprintf(`"%s" %s`, col, info.cqlType))
+			switch info.kind {
+			case "partition_key":
+				pkPart = append(pkPart, `"`+col+`"`)
+			case "clustering":
+				clusterPart = append(clusterPart, `"`+col+`"`)
+			}
+		}
+		var pk string
+		if len(clusterPart) > 0 {
+			pk = fmt.Sprintf("(%s), %s", strings.Join(pkPart, ", "), strings.Join(clusterPart, ", "))
+		} else {
+			pk = strings.Join(pkPart, ", ")
+		}
+		colDefs = append(colDefs, fmt.Sprintf("PRIMARY KEY (%s)", pk))
+		ddl := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%s"."%s" (%s)`, targetDB, tbl, strings.Join(colDefs, ", "))
+		if err := a.session.Query(ddl).ExecContext(ctx); err != nil {
 			return fmt.Errorf("failed to clone table %s: %w", tbl, err)
 		}
 	}

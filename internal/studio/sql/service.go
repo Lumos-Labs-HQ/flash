@@ -105,7 +105,14 @@ func (s *Service) GetTables() ([]common.TableInfo, error) {
 		type SchemaSwitcher interface {
 			SetActiveSchema(ctx context.Context, schema string) error
 		}
-		var result []common.TableInfo
+
+		// Collect all user tables first, then fetch row counts concurrently.
+		type entry struct {
+			displayName string
+			fullName    string
+			keyspace    string
+		}
+		var entries []entry
 		for _, k := range ks {
 			if k == "system" || k == "system_schema" || k == "system_auth" || k == "system_distributed" || k == "system_traces" {
 				continue
@@ -122,10 +129,21 @@ func (s *Service) GetTables() ([]common.TableInfo, error) {
 				if idx := strings.Index(t, "."); idx >= 0 {
 					displayName = t[idx+1:]
 				}
-				c, _ := s.adapter.GetTableRowCount(s.ctx, t)
-				result = append(result, common.TableInfo{
-					Name: displayName, FullName: t, RowCount: c, Keyspace: k,
-				})
+				entries = append(entries, entry{displayName, t, k})
+			}
+		}
+
+		// Fetch all row counts concurrently.
+		fullNames := make([]string, len(entries))
+		for i, e := range entries {
+			fullNames[i] = e.fullName
+		}
+		counts, _ := s.adapter.GetAllTableRowCounts(s.ctx, fullNames)
+
+		result := make([]common.TableInfo, len(entries))
+		for i, e := range entries {
+			result[i] = common.TableInfo{
+				Name: e.displayName, FullName: e.fullName, RowCount: counts[e.fullName], Keyspace: e.keyspace,
 			}
 		}
 		return result, nil

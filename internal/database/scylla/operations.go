@@ -142,7 +142,9 @@ func (a *Adapter) CheckUniqueConstraint(_ context.Context, _, _ string) (bool, e
 
 func (a *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
 	tblRef := a.qualifiedTableName(tableName)
-	iter := a.session.Query(fmt.Sprintf(`SELECT * FROM %s`, tblRef)).IterContext(ctx)
+	q := a.session.Query(fmt.Sprintf(`SELECT * FROM %s`, tblRef)).WithContext(ctx)
+	q.PageSize(500)
+	iter := q.Iter()
 	defer iter.Close()
 
 	var result []map[string]interface{}
@@ -164,14 +166,24 @@ func (a *Adapter) GetTableRowCount(ctx context.Context, tableName string) (int, 
 }
 
 func (a *Adapter) GetAllTableRowCounts(ctx context.Context, tableNames []string) (map[string]int, error) {
-	result := make(map[string]int, len(tableNames))
+	type entry struct {
+		name  string
+		count int
+	}
+	ch := make(chan entry, len(tableNames))
 	for _, t := range tableNames {
-		count, err := a.GetTableRowCount(ctx, t)
-		if err != nil {
-			result[t] = 0
-			continue
-		}
-		result[t] = count
+		go func(tbl string) {
+			count, err := a.GetTableRowCount(ctx, tbl)
+			if err != nil {
+				count = 0
+			}
+			ch <- entry{tbl, count}
+		}(t)
+	}
+	result := make(map[string]int, len(tableNames))
+	for range tableNames {
+		e := <-ch
+		result[e.name] = e.count
 	}
 	return result, nil
 }

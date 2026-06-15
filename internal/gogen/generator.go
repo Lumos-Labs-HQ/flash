@@ -1148,8 +1148,9 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 				code.WriteString("\t\tif !iter.MapScan(row) {\n\t\t\tbreak\n\t\t}\n")
 				code.WriteString(fmt.Sprintf("\t\tvar item %sRow\n", methodName))
 				for _, col := range columns {
+					goType := g.mapSQLTypeToGo(col.Type, false)
 					code.WriteString(fmt.Sprintf("\t\tif v, ok := row[\"%s\"]; ok { item.%s = %s }\n",
-						col.Name, utils.ToPascalCase(col.Name), gocqlCastExpr(col.Type, "string", false)))
+						col.Name, utils.ToPascalCase(col.Name), gocqlCastExpr(col.Type, goType, false)))
 				}
 				code.WriteString("\t\titems = append(items, item)\n\t}\n")
 			} else {
@@ -1173,8 +1174,8 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
 			fieldName := utils.ToPascalCase(col.Name)
-			// All gocql MapScan values converted via fmt.Sprint — use string for everything
-			code.WriteString(fmt.Sprintf("\t%s string `json:\"%s\"`\n", fieldName, utils.ToSnakeCase(col.Name)))
+			goType := g.mapSQLTypeToGo(col.Type, false)
+			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))
 		}
 		code.WriteString("}\n\n")
 	}
@@ -1184,7 +1185,31 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 
 // gocqlCastExpr returns a Go cast expression from MapScan interface{} to target type.
 func gocqlCastExpr(cqlType, goType string, nullable bool) string {
-	return "fmt.Sprint(v)"
+	lower := strings.ToLower(cqlType)
+	switch {
+	case goType == "bool" || lower == "boolean" || lower == "bool":
+		if nullable {
+			return "func() *bool { if b, ok := v.(bool); ok { return &b }; return nil }()"
+		}
+		return "func() bool { b, _ := v.(bool); return b }()"
+	case goType == "int64" || strings.Contains(lower, "int") || lower == "varint" || lower == "counter":
+		if nullable {
+			return "func() *int64 { switch n := v.(type) { case int: i := int64(n); return &i; case int32: i := int64(n); return &i; case int64: return &n; }; return nil }()"
+		}
+		return "func() int64 { switch n := v.(type) { case int: return int64(n); case int32: return int64(n); case int64: return n; }; return 0 }()"
+	case goType == "float64" || strings.Contains(lower, "float") || strings.Contains(lower, "double") || strings.Contains(lower, "decimal"):
+		if nullable {
+			return "func() *float64 { switch n := v.(type) { case float32: f := float64(n); return &f; case float64: return &n; }; return nil }()"
+		}
+		return "func() float64 { switch n := v.(type) { case float32: return float64(n); case float64: return n; }; return 0 }()"
+	case goType == "time.Time" || strings.Contains(lower, "time") || strings.Contains(lower, "date") || lower == "timeuuid":
+		if nullable {
+			return "func() *time.Time { if t, ok := v.(time.Time); ok { return &t }; return nil }()"
+		}
+		return "func() time.Time { t, _ := v.(time.Time); return t }()"
+	default:
+		return "fmt.Sprint(v)"
+	}
 }
 
 func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.Query) error {
