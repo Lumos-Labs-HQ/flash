@@ -22,7 +22,7 @@ hero:
 features:
   - icon: 🗃️
     title: Multi-Database Support
-    details: PostgreSQL, MySQL, SQLite, and MongoDB support with a unified API. Switch databases without rewriting code.
+    details: PostgreSQL, MySQL, SQLite, ScyllaDB/Cassandra, and ClickHouse with a unified API. MongoDB and Redis for Studio.
     link: /concepts/schema
     linkText: Learn about schemas
 
