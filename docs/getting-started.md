@@ -12,7 +12,7 @@ Welcome to Flash ORM! This guide will help you get up and running in minutes.
 - **Go 1.24.2+** (for Go projects)
 - **Node.js 22+** (for TypeScript/JavaScript projects)
 - **Python 3.9+** (for Python projects)
-- Database: PostgreSQL, MySQL, SQLite, or MongoDB
+- Database: PostgreSQL, MySQL, SQLite, ScyllaDB, Cassandra, ClickHouse, or MongoDB
 
 ## Installation
 
@@ -53,6 +53,12 @@ flash init --mysql
 
 # For SQLite
 flash init --sqlite
+
+# For ScyllaDB / Cassandra
+flash init --scylla
+
+# For ClickHouse
+flash init --clickhouse
 ```
 
 ### 2. Project Structure
@@ -86,6 +92,12 @@ DATABASE_URL=user:password@tcp(localhost:3306)/yourdb
 
 # SQLite
 DATABASE_URL=sqlite://./data.db
+
+# ScyllaDB / Cassandra
+DATABASE_URL=scylla://localhost:9042/mykeyspace
+
+# ClickHouse
+DATABASE_URL=clickhouse://localhost:9000/default
 ```
 
 ### 3. Define Your Schema

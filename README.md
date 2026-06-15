@@ -7,7 +7,7 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
   </a>
-  <a href="https://github.com/Lumos-Labs-HQ/flash/releases">
+  <a href="https://github.com/Lumos-Labs-HQ/flash">
     <img src="https://img.shields.io/github/v/release/Lumos-Labs-HQ/flash?label=Release" alt="Release">
   </a>
   <a href="https://www.npmjs.com/package/flashorm">
@@ -22,7 +22,7 @@
   <a href="docs/USAGE_GO.md">📗 Go Guide</a> •
   <a href="docs/USAGE_TYPESCRIPT.md">📘 TypeScript Guide</a> •
   <a href="docs/USAGE_PYTHON.md">📙 Python Guide</a> •
-  <a href="RELEASE_NOTES.md">📋 Release Notes</a>
+  <a href="docs/notes/RELEASE_NOTES.md">📋 Release Notes</a>
 </p>
 
 ![image](/img/flash-orm.png)
@@ -33,7 +33,7 @@ A powerful, database-agnostic ORM built in Go with multi-database support and ty
 
 ## ✨ Features
 
-- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite (full ORM)
+- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite, ScyllaDB/Cassandra, ClickHouse (full ORM)
 - 🔄 **Migration Management**: Create, apply, and track migrations with transaction safety
 - 📤 **Smart Export System**: JSON, CSV, SQLite formats
 - 🔧 **Code Generation**: Type-safe code for Go, JavaScript/TypeScript, and Python
@@ -69,7 +69,7 @@ go install github.com/Lumos-Labs-HQ/flash@latest
 
 ```bash
 # 1. Initialize project
-flash init --postgresql  # or --mysql, --sqlite
+flash init --postgresql  # or --mysql, --sqlite, --scylla, --clickhouse
 
 # 2. Set database URL
 export DATABASE_URL="postgres://user:pass@localhost:5432/mydb"
@@ -105,16 +105,20 @@ flash gen
 | PostgreSQL | ✅ Full | ✅ SQL Studio |
 | MySQL | ✅ Full | ✅ SQL Studio |
 | SQLite | ✅ Full | ✅ SQL Studio |
+| ScyllaDB / Cassandra | ✅ Beta | ✅ SQL Studio |
+| ClickHouse | ✅ Beta | ✅ SQL Studio |
 | MongoDB | ❌ | ✅ Visual Management |
 | Redis | ❌ | ✅ Visual Management |
 
 ## 📊 FlashORM Studio
 
-### SQL Studio (PostgreSQL, MySQL, SQLite)
+### SQL Studio (PostgreSQL, MySQL, SQLite, ScyllaDB, ClickHouse)
 
 ```bash
 flash studio
 flash studio "postgres://user:pass@localhost:5432/mydb"
+flash studio "scylla://localhost:9042/keyspace"
+flash studio "clickhouse://localhost:9000"
 ```
 
 Features: Schema designer, data browser, relationship visualization, auto-migration creation

@@ -133,6 +133,18 @@ type UpdateUserParams struct {
 
 ```go
 // flash_gen/users.go - Query implementations
+
+#### ScyllaDB / gocql Codegen Notes
+
+When generating Go code for ScyllaDB/Cassandra (provider `scylla`):
+
+- **Row struct fields are value types** — `string` not `*string`, because gocql MapScan produces values via `fmt.Sprint`.
+- **`database/sql` is excluded** — per-query files import `context`, `fmt`, and `gocql` only.
+- **`uuid`/`timeuuid` → `string`** in Go structs (not `time.Time`).
+- **Collection params map correctly**: `set<text>` → `[]string`, `list<frozen<addr>>` → `[]*Addr`.
+- **UDTs produce dedicated struct types** — `frozen<address>` generates a separate `Address` struct.
+- **`:many` queries use MapScan** — required for CQL type unmarshaling.
+- **RETURNING downgrade**: queries with `RETURNING` silently become `:exec` for ScyllaDB.
 package flash_gen
 
 import (
@@ -414,6 +426,12 @@ Flash generates code for multiple database drivers per language. Configure via `
 - `mysql2` — MySQL driver
 - `better-sqlite3` — Synchronous SQLite
 - `bun:sqlite` — Bun's native SQLite
+
+**ScyllaDB / Cassandra drivers:**
+- `gocql` (default) — Apache gocql driver v2. Automatically selected when provider is scylla/cassandra.
+
+**ClickHouse drivers:**
+- `clickhouse-go` — ClickHouse native Go driver. Automatically selected when provider is clickhouse.
 
 **Python drivers:**
 - PostgreSQL: `asyncpg` (default async) / `psycopg3` (sync/async)
