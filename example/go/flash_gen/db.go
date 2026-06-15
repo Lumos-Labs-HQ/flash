@@ -13,23 +13,18 @@ type DBTX interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-// New creates a new Queries instance.
-// Supported drivers: database/sql (default) and pgx.
-func New(db DBTX) *Queries {
+func Newq(db DBTX) *Queries {
 	return &Queries{
 		db:    db,
 		stmts: make(map[string]*sql.Stmt),
 	}
 }
 
-// OPTIMIZED: Queries struct with prepared statement cache
-// This provides 2-5x performance improvement for repeated queries
 type Queries struct {
 	db    DBTX
-	stmts map[string]*sql.Stmt // Statement cache for hot queries
+	stmts map[string]*sql.Stmt
 }
 
-// Close closes all prepared statements
 func (q *Queries) Close() error {
 	for _, stmt := range q.stmts {
 		if err := stmt.Close(); err != nil {

@@ -19,6 +19,7 @@ var (
 
 // ExtractTableName extracts the primary table name from a SQL query.
 // Works with INSERT INTO, SELECT FROM, UPDATE, and DELETE FROM statements.
+// Uses word-boundary matching to avoid matching function-internal FROM (e.g. EXTRACT(EPOCH FROM ...)).
 func ExtractTableName(sql string) string {
 	sqlUpper := strings.ToUpper(sql)
 
@@ -28,25 +29,41 @@ func ExtractTableName(sql string) string {
 		}
 	}
 
-	if strings.Contains(sqlUpper, "FROM") {
-		if matches := fromTableRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
-		}
+	// Match FROM/UPDATE/DELETE as standalone keywords (word boundary), not inside functions.
+	// Strip parentheses content first to avoid matching EXTRACT(EPOCH FROM ...).
+	stripped := StripParenthesizedContent(sqlUpper)
+	if matches := fromTableRegex.FindStringSubmatch(stripped); len(matches) > 1 {
+		return strings.ToLower(matches[1])
 	}
 
-	if strings.Contains(sqlUpper, "UPDATE") {
-		if matches := updateTableRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
-		}
+	if matches := updateTableRegex.FindStringSubmatch(stripped); len(matches) > 1 {
+		return strings.ToLower(matches[1])
 	}
 
-	if strings.Contains(sqlUpper, "DELETE") {
-		if matches := deleteFromRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
-		}
+	if matches := deleteFromRegex.FindStringSubmatch(stripped); len(matches) > 1 {
+		return strings.ToLower(matches[1])
 	}
 
 	return ""
+}
+
+// StripParenthesizedContent replaces everything between balanced parentheses with spaces.
+func StripParenthesizedContent(s string) string {
+	var result strings.Builder
+	result.Grow(len(s))
+	depth := 0
+	for _, ch := range s {
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+		} else if depth == 0 {
+			result.WriteRune(ch)
+		}
+	}
+	return result.String()
 }
 
 // IsModifyingQuery returns true if the SQL contains INSERT, UPDATE, or DELETE.

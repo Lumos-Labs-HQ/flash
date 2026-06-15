@@ -3,18 +3,20 @@
   "query_file_checksums": {
     "db/queries/users.sql": "0b23d253f800735bd186851c4cef5ad2756f1a9ba381bf24a02d644c91331660"
   },
-  "schema_checksum": "f0b426439fcf79e6c7f475d7f7d0de3310674e007b95443d1d6bb8ef0e9d8822",
+  "schema_checksum": "5c1b55106efcfeaa843dee48ba07f67dbc85c3a633b96483e2954408c35acb1d",
   "config_checksum": "2b830583743a1e919dfbb71ac169ec632459c70b9335cd180c7d80a891f75537",
   "query_table_deps": {
     "db/queries/users.sql": [
+      "users;",
+      "users",
+      "categories",
       "posts",
       "comments",
-      "users",
-      "categories"
+      "user_post_stats"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/users.go": "3e7731f69eb6b3e170511e2286fead9a7a7cdca40bacfdd3ac386ea6d3d6777a"
+    "flash_gen/users.go": "b2106b9142b6c5c9115df656afbac360d8e63c89ea483e2f7380b05ee47a2c7a"
   },
-  "last_generation": "2026-06-10T15:48:41.269805298+05:30"
+  "last_generation": "2026-06-15T11:28:18.494778616+05:30"
 }
