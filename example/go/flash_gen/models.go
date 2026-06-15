@@ -29,6 +29,8 @@ type Users struct {
 	Name string `json:"name" db:"name"`
 	Address sql.NullString `json:"address" db:"address"`
 	Isadmin bool `json:"isadmin" db:"isadmin"`
+	Age sql.NullInt64 `json:"age" db:"age"`
+	Bio sql.NullString `json:"bio" db:"bio"`
 	Email string `json:"email" db:"email"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`

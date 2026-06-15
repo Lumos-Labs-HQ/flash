@@ -19,6 +19,7 @@ var (
 	paramRegex     *regexp.Regexp
 	returningRegex *regexp.Regexp
 	asRegex        *regexp.Regexp
+	cteNameRegex   *regexp.Regexp
 	// Pre-compiled for inferTypeFromExpression
 	windowFuncRe    *regexp.Regexp
 	numericCTEColRe *regexp.Regexp
@@ -26,10 +27,11 @@ var (
 )
 
 func init() {
-	fromRegex = regexp.MustCompile(`(?i)FROM\s+([^\s;]+)`)
+	fromRegex = regexp.MustCompile(`(?i)\bFROM\s+([^\s;]+)`)
 	paramRegex = regexp.MustCompile(`\$\d+|\?`)
 	returningRegex = regexp.MustCompile(`(?i)RETURNING\s+(.+?)(?:;|\z)`)
 	asRegex = regexp.MustCompile(`(?i)\s+AS\s+`)
+	cteNameRegex = regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
 	windowFuncRe = regexp.MustCompile(`(?i)^(ROW_NUMBER|RANK|DENSE_RANK|NTILE|PERCENT_RANK|CUME_DIST|LEAD|LAG|FIRST_VALUE|LAST_VALUE)\s*\(`)
 	numericCTEColRe = regexp.MustCompile(`(?i)\.(cnt|count|total|total_posts|published_posts|draft_posts|total_comments|posts_commented_on|categories_used|engagement_score|num|qty|quantity|amount|unique_\w+)`)
 	pgCastRe = regexp.MustCompile(`(?i)::[a-zA-Z][a-zA-Z0-9_]*(\([^)]*\))?$`)
@@ -223,7 +225,9 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 
 func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	var tableName string
-	if match := fromRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
+	// Strip parenthesized content to avoid matching function-internal FROM (e.g. EXTRACT(EPOCH FROM ...))
+	cleaned := utils.StripParenthesizedContent(query.SQL)
+	if match := fromRegex.FindStringSubmatch(cleaned); len(match) > 1 {
 		tableName = stripIdentQuotes(match[1])
 	}
 
@@ -236,6 +240,19 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		if match := p.updateRegex.FindStringSubmatch(query.SQL); len(match) > 1 {
 			tableName = stripIdentQuotes(match[1])
 		}
+	}
+
+	// Build CTE name set — CTEs are query-local, not tables in schema
+	cteNames := make(map[string]bool)
+	for _, m := range cteNameRegex.FindAllStringSubmatch(query.SQL, -1) {
+		if len(m) > 1 {
+			cteNames[strings.ToLower(m[1])] = true
+		}
+	}
+
+	// If the extracted table name is actually a CTE, skip schema validation
+	if cteNames[strings.ToLower(tableName)] {
+		tableName = ""
 	}
 
 	// Normalize keyspace-qualified names: "ks"."tbl" → ks.tbl, ks.tbl → ks.tbl

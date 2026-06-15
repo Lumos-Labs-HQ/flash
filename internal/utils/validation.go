@@ -113,7 +113,7 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		}
 	}
 
-	matches := tablePatternRegex.FindAllStringSubmatch(sql, -1)
+	matches := tablePatternRegex.FindAllStringSubmatch(StripParenthesizedContent(sql), -1)
 
 	foundTableRefs := false
 
