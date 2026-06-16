@@ -114,9 +114,14 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	cluster.Timeout = 10 * time.Second
 	cluster.ConnectTimeout = 3 * time.Second
 	cluster.NumConns = 1
-	// Skip peer discovery — saves a round-trip on every connect.
+	// Skip peer discovery and topology event subscriptions — this is a CLI tool
+	// that runs one command then exits. These save ~10s of connection overhead.
 	cluster.DisableInitialHostLookup = true
 	cluster.IgnorePeerAddr = true
+	cluster.Events.DisableNodeStatusEvents = true
+	cluster.Events.DisableTopologyEvents = true
+	cluster.Events.DisableSchemaEvents = true
+	cluster.ReconnectInterval = 0
 
 	applyIntParam(queryParams, "protocol_version", func(v int) { cluster.ProtoVersion = v })
 	applyDurationParam(queryParams, "timeout", func(d time.Duration) { cluster.Timeout = d })
@@ -392,12 +397,10 @@ func (a *Adapter) ExecuteMigration(ctx context.Context, migrationSQL string) err
 
 func isIndependentDDL(stmt string) bool {
 	upper := strings.ToUpper(strings.TrimSpace(stmt))
-	for _, prefix := range []string{"CREATE TABLE", "CREATE INDEX", "DROP TABLE", "DROP INDEX", "CREATE TYPE", "DROP TYPE", "CREATE MATERIALIZED VIEW"} {
-		if strings.HasPrefix(upper, prefix) {
-			return true
-		}
-	}
-	return false
+	// Only CREATE TABLE / DROP TABLE can safely run in parallel.
+	// CREATE INDEX and CREATE MATERIALIZED VIEW depend on tables already existing.
+	// CREATE TYPE / DROP TYPE must complete before tables that reference them.
+	return strings.HasPrefix(upper, "CREATE TABLE") || strings.HasPrefix(upper, "DROP TABLE")
 }
 
 func (a *Adapter) ExecuteAndRecordMigration(ctx context.Context, migrationID, name, checksum, migrationSQL string) error {

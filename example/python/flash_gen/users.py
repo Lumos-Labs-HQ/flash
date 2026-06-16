@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Any, Literal
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 @dataclass
@@ -50,12 +50,12 @@ class Queries:
         result = await self.db.fetch(stmt)
         return [ListusersRow._make_fast(row) for row in result]
 
-    async def update_user(self, id: int, name: str, email: str) -> Optional[UpdateuserRow]:
+    async def update_user(self, name: str, email: str, id: int) -> Optional[UpdateuserRow]:
         _key = 'update_user'
         if _key not in self._stmts:
-            self._stmts[_key] = """UPDATE users SET name = $2, email = $3 WHERE id = $1 RETURNING id, name, email, created_at;"""
+            self._stmts[_key] = """UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, name, email, created_at;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, id, name, email)
+        result = await self.db.fetch(stmt, name, email, id)
         return UpdateuserRow._make_fast(result[0]) if result else None
 
     async def delete_user(self, id: int) -> int:

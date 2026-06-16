@@ -30,22 +30,39 @@ type Migrator struct {
 }
 
 func NewMigrator(cfg *config.Config) (*Migrator, error) {
+	return newMigratorInternal(cfg, false)
+}
+
+// NewMigratorForGenerate creates a Migrator for flash migrate — skips DB connection
+// when a valid schema snapshot already exists, since generation only needs the snapshot + schema files.
+func NewMigratorForGenerate(cfg *config.Config) (*Migrator, error) {
+	snapshotPath := schema.SnapshotPath(cfg.MigrationsPath)
+	snap, _ := schema.LoadSchemaSnapshot(snapshotPath)
+	if snap != nil {
+		// Snapshot exists — no DB needed for diff generation
+		return newMigratorInternal(cfg, true)
+	}
+	return newMigratorInternal(cfg, false)
+}
+
+func newMigratorInternal(cfg *config.Config, skipConnect bool) (*Migrator, error) {
 	adapter := database.NewAdapter(cfg.Database.Provider)
 
-	dbURL, err := cfg.GetDatabaseURL()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get database URL: %w", err)
-	}
-
-	if err := adapter.Connect(context.Background(), dbURL); err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	if !skipConnect {
+		dbURL, err := cfg.GetDatabaseURL()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get database URL: %w", err)
+		}
+		if err := adapter.Connect(context.Background(), dbURL); err != nil {
+			return nil, fmt.Errorf("failed to connect to database: %w", err)
+		}
 	}
 
 	return &Migrator{
 		adapter:       adapter,
 		schemaManager: schema.NewSchemaManager(adapter),
 		migrationsDir: cfg.MigrationsPath,
-		schemaPath:    cfg.GetSchemaDir(), // Use schema directory instead of single file
+		schemaPath:    cfg.GetSchemaDir(),
 		provider:      cfg.Database.Provider,
 		force:         false,
 		fileUtils:     &utils.FileUtils{},

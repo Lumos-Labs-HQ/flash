@@ -33,41 +33,30 @@ func stripNameQuotes(s string) string {
 
 func (a *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 	tblRef := a.qualifiedTableName(table.Name)
-	var pk []string
 
-	for _, col := range table.Columns {
-		if col.IsPrimary {
-			pk = append(pk, `"`+col.Name+`"`)
-		}
-	}
-
-	totalParts := len(table.Columns)
-	if totalParts == 0 {
+	if len(table.Columns) == 0 {
 		return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (unused text PRIMARY KEY);`, tblRef)
-	}
-	hasPK := len(pk) > 0
-	if !hasPK {
-		hasPK = true
-		pk = []string{`"` + table.Columns[0].Name + `"`}
 	}
 
 	var lines []string
 	lines = append(lines, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (`, tblRef))
-	for i, col := range table.Columns {
-		comma := ","
-		if i == totalParts-1 && hasPK {
-			comma = ","
-		} else if i == totalParts-1 {
-			comma = ""
-		}
-		lines = append(lines, fmt.Sprintf(`    "%s" %s%s`, col.Name, a.FormatColumnType(col), comma))
+	for _, col := range table.Columns {
+		lines = append(lines, fmt.Sprintf(`    "%s" %s,`, col.Name, a.FormatColumnType(col)))
 	}
 
-	if len(pk) > 1 {
-		pkStr := strings.Join(pk, ", ")
-		lines = append(lines, fmt.Sprintf(`    PRIMARY KEY (%s)`, pkStr))
+	if table.CompositePK != "" {
+		lines = append(lines, fmt.Sprintf(`    PRIMARY KEY %s`, table.CompositePK))
 	} else {
-		lines = append(lines, fmt.Sprintf(`    PRIMARY KEY (%s)`, pk[0]))
+		var pk []string
+		for _, col := range table.Columns {
+			if col.IsPrimary {
+				pk = append(pk, `"`+col.Name+`"`)
+			}
+		}
+		if len(pk) == 0 {
+			pk = []string{`"` + table.Columns[0].Name + `"`}
+		}
+		lines = append(lines, fmt.Sprintf(`    PRIMARY KEY (%s)`, strings.Join(pk, ", ")))
 	}
 
 	lines = append(lines, ");")

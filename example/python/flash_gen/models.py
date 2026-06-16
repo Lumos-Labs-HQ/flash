@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Optional, List, Literal
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 @dataclass
