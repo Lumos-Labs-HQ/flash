@@ -531,14 +531,14 @@ type GetuserdisplayinfoRow struct {
 type SearchuserswithcoalesceParams struct {
 	Name string `json:"name"`
 	Email string `json:"email"`
-	Param3 string `json:"param3"`
+	Age int64 `json:"age"`
 	Limit int64 `json:"limit"`
 	Offset int64 `json:"offset"`
 }
 
 func (q *Queries) Searchuserswithcoalesce(arg SearchuserswithcoalesceParams) ([]SearchuserswithcoalesceRow, error) {
 	const query = `SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;`
-	args := []interface{}{arg.Name, arg.Email, arg.Param3, arg.Limit, arg.Offset}
+	args := []interface{}{arg.Name, arg.Email, arg.Age, arg.Limit, arg.Offset}
 
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
@@ -638,7 +638,7 @@ type GetusersbyagerangeRow struct {
 	AgeRange int64 `json:"age_range"`
 }
 
-func (q *Queries) Getusersbygeneratedrange(param1 string) ([]GetusersbygeneratedrangeRow, error) {
+func (q *Queries) Getusersbygeneratedrange(age_range int64) ([]GetusersbygeneratedrangeRow, error) {
 	const query = `SELECT id, name, age, age_range FROM users WHERE age_range @> $1::integer;`
 	stmt := q.stmts["Getusersbygeneratedrange_stmt"]
 	if stmt == nil {
@@ -649,7 +649,7 @@ func (q *Queries) Getusersbygeneratedrange(param1 string) ([]Getusersbygenerated
 		}
 		q.stmts["Getusersbygeneratedrange_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{age_range}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -758,7 +758,7 @@ type GetuserpreferencesRow struct {
 	Preferences []byte `json:"preferences"`
 }
 
-func (q *Queries) Updateuserpreferences(param2 string, id int64) (error) {
+func (q *Queries) Updateuserpreferences(preferences []byte, id int64) (error) {
 	const query = `UPDATE users SET preferences = preferences || $1, updated_at = NOW() WHERE id = $2;`
 	stmt := q.stmts["Updateuserpreferences_stmt"]
 	if stmt == nil {
@@ -769,13 +769,13 @@ func (q *Queries) Updateuserpreferences(param2 string, id int64) (error) {
 		}
 		q.stmts["Updateuserpreferences_stmt"] = stmt
 	}
-	args := []interface{}{param2, id}
+	args := []interface{}{preferences, id}
 
 	_, err := stmt.Exec(args...)
 	return err
 }
 
-func (q *Queries) Findusersbyjsonkey(param1 string) ([]FindusersbyjsonkeyRow, error) {
+func (q *Queries) Findusersbyjsonkey(preferences []byte) ([]FindusersbyjsonkeyRow, error) {
 	const query = `SELECT id, name, email, preferences FROM users WHERE preferences->>'theme' = $1;`
 	stmt := q.stmts["Findusersbyjsonkey_stmt"]
 	if stmt == nil {
@@ -786,7 +786,7 @@ func (q *Queries) Findusersbyjsonkey(param1 string) ([]FindusersbyjsonkeyRow, er
 		}
 		q.stmts["Findusersbyjsonkey_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{preferences}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -812,7 +812,7 @@ type FindusersbyjsonkeyRow struct {
 	Preferences []byte `json:"preferences"`
 }
 
-func (q *Queries) Findusersbyjsoncontains(param1 string) ([]FindusersbyjsoncontainsRow, error) {
+func (q *Queries) Findusersbyjsoncontains(preferences []byte) ([]FindusersbyjsoncontainsRow, error) {
 	const query = `SELECT id, name, email FROM users WHERE preferences @> $1::jsonb;`
 	stmt := q.stmts["Findusersbyjsoncontains_stmt"]
 	if stmt == nil {
@@ -823,7 +823,7 @@ func (q *Queries) Findusersbyjsoncontains(param1 string) ([]Findusersbyjsonconta
 		}
 		q.stmts["Findusersbyjsoncontains_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{preferences}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -848,7 +848,7 @@ type FindusersbyjsoncontainsRow struct {
 	Email string `json:"email"`
 }
 
-func (q *Queries) Getuserswithtag(param1 string) ([]GetuserswithtagRow, error) {
+func (q *Queries) Getuserswithtag(tags []string) ([]GetuserswithtagRow, error) {
 	const query = `SELECT id, name, email, tags FROM users WHERE $1 = ANY(tags);`
 	stmt := q.stmts["Getuserswithtag_stmt"]
 	if stmt == nil {
@@ -859,7 +859,7 @@ func (q *Queries) Getuserswithtag(param1 string) ([]GetuserswithtagRow, error) {
 		}
 		q.stmts["Getuserswithtag_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{tags}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -885,7 +885,7 @@ type GetuserswithtagRow struct {
 	Tags []string `json:"tags"`
 }
 
-func (q *Queries) Getuserswithanytag(param1 string) ([]GetuserswithanytagRow, error) {
+func (q *Queries) Getuserswithanytag(tags []string) ([]GetuserswithanytagRow, error) {
 	const query = `SELECT id, name, email, tags FROM users WHERE tags && $1::text[];`
 	stmt := q.stmts["Getuserswithanytag_stmt"]
 	if stmt == nil {
@@ -896,7 +896,7 @@ func (q *Queries) Getuserswithanytag(param1 string) ([]GetuserswithanytagRow, er
 		}
 		q.stmts["Getuserswithanytag_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{tags}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -922,7 +922,7 @@ type GetuserswithanytagRow struct {
 	Tags []string `json:"tags"`
 }
 
-func (q *Queries) Addusertag(param2 string, id int64) (error) {
+func (q *Queries) Addusertag(tags []string, id int64) (error) {
 	const query = `UPDATE users SET tags = array_append(tags, $1), updated_at = NOW() WHERE id = $2;`
 	stmt := q.stmts["Addusertag_stmt"]
 	if stmt == nil {
@@ -933,13 +933,13 @@ func (q *Queries) Addusertag(param2 string, id int64) (error) {
 		}
 		q.stmts["Addusertag_stmt"] = stmt
 	}
-	args := []interface{}{param2, id}
+	args := []interface{}{tags, id}
 
 	_, err := stmt.Exec(args...)
 	return err
 }
 
-func (q *Queries) Removeusertag(param2 string, id int64) (error) {
+func (q *Queries) Removeusertag(tags []string, id int64) (error) {
 	const query = `UPDATE users SET tags = array_remove(tags, $1), updated_at = NOW() WHERE id = $2;`
 	stmt := q.stmts["Removeusertag_stmt"]
 	if stmt == nil {
@@ -950,7 +950,7 @@ func (q *Queries) Removeusertag(param2 string, id int64) (error) {
 		}
 		q.stmts["Removeusertag_stmt"] = stmt
 	}
-	args := []interface{}{param2, id}
+	args := []interface{}{tags, id}
 
 	_, err := stmt.Exec(args...)
 	return err
@@ -994,23 +994,23 @@ type GetusershippingaddressRow struct {
 }
 
 type UpdateusershippingParams struct {
-	Param2 string `json:"param2"`
-	Param3 string `json:"param3"`
-	Param4 string `json:"param4"`
-	Param5 string `json:"param5"`
-	Param6 string `json:"param6"`
+	ShippingField1 string `json:"shipping_field1"`
+	ShippingField2 string `json:"shipping_field2"`
+	ShippingField3 string `json:"shipping_field3"`
+	ShippingField4 string `json:"shipping_field4"`
+	ShippingField5 string `json:"shipping_field5"`
 	Id int64 `json:"id"`
 }
 
 func (q *Queries) Updateusershipping(arg UpdateusershippingParams) (error) {
 	const query = `UPDATE users SET shipping = ROW($1, $2, $3, $4, $5), updated_at = NOW() WHERE id = $6;`
-	args := []interface{}{arg.Param2, arg.Param3, arg.Param4, arg.Param5, arg.Param6, arg.Id}
+	args := []interface{}{arg.ShippingField1, arg.ShippingField2, arg.ShippingField3, arg.ShippingField4, arg.ShippingField5, arg.Id}
 
 	_, err := q.db.Exec(query, args...)
 	return err
 }
 
-func (q *Queries) Getcomplexuseranalytics(param1 string, param2 string, param3 string) ([]GetcomplexuseranalyticsRow, error) {
+func (q *Queries) Getcomplexuseranalytics(total_posts string, total_comments string, limit string) ([]GetcomplexuseranalyticsRow, error) {
 	const query = `WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;`
 	stmt := q.stmts["Getcomplexuseranalytics_stmt"]
 	if stmt == nil {
@@ -1021,7 +1021,7 @@ func (q *Queries) Getcomplexuseranalytics(param1 string, param2 string, param3 s
 		}
 		q.stmts["Getcomplexuseranalytics_stmt"] = stmt
 	}
-	args := []interface{}{param1, param2, param3}
+	args := []interface{}{total_posts, total_comments, limit}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1061,7 +1061,7 @@ type GetcomplexuseranalyticsRow struct {
 	EngagementScore int64 `json:"engagement_score"`
 }
 
-func (q *Queries) Getpostwithactivecommenters(param1 string, param2 string) ([]GetpostwithactivecommentersRow, error) {
+func (q *Queries) Getpostwithactivecommenters(rn string, post_id string) ([]GetpostwithactivecommentersRow, error) {
 	const query = `WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;`
 	stmt := q.stmts["Getpostwithactivecommenters_stmt"]
 	if stmt == nil {
@@ -1072,7 +1072,7 @@ func (q *Queries) Getpostwithactivecommenters(param1 string, param2 string) ([]G
 		}
 		q.stmts["Getpostwithactivecommenters_stmt"] = stmt
 	}
-	args := []interface{}{param1, param2}
+	args := []interface{}{rn, post_id}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1176,7 +1176,7 @@ type GetusertrendingpostsRow struct {
 	ViewDelta float64 `json:"view_delta"`
 }
 
-func (q *Queries) Getpostcountbyuser(param1 string) (GetpostcountbyuserRow, error) {
+func (q *Queries) Getpostcountbyuser(user_id string) (GetpostcountbyuserRow, error) {
 	const query = `SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;`
 	stmt := q.stmts["Getpostcountbyuser_stmt"]
 	if stmt == nil {
@@ -1187,7 +1187,7 @@ func (q *Queries) Getpostcountbyuser(param1 string) (GetpostcountbyuserRow, erro
 		}
 		q.stmts["Getpostcountbyuser_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{user_id}
 
 	var result GetpostcountbyuserRow
 	rows, err := stmt.Query(args...)
@@ -1210,7 +1210,7 @@ type GetpostcountbyuserRow struct {
 	CommentCount int64 `json:"comment_count"`
 }
 
-func (q *Queries) Getuserswithmanyposts(param1 string) ([]GetuserswithmanypostsRow, error) {
+func (q *Queries) Getuserswithmanyposts(min_count string) ([]GetuserswithmanypostsRow, error) {
 	const query = `SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;`
 	stmt := q.stmts["Getuserswithmanyposts_stmt"]
 	if stmt == nil {
@@ -1221,7 +1221,7 @@ func (q *Queries) Getuserswithmanyposts(param1 string) ([]GetuserswithmanypostsR
 		}
 		q.stmts["Getuserswithmanyposts_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{min_count}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1548,7 +1548,7 @@ type GetuseragestatsRow struct {
 	AvgNameLength float64 `json:"avg_name_length"`
 }
 
-func (q *Queries) Getpostsgroupedbystatus(param1 string) ([]GetpostsgroupedbystatusRow, error) {
+func (q *Queries) Getpostsgroupedbystatus(count_threshold string) ([]GetpostsgroupedbystatusRow, error) {
 	const query = `SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM posts GROUP BY status HAVING COUNT(*) > $1 ORDER BY count DESC;`
 	stmt := q.stmts["Getpostsgroupedbystatus_stmt"]
 	if stmt == nil {
@@ -1559,7 +1559,7 @@ func (q *Queries) Getpostsgroupedbystatus(param1 string) ([]Getpostsgroupedbysta
 		}
 		q.stmts["Getpostsgroupedbystatus_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{count_threshold}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1728,7 +1728,7 @@ type SearchpostsbytitleRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Fulltextsearchposts(param1 string, limit int64) ([]FulltextsearchpostsRow, error) {
+func (q *Queries) Fulltextsearchposts(search_query string, limit int64) ([]FulltextsearchpostsRow, error) {
 	const query = `SELECT id, title, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $1)) AS rank FROM posts WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $1) ORDER BY rank DESC LIMIT $2;`
 	stmt := q.stmts["Fulltextsearchposts_stmt"]
 	if stmt == nil {
@@ -1739,7 +1739,7 @@ func (q *Queries) Fulltextsearchposts(param1 string, limit int64) ([]Fulltextsea
 		}
 		q.stmts["Fulltextsearchposts_stmt"] = stmt
 	}
-	args := []interface{}{param1, limit}
+	args := []interface{}{search_query, limit}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1835,7 +1835,7 @@ type GetweeklypoststatsRow struct {
 	TotalViews float64 `json:"total_views"`
 }
 
-func (q *Queries) Getusersinids(param1 string) ([]GetusersinidsRow, error) {
+func (q *Queries) Getusersinids(id int64) ([]GetusersinidsRow, error) {
 	const query = `SELECT * FROM users WHERE id = ANY($1::bigint[]);`
 	stmt := q.stmts["Getusersinids_stmt"]
 	if stmt == nil {
@@ -1846,7 +1846,7 @@ func (q *Queries) Getusersinids(param1 string) ([]GetusersinidsRow, error) {
 		}
 		q.stmts["Getusersinids_stmt"] = stmt
 	}
-	args := []interface{}{param1}
+	args := []interface{}{id}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1883,7 +1883,7 @@ type GetusersinidsRow struct {
 	Role UserRole `json:"role"`
 }
 
-func (q *Queries) Getusersbynames(param1 string, param2 string, param3 string) ([]GetusersbynamesRow, error) {
+func (q *Queries) Getusersbynames(name1 string, name2 string, name3 string) ([]GetusersbynamesRow, error) {
 	const query = `SELECT id, name, email FROM users WHERE name IN ($1, $2, $3);`
 	stmt := q.stmts["Getusersbynames_stmt"]
 	if stmt == nil {
@@ -1894,7 +1894,7 @@ func (q *Queries) Getusersbynames(param1 string, param2 string, param3 string) (
 		}
 		q.stmts["Getusersbynames_stmt"] = stmt
 	}
-	args := []interface{}{param1, param2, param3}
+	args := []interface{}{name1, name2, name3}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2636,5 +2636,866 @@ func (q *Queries) Updateusertimestamp(updated_at time.Time, id int64) (error) {
 
 	_, err := stmt.Exec(args...)
 	return err
+}
+
+type CreatenotificationParams struct {
+	UserId int64 `json:"user_id"`
+	Type string `json:"type_"`
+	Title string `json:"title"`
+	Body string `json:"body"`
+	Metadata []byte `json:"metadata"`
+}
+
+func (q *Queries) Createnotification(arg CreatenotificationParams) (CreatenotificationRow, error) {
+	const query = `INSERT INTO notifications (user_id, type, title, body, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING *;`
+	args := []interface{}{arg.UserId, arg.Type, arg.Title, arg.Body, arg.Metadata}
+
+	var result CreatenotificationRow
+	rows, err := q.db.Query(query, args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.Id, &result.UserId, &result.Type, &result.Title, &result.Body, &result.IsRead, &result.Metadata, &result.CreatedAt)
+	return result, err
+}
+
+type CreatenotificationRow struct {
+	Id int64 `json:"id"`
+	UserId int64 `json:"user_id"`
+	Type string `json:"type"`
+	Title string `json:"title"`
+	Body string `json:"body"`
+	IsRead bool `json:"is_read"`
+	Metadata []byte `json:"metadata"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Getnotificationsbyuser(user_id int64, limit int64, offset int64) ([]GetnotificationsbyuserRow, error) {
+	const query = `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`
+	stmt := q.stmts["Getnotificationsbyuser_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getnotificationsbyuser_stmt"] = stmt
+	}
+	args := []interface{}{user_id, limit, offset}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetnotificationsbyuserRow, 0, 8) 
+	for rows.Next() {
+		var item GetnotificationsbyuserRow
+		if err := rows.Scan(&item.Id, &item.UserId, &item.Type, &item.Title, &item.Body, &item.IsRead, &item.Metadata, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetnotificationsbyuserRow struct {
+	Id int64 `json:"id"`
+	UserId int64 `json:"user_id"`
+	Type string `json:"type"`
+	Title string `json:"title"`
+	Body string `json:"body"`
+	IsRead bool `json:"is_read"`
+	Metadata []byte `json:"metadata"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Getunreadcount(user_id int64) (int64, error) {
+	const query = `SELECT COUNT(*) AS unread_count FROM notifications WHERE user_id = $1 AND is_read = FALSE;`
+	stmt := q.stmts["Getunreadcount_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return 0, err
+		}
+		q.stmts["Getunreadcount_stmt"] = stmt
+	}
+	args := []interface{}{user_id}
+
+	var result int64
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result)
+	return result, err
+}
+
+func (q *Queries) Marknotificationread(id int64, user_id int64) (error) {
+	const query = `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2;`
+	stmt := q.stmts["Marknotificationread_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Marknotificationread_stmt"] = stmt
+	}
+	args := []interface{}{id, user_id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Markallnotificationsread(user_id int64) (error) {
+	const query = `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE;`
+	stmt := q.stmts["Markallnotificationsread_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Markallnotificationsread_stmt"] = stmt
+	}
+	args := []interface{}{user_id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Deleteoldnotifications(user_id int64, created_at time.Time) (error) {
+	const query = `DELETE FROM notifications WHERE user_id = $1 AND created_at < $2;`
+	stmt := q.stmts["Deleteoldnotifications_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Deleteoldnotifications_stmt"] = stmt
+	}
+	args := []interface{}{user_id, created_at}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Getnotificationsbytype(user_id int64, type_ string, limit int64) ([]GetnotificationsbytypeRow, error) {
+	const query = `SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT $3;`
+	stmt := q.stmts["Getnotificationsbytype_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getnotificationsbytype_stmt"] = stmt
+	}
+	args := []interface{}{user_id, type_, limit}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetnotificationsbytypeRow, 0, 8) 
+	for rows.Next() {
+		var item GetnotificationsbytypeRow
+		if err := rows.Scan(&item.Id, &item.Type, &item.Title, &item.Body, &item.IsRead, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetnotificationsbytypeRow struct {
+	Id int64 `json:"id"`
+	Type string `json:"type"`
+	Title string `json:"title"`
+	Body string `json:"body"`
+	IsRead bool `json:"is_read"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Createtag(name string, slug string, color string) (CreatetagRow, error) {
+	const query = `INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;`
+	stmt := q.stmts["Createtag_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return CreatetagRow{}, err
+		}
+		q.stmts["Createtag_stmt"] = stmt
+	}
+	args := []interface{}{name, slug, color}
+
+	var result CreatetagRow
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.Id, &result.Name, &result.Slug, &result.Color)
+	return result, err
+}
+
+type CreatetagRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Color string `json:"color"`
+}
+
+func (q *Queries) Gettagbyslug(slug string) (GettagbyslugRow, error) {
+	const query = `SELECT * FROM tags WHERE slug = $1;`
+	stmt := q.stmts["Gettagbyslug_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GettagbyslugRow{}, err
+		}
+		q.stmts["Gettagbyslug_stmt"] = stmt
+	}
+	args := []interface{}{slug}
+
+	var result GettagbyslugRow
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.Id, &result.Name, &result.Slug, &result.Color)
+	return result, err
+}
+
+type GettagbyslugRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Color string `json:"color"`
+}
+
+func (q *Queries) Getalltags() ([]GetalltagsRow, error) {
+	const query = `SELECT * FROM tags ORDER BY name ASC;`
+	stmt := q.stmts["Getalltags_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getalltags_stmt"] = stmt
+	}
+
+	rows, err := stmt.Query()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetalltagsRow, 0, 8) 
+	for rows.Next() {
+		var item GetalltagsRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Slug, &item.Color); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetalltagsRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Color string `json:"color"`
+}
+
+func (q *Queries) Addtagtopost(post_id int64, tag_id int64) (error) {
+	const query = `INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`
+	stmt := q.stmts["Addtagtopost_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Addtagtopost_stmt"] = stmt
+	}
+	args := []interface{}{post_id, tag_id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Removetagfrompost(post_id int64, tag_id int64) (error) {
+	const query = `DELETE FROM post_tags WHERE post_id = $1 AND tag_id = $2;`
+	stmt := q.stmts["Removetagfrompost_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Removetagfrompost_stmt"] = stmt
+	}
+	args := []interface{}{post_id, tag_id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Gettagsforpost(post_id int64) ([]GettagsforpostRow, error) {
+	const query = `SELECT t.id, t.name, t.slug, t.color FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1 ORDER BY t.name;`
+	stmt := q.stmts["Gettagsforpost_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Gettagsforpost_stmt"] = stmt
+	}
+	args := []interface{}{post_id}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GettagsforpostRow, 0, 8) 
+	for rows.Next() {
+		var item GettagsforpostRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Slug, &item.Color); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GettagsforpostRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Color string `json:"color"`
+}
+
+func (q *Queries) Getpostsbytag(slug string, limit int64, offset int64) ([]GetpostsbytagRow, error) {
+	const query = `SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = $1 AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`
+	stmt := q.stmts["Getpostsbytag_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getpostsbytag_stmt"] = stmt
+	}
+	args := []interface{}{slug, limit, offset}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetpostsbytagRow, 0, 8) 
+	for rows.Next() {
+		var item GetpostsbytagRow
+		if err := rows.Scan(&item.Id, &item.Title, &item.Status, &item.CreatedAt, &item.AuthorName, &item.CommentCount); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetpostsbytagRow struct {
+	Id int64 `json:"id"`
+	Title string `json:"title"`
+	Status PostStatus `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	AuthorName string `json:"author_name"`
+	CommentCount int64 `json:"comment_count"`
+}
+
+func (q *Queries) Gettoptags(limit int64) ([]GettoptagsRow, error) {
+	const query = `SELECT t.id, t.name, t.slug, t.color, COUNT(pt.post_id) AS post_count FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON pt.post_id = p.id WHERE p.status = 'published' GROUP BY t.id, t.name, t.slug, t.color ORDER BY post_count DESC LIMIT $1;`
+	stmt := q.stmts["Gettoptags_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Gettoptags_stmt"] = stmt
+	}
+	args := []interface{}{limit}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GettoptagsRow, 0, 8) 
+	for rows.Next() {
+		var item GettoptagsRow
+		if err := rows.Scan(&item.Id, &item.Name, &item.Slug, &item.Color, &item.PostCount); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GettoptagsRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Color string `json:"color"`
+	PostCount int64 `json:"post_count"`
+}
+
+type UploadmediaParams struct {
+	UserId int64 `json:"user_id"`
+	PostId int64 `json:"post_id"`
+	Type string `json:"type_"`
+	Url string `json:"url"`
+	SizeBytes int64 `json:"size_bytes"`
+	MimeType string `json:"mime_type"`
+	Width int64 `json:"width"`
+	Height int64 `json:"height"`
+	Metadata []byte `json:"metadata"`
+}
+
+func (q *Queries) Uploadmedia(arg UploadmediaParams) (UploadmediaRow, error) {
+	const query = `INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;`
+	args := []interface{}{arg.UserId, arg.PostId, arg.Type, arg.Url, arg.SizeBytes, arg.MimeType, arg.Width, arg.Height, arg.Metadata}
+
+	var result UploadmediaRow
+	rows, err := q.db.Query(query, args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.Id, &result.UserId, &result.PostId, &result.Type, &result.Url, &result.SizeBytes, &result.MimeType, &result.Width, &result.Height, &result.Metadata, &result.CreatedAt)
+	return result, err
+}
+
+type UploadmediaRow struct {
+	Id string `json:"id"`
+	UserId int64 `json:"user_id"`
+	PostId int64 `json:"post_id"`
+	Type string `json:"type"`
+	Url string `json:"url"`
+	SizeBytes int64 `json:"size_bytes"`
+	MimeType string `json:"mime_type"`
+	Width int64 `json:"width"`
+	Height int64 `json:"height"`
+	Metadata []byte `json:"metadata"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Getmediabypost(post_id int64) ([]GetmediabypostRow, error) {
+	const query = `SELECT id, type, url, size_bytes, mime_type, width, height, created_at FROM media WHERE post_id = $1 ORDER BY created_at DESC;`
+	stmt := q.stmts["Getmediabypost_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getmediabypost_stmt"] = stmt
+	}
+	args := []interface{}{post_id}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetmediabypostRow, 0, 8) 
+	for rows.Next() {
+		var item GetmediabypostRow
+		if err := rows.Scan(&item.Id, &item.Type, &item.Url, &item.SizeBytes, &item.MimeType, &item.Width, &item.Height, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetmediabypostRow struct {
+	Id string `json:"id"`
+	Type string `json:"type"`
+	Url string `json:"url"`
+	SizeBytes int64 `json:"size_bytes"`
+	MimeType string `json:"mime_type"`
+	Width int64 `json:"width"`
+	Height int64 `json:"height"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Getmediabyuser(user_id int64, limit int64, offset int64) ([]GetmediabyuserRow, error) {
+	const query = `SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`
+	stmt := q.stmts["Getmediabyuser_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getmediabyuser_stmt"] = stmt
+	}
+	args := []interface{}{user_id, limit, offset}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetmediabyuserRow, 0, 8) 
+	for rows.Next() {
+		var item GetmediabyuserRow
+		if err := rows.Scan(&item.Id, &item.Type, &item.Url, &item.SizeBytes, &item.MimeType, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetmediabyuserRow struct {
+	Id string `json:"id"`
+	Type string `json:"type"`
+	Url string `json:"url"`
+	SizeBytes int64 `json:"size_bytes"`
+	MimeType string `json:"mime_type"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Getmediabytype(user_id int64, type_ string) ([]GetmediabytypeRow, error) {
+	const query = `SELECT id, user_id, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC;`
+	stmt := q.stmts["Getmediabytype_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getmediabytype_stmt"] = stmt
+	}
+	args := []interface{}{user_id, type_}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetmediabytypeRow, 0, 8) 
+	for rows.Next() {
+		var item GetmediabytypeRow
+		if err := rows.Scan(&item.Id, &item.UserId, &item.Url, &item.SizeBytes, &item.MimeType, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetmediabytypeRow struct {
+	Id string `json:"id"`
+	UserId int64 `json:"user_id"`
+	Url string `json:"url"`
+	SizeBytes int64 `json:"size_bytes"`
+	MimeType string `json:"mime_type"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Deletemedia(id string, user_id int64) (error) {
+	const query = `DELETE FROM media WHERE id = $1 AND user_id = $2;`
+	stmt := q.stmts["Deletemedia_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Deletemedia_stmt"] = stmt
+	}
+	args := []interface{}{id, user_id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Getstorageusedbyuser(user_id int64) (GetstorageusedbyuserRow, error) {
+	const query = `SELECT SUM(size_bytes) AS total_bytes, COUNT(*) AS total_files, COUNT(*) FILTER (WHERE type = 'image') AS image_count, COUNT(*) FILTER (WHERE type = 'video') AS video_count, COUNT(*) FILTER (WHERE type = 'document') AS document_count FROM media WHERE user_id = $1;`
+	stmt := q.stmts["Getstorageusedbyuser_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetstorageusedbyuserRow{}, err
+		}
+		q.stmts["Getstorageusedbyuser_stmt"] = stmt
+	}
+	args := []interface{}{user_id}
+
+	var result GetstorageusedbyuserRow
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.TotalBytes, &result.TotalFiles, &result.ImageCount, &result.VideoCount, &result.DocumentCount)
+	return result, err
+}
+
+type GetstorageusedbyuserRow struct {
+	TotalBytes float64 `json:"total_bytes"`
+	TotalFiles int64 `json:"total_files"`
+	ImageCount int64 `json:"image_count"`
+	VideoCount int64 `json:"video_count"`
+	DocumentCount int64 `json:"document_count"`
+}
+
+func (q *Queries) Getlargemediafiles(size_bytes int64, limit int64) ([]GetlargemediafilesRow, error) {
+	const query = `SELECT id, user_id, type, url, size_bytes, mime_type, created_at FROM media WHERE size_bytes > $1 ORDER BY size_bytes DESC LIMIT $2;`
+	stmt := q.stmts["Getlargemediafiles_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getlargemediafiles_stmt"] = stmt
+	}
+	args := []interface{}{size_bytes, limit}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetlargemediafilesRow, 0, 8) 
+	for rows.Next() {
+		var item GetlargemediafilesRow
+		if err := rows.Scan(&item.Id, &item.UserId, &item.Type, &item.Url, &item.SizeBytes, &item.MimeType, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetlargemediafilesRow struct {
+	Id string `json:"id"`
+	UserId int64 `json:"user_id"`
+	Type string `json:"type"`
+	Url string `json:"url"`
+	SizeBytes int64 `json:"size_bytes"`
+	MimeType string `json:"mime_type"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) Getuserfeed(user_id int64, limit int64, offset int64) ([]GetuserfeedRow, error) {
+	const query = `WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = $1 ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`
+	stmt := q.stmts["Getuserfeed_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getuserfeed_stmt"] = stmt
+	}
+	args := []interface{}{user_id, limit, offset}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetuserfeedRow, 0, 8) 
+	for rows.Next() {
+		var item GetuserfeedRow
+		if err := rows.Scan(&item.Id, &item.Title, &item.Excerpt, &item.Status, &item.CreatedAt, &item.AuthorId, &item.AuthorName, &item.AvatarHash, &item.CommentCount, &item.TagCount); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetuserfeedRow struct {
+	Id int64 `json:"id"`
+	Title string `json:"title"`
+	Excerpt string `json:"excerpt"`
+	Status PostStatus `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	AuthorId int64 `json:"author_id"`
+	AuthorName string `json:"author_name"`
+	AvatarHash string `json:"avatar_hash"`
+	CommentCount int64 `json:"comment_count"`
+	TagCount int64 `json:"tag_count"`
+}
+
+func (q *Queries) Searchpostsfulltext(search_query string, limit int64) ([]SearchpostsfulltextRow, error) {
+	const query = `SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.name AS author_name, ts_rank(to_tsvector('english', p.title || ' ' || p.content), plainto_tsquery('english', $1)) AS rank FROM posts p JOIN users u ON p.user_id = u.id WHERE to_tsvector('english', p.title || ' ' || p.content) @@ plainto_tsquery('english', $1) AND p.status = 'published' ORDER BY rank DESC, p.created_at DESC LIMIT $2;`
+	stmt := q.stmts["Searchpostsfulltext_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Searchpostsfulltext_stmt"] = stmt
+	}
+	args := []interface{}{search_query, limit}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]SearchpostsfulltextRow, 0, 8) 
+	for rows.Next() {
+		var item SearchpostsfulltextRow
+		if err := rows.Scan(&item.Id, &item.Title, &item.Excerpt, &item.Status, &item.CreatedAt, &item.AuthorName, &item.Rank); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type SearchpostsfulltextRow struct {
+	Id int64 `json:"id"`
+	Title string `json:"title"`
+	Excerpt string `json:"excerpt"`
+	Status PostStatus `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	AuthorName string `json:"author_name"`
+	Rank float64 `json:"rank"`
+}
+
+func (q *Queries) Bulkmarknotificationsread(user_id int64, id int64) (error) {
+	const query = `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND id = ANY($2::bigint[]);`
+	stmt := q.stmts["Bulkmarknotificationsread_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return err
+		}
+		q.stmts["Bulkmarknotificationsread_stmt"] = stmt
+	}
+	args := []interface{}{user_id, id}
+
+	_, err := stmt.Exec(args...)
+	return err
+}
+
+func (q *Queries) Getuserwithstats(id int64) (GetuserwithstatsRow, error) {
+	const query = `SELECT u.*, (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') AS published_posts, (SELECT COUNT(*) FROM comments WHERE user_id = u.id) AS total_comments, (SELECT COUNT(*) FROM notifications WHERE user_id = u.id AND is_read = FALSE) AS unread_notifications, (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used FROM users u WHERE u.id = $1;`
+	stmt := q.stmts["Getuserwithstats_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return GetuserwithstatsRow{}, err
+		}
+		q.stmts["Getuserwithstats_stmt"] = stmt
+	}
+	args := []interface{}{id}
+
+	var result GetuserwithstatsRow
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return result, err
+		}
+		return result, sql.ErrNoRows
+	}
+	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role)
+	return result, err
+}
+
+type GetuserwithstatsRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Address string `json:"address"`
+	Isadmin bool `json:"isadmin"`
+	Age int64 `json:"age"`
+	AgeRange int64 `json:"age_range"`
+	Bio string `json:"bio"`
+	Email string `json:"email"`
+	Preferences []byte `json:"preferences"`
+	Tags []string `json:"tags"`
+	AvatarHash string `json:"avatar_hash"`
+	Shipping string `json:"shipping"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Role UserRole `json:"role"`
 }
 

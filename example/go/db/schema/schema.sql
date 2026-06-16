@@ -261,3 +261,56 @@ COMMENT ON COLUMN posts.published_at IS 'Timestamp when the post was first publi
 COMMENT ON COLUMN posts.excerpt IS 'Auto-generated excerpt from first 200 chars of content';
 
 COMMENT ON TABLE audit_log IS 'Partitioned audit trail for all data changes';
+
+-- === NOTIFICATIONS ===
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id          BIGSERIAL PRIMARY KEY,
+    user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    body        TEXT NOT NULL,
+    is_read     BOOLEAN NOT NULL DEFAULT FALSE,
+    metadata    JSONB DEFAULT '{}',
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
+
+-- === TAGS ===
+
+CREATE TABLE IF NOT EXISTS tags (
+    id    SERIAL PRIMARY KEY,
+    name  TEXT NOT NULL UNIQUE,
+    slug  TEXT NOT NULL UNIQUE,
+    color TEXT DEFAULT '#6366f1'
+);
+
+CREATE TABLE IF NOT EXISTS post_tags (
+    post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    tag_id  INT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (post_id, tag_id)
+);
+
+CREATE INDEX idx_post_tags_tag_id ON post_tags(tag_id);
+
+-- === MEDIA ===
+
+CREATE TABLE IF NOT EXISTS media (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    post_id     INT REFERENCES posts(id) ON DELETE SET NULL,
+    type        TEXT NOT NULL CHECK (type IN ('image', 'video', 'document')),
+    url         TEXT NOT NULL,
+    size_bytes  BIGINT NOT NULL DEFAULT 0,
+    mime_type   TEXT NOT NULL,
+    width       INT,
+    height      INT,
+    metadata    JSONB DEFAULT '{}',
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_media_user_id ON media(user_id);
+CREATE INDEX idx_media_post_id ON media(post_id) WHERE post_id IS NOT NULL;
+CREATE INDEX idx_media_type ON media(type, created_at DESC);

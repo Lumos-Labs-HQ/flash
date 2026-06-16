@@ -73,7 +73,7 @@ Examples:
 			fmt.Printf("📍 Creating migration for branch: %s (schema: %s)\n", branchName, branchSchema)
 		}
 
-		m, err := migrator.NewBranchAwareMigrator(cfg)
+		m, err := migrator.NewBranchAwareMigratorForGenerate(cfg)
 		if err != nil {
 			return fmt.Errorf("failed to create migrator: %w", err)
 		}

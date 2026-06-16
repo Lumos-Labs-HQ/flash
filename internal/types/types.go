@@ -10,9 +10,10 @@ type SchemaEnum struct {
 }
 
 type SchemaTable struct {
-	Name    string
-	Columns []SchemaColumn
-	Indexes []SchemaIndex
+	Name         string
+	Columns      []SchemaColumn
+	Indexes      []SchemaIndex
+	CompositePK  string // raw CQL PRIMARY KEY clause, e.g. "((country, city), order_id)"
 }
 
 type SchemaColumn struct {

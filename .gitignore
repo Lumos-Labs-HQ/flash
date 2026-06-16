@@ -40,6 +40,7 @@ db/migrations/.snapshots/
 .DS_Store?
 ._*
 .Spotlight-V100
+.kiro/
 .commandcode/
 .Trashes
 ehthumbs.db

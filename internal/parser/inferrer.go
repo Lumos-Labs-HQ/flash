@@ -210,18 +210,25 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	if strings.Contains(sql, "?") {
-		// SET clause with ? params: SET col = ?, col2 = ?
+		// SET clause with ? params: SET col = ?, col2 = ?, col = col + ?
 		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
 		if setMatch := setColPattern.FindStringSubmatch(sql); len(setMatch) > 1 {
 			setClause := setMatch[1]
-			colPattern := regexp.MustCompile(`(\w+)\s*=\s*\?`)
+			// Match both: direct (col = ?) and counter (col = col + ? or col = col - ?)
+			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*(?:\w+\s*[+\-]\s*)?\?`)
 			allSetMatches := colPattern.FindAllStringSubmatch(setClause, -1)
 			setCols := []string{}
 			for _, m := range allSetMatches {
 				setCols = append(setCols, m[1])
 			}
 			if paramIndex <= len(setCols) {
-				return setCols[paramIndex-1]
+				name := setCols[paramIndex-1]
+				// For counter pattern (col = col +/- ?) append _delta
+				counterCheck := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s*=\s*\w+\s*[+\-]\s*\?`, regexp.QuoteMeta(name)))
+				if counterCheck.MatchString(setClause) {
+					return name + "_delta"
+				}
+				return name
 			}
 			// Offset index past SET params for WHERE matching
 			paramIndex = paramIndex - len(setCols)
@@ -250,6 +257,30 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			rangeMatches := rangePattern.FindAllStringSubmatch(whereClause, -1)
 			if whereParamIndex <= len(rangeMatches) {
 				return rangeMatches[whereParamIndex-1][1]
+			}
+		}
+
+		// LIMIT ? — count total params before LIMIT to find if this ? is LIMIT
+		if regexp.MustCompile(`(?i)LIMIT\s+\?`).MatchString(sql) {
+			beforeLimit := regexp.MustCompile(`(?i)LIMIT\s+\?`).Split(sql, 2)[0]
+			totalBefore := strings.Count(beforeLimit, "?")
+			if paramIndex == totalBefore+1 {
+				return "limit"
+			}
+		}
+
+		// SET col = col + ? (counter increment) → use the column name
+		counterRe := regexp.MustCompile(`(?i)(\w+)\s*=\s*(\w+)\s*\+\s*\?`)
+		for _, m := range counterRe.FindAllStringSubmatch(sql, -1) {
+			if strings.EqualFold(m[1], m[2]) {
+				// Find position of this ? in the SQL
+				idx := strings.Index(sql, m[0])
+				if idx >= 0 {
+					pos := strings.Count(sql[:idx+len(m[0])], "?")
+					if paramIndex == pos {
+						return m[1]
+					}
+				}
 			}
 		}
 	}
@@ -301,6 +332,101 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	compRe := regexp.MustCompile(compPattern)
 	if match := compRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
+	}
+
+	// COALESCE(col, ...) op $N
+	coalesceRe := regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*(\w+)[^)]*\)\s*[><=!]+\s*\$%d`, paramIndex))
+	if match := coalesceRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// col @> $N, col && $N, col || $N (jsonb/array operators)
+	jsonbOpRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*(?:@>|&&|\|\|)\s*\$%d`, paramIndex))
+	if match := jsonbOpRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// $N = ANY(col)
+	anyRe := regexp.MustCompile(fmt.Sprintf(`(?i)\$%d\s*=\s*ANY\s*\(\s*(\w+)\s*\)`, paramIndex))
+	if match := anyRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// array_append(col, $N) / array_remove(col, $N)
+	arrFnRe := regexp.MustCompile(fmt.Sprintf(`(?i)array_(?:append|remove)\s*\(\s*(\w+)\s*,\s*\$%d\b`, paramIndex))
+	if match := arrFnRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// col->>'key' = $N or col->'key' = $N (jsonb field access)
+	arrowRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)->>?\S+\s*=\s*\$%d`, paramIndex))
+	if match := arrowRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// id = ANY($N::type) — cast variant
+	anyWithCastRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*=\s*ANY\s*\(\s*\$%d`, paramIndex))
+	if match := anyWithCastRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// HAVING COUNT(*) > $N or HAVING col op $N
+	havingRe := regexp.MustCompile(fmt.Sprintf(`(?i)HAVING\s+(?:\w+\s*\(.*?\)\s*)?(?:(\w+)\s*)?[><=!]+\s*\$%d`, paramIndex))
+	if match := havingRe.FindStringSubmatch(sql); len(match) > 1 && match[1] != "" {
+		return "count_threshold"
+	}
+	if regexp.MustCompile(fmt.Sprintf(`(?i)HAVING\s+.*\$%d`, paramIndex)).MatchString(sql) {
+		return "count_threshold"
+	}
+
+	// WHERE (subquery) > $N — correlated subquery threshold
+	subqueryThresholdRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+\(SELECT[\s\S]*?\)\s*[><=!]+\s*\$%d`, paramIndex))
+	if subqueryThresholdRe.MatchString(sql) {
+		return "min_count"
+	}
+
+	// plainto_tsquery(..., $N) or to_tsquery(..., $N) — full-text search
+	tsqueryRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:plainto_tsquery|to_tsquery|phraseto_tsquery)\s*\([^,)]+,\s*\$%d\b`, paramIndex))
+	if tsqueryRe.MatchString(sql) {
+		return "search_query"
+	}
+
+	// WHERE col IN ($1, $2, ...) — name each as col_1, col_2
+	inListRe := regexp.MustCompile(`(?i)(?:WHERE|AND|OR)\s+(?:\w+\.)?(\w+)\s+IN\s*\(([^)]+)\)`)
+	if inMatch := inListRe.FindStringSubmatch(sql); len(inMatch) > 2 {
+		colName := inMatch[1]
+		for pos, part := range strings.Split(inMatch[2], ",") {
+			if regexp.MustCompile(fmt.Sprintf(`\$%d\b`, paramIndex)).MatchString(strings.TrimSpace(part)) {
+				return fmt.Sprintf("%s%d", colName, pos+1)
+			}
+		}
+	}
+
+	// CTE: WHERE alias.col > $N — strip table alias and try col name
+	ctePropRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+\w+\.(\w+)\s*[><=!]+\s*\$%d`, paramIndex))
+	if match := ctePropRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// SET col = ROW($1, $2, ...) — name params as col_field1, col_field2
+	rowSetRe := regexp.MustCompile(`(?i)SET\s+(\w+)\s*=\s*ROW\s*\(([^)]+)\)`)
+	if rowSetMatch := rowSetRe.FindStringSubmatch(sql); len(rowSetMatch) > 2 {
+		colName := rowSetMatch[1]
+		for pos, part := range strings.Split(rowSetMatch[2], ",") {
+			if regexp.MustCompile(fmt.Sprintf(`\$%d\b`, paramIndex)).MatchString(strings.TrimSpace(part)) {
+				return fmt.Sprintf("%s_field%d", colName, pos+1)
+			}
+		}
+	}
+
+	// Generic: col = $N anywhere in the SQL (catches multi-column SET clauses etc.)
+	genericColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*=\s*\$%d\b`, paramIndex))
+	if match := genericColRe.FindStringSubmatch(sql); len(match) > 1 {
+		name := strings.ToLower(match[1])
+		// Avoid returning SQL keywords as param names
+		if name != "true" && name != "false" && name != "null" {
+			return match[1]
+		}
 	}
 
 	return fmt.Sprintf("param%d", paramIndex)

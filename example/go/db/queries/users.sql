@@ -569,3 +569,180 @@ DELETE FROM users WHERE created_at < $1 AND isadmin = FALSE;
 
 -- name: UpdateUserTimestamp :exec
 UPDATE users SET updated_at = $1 WHERE id = $2;
+
+-- ==========================================================
+-- NOTIFICATIONS
+-- ==========================================================
+
+-- name: CreateNotification :one
+INSERT INTO notifications (user_id, type, title, body, metadata)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: GetNotificationsByUser :many
+SELECT * FROM notifications WHERE user_id = $1
+ORDER BY created_at DESC LIMIT $2 OFFSET $3;
+
+-- name: GetUnreadCount :one
+SELECT COUNT(*) AS unread_count FROM notifications
+WHERE user_id = $1 AND is_read = FALSE;
+
+-- name: MarkNotificationRead :exec
+UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2;
+
+-- name: MarkAllNotificationsRead :exec
+UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE;
+
+-- name: DeleteOldNotifications :exec
+DELETE FROM notifications WHERE user_id = $1 AND created_at < $2;
+
+-- name: GetNotificationsByType :many
+SELECT id, type, title, body, is_read, created_at
+FROM notifications
+WHERE user_id = $1 AND type = $2
+ORDER BY created_at DESC LIMIT $3;
+
+-- ==========================================================
+-- TAGS
+-- ==========================================================
+
+-- name: CreateTag :one
+INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3)
+ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color
+RETURNING *;
+
+-- name: GetTagBySlug :one
+SELECT * FROM tags WHERE slug = $1;
+
+-- name: GetAllTags :many
+SELECT * FROM tags ORDER BY name ASC;
+
+-- name: AddTagToPost :exec
+INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: RemoveTagFromPost :exec
+DELETE FROM post_tags WHERE post_id = $1 AND tag_id = $2;
+
+-- name: GetTagsForPost :many
+SELECT t.id, t.name, t.slug, t.color
+FROM tags t
+JOIN post_tags pt ON t.id = pt.tag_id
+WHERE pt.post_id = $1
+ORDER BY t.name;
+
+-- name: GetPostsByTag :many
+SELECT p.id, p.title, p.status, p.created_at,
+       u.name AS author_name,
+       COUNT(DISTINCT c.id) AS comment_count
+FROM posts p
+JOIN post_tags pt ON p.id = pt.post_id
+JOIN tags t ON pt.tag_id = t.id
+JOIN users u ON p.user_id = u.id
+LEFT JOIN comments c ON p.id = c.post_id
+WHERE t.slug = $1 AND p.status = 'published'
+GROUP BY p.id, p.title, p.status, p.created_at, u.name
+ORDER BY p.created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: GetTopTags :many
+SELECT t.id, t.name, t.slug, t.color, COUNT(pt.post_id) AS post_count
+FROM tags t
+JOIN post_tags pt ON t.id = pt.tag_id
+JOIN posts p ON pt.post_id = p.id
+WHERE p.status = 'published'
+GROUP BY t.id, t.name, t.slug, t.color
+ORDER BY post_count DESC
+LIMIT $1;
+
+-- ==========================================================
+-- MEDIA
+-- ==========================================================
+
+-- name: UploadMedia :one
+INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING *;
+
+-- name: GetMediaByPost :many
+SELECT id, type, url, size_bytes, mime_type, width, height, created_at
+FROM media WHERE post_id = $1
+ORDER BY created_at DESC;
+
+-- name: GetMediaByUser :many
+SELECT id, type, url, size_bytes, mime_type, created_at
+FROM media WHERE user_id = $1
+ORDER BY created_at DESC LIMIT $2 OFFSET $3;
+
+-- name: GetMediaByType :many
+SELECT id, user_id, url, size_bytes, mime_type, created_at
+FROM media WHERE user_id = $1 AND type = $2
+ORDER BY created_at DESC;
+
+-- name: DeleteMedia :exec
+DELETE FROM media WHERE id = $1 AND user_id = $2;
+
+-- name: GetStorageUsedByUser :one
+SELECT
+    SUM(size_bytes) AS total_bytes,
+    COUNT(*) AS total_files,
+    COUNT(*) FILTER (WHERE type = 'image') AS image_count,
+    COUNT(*) FILTER (WHERE type = 'video') AS video_count,
+    COUNT(*) FILTER (WHERE type = 'document') AS document_count
+FROM media WHERE user_id = $1;
+
+-- name: GetLargeMediaFiles :many
+SELECT id, user_id, type, url, size_bytes, mime_type, created_at
+FROM media
+WHERE size_bytes > $1
+ORDER BY size_bytes DESC LIMIT $2;
+
+-- ==========================================================
+-- COMBINED / EDGE CASE QUERIES
+-- ==========================================================
+
+-- name: GetUserFeed :many
+WITH followed_users AS (
+    SELECT following_id FROM subscriptions WHERE user_id = $1
+)
+SELECT p.id, p.title, p.excerpt, p.status, p.created_at,
+       u.id AS author_id, u.name AS author_name, u.avatar_hash,
+       COUNT(DISTINCT c.id) AS comment_count,
+       COUNT(DISTINCT l.tag_id) AS tag_count
+FROM posts p
+JOIN users u ON p.user_id = u.id
+LEFT JOIN comments c ON p.id = c.post_id
+LEFT JOIN post_tags l ON p.id = l.post_id
+WHERE p.user_id = ANY(SELECT following_id FROM followed_users)
+  AND p.status = 'published'
+GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash
+ORDER BY p.created_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: SearchPostsFullText :many
+SELECT
+    p.id, p.title, p.excerpt, p.status, p.created_at,
+    u.name AS author_name,
+    ts_rank(to_tsvector('english', p.title || ' ' || p.content),
+            plainto_tsquery('english', $1)) AS rank
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE to_tsvector('english', p.title || ' ' || p.content) @@ plainto_tsquery('english', $1)
+  AND p.status = 'published'
+ORDER BY rank DESC, p.created_at DESC
+LIMIT $2;
+
+-- name: BulkMarkNotificationsRead :exec
+UPDATE notifications
+SET is_read = TRUE
+WHERE user_id = $1 AND id = ANY($2::bigint[]);
+
+-- name: GetUserWithStats :one
+SELECT
+    u.*,
+    (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') AS published_posts,
+    (SELECT COUNT(*) FROM comments WHERE user_id = u.id) AS total_comments,
+    (SELECT COUNT(*) FROM notifications WHERE user_id = u.id AND is_read = FALSE) AS unread_notifications,
+    (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used
+FROM users u
+WHERE u.id = $1;

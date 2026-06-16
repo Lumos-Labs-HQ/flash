@@ -186,7 +186,18 @@ func (g *Generator) generateModels() error {
 	for _, table := range g.schema.Tables {
 		structName := utils.ToPascalCase(table.Name)
 		code.WriteString(fmt.Sprintf("type %s struct {\n", structName))
-		for _, col := range table.Columns {
+
+		// Resolve wildcard SELECT * views against the source table
+		cols := table.Columns
+		if len(cols) == 1 && cols[0].Name == "*" {
+			cols = g.resolveWildcardViewColumns(table.Name)
+		}
+
+		for _, col := range cols {
+			// Skip wildcard placeholders and view marker columns
+			if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
+				continue
+			}
 			fieldName := utils.ToPascalCase(col.Name)
 			goType := g.mapSQLTypeToGoWithEnumMap(col.Type, col.Nullable, enumTypeMap)
 			jsonTag := utils.ToSnakeCase(col.Name)
@@ -325,8 +336,32 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 		return query.Columns
 	}
 
-	expanded := make([]*parser.QueryColumn, 0, len(table.Columns))
-	for _, col := range table.Columns {
+	// If the table only has a wildcard column (SELECT * view with unresolved source),
+	// try to find the source table from the view's stored SQL.
+	cols := table.Columns
+	if len(cols) == 1 && cols[0].Name == "*" {
+		// The view column's Type holds the raw view SQL — extract the FROM table
+		sourceSQL := cols[0].Type
+		sourceTable := utils.ExtractTableName(sourceSQL)
+		if sourceTable != "" {
+			for _, t := range g.schema.Tables {
+				if strings.EqualFold(t.Name, sourceTable) && !(len(t.Columns) == 1 && t.Columns[0].Name == "*") {
+					cols = t.Columns
+					break
+				}
+			}
+		}
+		// Still unresolved — return empty so the method generates with no columns
+		if len(cols) == 1 && cols[0].Name == "*" {
+			return []*parser.QueryColumn{}
+		}
+	}
+
+	expanded := make([]*parser.QueryColumn, 0, len(cols))
+	for _, col := range cols {
+		if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
+			continue
+		}
 		expanded = append(expanded, &parser.QueryColumn{
 			Name:     col.Name,
 			Type:     col.Type,
@@ -362,7 +397,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		for _, param := range query.Params {
 			fieldName := utils.ToPascalCase(param.Name)
 			goType := g.mapParamTypeToGo(param.Type)
-			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(param.Name)))
+			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.SafeGoIdent(utils.ToSnakeCase(param.Name))))
 		}
 		code.WriteString("}\n\n")
 	}
@@ -378,7 +413,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		} else {
 			paramList := []string{}
 			for _, param := range query.Params {
-				paramName := utils.ToSnakeCase(param.Name)
+				paramName := utils.SafeGoIdent(utils.ToSnakeCase(param.Name))
 				goType := g.mapParamTypeToGo(param.Type)
 				paramList = append(paramList, fmt.Sprintf("%s %s", paramName, goType))
 			}
@@ -473,7 +508,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 			if useStructParams {
 				code.WriteString(fmt.Sprintf("arg.%s", utils.ToPascalCase(param.Name)))
 			} else {
-				code.WriteString(utils.ToSnakeCase(param.Name))
+				code.WriteString(utils.SafeGoIdent(utils.ToSnakeCase(param.Name)))
 			}
 		}
 		code.WriteString("}\n")
@@ -677,10 +712,70 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 
 	baseType := ""
 	switch {
+	// ScyllaDB/Cassandra CQL types — check before generic contains-based cases
+	case sqlTypeLower == "timeuuid":
+		baseType = "string" // timeuuid is a UUID type, not a time — though gocql can scan it as time.Time, string is safer
+	case sqlTypeLower == "uuid":
+		baseType = "string"
+	case sqlTypeLower == "inet":
+		baseType = "string"
+	case sqlTypeLower == "varint":
+		baseType = "int64"
+	case sqlTypeLower == "counter":
+		baseType = "int64"
+	case sqlTypeLower == "duration":
+		baseType = "int64"
+	// ScyllaDB/Cassandra collection types — must be before generic string/int checks
+	case strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "list<"):
+		// Extract element type and map to []GoType
+		inner := extractCollectionInner(sqlTypeLower)
+		elemGo := g.mapSQLTypeToGo(inner, false)
+		if nullable && isScylla {
+			return "*[]" + elemGo
+		}
+		return "[]" + elemGo
+	case strings.HasPrefix(sqlTypeLower, "map<"):
+		// map<key,value> → map[KeyType]ValueType
+		k, v := extractMapTypes(sqlTypeLower)
+		kGo := g.mapSQLTypeToGo(k, false)
+		vGo := g.mapSQLTypeToGo(v, false)
+		if nullable && isScylla {
+			return fmt.Sprintf("*map[%s]%s", kGo, vGo)
+		}
+		return fmt.Sprintf("map[%s]%s", kGo, vGo)
+	case strings.HasPrefix(sqlTypeLower, "frozen<"):
+		// frozen<type> — unwrap and check for UDT
+		inner := extractCollectionInner(sqlTypeLower)
+		if isScylla && g.schema != nil {
+			for _, udt := range g.schema.UDTs {
+				bareName := udt.Name
+				if dotIdx := strings.LastIndex(udt.Name, "."); dotIdx >= 0 {
+					bareName = udt.Name[dotIdx+1:]
+				}
+				if strings.EqualFold(bareName, inner) || strings.EqualFold(udt.Name, inner) {
+					goName := utils.ToPascalCase(bareName)
+					if nullable {
+						return "*" + goName
+					}
+					return goName
+				}
+			}
+		}
+		// frozen<tuple<...>> or other frozen types → string
+		baseType = "string"
+	case strings.HasPrefix(sqlTypeLower, "tuple<"):
+		baseType = "string"
 	case strings.Contains(sqlTypeLower, "int"):
 		baseType = "int64"
 	case strings.Contains(sqlTypeLower, "serial"):
 		baseType = "int64"
+	// PostgreSQL range types — must be before contains("int")
+	case strings.HasSuffix(sqlTypeLower, "range"):
+		baseType = "string" // int4range, int8range, numrange, tsrange etc. serialize as "[a,b)"
+	case sqlTypeLower == "inet" || sqlTypeLower == "cidr" || sqlTypeLower == "macaddr":
+		baseType = "string"
+	case sqlTypeLower == "bytea":
+		baseType = "[]byte"
 	case strings.Contains(sqlTypeLower, "float") || strings.Contains(sqlTypeLower, "double") || strings.Contains(sqlTypeLower, "numeric") || strings.Contains(sqlTypeLower, "decimal"):
 		baseType = "float64"
 	case strings.Contains(sqlTypeLower, "bool"):
@@ -716,44 +811,6 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	case strings.HasPrefix(sqlTypeLower, "nullable("):
 		inner := sqlTypeLower[9 : len(sqlTypeLower)-1]
 		return g.mapSQLTypeToGo(inner, true)
-	// ScyllaDB/Cassandra collection and UDT types
-	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
-		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
-		strings.HasPrefix(sqlTypeLower, "tuple<"):
-		// Check if wrapped type is a known UDT
-		if isScylla && g.schema != nil {
-			udtType := extractUDTName(sqlTypeLower)
-			for _, udt := range g.schema.UDTs {
-				// UDTs may be keyspace-qualified (ap.address) but column types are bare (address)
-				bareName := udt.Name
-				if dotIdx := strings.LastIndex(udt.Name, "."); dotIdx >= 0 {
-					bareName = udt.Name[dotIdx+1:]
-				}
-				if strings.EqualFold(bareName, udtType) || strings.EqualFold(udt.Name, udtType) {
-					goName := utils.ToPascalCase(bareName)
-					if nullable {
-						return "*" + goName
-					}
-					return goName
-				}
-			}
-		}
-		baseType = "string"
-	// ScyllaDB/Cassandra CQL types
-	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid":
-		baseType = "string"
-	case sqlTypeLower == "inet":
-		baseType = "string"
-	case sqlTypeLower == "varint":
-		baseType = "int64"
-	case sqlTypeLower == "counter":
-		baseType = "int64"
-	case sqlTypeLower == "duration":
-		baseType = "int64"
-	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
-		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
-		strings.HasPrefix(sqlTypeLower, "tuple<"):
-		baseType = "string"
 	default:
 		// Check if bare CQL UDT name (not wrapped in frozen<>)
 		if isScylla && g.schema != nil {
@@ -945,6 +1002,31 @@ func extractCQLInner(typ, wrapper string) (string, bool) {
 	return "", false
 }
 
+// extractCollectionInner extracts the element type from set<T>, list<T>, or frozen<T>.
+func extractCollectionInner(typ string) string {
+	for _, wrapper := range []string{"set", "list", "frozen"} {
+		if inner, ok := extractCQLInner(typ, wrapper); ok {
+			return inner
+		}
+	}
+	return "text"
+}
+
+// extractMapTypes extracts key and value types from map<K,V>.
+func extractMapTypes(typ string) (string, string) {
+	k, v, ok := extractCQLMap(typ)
+	if !ok {
+		return "string", "string"
+	}
+	return k, v
+}
+
+// resolveWildcardViewColumns returns nil for SELECT * views — the struct will be empty
+// but won't generate an invalid `* *string` field.
+func (g *Generator) resolveWildcardViewColumns(viewName string) []*parser.Column {
+	return nil
+}
+
 // extractCQLMap extracts key and value types from a CQL map<key,value>.
 func extractCQLMap(typ string) (string, string, bool) {
 	if !strings.HasPrefix(typ, "map<") || !strings.HasSuffix(typ, ">") {
@@ -1003,162 +1085,156 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	methodName := utils.ToPascalCase(query.Name)
 	useStructParams := len(query.Params) > 3
 
+	cmd := strings.ToLower(query.Cmd)
+	hasReturning := strings.Contains(strings.ToUpper(query.SQL), "RETURNING")
+
+	// CQL does not support RETURNING — treat as :exec but return the inserted row
+	// by re-reading params (we know what we inserted).
+	if hasReturning {
+		cmd = ":exec"
+	}
+
 	if useStructParams && len(query.Params) > 0 {
 		code.WriteString(fmt.Sprintf("type %sParams struct {\n", methodName))
 		for _, param := range query.Params {
 			fieldName := utils.ToPascalCase(param.Name)
 			goType := g.mapParamTypeToGo(param.Type)
-			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(param.Name)))
+			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.SafeGoIdent(utils.ToSnakeCase(param.Name))))
 		}
 		code.WriteString("}\n\n")
 	}
 
-	cmd := strings.ToLower(query.Cmd)
-	isModifying := utils.IsModifyingQuery(query.SQL)
-
-	// CQL does not support RETURNING — treat INSERT/UPDATE with RETURNING as :exec
-	if strings.Contains(strings.ToUpper(query.SQL), "RETURNING") {
-		if cmd == ":one" || cmd == ":many" {
-			cmd = ":exec"
-		}
-	}
-
+	// Signature
 	code.WriteString(fmt.Sprintf("func (q *Queries) %s(ctx context.Context, ", methodName))
 	if len(query.Params) > 0 {
 		if useStructParams {
 			code.WriteString(fmt.Sprintf("arg %sParams", methodName))
 		} else {
-			paramList := []string{}
+			var parts []string
 			for _, param := range query.Params {
-				paramName := utils.ToSnakeCase(param.Name)
-				goType := g.mapParamTypeToGo(param.Type)
-				paramList = append(paramList, fmt.Sprintf("%s %s", paramName, goType))
+				parts = append(parts, fmt.Sprintf("%s %s", utils.SafeGoIdent(utils.ToSnakeCase(param.Name)), g.mapParamTypeToGo(param.Type)))
 			}
-			code.WriteString(strings.Join(paramList, ", "))
+			code.WriteString(strings.Join(parts, ", "))
 		}
 	}
 	code.WriteString(") (")
-	switch {
-	case cmd == ":one":
-		if len(columns) == 1 {
+	switch cmd {
+	case ":one":
+		if len(columns) == 0 {
+			code.WriteString("error")
+		} else if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
 			code.WriteString(fmt.Sprintf("%sRow, error", methodName))
 		}
-	case cmd == ":many":
-		if len(columns) == 1 {
+	case ":many":
+		if len(columns) == 0 {
+			code.WriteString("error")
+		} else if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("[]%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
 			code.WriteString(fmt.Sprintf("[]%sRow, error", methodName))
 		}
-	case cmd == ":exec" || isModifying:
-		code.WriteString("error")
 	default:
 		code.WriteString("error")
 	}
 	code.WriteString(") {\n")
 
+	// SQL constant — strip RETURNING, handle BATCH for multi-statement
 	cleanSQL := strings.TrimSpace(query.SQL)
-	// CQL does not support RETURNING
 	if idx := strings.LastIndex(strings.ToUpper(cleanSQL), "RETURNING"); idx >= 0 {
 		cleanSQL = strings.TrimSpace(cleanSQL[:idx])
 	}
-	if strings.Contains(cleanSQL, "`") {
-		parts := strings.Split(cleanSQL, "`")
-		code.WriteString("\tconst query = `")
-		for i, part := range parts {
-			if i > 0 {
-				code.WriteString("` + \"`\" + `")
-			}
-			code.WriteString(part)
+	// Multi-statement → BATCH
+	stmts := splitCQLStatements(cleanSQL)
+	if len(stmts) > 1 {
+		batch := "BEGIN BATCH\n"
+		for _, s := range stmts {
+			batch += "\t" + strings.TrimSpace(s) + ";\n"
 		}
-		code.WriteString("`\n")
-	} else {
-		code.WriteString(fmt.Sprintf("\tconst query = `%s`\n", cleanSQL))
+		batch += "APPLY BATCH"
+		cleanSQL = batch
 	}
 
-	if len(query.Params) > 0 {
+	code.WriteString(fmt.Sprintf("\tconst query = `%s`\n", cleanSQL))
+
+	// Args
+	// Only declare args if we'll actually use them (not in zero-column :many fallback)
+	needsArgs := len(query.Params) > 0 && !(cmd == ":many" && len(columns) == 0)
+	if needsArgs {
 		code.WriteString("\targs := []interface{}{")
 		for i, param := range query.Params {
 			if i > 0 {
 				code.WriteString(", ")
 			}
 			if useStructParams {
-				code.WriteString(fmt.Sprintf("arg.%s", utils.ToPascalCase(param.Name)))
+				code.WriteString("arg." + utils.ToPascalCase(param.Name))
 			} else {
-				code.WriteString(utils.ToSnakeCase(param.Name))
+				code.WriteString(utils.SafeGoIdent(utils.ToSnakeCase(param.Name)))
 			}
 		}
 		code.WriteString("}\n")
 	}
 
-	switch {
-	case cmd == ":one":
+	// Body
+	switch cmd {
+	case ":one":
 		if len(columns) == 0 {
-			code.WriteString("\n\treturn nil, fmt.Errorf(\"query has no return columns\")\n")
-		} else if len(columns) > 1 {
+			// No columns — fallback exec
+			code.WriteString("\treturn q.exec(ctx, query")
+			if len(query.Params) > 0 {
+				code.WriteString(", args...")
+			}
+			code.WriteString(")\n")
+		} else if len(columns) == 1 {
+			code.WriteString(fmt.Sprintf("\n\tvar result %s\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
+			code.WriteString("\tif err := q.db.Query(query")
+			if len(query.Params) > 0 {
+				code.WriteString(", args...")
+			}
+			code.WriteString(").WithContext(ctx).Scan(&result); err != nil {\n")
+			code.WriteString(fmt.Sprintf("\t\treturn %s, err\n", gocqlZero(g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable))))
+			code.WriteString("\t}\n\treturn result, nil\n")
+		} else {
 			code.WriteString(fmt.Sprintf("\n\tvar result %sRow\n", methodName))
-			code.WriteString("\trow := make(map[string]interface{})\n")
-			code.WriteString("\titer := q.db.Query(query")
+			code.WriteString("\terr := q.db.Query(query")
 			if len(query.Params) > 0 {
 				code.WriteString(", args...")
 			}
-			code.WriteString(").WithContext(ctx).Iter()\n")
-			code.WriteString("\tdefer iter.Close()\n")
-			code.WriteString("\tif !iter.MapScan(row) {\n")
-			code.WriteString("\t\tif err := iter.Close(); err != nil {\n")
-			code.WriteString("\t\t\treturn result, err\n")
-			code.WriteString("\t\t}\n")
-			code.WriteString("\t\treturn result, gocql.ErrNotFound\n")
-			code.WriteString("\t}\n")
+			code.WriteString(").WithContext(ctx).Scan(\n")
 			for _, col := range columns {
-				goType := g.mapSQLTypeToGo(col.Type, false)
-				code.WriteString(fmt.Sprintf("\tif v, ok := row[\"%s\"]; ok { result.%s = %s }\n",
-					col.Name, utils.ToPascalCase(col.Name), gocqlCastExpr(col.Type, goType, false)))
+				code.WriteString(fmt.Sprintf("\t\t&result.%s,\n", utils.ToPascalCase(col.Name)))
 			}
-			code.WriteString("\treturn result, iter.Close()\n")
-		} else {
-			code.WriteString("\n\tvar result ")
-			code.WriteString(g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable))
-			code.WriteString("\n\terr := q.db.Query(query")
-			if len(query.Params) > 0 {
-				code.WriteString(", args...")
-			}
-			code.WriteString(").WithContext(ctx).Scan(&result)\n")
-			code.WriteString("\treturn result, err\n")
+			code.WriteString("\t)\n")
+			code.WriteString("\tif err != nil {\n\t\treturn result, err\n\t}\n")
+			code.WriteString("\treturn result, nil\n")
 		}
-	case cmd == ":many":
+	case ":many":
 		if len(columns) == 0 {
-			code.WriteString("\n\treturn nil, fmt.Errorf(\"query has no return columns\")\n")
-		} else {
-			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\n\titems := make([]%sRow, 0)\n", methodName))
-			} else {
-				code.WriteString(fmt.Sprintf("\n\titems := make([]%s, 0)\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
-			}
+			code.WriteString("\treturn q.exec(ctx, query)\n")
+		} else if len(columns) == 1 {
+			code.WriteString(fmt.Sprintf("\n\tvar items []%s\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 			code.WriteString("\titer := q.db.Query(query")
 			if len(query.Params) > 0 {
 				code.WriteString(", args...")
 			}
 			code.WriteString(").WithContext(ctx).Iter()\n")
-			code.WriteString("\tdefer iter.Close()\n")
-			if len(columns) > 1 {
-				code.WriteString("\tfor {\n")
-				code.WriteString("\t\trow := make(map[string]interface{})\n")
-				code.WriteString("\t\tif !iter.MapScan(row) {\n\t\t\tbreak\n\t\t}\n")
-				code.WriteString(fmt.Sprintf("\t\tvar item %sRow\n", methodName))
-				for _, col := range columns {
-					goType := g.mapSQLTypeToGo(col.Type, false)
-					code.WriteString(fmt.Sprintf("\t\tif v, ok := row[\"%s\"]; ok { item.%s = %s }\n",
-						col.Name, utils.ToPascalCase(col.Name), gocqlCastExpr(col.Type, goType, false)))
-				}
-				code.WriteString("\t\titems = append(items, item)\n\t}\n")
-			} else {
-				code.WriteString("\tfor {\n\t\tvar item ")
-				code.WriteString(g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable))
-				code.WriteString("\n\t\tif !iter.Scan(&item) {\n\t\t\tbreak\n\t\t}\n")
-				code.WriteString("\t\titems = append(items, item)\n\t}\n")
+			code.WriteString(fmt.Sprintf("\tvar v %s\n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
+			code.WriteString("\tfor iter.Scan(&v) {\n\t\titems = append(items, v)\n\t}\n")
+			code.WriteString("\treturn items, iter.Close()\n")
+		} else {
+			code.WriteString(fmt.Sprintf("\n\tvar items []%sRow\n", methodName))
+			code.WriteString("\titer := q.db.Query(query")
+			if len(query.Params) > 0 {
+				code.WriteString(", args...")
 			}
+			code.WriteString(").WithContext(ctx).Iter()\n")
+			code.WriteString(fmt.Sprintf("\tvar item %sRow\n", methodName))
+			code.WriteString("\tfor iter.Scan(\n")
+			for _, col := range columns {
+				code.WriteString(fmt.Sprintf("\t\t&item.%s,\n", utils.ToPascalCase(col.Name)))
+			}
+			code.WriteString("\t) {\n\t\titems = append(items, item)\n\t}\n")
 			code.WriteString("\treturn items, iter.Close()\n")
 		}
 	default:
@@ -1170,12 +1246,12 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	}
 	code.WriteString("}\n\n")
 
+	// Row struct
 	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
-			fieldName := utils.ToPascalCase(col.Name)
 			goType := g.mapSQLTypeToGo(col.Type, false)
-			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))
+			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", utils.ToPascalCase(col.Name), goType, utils.ToSnakeCase(col.Name)))
 		}
 		code.WriteString("}\n\n")
 	}
@@ -1183,9 +1259,56 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	return nil
 }
 
+// splitCQLStatements splits multiple CQL statements (separated by ;) for BATCH wrapping.
+func splitCQLStatements(sql string) []string {
+	var stmts []string
+	for _, s := range strings.Split(sql, ";") {
+		if s = strings.TrimSpace(s); s != "" {
+			stmts = append(stmts, s)
+		}
+	}
+	return stmts
+}
+
+// gocqlZero returns the zero value expression for a Go type (for early-return on error).
+func gocqlZero(goType string) string {
+	switch {
+	case goType == "string":
+		return `""`
+	case goType == "bool":
+		return "false"
+	case strings.HasPrefix(goType, "[]") || strings.HasPrefix(goType, "map[") || strings.HasPrefix(goType, "*"):
+		return "nil"
+	case goType == "int64" || goType == "float64":
+		return "0"
+	case goType == "time.Time":
+		return "time.Time{}"
+	default:
+		return goType + "{}"
+	}
+}
+
 // gocqlCastExpr returns a Go cast expression from MapScan interface{} to target type.
 func gocqlCastExpr(cqlType, goType string, nullable bool) string {
 	lower := strings.ToLower(cqlType)
+
+	// If the Go type is string, always use fmt.Sprint — handles uuid, timeuuid, inet,
+	// tuple<>, frozen<>, and any other types that serialize to string.
+	if goType == "string" || strings.HasPrefix(goType, "*string") {
+		if nullable {
+			return "func() *string { s := fmt.Sprint(v); return &s }()"
+		}
+		return "fmt.Sprint(v)"
+	}
+	// Collection types map to their Go slice/map — use fmt.Sprint as safe fallback
+	// (gocql returns these as native Go types which can be passed directly, but MapScan
+	// uses interface{} so Sprint is the safest cross-version approach).
+	if strings.HasPrefix(lower, "set<") || strings.HasPrefix(lower, "list<") ||
+		strings.HasPrefix(lower, "map<") || strings.HasPrefix(lower, "frozen<") ||
+		strings.HasPrefix(lower, "tuple<") {
+		return "fmt.Sprint(v)"
+	}
+
 	switch {
 	case goType == "bool" || lower == "boolean" || lower == "bool":
 		if nullable {
@@ -1202,7 +1325,11 @@ func gocqlCastExpr(cqlType, goType string, nullable bool) string {
 			return "func() *float64 { switch n := v.(type) { case float32: f := float64(n); return &f; case float64: return &n; }; return nil }()"
 		}
 		return "func() float64 { switch n := v.(type) { case float32: return float64(n); case float64: return n; }; return 0 }()"
-	case goType == "time.Time" || strings.Contains(lower, "time") || strings.Contains(lower, "date") || lower == "timeuuid":
+	case goType == "time.Time" || strings.Contains(lower, "time") || strings.Contains(lower, "date"):
+		if lower == "timeuuid" {
+			// timeuuid is a UUID-like type; gocql returns it as gocql.UUID — use Sprint
+			return "fmt.Sprint(v)"
+		}
 		if nullable {
 			return "func() *time.Time { if t, ok := v.(time.Time); ok { return &t }; return nil }()"
 		}
@@ -1222,7 +1349,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 		for _, param := range query.Params {
 			fieldName := utils.ToPascalCase(param.Name)
 			goType := g.mapParamTypeToGo(param.Type)
-			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(param.Name)))
+			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.SafeGoIdent(utils.ToSnakeCase(param.Name))))
 		}
 		code.WriteString("}\n\n")
 	}
@@ -1238,7 +1365,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 		} else {
 			paramList := []string{}
 			for _, param := range query.Params {
-				paramName := utils.ToSnakeCase(param.Name)
+				paramName := utils.SafeGoIdent(utils.ToSnakeCase(param.Name))
 				goType := g.mapParamTypeToGo(param.Type)
 				paramList = append(paramList, fmt.Sprintf("%s %s", paramName, goType))
 			}
@@ -1295,7 +1422,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 			if useStructParams {
 				code.WriteString(fmt.Sprintf("arg.%s", utils.ToPascalCase(param.Name)))
 			} else {
-				code.WriteString(utils.ToSnakeCase(param.Name))
+				code.WriteString(utils.SafeGoIdent(utils.ToSnakeCase(param.Name)))
 			}
 		}
 		code.WriteString("}\n")

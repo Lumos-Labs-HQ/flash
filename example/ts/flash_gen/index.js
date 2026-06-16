@@ -27,8 +27,8 @@ class Queries {
  * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)
  * @returns {Queries}
  */
-function New(db) {
+function Newq(db) {
   return new Queries(db);
 }
 
-module.exports = { New, Queries };
+module.exports = { Newq, Queries };

@@ -138,6 +138,43 @@ type UserSessions struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
+type Notifications struct {
+	Id int64 `json:"id" db:"id"`
+	UserId int64 `json:"user_id" db:"user_id"`
+	Type string `json:"type" db:"type"`
+	Title string `json:"title" db:"title"`
+	Body string `json:"body" db:"body"`
+	IsRead bool `json:"is_read" db:"is_read"`
+	Metadata *[]byte `json:"metadata" db:"metadata"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type Tags struct {
+	Id int64 `json:"id" db:"id"`
+	Name string `json:"name" db:"name"`
+	Slug string `json:"slug" db:"slug"`
+	Color sql.NullString `json:"color" db:"color"`
+}
+
+type PostTags struct {
+	PostId int64 `json:"post_id" db:"post_id"`
+	TagId int64 `json:"tag_id" db:"tag_id"`
+}
+
+type Media struct {
+	Id string `json:"id" db:"id"`
+	UserId int64 `json:"user_id" db:"user_id"`
+	PostId sql.NullInt64 `json:"post_id" db:"post_id"`
+	Type string `json:"type" db:"type"`
+	Url string `json:"url" db:"url"`
+	SizeBytes int64 `json:"size_bytes" db:"size_bytes"`
+	MimeType string `json:"mime_type" db:"mime_type"`
+	Width sql.NullInt64 `json:"width" db:"width"`
+	Height sql.NullInt64 `json:"height" db:"height"`
+	Metadata *[]byte `json:"metadata" db:"metadata"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
 type ActiveUsers struct {
 	Id sql.NullString `json:"id" db:"id"`
 	Name sql.NullString `json:"name" db:"name"`

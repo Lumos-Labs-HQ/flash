@@ -262,10 +262,14 @@ func (sm *SchemaManager) parseCreateTableStatement(stmt string) (types.SchemaTab
 
 	sm.applyForeignKeys(columns, foreignKeys)
 
+	// Extract raw PRIMARY KEY clause for CQL compound/composite keys
+	compositePK := extractRawPKClause(stmt[start+1 : parenEnd])
+
 	return types.SchemaTable{
-		Name:    tableName,
-		Columns: columns,
-		Indexes: []types.SchemaIndex{},
+		Name:        tableName,
+		Columns:     columns,
+		Indexes:     []types.SchemaIndex{},
+		CompositePK: compositePK,
 	}, nil
 }
 
@@ -302,6 +306,34 @@ func findMatchingParen(s string, start int) int {
 	return -1
 }
 
+// extractRawPKClause returns the raw parenthesised content of a table-level PRIMARY KEY,
+// e.g. "((country, city), order_id)" — used by ScyllaDB to reconstruct compound PKs.
+// Returns "" if no table-level PRIMARY KEY is found (single-column inline PK).
+func extractRawPKClause(columnDefs string) string {
+	upper := strings.ToUpper(columnDefs)
+	idx := strings.Index(upper, "PRIMARY KEY")
+	if idx == -1 {
+		return ""
+	}
+	rest := strings.TrimSpace(columnDefs[idx+len("PRIMARY KEY"):])
+	if len(rest) == 0 || rest[0] != '(' {
+		return ""
+	}
+	depth, end := 0, 0
+	for i, ch := range rest {
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			depth--
+			if depth == 0 {
+				end = i + 1
+				break
+			}
+		}
+	}
+	return rest[:end]
+}
+
 func (sm *SchemaManager) applyForeignKeys(columns []types.SchemaColumn, foreignKeys []foreignKeyConstraint) {
 	for _, fk := range foreignKeys {
 		for i := range columns {
@@ -329,6 +361,18 @@ func (sm *SchemaManager) parseColumnDefinitionsAndConstraints(columnDefs string)
 			if fk := sm.parseForeignKeyConstraint(colDef); fk != nil {
 				foreignKeys = append(foreignKeys, *fk)
 			}
+			// Mark PRIMARY KEY columns as primary and non-nullable
+			if upper := strings.ToUpper(strings.TrimSpace(colDef)); strings.HasPrefix(upper, "PRIMARY KEY") {
+				pkColNames := extractPKColumnNames(colDef)
+				for i := range columns {
+					for _, pkCol := range pkColNames {
+						if strings.EqualFold(columns[i].Name, pkCol) {
+							columns[i].IsPrimary = true
+							columns[i].Nullable = false
+						}
+					}
+				}
+			}
 			continue
 		}
 
@@ -340,6 +384,46 @@ func (sm *SchemaManager) parseColumnDefinitionsAndConstraints(columnDefs string)
 	}
 
 	return columns, foreignKeys, nil
+}
+
+// extractPKColumnNames extracts all column names from a PRIMARY KEY clause,
+// handling both simple PRIMARY KEY (col) and compound PRIMARY KEY ((pk1, pk2), ck1, ck2).
+func extractPKColumnNames(constraint string) []string {
+	// Find the outer paren content after "PRIMARY KEY"
+	upper := strings.ToUpper(constraint)
+	idx := strings.Index(upper, "PRIMARY KEY")
+	if idx == -1 {
+		return nil
+	}
+	rest := strings.TrimSpace(constraint[idx+len("PRIMARY KEY"):])
+	if len(rest) == 0 || rest[0] != '(' {
+		return nil
+	}
+	// Find matching close paren
+	depth := 0
+	end := 0
+	for i, ch := range rest {
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			depth--
+			if depth == 0 {
+				end = i
+				break
+			}
+		}
+	}
+	inner := rest[1:end] // strip outer parens
+	// Remove nested parens (partition key group) and split by comma
+	inner = strings.NewReplacer("(", "", ")", "").Replace(inner)
+	var cols []string
+	for _, part := range strings.Split(inner, ",") {
+		col := strings.Trim(strings.TrimSpace(part), `"`)
+		if col != "" {
+			cols = append(cols, col)
+		}
+	}
+	return cols
 }
 
 func (sm *SchemaManager) parseForeignKeyConstraint(constraint string) *foreignKeyConstraint {

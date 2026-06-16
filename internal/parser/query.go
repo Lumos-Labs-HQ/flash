@@ -333,12 +333,13 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		paramName := fmt.Sprintf("param%d", i+1)
 		paramType := "any"
 
-		if table != nil {
-			inferredName := p.typeInferrer.InferParamName(query.SQL, paramNum)
-			if inferredName != "" && inferredName != paramName {
-				paramName = inferredName
-			}
+		// Infer param name from SQL regardless of table availability
+		inferredName := p.typeInferrer.InferParamName(query.SQL, paramNum)
+		if inferredName != "" && inferredName != paramName {
+			paramName = inferredName
+		}
 
+		if table != nil {
 			paramType = p.typeInferrer.InferParamType(query.SQL, paramNum, table, paramName)
 		}
 
