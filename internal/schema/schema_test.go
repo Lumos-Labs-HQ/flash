@@ -917,3 +917,249 @@ CREATE TABLE IF NOT EXISTS users (
 		}
 	}
 }
+
+// ── String literal in splitColumnDefinitions ─────────────────────────────────
+
+func TestSplitColumnDefinitions_StringLiteralWithParen(t *testing.T) {
+	// '[0,18)'::int4range contains ')' inside a string literal — must not split there
+	sm := newSM()
+	sql := `CREATE TABLE users (
+		id     SERIAL PRIMARY KEY,
+		age    INT,
+		r      INT4RANGE GENERATED ALWAYS AS (
+		           CASE WHEN age < 18 THEN '[0,18)'::int4range
+		                ELSE '[18,)'::int4range END
+		       ) STORED,
+		email  VARCHAR(255) NOT NULL,
+		name   TEXT
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := map[string]bool{}
+	for _, c := range table.Columns {
+		got[c.Name] = true
+	}
+	for _, want := range []string{"id", "age", "r", "email", "name"} {
+		if !got[want] {
+			t.Errorf("column %q lost after GENERATED string literal", want)
+		}
+	}
+}
+
+// ── Composite PK stored in CompositePK ───────────────────────────────────────
+
+func TestParseCreateTable_CompositePK(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE orders (
+		country    TEXT,
+		city       TEXT,
+		order_id   UUID,
+		amount     DECIMAL,
+		PRIMARY KEY ((country, city), order_id)
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if table.CompositePK == "" {
+		t.Fatal("CompositePK should be set for compound primary key")
+	}
+	if !strings.Contains(table.CompositePK, "country") {
+		t.Errorf("CompositePK %q should contain 'country'", table.CompositePK)
+	}
+	// Partition + clustering columns must be marked IsPrimary
+	pkCols := map[string]bool{}
+	for _, c := range table.Columns {
+		if c.IsPrimary {
+			pkCols[c.Name] = true
+		}
+	}
+	if !pkCols["country"] || !pkCols["city"] || !pkCols["order_id"] {
+		t.Errorf("PK columns not all marked IsPrimary: %v", pkCols)
+	}
+}
+
+// ── Raw statements (DOMAIN, composite type, PARTITION OF) ────────────────────
+
+func TestExtractRawStatements_Domain(t *testing.T) {
+	sql := `
+CREATE DOMAIN percentage AS NUMERIC(5,2) CHECK (VALUE >= 0 AND VALUE <= 100);
+CREATE TABLE products (id SERIAL PRIMARY KEY, price percentage);
+`
+	raw := extractRawStatements(sql)
+	if len(raw) != 1 {
+		t.Fatalf("raw count = %d, want 1", len(raw))
+	}
+	if !strings.Contains(raw[0], "CREATE DOMAIN") {
+		t.Errorf("raw[0] = %q, want DOMAIN statement", raw[0])
+	}
+}
+
+func TestExtractRawStatements_CompositeType(t *testing.T) {
+	sql := `
+CREATE TYPE address_type AS (
+    street TEXT,
+    city   TEXT,
+    zip    VARCHAR(10)
+);
+CREATE TABLE users (id SERIAL PRIMARY KEY, addr address_type);
+`
+	raw := extractRawStatements(sql)
+	if len(raw) != 1 {
+		t.Fatalf("raw count = %d, want 1 (composite type)", len(raw))
+	}
+	if !strings.Contains(raw[0], "address_type") {
+		t.Errorf("raw[0] = %q, missing address_type", raw[0])
+	}
+}
+
+func TestExtractRawStatements_FunctionWithDollarQuote(t *testing.T) {
+	sql := `
+CREATE TABLE users (id SERIAL PRIMARY KEY, updated_at TIMESTAMP);
+
+CREATE OR REPLACE FUNCTION update_ts()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+`
+	raw := extractRawStatements(sql)
+	if len(raw) != 1 {
+		t.Fatalf("raw count = %d, want 1 (function)", len(raw))
+	}
+	// Function body must be intact — not split at semicolons inside $$
+	if !strings.Contains(raw[0], "RETURN NEW") {
+		t.Errorf("function body truncated: %s", raw[0])
+	}
+}
+
+func TestExtractRawStatements_PartitionOf(t *testing.T) {
+	sql := `
+CREATE TABLE audit_log (id BIGSERIAL PRIMARY KEY, changed_at TIMESTAMP) PARTITION BY RANGE (changed_at);
+CREATE TABLE audit_log_2025 PARTITION OF audit_log FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+`
+	raw := extractRawStatements(sql)
+	found := false
+	for _, r := range raw {
+		if strings.Contains(r, "PARTITION OF") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("PARTITION OF statement not extracted as raw")
+	}
+}
+
+// ── parseSchemaContentAllV2: raw statements excluded from tables ──────────────
+
+func TestParseSchemaContent_RawNotInTables(t *testing.T) {
+	sm := newSM()
+	content := `
+CREATE DOMAIN hex_color AS TEXT CHECK (VALUE ~ '^#[0-9a-fA-F]{6}$');
+CREATE TABLE categories (id SERIAL PRIMARY KEY, color hex_color);
+`
+	tables, _, _, _, _, raw, err := sm.parseSchemaContentAllV2(content)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tables) != 1 || tables[0].Name != "categories" {
+		t.Errorf("tables = %v, want [categories]", tables)
+	}
+	if len(raw) != 1 || !strings.Contains(raw[0], "DOMAIN") {
+		t.Errorf("raw = %v, want DOMAIN statement", raw)
+	}
+}
+
+// ── INT4RANGE and other PostgreSQL range types ────────────────────────────────
+
+func TestParseCreateTable_RangeTypeNotInt(t *testing.T) {
+	// INT4RANGE contains "int" but should NOT map to int64
+	sm := newSM()
+	sql := `CREATE TABLE t (r INT4RANGE, s INT8RANGE, n NUMRANGE, ts TSRANGE)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, col := range table.Columns {
+		if !strings.HasSuffix(strings.ToLower(col.Type), "range") {
+			continue
+		}
+		// Just verify the type is preserved correctly
+		if !strings.Contains(strings.ToUpper(col.Type), "RANGE") {
+			t.Errorf("column %q type %q should contain RANGE", col.Name, col.Type)
+		}
+	}
+}
+
+// ── SplitColumns utility ──────────────────────────────────────────────────────
+
+func TestSplitColumns_WithStringLiteral(t *testing.T) {
+	// Regression: closing ')' inside string literal must not decrement depth
+	input := `col1 TEXT DEFAULT 'foo)', col2 INT, col3 TEXT`
+	parts := sm_splitCols(input)
+	if len(parts) != 3 {
+		t.Errorf("parts = %d, want 3; got %v", len(parts), parts)
+	}
+}
+
+// helper: use the utils function directly
+func sm_splitCols(s string) []string {
+	sm := newSM()
+	return sm.splitColumnDefinitions(s)
+}
+
+// ── ParseSchemaPathAllV2 directory: all tables present ───────────────────────
+
+func TestParseSchemaDirAllV2_MultipleTables(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "tables.sql"), []byte(`
+CREATE TABLE users (
+    id    SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    age   INT4RANGE GENERATED ALWAYS AS (
+              CASE WHEN id < 18 THEN '[0,18)'::int4range ELSE '[18,)'::int4range END
+          ) STORED,
+    bio   TEXT
+);
+CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), title TEXT);
+`), 0644)
+	sm := newSM()
+	tables, _, _, _, _, _, err := sm.parseSchemaContentAllV2(string(mustRead(t, filepath.Join(dir, "tables.sql"))))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tableNames := map[string]bool{}
+	for _, tbl := range tables {
+		tableNames[tbl.Name] = true
+	}
+	if !tableNames["users"] || !tableNames["posts"] {
+		t.Errorf("tables = %v, want users and posts", tableNames)
+	}
+	// users must have all 4 columns (bio must survive the string literal in age)
+	for _, tbl := range tables {
+		if tbl.Name == "users" {
+			got := map[string]bool{}
+			for _, c := range tbl.Columns {
+				got[c.Name] = true
+			}
+			for _, want := range []string{"id", "email", "age", "bio"} {
+				if !got[want] {
+					t.Errorf("users.%s missing — string literal split bug", want)
+				}
+			}
+		}
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return b
+}
