@@ -1051,35 +1051,6 @@ func extractCQLMap(typ string) (string, string, bool) {
 	return "", "", false
 }
 
-// extractUDTName strips CQL collection wrappers to find the inner UDT name.
-// "frozen<social_link>" → "social_link", "list<frozen<social_link>>" → "social_link"
-func extractUDTName(cqlType string) string {
-	for {
-		inner, ok := extractCQLInner(cqlType, "frozen")
-		if ok {
-			cqlType = inner
-			continue
-		}
-		inner, ok = extractCQLInner(cqlType, "list")
-		if ok {
-			cqlType = inner
-			continue
-		}
-		inner, ok = extractCQLInner(cqlType, "set")
-		if ok {
-			cqlType = inner
-			continue
-		}
-		_, inner, ok = extractCQLMap(cqlType)
-		if ok {
-			cqlType = inner
-			continue
-		}
-		break
-	}
-	return cqlType
-}
-
 func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)
 	methodName := utils.ToPascalCase(query.Name)
@@ -1285,57 +1256,6 @@ func gocqlZero(goType string) string {
 		return "time.Time{}"
 	default:
 		return goType + "{}"
-	}
-}
-
-// gocqlCastExpr returns a Go cast expression from MapScan interface{} to target type.
-func gocqlCastExpr(cqlType, goType string, nullable bool) string {
-	lower := strings.ToLower(cqlType)
-
-	// If the Go type is string, always use fmt.Sprint — handles uuid, timeuuid, inet,
-	// tuple<>, frozen<>, and any other types that serialize to string.
-	if goType == "string" || strings.HasPrefix(goType, "*string") {
-		if nullable {
-			return "func() *string { s := fmt.Sprint(v); return &s }()"
-		}
-		return "fmt.Sprint(v)"
-	}
-	// Collection types map to their Go slice/map — use fmt.Sprint as safe fallback
-	// (gocql returns these as native Go types which can be passed directly, but MapScan
-	// uses interface{} so Sprint is the safest cross-version approach).
-	if strings.HasPrefix(lower, "set<") || strings.HasPrefix(lower, "list<") ||
-		strings.HasPrefix(lower, "map<") || strings.HasPrefix(lower, "frozen<") ||
-		strings.HasPrefix(lower, "tuple<") {
-		return "fmt.Sprint(v)"
-	}
-
-	switch {
-	case goType == "bool" || lower == "boolean" || lower == "bool":
-		if nullable {
-			return "func() *bool { if b, ok := v.(bool); ok { return &b }; return nil }()"
-		}
-		return "func() bool { b, _ := v.(bool); return b }()"
-	case goType == "int64" || strings.Contains(lower, "int") || lower == "varint" || lower == "counter":
-		if nullable {
-			return "func() *int64 { switch n := v.(type) { case int: i := int64(n); return &i; case int32: i := int64(n); return &i; case int64: return &n; }; return nil }()"
-		}
-		return "func() int64 { switch n := v.(type) { case int: return int64(n); case int32: return int64(n); case int64: return n; }; return 0 }()"
-	case goType == "float64" || strings.Contains(lower, "float") || strings.Contains(lower, "double") || strings.Contains(lower, "decimal"):
-		if nullable {
-			return "func() *float64 { switch n := v.(type) { case float32: f := float64(n); return &f; case float64: return &n; }; return nil }()"
-		}
-		return "func() float64 { switch n := v.(type) { case float32: return float64(n); case float64: return n; }; return 0 }()"
-	case goType == "time.Time" || strings.Contains(lower, "time") || strings.Contains(lower, "date"):
-		if lower == "timeuuid" {
-			// timeuuid is a UUID-like type; gocql returns it as gocql.UUID — use Sprint
-			return "fmt.Sprint(v)"
-		}
-		if nullable {
-			return "func() *time.Time { if t, ok := v.(time.Time); ok { return &t }; return nil }()"
-		}
-		return "func() time.Time { t, _ := v.(time.Time); return t }()"
-	default:
-		return "fmt.Sprint(v)"
 	}
 }
 

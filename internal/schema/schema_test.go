@@ -850,7 +850,6 @@ func TestParseOnUpdateFK(t *testing.T) {
 
 // ── Date/Time type parsing ────────────────────────────────────────────────────
 
-
 func TestParseUsersTableFromExampleSchema(t *testing.T) {
 	sql := `
 CREATE TABLE IF NOT EXISTS users (
