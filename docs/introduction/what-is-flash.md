@@ -13,7 +13,10 @@ Flash ORM is a powerful, database-agnostic ORM built in Go that provides Prisma-
 - **PostgreSQL** - Full support with advanced features
 - **MySQL** - Complete compatibility
 - **SQLite** - File-based database support
-- **MongoDB** - NoSQL document database support
+- **ScyllaDB / Cassandra** - Wide-column NoSQL with CQL (Beta)
+- **ClickHouse** - Columnar analytics database (Beta)
+- **MongoDB** - NoSQL document database support (Studio only)
+- **Redis** - Key-value store (Studio only)
 
 ### Lightning Fast Performance
 FlashORM significantly outperforms popular ORMs:

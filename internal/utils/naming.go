@@ -34,7 +34,7 @@ func toTitleCase(s string) string {
 
 func ToPascalCase(s string) string {
 	words := strings.FieldsFunc(s, func(r rune) bool {
-		return r == '_' || r == '-' || r == ' '
+		return r == '_' || r == '-' || r == ' ' || r == '.'
 	})
 	for i, word := range words {
 		words[i] = toTitleCase(word)
@@ -51,4 +51,22 @@ func ToSnakeCase(s string) string {
 		result.WriteRune(r)
 	}
 	return strings.ToLower(result.String())
+}
+
+// goKeywords is the set of Go reserved keywords that cannot be used as identifiers.
+var goKeywords = map[string]bool{
+	"break": true, "case": true, "chan": true, "const": true, "continue": true,
+	"default": true, "defer": true, "else": true, "fallthrough": true, "for": true,
+	"func": true, "go": true, "goto": true, "if": true, "import": true,
+	"interface": true, "map": true, "package": true, "range": true, "return": true,
+	"select": true, "struct": true, "switch": true, "type": true, "var": true,
+}
+
+// SafeGoIdent ensures a string is a valid Go identifier by appending "_"
+// to reserved keywords.
+func SafeGoIdent(s string) string {
+	if goKeywords[s] {
+		return s + "_"
+	}
+	return s
 }

@@ -4,6 +4,8 @@ package common
 type TableInfo struct {
 	Name     string `json:"name"`
 	RowCount int    `json:"row_count"`
+	Keyspace string `json:"keyspace,omitempty"`  // CQL keyspace (ScyllaDB/Cassandra)
+	FullName string `json:"full_name,omitempty"` // Keyspace-qualified name for API queries
 }
 
 // ColumnInfo represents column metadata
@@ -95,6 +97,11 @@ type ExportColumn struct {
 	Unique           bool   `json:"unique,omitempty"`
 	ForeignKeyTable  string `json:"foreign_key_table,omitempty"`
 	ForeignKeyColumn string `json:"foreign_key_column,omitempty"`
+	OnDeleteAction   string `json:"on_delete,omitempty"`
+	OnUpdateAction   string `json:"on_update,omitempty"`
+	Check            string `json:"check,omitempty"`
+	Generated        string `json:"generated,omitempty"`
+	IsIdentity       bool   `json:"is_identity,omitempty"`
 }
 
 // ExportIndex represents an index in the export schema
@@ -102,6 +109,9 @@ type ExportIndex struct {
 	Name    string   `json:"name"`
 	Columns []string `json:"columns"`
 	Unique  bool     `json:"unique"`
+	Where   string   `json:"where,omitempty"`
+	Method  string   `json:"method,omitempty"`
+	Expr    []string `json:"expr,omitempty"`
 }
 
 // ExportTableSchema represents the schema of a table

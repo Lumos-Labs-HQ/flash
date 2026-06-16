@@ -10,9 +10,10 @@ type SchemaEnum struct {
 }
 
 type SchemaTable struct {
-	Name    string
-	Columns []SchemaColumn
-	Indexes []SchemaIndex
+	Name        string
+	Columns     []SchemaColumn
+	Indexes     []SchemaIndex
+	CompositePK string // raw CQL PRIMARY KEY clause, e.g. "((country, city), order_id)"
 }
 
 type SchemaColumn struct {
@@ -22,11 +23,14 @@ type SchemaColumn struct {
 	Default          string
 	IsPrimary        bool
 	IsUnique         bool
-	IsAutoIncrement  bool // NEW: Indicates if column is auto-increment (SERIAL, AUTO_INCREMENT, etc.)
+	IsAutoIncrement  bool
 	ForeignKeyTable  string
 	ForeignKeyColumn string
 	OnDeleteAction   string
-	Check            string // CHECK constraint expression
+	OnUpdateAction   string // ON UPDATE action for FK
+	Check            string
+	Generated        string // GENERATED ALWAYS AS expression
+	IsIdentity       bool   // GENERATED ALWAYS AS IDENTITY (PostgreSQL)
 }
 
 type SchemaIndex struct {
@@ -34,35 +38,85 @@ type SchemaIndex struct {
 	Table   string
 	Columns []string
 	Unique  bool
-	Where   string // Partial index WHERE clause (PostgreSQL)
+	Where   string   // Partial index WHERE clause
+	Method  string   // USING btree|hash|gin|gist|brin|spgist (PostgreSQL)
+	Expr    []string // Expression index columns e.g. lower(email)
+}
+
+type SchemaConstraint struct {
+	Name    string
+	Table   string
+	Type    string // CHECK, UNIQUE, EXCLUDE
+	Expr    string // for CHECK constraints
+	Columns []string
+}
+
+type SchemaKeyspace struct {
+	Name          string
+	Replication   string
+	DurableWrites *bool
 }
 
 type SchemaDiff struct {
-	NewTables      []SchemaTable
-	DroppedTables  []string
-	ModifiedTables []TableDiff
-	NewIndexes     []SchemaIndex
-	DroppedIndexes []SchemaIndex // Changed from []string to include table name for MySQL DROP INDEX
-	NewEnums       []SchemaEnum
-	DroppedEnums   []string
+	NewTables          []SchemaTable
+	DroppedTables      []string
+	ModifiedTables     []TableDiff
+	NewIndexes         []SchemaIndex
+	DroppedIndexes     []SchemaIndex
+	NewEnums           []SchemaEnum
+	DroppedEnums       []string
+	ModifiedEnums      []EnumDiff
+	RenamedColumns     []RenameOp
+	RenamedTables      []RenameOp
+	NewConstraints     []SchemaConstraint
+	DroppedConstraints []SchemaConstraint
+	NewKeyspaces       []SchemaKeyspace
+	DroppedKeyspaces   []string
+	NewUDTs            []SchemaUDT // CQL user-defined types (ScyllaDB/Cassandra)
+	DroppedUDTs        []string    // CQL UDT names to drop
+	NewRawStatements   []string    // Raw SQL statements (DOMAIN, PARTITION OF, composite types, triggers, functions)
+}
+
+type SchemaUDT struct {
+	Name   string
+	Fields []SchemaUDTField
+}
+
+type SchemaUDTField struct {
+	Name string
+	Type string
+}
+
+type EnumDiff struct {
+	Name      string
+	AddValues []string
+}
+
+type RenameOp struct {
+	Table   string
+	OldName string
+	NewName string
 }
 
 type TableDiff struct {
 	Name            string
 	NewColumns      []SchemaColumn
-	DroppedColumns  []SchemaColumn // Changed from []string to preserve column info for DOWN migration
+	DroppedColumns  []SchemaColumn
 	ModifiedColumns []ColumnDiff
-	OldTable        SchemaTable // Full old table schema (for SQLite table recreation)
-	NewTable        SchemaTable // Full new table schema (for SQLite table recreation)
+	OldTable        SchemaTable
+	NewTable        SchemaTable
 }
 
 type ColumnDiff struct {
-	Name      string
-	OldType   string
-	NewType   string
-	Changes   []string
-	OldColumn SchemaColumn
-	NewColumn SchemaColumn
+	Name             string
+	OldType          string
+	NewType          string
+	Changes          []string
+	OldColumn        SchemaColumn
+	NewColumn        SchemaColumn
+	NullableChanged  bool
+	DefaultChanged   bool
+	GeneratedChanged bool
 }
 
 type MigrationConflict struct {

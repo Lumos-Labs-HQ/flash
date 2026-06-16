@@ -312,19 +312,18 @@ func (s *Adapter) FormatColumnType(column types.SchemaColumn) string {
 			parts = append(parts, "PRIMARY KEY")
 		}
 	}
-
 	if column.IsUnique && !column.IsPrimary {
 		parts = append(parts, "UNIQUE")
 	}
-
 	if !column.Nullable {
 		parts = append(parts, "NOT NULL")
 	}
-
 	if column.Default != "" {
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", column.Default))
 	}
-
+	if column.Generated != "" {
+		parts = append(parts, fmt.Sprintf("GENERATED ALWAYS AS (%s) STORED", column.Generated))
+	}
 	if column.Check != "" {
 		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}

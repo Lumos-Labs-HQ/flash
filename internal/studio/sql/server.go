@@ -26,13 +26,12 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
-	adapter := database.NewAdapter(cfg.Database.Provider)
-
 	dbURL, err := cfg.GetDatabaseURL()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to get database URL: %v", err))
 	}
 
+	adapter := database.NewAdapter(cfg.Database.Provider)
 	if err := adapter.Connect(context.Background(), dbURL); err != nil {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
@@ -62,7 +61,6 @@ func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
 		host:      host,
 		authToken: authToken,
 	}
-
 	server.setupRoutes()
 	return server
 }
@@ -70,13 +68,11 @@ func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
 func (s *Server) setupRoutes() {
 	common.SetupStaticFS(s.mux, StaticFS)
 
-	// UI routes
 	s.mux.HandleFunc("GET /{$}", s.handleIndex)
 	s.mux.HandleFunc("GET /schema", s.handleSchema)
 	s.mux.HandleFunc("GET /sql", s.handleSQL)
 	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
 
-	// API routes
 	s.mux.HandleFunc("GET /api/tables", s.handleGetTables)
 	s.mux.HandleFunc("GET /api/tables/{name}", s.handleGetTableData)
 	s.mux.HandleFunc("GET /api/schema", s.handleGetSchema)

@@ -13,14 +13,18 @@ import (
 )
 
 var (
-	createTableRegex *regexp.Regexp
-	enumRegex        *regexp.Regexp
-	regexOnce        sync.Once
+	createTableRegex    *regexp.Regexp
+	enumRegex           *regexp.Regexp
+	createKeyspaceRegex *regexp.Regexp
+	createUDTRegex      *regexp.Regexp
+	regexOnce           sync.Once
 )
 
 func initRegex() {
-	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\(([\s\S]*?)\);`)
+	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s*\(([\s\S]*?)\);`)
 	enumRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
+	createKeyspaceRegex = regexp.MustCompile(`(?i)CREATE\s+KEYSPACE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)`)
+	createUDTRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\S+)\s*\(([\s\S]*?)\);`)
 }
 
 type SchemaParser struct {
@@ -62,8 +66,15 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 
 				tables := p.parseCreateTables(string(content))
 				schema.Tables = append(schema.Tables, tables...)
+				views := p.parseCreateViews(string(content))
+				schema.Tables = append(schema.Tables, views...)
 				enums := p.parseCreateEnums(string(content))
 				schema.Enums = append(schema.Enums, enums...)
+				udts := p.parseCreateUDTs(string(content))
+				schema.UDTs = append(schema.UDTs, udts...)
+				if ks := p.parseCreateKeyspace(string(content)); ks != "" && schema.Keyspace == "" {
+					schema.Keyspace = ks
+				}
 			}
 			return schema, nil
 		}
@@ -90,8 +101,15 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 
 		tables := p.parseCreateTables(string(content))
 		schema.Tables = append(schema.Tables, tables...)
+		views := p.parseCreateViews(string(content))
+		schema.Tables = append(schema.Tables, views...)
 		enums := p.parseCreateEnums(string(content))
 		schema.Enums = append(schema.Enums, enums...)
+		udts := p.parseCreateUDTs(string(content))
+		schema.UDTs = append(schema.UDTs, udts...)
+		if ks := p.parseCreateKeyspace(string(content)); ks != "" && schema.Keyspace == "" {
+			schema.Keyspace = ks
+		}
 	}
 
 	return schema, nil
@@ -109,11 +127,16 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 		}
 
 		table := &Table{
-			Name:    match[1],
+			Name:    stripTableNameQuotes(match[1]),
 			Columns: make([]*Column, 0, 16),
 		}
 
-		lines := utils.SplitColumns(match[2])
+		body := match[2]
+		// Strip CQL WITH clause — may follow after a newline/space
+		withStripper := regexp.MustCompile(`(?i)\)?\s*WITH\s+(CLUSTERING|COMPACT|compression)[\s\S]*$`)
+		body = withStripper.ReplaceAllString(body, "")
+
+		lines := utils.SplitColumns(body)
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if line == "" {
@@ -127,7 +150,8 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 				strings.HasPrefix(lineUpper, "CHECK") ||
 				strings.HasPrefix(lineUpper, "CONSTRAINT") ||
 				strings.HasPrefix(lineUpper, "INDEX") ||
-				strings.HasPrefix(lineUpper, "KEY") {
+				strings.HasPrefix(lineUpper, "KEY") ||
+				strings.HasPrefix(lineUpper, "STATIC") {
 				continue
 			}
 
@@ -143,24 +167,28 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 			colName = line[:spaceIdx]
 			rest := strings.TrimSpace(line[spaceIdx+1:])
 
-			// Extract type (handle parentheses for types like DECIMAL(10, 2))
+			// Extract type (handle parens + angle brackets for CQL types)
 			parenDepth := 0
+			angleDepth := 0
 			typeEnd := 0
 			for i, ch := range rest {
-				if ch == '(' {
+				switch ch {
+				case '(':
 					parenDepth++
-				} else if ch == ')' {
+				case ')':
 					parenDepth--
-					if parenDepth == 0 {
-						typeEnd = i + 1
-						break
+				case '<':
+					angleDepth++
+				case '>':
+					angleDepth--
+				case ' ', '\t':
+					if parenDepth <= 0 && angleDepth <= 0 {
+						typeEnd = i
+						goto typeEndFound
 					}
-				} else if parenDepth == 0 && (ch == ' ' || ch == '\t') {
-					typeEnd = i
-					break
 				}
 			}
-
+		typeEndFound:
 			if typeEnd == 0 {
 				typeEnd = len(rest)
 			}
@@ -184,6 +212,122 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 	}
 
 	return tables
+}
+
+func (p *SchemaParser) parseCreateViews(sql string) []*Table {
+	sql = utils.RemoveComments(sql)
+
+	views := make([]*Table, 0, 4)
+	viewNameRegex := regexp.MustCompile(`(?i)CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT\s+`)
+	nameMatches := viewNameRegex.FindAllStringSubmatchIndex(sql, -1)
+
+	for _, loc := range nameMatches {
+		name := stripTableNameQuotes(sql[loc[2]:loc[3]])
+		afterSelect := sql[loc[1]:]
+		// Scope to the current statement only (up to the next top-level semicolon)
+		stmtEnd := findTopLevelSemicolon(afterSelect)
+		if stmtEnd != -1 {
+			afterSelect = afterSelect[:stmtEnd]
+		}
+		selectList := extractTopLevelSelectList(afterSelect)
+		cols := parseViewSelectColumns(selectList)
+		if len(cols) == 0 {
+			cols = []*Column{{Name: "*", Type: "text", Nullable: true}}
+		}
+		views = append(views, &Table{Name: name, Columns: cols})
+	}
+	return views
+}
+
+// findTopLevelSemicolon returns the index of the first `;` not inside parentheses.
+func findTopLevelSemicolon(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ';':
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// extractTopLevelSelectList finds the select column list by scanning for the
+// last top-level FROM (not inside parentheses).
+func extractTopLevelSelectList(afterSelect string) string {
+	upper := strings.ToUpper(afterSelect)
+	depth := 0
+	lastFrom := -1
+	for i := 0; i < len(upper); i++ {
+		switch upper[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		default:
+			if depth == 0 && strings.HasPrefix(upper[i:], "FROM ") {
+				lastFrom = i
+			}
+		}
+	}
+	if lastFrom == -1 {
+		return afterSelect
+	}
+	return strings.TrimSpace(afterSelect[:lastFrom])
+}
+
+// parseViewSelectColumns extracts named columns from a SELECT column list.
+// Handles: bare names, aliases (expr AS alias), qualified names (t.col).
+// Returns nil if it looks like SELECT * (wildcard).
+func parseViewSelectColumns(selectList string) []*Column {
+	selectList = strings.TrimSpace(selectList)
+	if selectList == "*" {
+		return nil
+	}
+
+	parts := utils.SplitColumns(selectList)
+	cols := make([]*Column, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "*" {
+			continue
+		}
+		name := extractSelectColumnName(part)
+		if name == "" || name == "*" {
+			continue
+		}
+		cols = append(cols, &Column{Name: name, Type: "text", Nullable: true})
+	}
+	return cols
+}
+
+// extractSelectColumnName returns the output column name for a SELECT expression.
+// Handles: "col", "t.col", "expr AS alias", "expr alias".
+func extractSelectColumnName(expr string) string {
+	upper := strings.ToUpper(expr)
+	// Check for AS alias
+	if idx := strings.LastIndex(upper, " AS "); idx != -1 {
+		return strings.Trim(strings.TrimSpace(expr[idx+4:]), `"`)
+	}
+	// Last word after space (implicit alias)
+	// But only if it doesn't look like a function call — heuristic: no parens in last token
+	parts := strings.Fields(expr)
+	if len(parts) > 1 {
+		last := parts[len(parts)-1]
+		if !strings.Contains(last, "(") && !strings.Contains(last, ")") {
+			return strings.Trim(last, `"`)
+		}
+	}
+	// Qualified name: t.col → col
+	if idx := strings.LastIndex(expr, "."); idx != -1 {
+		return strings.Trim(expr[idx+1:], `"`)
+	}
+	return strings.Trim(expr, `"`)
 }
 
 func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {
@@ -218,4 +362,46 @@ func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {
 	}
 
 	return enums
+}
+
+func (p *SchemaParser) parseCreateUDTs(sql string) []*UDT {
+	sql = utils.RemoveComments(sql)
+	matches := createUDTRegex.FindAllStringSubmatch(sql, -1)
+
+	udts := make([]*UDT, 0, len(matches))
+	for _, match := range matches {
+		if len(match) < 3 {
+			continue
+		}
+		udt := &UDT{
+			Name:   match[1],
+			Fields: make([]*UDTField, 0),
+		}
+		// Parse fields: each is "name type" separated by commas
+		for _, field := range strings.Split(match[2], ",") {
+			field = strings.TrimSpace(field)
+			parts := strings.SplitN(field, " ", 2)
+			if len(parts) == 2 {
+				udt.Fields = append(udt.Fields, &UDTField{Name: parts[0], Type: parts[1]})
+			}
+		}
+		udts = append(udts, udt)
+	}
+	return udts
+}
+
+func (p *SchemaParser) parseCreateKeyspace(sql string) string {
+	match := createKeyspaceRegex.FindStringSubmatch(sql)
+	if len(match) >= 2 {
+		return match[1]
+	}
+	return ""
+}
+
+func stripTableNameQuotes(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) >= 2 && name[0] == '"' && name[len(name)-1] == '"' {
+		return name[1 : len(name)-1]
+	}
+	return name
 }

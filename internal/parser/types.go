@@ -1,8 +1,20 @@
 package parser
 
 type Schema struct {
-	Tables []*Table
-	Enums  []*Enum
+	Tables   []*Table
+	Enums    []*Enum
+	Keyspace string // CQL keyspace name (ScyllaDB/Cassandra)
+	UDTs     []*UDT // CQL user-defined types
+}
+
+type UDT struct {
+	Name   string
+	Fields []*UDTField
+}
+
+type UDTField struct {
+	Name string
+	Type string
 }
 
 type Enum struct {
@@ -32,13 +44,16 @@ type Query struct {
 }
 
 type Param struct {
-	Name string
-	Type string
+	Name     string
+	Type     string
+	ParamNum int // the actual $N number in SQL (1-based)
 }
 
 type QueryColumn struct {
-	Name     string
-	Type     string
-	Table    string
-	Nullable bool
+	Name         string
+	Type         string
+	Table        string
+	Nullable     bool
+	IsComputed   bool   // true if Name came from an expression, not a bare column ref
+	OriginalExpr string // the raw expression (e.g. "preferences->'key'", "RANK() OVER (...)")
 }

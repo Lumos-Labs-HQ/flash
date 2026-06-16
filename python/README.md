@@ -4,13 +4,14 @@ A powerful, database-agnostic migration CLI tool built in Go with multi-database
 
 ## ✨ Features
 
-- 🎨 **FlashORM Studio**: Visual database editor with React-based schema visualization
-- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite
-- 🔄 **Migration Management**: Create, apply, and track migrations
+- 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite, ScyllaDB / Cassandra, ClickHouse
+- 🔄 **Migration Management**: Create, apply, rollback, and track migrations
+- 🌿 **Schema Branching**: Git-like branching for database schemas
+- 🌱 **Database Seeding**: Generate realistic fake data for development
 - 🔒 **Safe Migration System**: Transaction-based execution with automatic rollback
 - 📤 **Smart Export System**: Multiple formats (JSON, CSV, SQLite)
-- 🔧 **Type-Safe Code Generation**: Generate fully typed JavaScript/TypeScript code
-- ⚡ **Blazing Fast**: 2.5x faster than Drizzle, 10x faster than Prisma
+- 🔧 **Type-Safe Code Generation**: Generate fully typed Python code with async/sync support
+- ⚡ **Blazing Fast**: 2.8x faster than Drizzle, 11.9x faster than Prisma
 - 💻 **Raw SQL Execution**: Execute SQL files or inline queries
 - 🎯 **Prisma-like Commands**: Familiar CLI interface
 
@@ -40,7 +41,7 @@ pip install flashorm
 ### 1. Initialize Project
 
 ```bash
-flash init --postgresql  # or --mysql, --sqlite
+flash init --postgresql  # or --mysql, --sqlite, --scylla, --clickhouse
 ```
 
 This creates:
@@ -199,7 +200,8 @@ if __name__ == '__main__':
 ### Visual Database Editor
 
 ```bash
-# Launch FlashORM Studio (web-based database editor)
+# Launch FlashORM Studio (web-based database editor for PostgreSQL, MySQL, SQLite,
+# ScyllaDB, ClickHouse, MongoDB, and Redis)
 flash studio
 
 # Launch on custom port
@@ -227,6 +229,8 @@ flash studio --browser=false
 flash init --postgresql
 flash init --mysql
 flash init --sqlite
+flash init --scylla
+flash init --clickhouse
 ```
 
 ### Migrations
@@ -280,6 +284,39 @@ flash export --csv
 
 # Export as SQLite
 flash export --sqlite
+```
+
+### Database Seeding
+
+```bash
+# Seed all tables with default count
+flash seed
+
+# Seed with custom count
+flash seed --count 100
+
+# Seed specific tables with different counts
+flash seed users:100 posts:500
+
+# Truncate before seeding
+flash seed --truncate --force
+```
+
+### Schema Branching
+
+```bash
+# Create a feature branch
+flash branch create feature/new-schema
+
+# Switch between branches
+flash checkout feature/new-schema
+flash checkout main
+
+# List branches
+flash branch list
+
+# Merge branches
+flash branch merge feature/new-schema
 ```
 
 ### Database Operations
@@ -512,15 +549,13 @@ $ flash raw -q "SELECT id, name, email FROM users LIMIT 3"
 └────┴────────────┴─────────────────────┘
 ```
 
-d
-
 ## 📚 Examples
 
 Check out complete examples:
 
 - [Python Example](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/python)
-- [TypeScript Example](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/ts)
 - [Go Example](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/go)
+- [TypeScript Example](https://github.com/Lumos-Labs-HQ/flash/tree/main/example/ts)
 
 ## 🐛 Troubleshooting
 
@@ -559,9 +594,9 @@ flash studio --port 3000
 
 - **Visual Database Editor**: Manage your database visually with FlashORM Studio
 - **Raw SQL Support**: Execute SQL files or queries directly from CLI
-- **Type-Safe**: Full TypeScript support with generated types
-- **Fast**: 2.5x-10x faster than popular ORMs
-- **Multi-DB**: PostgreSQL, MySQL, and SQLite support
+- **Type-Safe**: Full Python type hints with generated types (async + sync)
+- **Fast**: 2.8x-11.9x faster than popular ORMs
+- **Multi-DB**: PostgreSQL, MySQL, SQLite, ScyllaDB, Cassandra, ClickHouse
 - **Zero Config**: Works out of the box with sensible defaults
 
 ## 📄 License

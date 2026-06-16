@@ -5,9 +5,52 @@ description: Flash ORM release notes and changelog
 
 # FlashORM Release Notes
 
-## Version 2.3.0 - Latest Release
+## Version 2.4.5 — ScyllaDB Support & Multi-Provider Hardening
 
-### 🔴 Redis Studio (New Feature)
+**Released:** June 2025
+
+### ✨ New Features
+
+- **ScyllaDB & Apache Cassandra Support (Beta)** — Full database adapter with multi-cluster connections, keyspace-aware operations, and migration pipelines. See the [detailed release notes](/notes/RELEASE_NOTES) for the complete list.
+
+- **ClickHouse Support (Beta)** — Full database adapter for ClickHouse analytics database.
+
+- **CQL UDT Support** — `CREATE TYPE` statements for user-defined types are parsed, included in schema snapshots, and generated in migrations. Go codegen produces proper struct types for UDTs.
+
+- **CQL Materialized View Support** — `CREATE MATERIALIZED VIEW` statements are parsed, ordered after tables in migrations, and generated with `IF NOT EXISTS`.
+
+- **Multi-Keyspace Support** — ScyllaDB adapter iterates all user keyspaces. Studio shows collapsible keyspace sections with table counts.
+
+- **Studio Improvements** — Enhanced SQL editor autocomplete for CQL keywords, keyspace grouping in database view, metrics page per keyspace.
+
+### 🐛 Bug Fixes
+
+- **COALESCE Handling** — `COALESCE` in SELECT, SET, and WHERE clauses correctly parsed for CQL queries.
+- **Studio Tables Fix** — Fixed table-not-showing issues in SQL Studio.
+- **Schema Parser** — Fixed `FROM` extraction inside `EXTRACT(EPOCH FROM ...)` expressions; CTE recognition for WITH-clause names.
+- **Go Codegen — gocql** — Row struct fields use `string` value types; `database/sql` import excluded for ScyllaDB.
+- **Migration Generation** — Schema diffs for UDTs, materialized views, and collection types produce correct UP/DOWN SQL.
+- **Export System** — ENUM-type export gated behind provider check; won't fail on ScyllaDB/ClickHouse.
+
+### ⚡ Performance
+
+- `SplitColumns` angle bracket tracking avoids false column splits for CQL types.
+- Schema parser pre-compiled regex improvements.
+
+### 🗑️ Breaking Changes
+
+- **ScyllaDB `RETURNING`** — Queries with `RETURNING` in `.sql` files silently downgrade from `:one`/`:many` to `:exec` for ScyllaDB.
+- **Go Codegen — gocql Row Types** — Row struct fields are now `string` (value type) instead of `*string` (nullable).
+
+### 📦 Installation
+
+```bash
+go install github.com/Lumos-Labs-HQ/flash@latest
+```
+
+---
+
+## Version 2.3.0 — Redis Studio & Performance
 
 A comprehensive web-based Redis management interface with advanced features:
 

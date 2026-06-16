@@ -9,6 +9,7 @@ const (
 	PostgreSQL DatabaseType = "postgresql"
 	MySQL      DatabaseType = "mysql"
 	ClickHouse DatabaseType = "clickhouse"
+	ScyllaDB   DatabaseType = "scylla"
 )
 
 type ProjectTemplate struct {
@@ -78,6 +79,18 @@ var dbConfigs = map[DatabaseType]dbConfig{
 		queryParam:       "?",
 		returnType:       ":exec",
 		envExample:       "clickhouse://username:password@localhost:9000/database_name",
+	},
+	ScyllaDB: {
+		provider:         "scylla",
+		engine:           "scylla",
+		primaryKey:       "uuid PRIMARY KEY",
+		autoIncrement:    "",
+		textType:         "text",
+		timestampType:    "timestamp",
+		timestampDefault: "toTimestamp(now())",
+		queryParam:       "?",
+		returnType:       ":one",
+		envExample:       "scylla://host:9042/keyspace_name",
 	},
 }
 
@@ -169,6 +182,9 @@ func ValidateDatabaseType(dbType string) DatabaseType {
 		"postgresql": PostgreSQL,
 		"postgres":   PostgreSQL,
 		"clickhouse": ClickHouse,
+		"scylla":     ScyllaDB,
+		"scylladb":   ScyllaDB,
+		"cassandra":  ScyllaDB,
 	}
 
 	if dt, exists := types[dbType]; exists {
@@ -218,6 +234,12 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Go:     "clickhouse-go/v2"
 #   JS:     "@clickhouse/client"
 #   Python: "clickhouse-driver" (sync) | "asynch" (async)
+# Add driver = "<name>" inside the [gen.*] block below.`
+	case ScyllaDB:
+		return `# FlashORM — ScyllaDB/Cassandra Drivers
+#   Go:     "apache/cassandra-gocql-driver/v2"
+#   JS:     "cassandra-driver"
+#   Python: "scylla-driver" (sync) | "cassandra-driver" (async)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	default:
 		return `# FlashORM — See docs for available drivers per database.`

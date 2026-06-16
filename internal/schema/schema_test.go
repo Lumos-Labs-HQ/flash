@@ -3,6 +3,7 @@ package schema
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
@@ -489,4 +490,675 @@ func TestCompareSchemas_PreservesDependencyOrder(t *testing.T) {
 	if diff.NewTables[1].Name != "jobs" {
 		t.Errorf("expected second table to be 'jobs' (depends on users), got %q", diff.NewTables[1].Name)
 	}
+}
+
+// ── Date/Time type parsing ────────────────────────────────────────────────────
+
+func TestParseAllDateTimeTypes_PostgreSQL(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE events (
+		id SERIAL PRIMARY KEY,
+		ts_tz    TIMESTAMP WITH TIME ZONE NOT NULL,
+		ts_notz  TIMESTAMP WITHOUT TIME ZONE,
+		ts_plain TIMESTAMP,
+		ts_tz2   TIMESTAMPTZ,
+		d        DATE,
+		t        TIME,
+		t_tz     TIME WITH TIME ZONE,
+		iv       INTERVAL,
+		ts_def   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]string{
+		"ts_tz":    "TIMESTAMP WITH TIME ZONE",
+		"ts_notz":  "TIMESTAMP WITHOUT TIME ZONE",
+		"ts_plain": "TIMESTAMP",
+		"ts_tz2":   "TIMESTAMPTZ",
+		"d":        "DATE",
+		"t":        "TIME",
+		"t_tz":     "TIME WITH TIME ZONE",
+		"iv":       "INTERVAL",
+		"ts_def":   "TIMESTAMP WITH TIME ZONE",
+	}
+
+	cols := make(map[string]string)
+	for _, c := range table.Columns {
+		cols[c.Name] = c.Type
+	}
+
+	for name, expectedType := range want {
+		got, ok := cols[name]
+		if !ok {
+			t.Errorf("column %q not found", name)
+			continue
+		}
+		if got != expectedType {
+			t.Errorf("col %q: type = %q, want %q", name, got, expectedType)
+		}
+	}
+
+	// ts_tz should be NOT NULL
+	for _, c := range table.Columns {
+		if c.Name == "ts_tz" && c.Nullable {
+			t.Error("ts_tz should be NOT NULL")
+		}
+		if c.Name == "ts_def" && c.Default == "" {
+			t.Error("ts_def should have DEFAULT NOW()")
+		}
+	}
+}
+
+func TestParseAllDateTimeTypes_MySQL(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE events (
+		id INT PRIMARY KEY AUTO_INCREMENT,
+		dt   DATETIME NOT NULL,
+		dt6  DATETIME(6),
+		ts   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		ts6  TIMESTAMP(6),
+		d    DATE,
+		t    TIME,
+		yr   YEAR
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]string{
+		"dt":  "DATETIME",
+		"dt6": "DATETIME(6)",
+		"ts":  "TIMESTAMP",
+		"ts6": "TIMESTAMP(6)",
+		"d":   "DATE",
+		"t":   "TIME",
+		"yr":  "YEAR",
+	}
+
+	cols := make(map[string]string)
+	for _, c := range table.Columns {
+		cols[c.Name] = c.Type
+	}
+
+	for name, expectedType := range want {
+		got, ok := cols[name]
+		if !ok {
+			t.Errorf("column %q not found", name)
+			continue
+		}
+		if got != expectedType {
+			t.Errorf("col %q: type = %q, want %q", name, got, expectedType)
+		}
+	}
+}
+
+func TestParseAllDateTimeTypes_SQLite(t *testing.T) {
+	sm := newSM()
+	// SQLite stores dates as TEXT, REAL, or INTEGER — all are valid
+	sql := `CREATE TABLE events (
+		id   INTEGER PRIMARY KEY AUTOINCREMENT,
+		ts   TEXT NOT NULL,
+		dt   TEXT,
+		d    TEXT DEFAULT (date('now')),
+		unix INTEGER
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(table.Columns) != 5 {
+		t.Errorf("columns = %d, want 5", len(table.Columns))
+	}
+}
+
+// ── Numeric precision types ───────────────────────────────────────────────────
+
+func TestParseNumericTypes(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE financials (
+		id       SERIAL PRIMARY KEY,
+		price    DECIMAL(10,2) NOT NULL,
+		qty      NUMERIC(8,3),
+		amount   FLOAT,
+		rate     DOUBLE PRECISION,
+		score    REAL,
+		big      BIGINT,
+		small    SMALLINT,
+		tiny     TINYINT,
+		pct      NUMERIC(5,4) DEFAULT 0.0000
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := map[string]string{
+		"price":  "DECIMAL(10,2)",
+		"qty":    "NUMERIC(8,3)",
+		"amount": "FLOAT",
+		"rate":   "DOUBLE PRECISION",
+		"score":  "REAL",
+		"big":    "BIGINT",
+		"small":  "SMALLINT",
+		"tiny":   "TINYINT",
+		"pct":    "NUMERIC(5,4)",
+	}
+
+	cols := make(map[string]string)
+	for _, c := range table.Columns {
+		cols[c.Name] = c.Type
+	}
+	for name, expectedType := range want {
+		if got := cols[name]; got != expectedType {
+			t.Errorf("col %q: type = %q, want %q", name, got, expectedType)
+		}
+	}
+}
+
+// ── CHECK constraint parsing ──────────────────────────────────────────────────
+
+func TestParseCheckConstraints(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE products (
+		id    SERIAL PRIMARY KEY,
+		price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+		qty   INTEGER CHECK (qty > 0 AND qty <= 10000),
+		code  VARCHAR(10) CHECK (code ~ '^[A-Z]{3}[0-9]{4}$')
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	checks := make(map[string]string)
+	for _, c := range table.Columns {
+		checks[c.Name] = c.Check
+	}
+
+	if checks["price"] == "" {
+		t.Error("price should have CHECK constraint")
+	}
+	if checks["qty"] == "" {
+		t.Error("qty should have CHECK constraint")
+	}
+}
+
+// ── Schema diff: nullable/default changes ─────────────────────────────────────
+
+func TestSchemaDiff_NullableAndDefaultChange(t *testing.T) {
+	sm := newSM()
+
+	current := []types.SchemaTable{{
+		Name: "users",
+		Columns: []types.SchemaColumn{
+			{Name: "id", Type: "SERIAL", IsPrimary: true},
+			{Name: "email", Type: "TEXT", Nullable: true},
+			{Name: "score", Type: "INTEGER", Nullable: false, Default: "0"},
+		},
+	}}
+
+	target := []types.SchemaTable{{
+		Name: "users",
+		Columns: []types.SchemaColumn{
+			{Name: "id", Type: "SERIAL", IsPrimary: true},
+			{Name: "email", Type: "TEXT", Nullable: false},                    // made NOT NULL
+			{Name: "score", Type: "INTEGER", Nullable: false, Default: "100"}, // default changed
+		},
+	}}
+
+	diff := sm.compareSchemas(current, target, nil, nil, nil)
+
+	if len(diff.ModifiedTables) != 1 {
+		t.Fatalf("expected 1 modified table, got %d", len(diff.ModifiedTables))
+	}
+	mods := diff.ModifiedTables[0].ModifiedColumns
+	if len(mods) != 2 {
+		t.Fatalf("expected 2 modified columns, got %d: %v", len(mods), mods)
+	}
+
+	for _, col := range mods {
+		switch col.Name {
+		case "email":
+			if !col.NullableChanged {
+				t.Error("email NullableChanged should be true")
+			}
+		case "score":
+			if !col.DefaultChanged {
+				t.Error("score DefaultChanged should be true")
+			}
+		}
+	}
+}
+
+// ── Schema diff: UNIQUE change ────────────────────────────────────────────────
+
+func TestSchemaDiff_UniqueChange(t *testing.T) {
+	sm := newSM()
+
+	current := []types.SchemaTable{{
+		Name: "users",
+		Columns: []types.SchemaColumn{
+			{Name: "id", Type: "SERIAL", IsPrimary: true},
+			{Name: "email", Type: "TEXT", IsUnique: false},
+		},
+	}}
+	target := []types.SchemaTable{{
+		Name: "users",
+		Columns: []types.SchemaColumn{
+			{Name: "id", Type: "SERIAL", IsPrimary: true},
+			{Name: "email", Type: "TEXT", IsUnique: true},
+		},
+	}}
+
+	diff := sm.compareSchemas(current, target, nil, nil, nil)
+	if len(diff.ModifiedTables) != 1 || len(diff.ModifiedTables[0].ModifiedColumns) != 1 {
+		t.Fatal("expected 1 modified column (email uniqueness change)")
+	}
+}
+
+// ── Schema diff: enum ADD VALUE ───────────────────────────────────────────────
+
+func TestSchemaDiff_EnumAddValue(t *testing.T) {
+	sm := newSM()
+	current := []types.SchemaEnum{{Name: "status", Values: []string{"active", "inactive"}}}
+	target := []types.SchemaEnum{{Name: "status", Values: []string{"active", "inactive", "pending"}}}
+
+	diff := sm.compareSchemas(nil, nil, current, target, nil)
+	if len(diff.ModifiedEnums) != 1 {
+		t.Fatalf("expected 1 modified enum, got %d", len(diff.ModifiedEnums))
+	}
+	if len(diff.ModifiedEnums[0].AddValues) != 1 || diff.ModifiedEnums[0].AddValues[0] != "pending" {
+		t.Errorf("expected pending to be added, got %v", diff.ModifiedEnums[0].AddValues)
+	}
+}
+
+// ── Multi-word types preserved through parse/compare cycle ───────────────────
+
+func TestMultiWordTypesRoundTrip(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE t (
+		a TIMESTAMP WITH TIME ZONE NOT NULL,
+		b TIMESTAMP WITHOUT TIME ZONE,
+		c DOUBLE PRECISION,
+		d CHARACTER VARYING(100),
+		e TIME WITH TIME ZONE
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	// compareSchemas with identical target — no diffs
+	tables := []types.SchemaTable{table}
+	diff := sm.compareSchemas(tables, tables, nil, nil, nil)
+	if len(diff.ModifiedTables) != 0 {
+		t.Errorf("identical schema should produce no diffs, got %v", diff.ModifiedTables)
+	}
+}
+
+// ── GENERATED column ──────────────────────────────────────────────────────────
+
+func TestParseGeneratedColumn(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE products (
+		id    SERIAL PRIMARY KEY,
+		price NUMERIC(10,2) NOT NULL,
+		tax   NUMERIC(10,2) GENERATED ALWAYS AS (price * 0.1) STORED
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, c := range table.Columns {
+		if c.Name == "tax" && c.Generated != "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("tax column should have Generated expression")
+	}
+}
+
+// ── ON UPDATE FK action ───────────────────────────────────────────────────────
+
+func TestParseOnUpdateFK(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE orders (
+		id      SERIAL PRIMARY KEY,
+		user_id INTEGER REFERENCES users(id) ON DELETE CASCADE ON UPDATE RESTRICT
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, c := range table.Columns {
+		if c.Name == "user_id" {
+			if c.OnDeleteAction != "CASCADE" {
+				t.Errorf("OnDeleteAction = %q, want CASCADE", c.OnDeleteAction)
+			}
+			if c.OnUpdateAction != "RESTRICT" {
+				t.Errorf("OnUpdateAction = %q, want RESTRICT", c.OnUpdateAction)
+			}
+		}
+	}
+}
+
+// ── Date/Time type parsing ────────────────────────────────────────────────────
+
+func TestParseUsersTableFromExampleSchema(t *testing.T) {
+	sql := `
+CREATE TABLE IF NOT EXISTS users (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(255) NOT NULL,
+    address     VARCHAR(255),
+    isadmin     BOOLEAN NOT NULL DEFAULT FALSE,
+    age         INT CHECK (age >= 0),
+    age_range   INT4RANGE GENERATED ALWAYS AS (
+                    CASE WHEN age IS NULL THEN NULL
+                         WHEN age < 18  THEN '[0,18)'::int4range
+                         WHEN age < 35  THEN '[18,35)'::int4range
+                         WHEN age < 55  THEN '[35,55)'::int4range
+                         ELSE                '[55,)'::int4range
+                    END
+                ) STORED,
+    bio         VARCHAR(500),
+    email       VARCHAR(255) UNIQUE NOT NULL,
+    preferences JSONB DEFAULT '{"theme":"light","notifications":true}',
+    role        VARCHAR(50) NOT NULL DEFAULT 'user',
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);`
+	sm := NewSchemaManager(nil)
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("parseCreateTableStatement failed: %v", err)
+	}
+	if table.Name != "users" {
+		t.Errorf("expected table name 'users', got %q", table.Name)
+	}
+
+	expectedCols := map[string]string{
+		"id":          "SERIAL",
+		"name":        "VARCHAR(255)",
+		"address":     "VARCHAR(255)",
+		"isadmin":     "BOOLEAN",
+		"age":         "INT",
+		"age_range":   "INT4RANGE",
+		"bio":         "VARCHAR(500)",
+		"email":       "VARCHAR(255)",
+		"preferences": "JSONB",
+		"role":        "VARCHAR(50)",
+		"created_at":  "TIMESTAMP WITH TIME ZONE",
+	}
+	if len(table.Columns) != len(expectedCols) {
+		t.Errorf("expected %d columns, got %d", len(expectedCols), len(table.Columns))
+	}
+	for _, col := range table.Columns {
+		expectedType, exists := expectedCols[col.Name]
+		if !exists {
+			t.Errorf("unexpected column %q (type %q)", col.Name, col.Type)
+		} else if col.Type != expectedType {
+			t.Errorf("column %q: expected type %q, got %q", col.Name, expectedType, col.Type)
+		}
+	}
+	for _, col := range table.Columns {
+		if col.Name == "age_range" {
+			if col.Generated == "" {
+				t.Error("age_range should have Generated expression")
+			}
+			if !strings.Contains(col.Generated, "CASE WHEN") {
+				t.Errorf("age_range Generated should contain CASE, got: %s", col.Generated)
+			}
+		}
+	}
+}
+
+// ── String literal in splitColumnDefinitions ─────────────────────────────────
+
+func TestSplitColumnDefinitions_StringLiteralWithParen(t *testing.T) {
+	// '[0,18)'::int4range contains ')' inside a string literal — must not split there
+	sm := newSM()
+	sql := `CREATE TABLE users (
+		id     SERIAL PRIMARY KEY,
+		age    INT,
+		r      INT4RANGE GENERATED ALWAYS AS (
+		           CASE WHEN age < 18 THEN '[0,18)'::int4range
+		                ELSE '[18,)'::int4range END
+		       ) STORED,
+		email  VARCHAR(255) NOT NULL,
+		name   TEXT
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := map[string]bool{}
+	for _, c := range table.Columns {
+		got[c.Name] = true
+	}
+	for _, want := range []string{"id", "age", "r", "email", "name"} {
+		if !got[want] {
+			t.Errorf("column %q lost after GENERATED string literal", want)
+		}
+	}
+}
+
+// ── Composite PK stored in CompositePK ───────────────────────────────────────
+
+func TestParseCreateTable_CompositePK(t *testing.T) {
+	sm := newSM()
+	sql := `CREATE TABLE orders (
+		country    TEXT,
+		city       TEXT,
+		order_id   UUID,
+		amount     DECIMAL,
+		PRIMARY KEY ((country, city), order_id)
+	)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if table.CompositePK == "" {
+		t.Fatal("CompositePK should be set for compound primary key")
+	}
+	if !strings.Contains(table.CompositePK, "country") {
+		t.Errorf("CompositePK %q should contain 'country'", table.CompositePK)
+	}
+	// Partition + clustering columns must be marked IsPrimary
+	pkCols := map[string]bool{}
+	for _, c := range table.Columns {
+		if c.IsPrimary {
+			pkCols[c.Name] = true
+		}
+	}
+	if !pkCols["country"] || !pkCols["city"] || !pkCols["order_id"] {
+		t.Errorf("PK columns not all marked IsPrimary: %v", pkCols)
+	}
+}
+
+// ── Raw statements (DOMAIN, composite type, PARTITION OF) ────────────────────
+
+func TestExtractRawStatements_Domain(t *testing.T) {
+	sql := `
+CREATE DOMAIN percentage AS NUMERIC(5,2) CHECK (VALUE >= 0 AND VALUE <= 100);
+CREATE TABLE products (id SERIAL PRIMARY KEY, price percentage);
+`
+	raw := extractRawStatements(sql)
+	if len(raw) != 1 {
+		t.Fatalf("raw count = %d, want 1", len(raw))
+	}
+	if !strings.Contains(raw[0], "CREATE DOMAIN") {
+		t.Errorf("raw[0] = %q, want DOMAIN statement", raw[0])
+	}
+}
+
+func TestExtractRawStatements_CompositeType(t *testing.T) {
+	sql := `
+CREATE TYPE address_type AS (
+    street TEXT,
+    city   TEXT,
+    zip    VARCHAR(10)
+);
+CREATE TABLE users (id SERIAL PRIMARY KEY, addr address_type);
+`
+	raw := extractRawStatements(sql)
+	if len(raw) != 1 {
+		t.Fatalf("raw count = %d, want 1 (composite type)", len(raw))
+	}
+	if !strings.Contains(raw[0], "address_type") {
+		t.Errorf("raw[0] = %q, missing address_type", raw[0])
+	}
+}
+
+func TestExtractRawStatements_FunctionWithDollarQuote(t *testing.T) {
+	sql := `
+CREATE TABLE users (id SERIAL PRIMARY KEY, updated_at TIMESTAMP);
+
+CREATE OR REPLACE FUNCTION update_ts()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+`
+	raw := extractRawStatements(sql)
+	if len(raw) != 1 {
+		t.Fatalf("raw count = %d, want 1 (function)", len(raw))
+	}
+	// Function body must be intact — not split at semicolons inside $$
+	if !strings.Contains(raw[0], "RETURN NEW") {
+		t.Errorf("function body truncated: %s", raw[0])
+	}
+}
+
+func TestExtractRawStatements_PartitionOf(t *testing.T) {
+	sql := `
+CREATE TABLE audit_log (id BIGSERIAL PRIMARY KEY, changed_at TIMESTAMP) PARTITION BY RANGE (changed_at);
+CREATE TABLE audit_log_2025 PARTITION OF audit_log FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');
+`
+	raw := extractRawStatements(sql)
+	found := false
+	for _, r := range raw {
+		if strings.Contains(r, "PARTITION OF") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("PARTITION OF statement not extracted as raw")
+	}
+}
+
+// ── parseSchemaContentAllV2: raw statements excluded from tables ──────────────
+
+func TestParseSchemaContent_RawNotInTables(t *testing.T) {
+	sm := newSM()
+	content := `
+CREATE DOMAIN hex_color AS TEXT CHECK (VALUE ~ '^#[0-9a-fA-F]{6}$');
+CREATE TABLE categories (id SERIAL PRIMARY KEY, color hex_color);
+`
+	tables, _, _, _, _, raw, err := sm.parseSchemaContentAllV2(content)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(tables) != 1 || tables[0].Name != "categories" {
+		t.Errorf("tables = %v, want [categories]", tables)
+	}
+	if len(raw) != 1 || !strings.Contains(raw[0], "DOMAIN") {
+		t.Errorf("raw = %v, want DOMAIN statement", raw)
+	}
+}
+
+// ── INT4RANGE and other PostgreSQL range types ────────────────────────────────
+
+func TestParseCreateTable_RangeTypeNotInt(t *testing.T) {
+	// INT4RANGE contains "int" but should NOT map to int64
+	sm := newSM()
+	sql := `CREATE TABLE t (r INT4RANGE, s INT8RANGE, n NUMRANGE, ts TSRANGE)`
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, col := range table.Columns {
+		if !strings.HasSuffix(strings.ToLower(col.Type), "range") {
+			continue
+		}
+		// Just verify the type is preserved correctly
+		if !strings.Contains(strings.ToUpper(col.Type), "RANGE") {
+			t.Errorf("column %q type %q should contain RANGE", col.Name, col.Type)
+		}
+	}
+}
+
+// ── SplitColumns utility ──────────────────────────────────────────────────────
+
+func TestSplitColumns_WithStringLiteral(t *testing.T) {
+	// Regression: closing ')' inside string literal must not decrement depth
+	input := `col1 TEXT DEFAULT 'foo)', col2 INT, col3 TEXT`
+	parts := sm_splitCols(input)
+	if len(parts) != 3 {
+		t.Errorf("parts = %d, want 3; got %v", len(parts), parts)
+	}
+}
+
+// helper: use the utils function directly
+func sm_splitCols(s string) []string {
+	sm := newSM()
+	return sm.splitColumnDefinitions(s)
+}
+
+// ── ParseSchemaPathAllV2 directory: all tables present ───────────────────────
+
+func TestParseSchemaDirAllV2_MultipleTables(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "tables.sql"), []byte(`
+CREATE TABLE users (
+    id    SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    age   INT4RANGE GENERATED ALWAYS AS (
+              CASE WHEN id < 18 THEN '[0,18)'::int4range ELSE '[18,)'::int4range END
+          ) STORED,
+    bio   TEXT
+);
+CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), title TEXT);
+`), 0644)
+	sm := newSM()
+	tables, _, _, _, _, _, err := sm.parseSchemaContentAllV2(string(mustRead(t, filepath.Join(dir, "tables.sql"))))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tableNames := map[string]bool{}
+	for _, tbl := range tables {
+		tableNames[tbl.Name] = true
+	}
+	if !tableNames["users"] || !tableNames["posts"] {
+		t.Errorf("tables = %v, want users and posts", tableNames)
+	}
+	// users must have all 4 columns (bio must survive the string literal in age)
+	for _, tbl := range tables {
+		if tbl.Name == "users" {
+			got := map[string]bool{}
+			for _, c := range tbl.Columns {
+				got[c.Name] = true
+			}
+			for _, want := range []string{"id", "email", "age", "bio"} {
+				if !got[want] {
+					t.Errorf("users.%s missing — string literal split bug", want)
+				}
+			}
+		}
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return b
 }

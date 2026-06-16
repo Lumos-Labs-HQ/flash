@@ -16,14 +16,10 @@ var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export database tables",
 	Long: `
-Export all database tables (excluding migration table) to various formats.
-Supported formats: json (default), csv, sqlite
+Export all database tables (excluding migration table) to JSON format.
 
 Examples:
-  flash export
-  flash export --sqlite
-  flash export --csv
-  flash export --json`,
+  flash export`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -36,16 +32,6 @@ Examples:
 
 		if err := cfg.EnsureDirectories(); err != nil {
 			return fmt.Errorf("failed to create directories: %w", err)
-		}
-
-		// Determine format from flags
-		format := "json"
-		if csv, _ := cmd.Flags().GetBool("csv"); csv {
-			format = "csv"
-		} else if sqlite, _ := cmd.Flags().GetBool("sqlite"); sqlite {
-			format = "sqlite"
-		} else if jsonFlag, _ := cmd.Flags().GetBool("json"); jsonFlag {
-			format = "json"
 		}
 
 		ctx := cmd.Context()
@@ -66,7 +52,7 @@ Examples:
 			return fmt.Errorf("failed to connect to database: %w", err)
 		}
 
-		exportPath, err := export.PerformExport(ctx, adapter, cfg.ExportPath, format)
+		exportPath, err := export.PerformExport(ctx, adapter, cfg.ExportPath)
 		if err != nil {
 			return err
 		}
@@ -83,7 +69,4 @@ Examples:
 
 func init() {
 	// Command is registered by plugin executors, not the base CLI
-	exportCmd.Flags().BoolP("json", "j", false, "Export as JSON (default)")
-	exportCmd.Flags().BoolP("csv", "c", false, "Export as CSV")
-	exportCmd.Flags().BoolP("sqlite", "s", false, "Export as SQLite")
 }

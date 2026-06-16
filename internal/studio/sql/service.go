@@ -68,6 +68,20 @@ func (s *Service) ensureCorrectSchema() error {
 		query := fmt.Sprintf("SET search_path TO %s, public", s.quote(currentBranch.Schema))
 		_, err = s.adapter.ExecuteQuery(s.ctx, query)
 		return err
+	case "clickhouse":
+		query := fmt.Sprintf("USE %s", s.quote(currentBranch.Schema))
+		_, err = s.adapter.ExecuteQuery(s.ctx, query)
+		return err
+	case "scylla", "scylladb", "cassandra":
+		if currentBranch.Schema != "" {
+			type SchemaSwitcher interface {
+				SetActiveSchema(ctx context.Context, schema string) error
+			}
+			if switcher, ok := s.adapter.(SchemaSwitcher); ok {
+				return switcher.SetActiveSchema(s.ctx, currentBranch.Schema)
+			}
+		}
+		return nil
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
 			SwitchDatabase(ctx context.Context, dbName string) error
@@ -81,6 +95,60 @@ func (s *Service) ensureCorrectSchema() error {
 
 func (s *Service) GetTables() ([]common.TableInfo, error) {
 	_ = s.ensureCorrectSchema()
+
+	// ScyllaDB/Cassandra — return keyspace-grouped tables from all user keyspaces
+	if s.adapter.ProviderName() == "scylla" || s.adapter.ProviderName() == "scylladb" || s.adapter.ProviderName() == "cassandra" {
+		ks, err := s.adapter.GetKeyspaces(s.ctx)
+		if err != nil {
+			return nil, err
+		}
+		type SchemaSwitcher interface {
+			SetActiveSchema(ctx context.Context, schema string) error
+		}
+
+		// Collect all user tables first, then fetch row counts concurrently.
+		type entry struct {
+			displayName string
+			fullName    string
+			keyspace    string
+		}
+		var entries []entry
+		for _, k := range ks {
+			if k == "system" || k == "system_schema" || k == "system_auth" || k == "system_distributed" || k == "system_traces" {
+				continue
+			}
+			if sw, ok := s.adapter.(SchemaSwitcher); ok {
+				_ = sw.SetActiveSchema(s.ctx, k)
+			}
+			tables, _ := s.adapter.GetAllTableNames(s.ctx)
+			for _, t := range tables {
+				if t == "_flash_migrations" {
+					continue
+				}
+				displayName := t
+				if idx := strings.Index(t, "."); idx >= 0 {
+					displayName = t[idx+1:]
+				}
+				entries = append(entries, entry{displayName, t, k})
+			}
+		}
+
+		// Fetch all row counts concurrently.
+		fullNames := make([]string, len(entries))
+		for i, e := range entries {
+			fullNames[i] = e.fullName
+		}
+		counts, _ := s.adapter.GetAllTableRowCounts(s.ctx, fullNames)
+
+		result := make([]common.TableInfo, len(entries))
+		for i, e := range entries {
+			result[i] = common.TableInfo{
+				Name: e.displayName, FullName: e.fullName, RowCount: counts[e.fullName], Keyspace: e.keyspace,
+			}
+		}
+		return result, nil
+	}
+
 	tables, err := s.adapter.GetAllTableNames(s.ctx)
 	if err != nil {
 		return nil, err
@@ -511,6 +579,24 @@ func (s *Service) buildFilterCondition(filter common.Filter, columnTypes map[str
 }
 
 func (s *Service) getRowsFiltered(tableName string, limit, offset int, whereClause string, args []any) ([]map[string]any, error) {
+	// ScyllaDB does not support LIMIT/OFFSET in CQL the same way as SQL.
+	// Use GetTableData which returns all rows, then paginate in-memory.
+	if s.adapter.ProviderName() == "scylla" || s.adapter.ProviderName() == "scylladb" || s.adapter.ProviderName() == "cassandra" {
+		data, err := s.adapter.GetTableData(s.ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		start := offset
+		end := offset + limit
+		if start > len(data) {
+			return []map[string]any{}, nil
+		}
+		if end > len(data) {
+			end = len(data)
+		}
+		return data[start:end], nil
+	}
+
 	var query string
 	if whereClause != "" {
 		query = fmt.Sprintf("SELECT * FROM %s WHERE %s LIMIT %d OFFSET %d",
@@ -577,23 +663,52 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
 	defer cancel()
 
-	// Use PullCompleteSchema directly to avoid N per-table index queries
 	type SchemaFetcher interface {
 		PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
 	}
-	var tables []types.SchemaTable
-	var err error
-	if fetcher, ok := s.adapter.(SchemaFetcher); ok {
-		tables, err = fetcher.PullCompleteSchema(ctx)
+
+	var allTables []types.SchemaTable
+
+	// ScyllaDB/Cassandra — iterate all user keyspaces
+	if s.adapter.ProviderName() == "scylla" || s.adapter.ProviderName() == "scylladb" || s.adapter.ProviderName() == "cassandra" {
+		type SchemaSwitcher interface {
+			SetActiveSchema(ctx context.Context, schema string) error
+		}
+		keyspaces, err := s.adapter.GetKeyspaces(s.ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, ks := range keyspaces {
+			if ks == "system" || ks == "system_schema" || ks == "system_auth" || ks == "system_distributed" || ks == "system_traces" {
+				continue
+			}
+			if sw, ok := s.adapter.(SchemaSwitcher); ok {
+				_ = sw.SetActiveSchema(ctx, ks)
+			}
+			if fetcher, ok := s.adapter.(SchemaFetcher); ok {
+				tbls, _ := fetcher.PullCompleteSchema(ctx)
+				for i := range tbls {
+					tbls[i].Name = ks + "." + tbls[i].Name
+				}
+				allTables = append(allTables, tbls...)
+			}
+		}
 	} else {
-		tables, err = s.adapter.GetCurrentSchema(ctx)
-	}
-	if err != nil {
-		return nil, err
+		var err error
+		if fetcher, ok := s.adapter.(SchemaFetcher); ok {
+			allTables, err = fetcher.PullCompleteSchema(ctx)
+		} else {
+			allTables, err = s.adapter.GetCurrentSchema(ctx)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	enums, _ := s.adapter.GetCurrentEnums(ctx)
+	_ = enums
 
+	tables := allTables
 	nodes := make([]map[string]any, 0, len(tables))
 	nodeIndex := make(map[string]string, len(tables))
 
@@ -634,8 +749,9 @@ func (s *Service) GetSchemaVisualization() (map[string]any, error) {
 			nodes = append(nodes, map[string]any{
 				"id": nodeID,
 				"data": map[string]any{
-					"label":   table.Name,
-					"columns": columns,
+					"label":    table.Name,
+					"columns":  columns,
+					"keyspace": extractKeyspace(table.Name),
 				},
 				"position": map[string]int{
 					"x": 100 + (j%4)*300,
@@ -798,6 +914,13 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 	}, nil
 }
 
+func extractKeyspace(name string) string {
+	if idx := strings.Index(name, "."); idx >= 0 {
+		return name[:idx]
+	}
+	return ""
+}
+
 func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
 	_ = s.ensureCorrectSchema()
 
@@ -934,6 +1057,15 @@ func (s *Service) SwitchBranch(branchName string) error {
 		query := fmt.Sprintf("SET search_path TO %s, public", s.quote(branchSchema))
 		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
 			return fmt.Errorf("failed to set search_path: %w", err)
+		}
+	case "clickhouse":
+		query := fmt.Sprintf("USE %s", s.quote(branchSchema))
+		if _, err := s.adapter.ExecuteQuery(ctx, query); err != nil {
+			return fmt.Errorf("failed to switch database: %w", err)
+		}
+	case "scylla", "scylladb", "cassandra":
+		if err := s.adapter.SetActiveSchema(ctx, branchSchema); err != nil {
+			return fmt.Errorf("failed to switch keyspace: %w", err)
 		}
 	case "mysql", "sqlite", "sqlite3":
 		type DatabaseSwitcher interface {
@@ -1183,18 +1315,17 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		provider = s.cfg.Database.Provider
 	}
 
-	// Fetch the full schema once — avoids N per-table GetTableColumns queries.
 	var tableNames []string
-	var colsByTable map[string][]types.SchemaColumn // may be nil on fallback
+	var schemaTables []types.SchemaTable
 
 	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-		schemaTables, err := s.adapter.GetCurrentSchema(ctx)
-		if err == nil {
-			colsByTable = make(map[string][]types.SchemaColumn, len(schemaTables))
-			for _, t := range schemaTables {
-				tableNames = append(tableNames, t.Name)
-				colsByTable[t.Name] = t.Columns
-			}
+		var err error
+		schemaTables, err = s.adapter.PullCompleteSchema(ctx)
+		if err != nil {
+			schemaTables, _ = s.adapter.GetCurrentSchema(ctx)
+		}
+		for _, t := range schemaTables {
+			tableNames = append(tableNames, t.Name)
 		}
 	}
 
@@ -1206,7 +1337,14 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		}
 	}
 
-	sortedTables, err := s.sortTablesByDependency(ctx, tableNames, colsByTable)
+	// Build table → schema lookup for quick access
+	schemaMap := make(map[string]*types.SchemaTable, len(schemaTables))
+	for i := range schemaTables {
+		t := &schemaTables[i]
+		schemaMap[t.Name] = t
+	}
+
+	sortedTables, err := s.sortTablesByDependency(ctx, tableNames, nil)
 	if err != nil {
 		sortedTables = tableNames
 	}
@@ -1219,9 +1357,9 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		Tables:           make([]common.ExportTable, 0),
 	}
 
-	// Export ENUM types for schema exports (PostgreSQL)
-	if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-		if provider == "postgresql" {
+	// Export ENUM types for schema exports (PostgreSQL only)
+	if provider != "scylla" && provider != "scylladb" && provider != "cassandra" {
+		if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
 			enumTypes, err := s.getEnumTypes(ctx)
 			if err == nil && len(enumTypes) > 0 {
 				exportData.EnumTypes = enumTypes
@@ -1239,8 +1377,8 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 		}
 
 		if exportType == common.ExportSchemaOnly || exportType == common.ExportComplete {
-			if cols, ok := colsByTable[tableName]; ok {
-				exportTable.Schema = s.buildTableSchemaFromCols(cols)
+			if tbl, ok := schemaMap[tableName]; ok {
+				exportTable.Schema = s.buildTableSchemaFromTable(tbl)
 			} else {
 				schema, err := s.getTableSchema(ctx, tableName)
 				if err != nil {
@@ -1264,11 +1402,11 @@ func (s *Service) ExportDatabase(exportType common.ExportType) (*common.ExportDa
 	return exportData, nil
 }
 
-// buildTableSchemaFromCols builds an ExportTableSchema from pre-fetched column info.
-func (s *Service) buildTableSchemaFromCols(columns []types.SchemaColumn) *common.ExportTableSchema {
-	exportColumns := make([]common.ExportColumn, 0, len(columns))
-	seen := make(map[string]bool, len(columns))
-	for _, col := range columns {
+// buildTableSchemaFromTable builds an ExportTableSchema from a full SchemaTable (includes indexes).
+func (s *Service) buildTableSchemaFromTable(t *types.SchemaTable) *common.ExportTableSchema {
+	exportColumns := make([]common.ExportColumn, 0, len(t.Columns))
+	seen := make(map[string]bool, len(t.Columns))
+	for _, col := range t.Columns {
 		if seen[col.Name] {
 			continue
 		}
@@ -1283,12 +1421,34 @@ func (s *Service) buildTableSchemaFromCols(columns []types.SchemaColumn) *common
 			Unique:           col.IsUnique,
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
+			OnDeleteAction:   col.OnDeleteAction,
+			OnUpdateAction:   col.OnUpdateAction,
+			Check:            col.Check,
+			Generated:        col.Generated,
+			IsIdentity:       col.IsIdentity,
 		})
 	}
-	return &common.ExportTableSchema{Columns: exportColumns}
+
+	// Include indexes
+	var exportIndexes []common.ExportIndex
+	if len(t.Indexes) > 0 {
+		exportIndexes = make([]common.ExportIndex, 0, len(t.Indexes))
+		for _, idx := range t.Indexes {
+			exportIndexes = append(exportIndexes, common.ExportIndex{
+				Name:    idx.Name,
+				Columns: idx.Columns,
+				Unique:  idx.Unique,
+				Where:   idx.Where,
+				Method:  idx.Method,
+				Expr:    idx.Expr,
+			})
+		}
+	}
+
+	return &common.ExportTableSchema{Columns: exportColumns, Indexes: exportIndexes}
 }
 
-// getTableSchema returns the schema for a table
+// getTableSchema returns the schema for a table (fallback when PullCompleteSchema unavailable)
 func (s *Service) getTableSchema(ctx context.Context, tableName string) (*common.ExportTableSchema, error) {
 	columns, err := s.adapter.GetTableColumns(ctx, tableName)
 	if err != nil {
@@ -1314,6 +1474,11 @@ func (s *Service) getTableSchema(ctx context.Context, tableName string) (*common
 			Unique:           col.IsUnique,
 			ForeignKeyTable:  col.ForeignKeyTable,
 			ForeignKeyColumn: col.ForeignKeyColumn,
+			OnDeleteAction:   col.OnDeleteAction,
+			OnUpdateAction:   col.OnUpdateAction,
+			Check:            col.Check,
+			Generated:        col.Generated,
+			IsIdentity:       col.IsIdentity,
 		})
 	}
 
@@ -1453,10 +1618,8 @@ func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) 
 	case "sqlite", "sqlite3":
 		res, err := s.adapter.ExecuteQuery(ctx, "PRAGMA foreign_keys")
 		if err == nil && len(res.Rows) > 0 {
-			// PRAGMA returns "foreign_keys" column with 0 or 1
 			for _, v := range res.Rows[0] {
 				if fmt.Sprintf("%v", v) == "0" {
-					// Already disabled
 					return func() {}
 				}
 			}
@@ -1465,6 +1628,10 @@ func (s *Service) disableFKChecksIfNeeded(ctx context.Context) (restore func()) 
 		return func() {
 			_ = s.adapter.ExecuteMigration(ctx, "PRAGMA foreign_keys = ON")
 		}
+
+	case "clickhouse", "scylla", "scylladb", "cassandra":
+		// ClickHouse/ScyllaDB have no FK constraints
+		return func() {}
 
 	default: // postgresql, postgres
 		var original string
@@ -1543,40 +1710,18 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 	// Sort tables by dependency order
 	sortedTables := s.sortImportTablesByDependency(importData.Tables)
 
-	// Collect FK constraints to add after all tables are created
-	type fkConstraint struct {
-		tableName string
-		colName   string
-		fkTable   string
-		fkColumn  string
-	}
-	var pendingFKs []fkConstraint
-
-	// Phase 1: Create tables WITHOUT foreign key constraints
+	// Phase 1: Create tables (FKs included inline via REFERENCES)
 	for _, table := range sortedTables {
 		tableExists := existingTableMap[table.Name]
 
 		if table.Schema != nil {
 			if !tableExists {
-				// Create the table without FK constraints
 				if err := s.createTableFromSchemaNoFK(ctx, table.Name, table.Schema); err != nil {
 					result.Errors = append(result.Errors, fmt.Sprintf("Failed to create table %s: %v", table.Name, err))
 					continue
 				}
 				result.TablesCreated = append(result.TablesCreated, table.Name)
 				existingTableMap[table.Name] = true
-
-				// Collect FK constraints to add later
-				for _, col := range table.Schema.Columns {
-					if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
-						pendingFKs = append(pendingFKs, fkConstraint{
-							tableName: table.Name,
-							colName:   col.Name,
-							fkTable:   col.ForeignKeyTable,
-							fkColumn:  col.ForeignKeyColumn,
-						})
-					}
-				}
 			} else {
 				// Update existing table - add missing columns
 				added, err := s.updateTableSchema(ctx, table.Name, table.Schema)
@@ -1607,22 +1752,6 @@ func (s *Service) ImportDatabase(importData *common.ExportData) (*common.ImportR
 	}
 	restoreFK()
 
-	// Phase 3: Add foreign key constraints (after all data is in place)
-	for _, fk := range pendingFKs {
-		if !existingTableMap[fk.fkTable] {
-			continue
-		}
-
-		query := fmt.Sprintf("ALTER TABLE %s ADD FOREIGN KEY (%s) REFERENCES %s(%s)",
-			common.QuoteIdentifier(fk.tableName),
-			common.QuoteIdentifier(fk.colName),
-			common.QuoteIdentifier(fk.fkTable),
-			common.QuoteIdentifier(fk.fkColumn))
-
-		// FK failures (no unique constraint on target, already exists, etc.) are non-fatal — skip silently
-		_ = s.adapter.ExecuteMigration(ctx, query)
-	}
-
 	return result, nil
 }
 
@@ -1648,6 +1777,21 @@ func normalizeDefault(def, colType string) string {
 
 // createTableFromSchemaNoFK creates a new table from the export schema WITHOUT foreign key constraints
 func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	provider := ""
+	if s.cfg != nil {
+		provider = s.cfg.Database.Provider
+	}
+
+	// Use adapter-native DDL for ClickHouse (MergeTree, no SQL constraints)
+	if provider == "clickhouse" {
+		return s.createTableClickHouse(ctx, tableName, schema)
+	}
+
+	// Use CQL DDL for ScyllaDB
+	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		return s.createTableScylla(ctx, tableName, schema)
+	}
+
 	var columnDefs []string
 	var pkCols []string
 
@@ -1660,13 +1804,33 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 
 	for _, col := range schema.Columns {
 		colType := normalizeColType(col.Type)
+
+		// GENERATED ALWAYS AS (computed columns)
+		if col.Generated != "" {
+			def := fmt.Sprintf("%s %s GENERATED ALWAYS AS (%s) STORED",
+				common.QuoteIdentifier(col.Name), colType, col.Generated)
+			columnDefs = append(columnDefs, def)
+			continue
+		}
+
+		// GENERATED ALWAYS AS IDENTITY (PostgreSQL)
+		if col.IsIdentity {
+			def := fmt.Sprintf("%s %s GENERATED ALWAYS AS IDENTITY",
+				common.QuoteIdentifier(col.Name), colType)
+			if col.PrimaryKey && !compositePK {
+				def += " PRIMARY KEY"
+			}
+			columnDefs = append(columnDefs, def)
+			continue
+		}
+
 		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
 
 		if col.PrimaryKey && !compositePK {
 			def += " PRIMARY KEY"
 		}
 		if col.AutoIncrement {
-			if s.cfg != nil && s.cfg.Database.Provider == "mysql" {
+			if provider == "mysql" {
 				def += " AUTO_INCREMENT"
 			}
 		}
@@ -1682,6 +1846,23 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 				def += fmt.Sprintf(" DEFAULT %s", normalized)
 			}
 		}
+		if col.Check != "" {
+			def += fmt.Sprintf(" CHECK (%s)", col.Check)
+		}
+
+		// ON DELETE / ON UPDATE for self-referencing or dependent tables
+		if col.ForeignKeyTable != "" && col.ForeignKeyColumn != "" {
+			ref := fmt.Sprintf(" REFERENCES %s(%s)",
+				common.QuoteIdentifier(col.ForeignKeyTable),
+				common.QuoteIdentifier(col.ForeignKeyColumn))
+			if col.OnDeleteAction != "" {
+				ref += fmt.Sprintf(" ON DELETE %s", col.OnDeleteAction)
+			}
+			if col.OnUpdateAction != "" {
+				ref += fmt.Sprintf(" ON UPDATE %s", col.OnUpdateAction)
+			}
+			def += ref
+		}
 
 		columnDefs = append(columnDefs, def)
 	}
@@ -1694,7 +1875,155 @@ func (s *Service) createTableFromSchemaNoFK(ctx context.Context, tableName strin
 		common.QuoteIdentifier(tableName),
 		strings.Join(columnDefs, ",\n  "))
 
+	if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+		return err
+	}
+
+	// Create indexes defined on the table
+	if len(schema.Indexes) > 0 {
+		for _, idx := range schema.Indexes {
+			if sql := s.buildCreateIndexSQL(tableName, idx); sql != "" {
+				_ = s.adapter.ExecuteMigration(ctx, sql)
+			}
+		}
+	}
+
+	return nil
+}
+
+// createTableClickHouse creates a table using MergeTree engine for ClickHouse
+func (s *Service) createTableClickHouse(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	var columnDefs []string
+	var pkCols []string
+
+	for _, col := range schema.Columns {
+		if col.PrimaryKey {
+			pkCols = append(pkCols, common.QuoteIdentifier(col.Name))
+		}
+	}
+
+	for _, col := range schema.Columns {
+		colType := normalizeColType(col.Type)
+		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
+		if col.Default != "" {
+			def += fmt.Sprintf(" DEFAULT %s", col.Default)
+		}
+		columnDefs = append(columnDefs, def)
+	}
+
+	orderCols := pkCols
+	if len(orderCols) == 0 && len(schema.Columns) > 0 {
+		orderCols = []string{common.QuoteIdentifier(schema.Columns[0].Name)}
+	}
+	if len(orderCols) == 0 {
+		orderCols = []string{"tuple()"}
+	}
+
+	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  %s\n) ENGINE = MergeTree() ORDER BY (%s)",
+		common.QuoteIdentifier(tableName),
+		strings.Join(columnDefs, ",\n  "),
+		strings.Join(orderCols, ", "))
+
+	if err := s.adapter.ExecuteMigration(ctx, query); err != nil {
+		return err
+	}
+
+	// Add data-skipping indexes
+	if len(schema.Indexes) > 0 {
+		for _, idx := range schema.Indexes {
+			idxType := "minmax"
+			if idx.Unique {
+				idxType = "bloom_filter"
+			}
+			cols := strings.Join(idx.Columns, ", ")
+			idxSQL := fmt.Sprintf("ALTER TABLE %s ADD INDEX %s (%s) TYPE %s GRANULARITY 1",
+				common.QuoteIdentifier(tableName),
+				common.QuoteIdentifier(idx.Name), cols, idxType)
+			_ = s.adapter.ExecuteMigration(ctx, idxSQL)
+		}
+	}
+
+	return nil
+}
+
+// createTableScylla creates a table using CQL syntax for ScyllaDB
+func (s *Service) createTableScylla(ctx context.Context, tableName string, schema *common.ExportTableSchema) error {
+	var columnDefs []string
+	var pkCols []string
+
+	for _, col := range schema.Columns {
+		if col.PrimaryKey {
+			pkCols = append(pkCols, col.Name)
+		}
+	}
+
+	for _, col := range schema.Columns {
+		colType := normalizeColType(col.Type)
+		def := fmt.Sprintf("%s %s", common.QuoteIdentifier(col.Name), colType)
+		columnDefs = append(columnDefs, def)
+	}
+
+	query := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n  %s\n  PRIMARY KEY (%s)\n)",
+		common.QuoteIdentifier(tableName),
+		strings.Join(columnDefs, ",\n  "),
+		func() string {
+			if len(pkCols) > 0 {
+				quoted := make([]string, len(pkCols))
+				for i, c := range pkCols {
+					quoted[i] = common.QuoteIdentifier(c)
+				}
+				return strings.Join(quoted, ", ")
+			}
+			if len(schema.Columns) > 0 {
+				return common.QuoteIdentifier(schema.Columns[0].Name)
+			}
+			return "id"
+		}())
+
 	return s.adapter.ExecuteMigration(ctx, query)
+}
+
+// buildCreateIndexSQL generates CREATE INDEX DDL from export data
+func (s *Service) buildCreateIndexSQL(tableName string, idx common.ExportIndex) string {
+	if idx.Unique && idx.Name == "" {
+		return ""
+	}
+
+	createClause := "CREATE"
+	if idx.Unique {
+		createClause = "CREATE UNIQUE"
+	}
+
+	nameClause := ""
+	if idx.Name != "" {
+		nameClause = fmt.Sprintf(" %s", common.QuoteIdentifier(idx.Name))
+	}
+
+	methodClause := ""
+	if idx.Method != "" {
+		methodClause = fmt.Sprintf(" USING %s", idx.Method)
+	}
+
+	var colExprs []string
+	if len(idx.Expr) > 0 {
+		for _, e := range idx.Expr {
+			colExprs = append(colExprs, fmt.Sprintf("(%s)", e))
+		}
+	}
+	for _, c := range idx.Columns {
+		colExprs = append(colExprs, common.QuoteIdentifier(c))
+	}
+
+	query := fmt.Sprintf("%s INDEX%s ON %s%s (%s)",
+		createClause, nameClause,
+		common.QuoteIdentifier(tableName),
+		methodClause,
+		strings.Join(colExprs, ", "))
+
+	if idx.Where != "" {
+		query += fmt.Sprintf(" WHERE %s", idx.Where)
+	}
+	return query
 }
 
 // updateTableSchema updates an existing table by adding missing columns
@@ -1723,7 +2052,6 @@ func (s *Service) updateTableSchema(ctx context.Context, tableName string, schem
 			if col.Default != "" {
 				def += fmt.Sprintf(" DEFAULT %s", col.Default)
 			}
-			// Don't add NOT NULL when adding column without default to avoid errors
 		}
 		if col.Unique {
 			def += " UNIQUE"

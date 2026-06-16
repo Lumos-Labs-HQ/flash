@@ -134,7 +134,8 @@ func (m *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 			c.ordinal_position,
 			k.REFERENCED_TABLE_NAME,
 			k.REFERENCED_COLUMN_NAME,
-			r.DELETE_RULE
+			r.DELETE_RULE,
+			r.UPDATE_RULE
 		FROM information_schema.columns c
 		LEFT JOIN information_schema.key_column_usage k
 			ON c.table_schema = k.table_schema
@@ -159,7 +160,7 @@ func (m *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 		var tableName string
 		var column types.SchemaColumn
 		var dataType, isNullable, columnType, extra string
-		var columnDefault, referencedTable, referencedColumn, onDeleteAction sql.NullString
+		var columnDefault, referencedTable, referencedColumn, onDeleteAction, onUpdateAction sql.NullString
 		var charMaxLength, numericPrecision, numericScale sql.NullInt64
 		var isPrimary, isUnique int
 		var ordinalPosition int
@@ -181,6 +182,7 @@ func (m *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 			&referencedTable,
 			&referencedColumn,
 			&onDeleteAction,
+			&onUpdateAction,
 		)
 		if err != nil {
 			return nil, err
@@ -198,13 +200,50 @@ func (m *Adapter) GetAllTablesColumns(ctx context.Context, tableNames []string) 
 		if referencedTable.Valid && referencedColumn.Valid {
 			column.ForeignKeyTable = referencedTable.String
 			column.ForeignKeyColumn = referencedColumn.String
-			if onDeleteAction.Valid {
+			if onDeleteAction.Valid && onDeleteAction.String != "NO ACTION" {
 				column.OnDeleteAction = onDeleteAction.String
+			}
+			if onUpdateAction.Valid && onUpdateAction.String != "NO ACTION" {
+				column.OnUpdateAction = onUpdateAction.String
 			}
 		}
 
 		result[tableName] = append(result[tableName], column)
 	}
+
+	// Fetch CHECK constraints for MySQL 8.0.16+
+	checkQuery := fmt.Sprintf(`
+		SELECT cc.TABLE_NAME, cc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
+		FROM information_schema.CHECK_CONSTRAINTS cc
+		JOIN information_schema.TABLE_CONSTRAINTS tc
+			ON cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+			AND cc.CONSTRAINT_SCHEMA = tc.TABLE_SCHEMA
+		WHERE tc.TABLE_NAME IN (%s)
+		  AND tc.CONSTRAINT_SCHEMA = DATABASE()
+		  AND tc.CONSTRAINT_TYPE = 'CHECK'
+	`, strings.Join(placeholders, ","))
+
+	checkRows, err := m.db.QueryContext(ctx, checkQuery, args...)
+	if err == nil {
+		defer checkRows.Close()
+		for checkRows.Next() {
+			var tableName, constraintName, checkClause string
+			if err := checkRows.Scan(&tableName, &constraintName, &checkClause); err != nil {
+				continue
+			}
+			// constraintName is like "users_age_check" — try to match to column
+			colName := extractColumnFromCheckName(constraintName, tableName)
+			if cols, ok := result[tableName]; ok {
+				for i := range cols {
+					if strings.EqualFold(cols[i].Name, colName) {
+						result[tableName][i].Check = checkClause
+						break
+					}
+				}
+			}
+		}
+	}
+	// Note: if CHECK_CONSTRAINTS table doesn't exist (MySQL < 8.0.16), we silently skip
 
 	return result, nil
 }
@@ -285,6 +324,10 @@ func (m *Adapter) GetAllTablesIndexes(ctx context.Context, tableNames []string) 
 	return result, nil
 }
 
+func (m *Adapter) GetKeyspaces(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func (m *Adapter) GetAllTableNames(ctx context.Context) ([]string, error) {
 	rows, err := m.db.QueryContext(ctx, `
 		SELECT table_name FROM information_schema.tables 
@@ -340,7 +383,8 @@ func (m *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		CASE WHEN c.COLUMN_KEY = 'UNI' THEN 'UNIQUE' ELSE NULL END as is_unique,
 		k.REFERENCED_TABLE_NAME AS REFERENCES_TABLE,
 		k.REFERENCED_COLUMN_NAME AS REFERENCES_COLUMN,
-		r.DELETE_RULE AS ON_DELETE
+		r.DELETE_RULE AS ON_DELETE,
+		r.UPDATE_RULE AS ON_UPDATE
 	FROM INFORMATION_SCHEMA.COLUMNS c
 	LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
 		ON c.TABLE_SCHEMA = k.TABLE_SCHEMA
@@ -366,19 +410,16 @@ func (m *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 	for rows.Next() {
 		var tableName, columnName, columnType, isNullable string
 		var ordinalPosition int
-		var columnDefault, extra, isPrimary, isUnique, referencesTable, referencesColumn, onDelete sql.NullString
+		var columnDefault, extra, isPrimary, isUnique, referencesTable, referencesColumn, onDelete, onUpdate sql.NullString
 
 		err := rows.Scan(&tableName, &columnName, &columnType, &isNullable, &columnDefault,
-			&extra, &ordinalPosition, &isPrimary, &isUnique, &referencesTable, &referencesColumn, &onDelete)
+			&extra, &ordinalPosition, &isPrimary, &isUnique, &referencesTable, &referencesColumn, &onDelete, &onUpdate)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
 		if _, exists := tableMap[tableName]; !exists {
-			tableMap[tableName] = &types.SchemaTable{
-				Name:    tableName,
-				Columns: []types.SchemaColumn{},
-			}
+			tableMap[tableName] = &types.SchemaTable{Name: tableName, Columns: []types.SchemaColumn{}}
 			columnsSeen[tableName] = make(map[string]bool)
 		}
 
@@ -388,7 +429,6 @@ func (m *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		columnsSeen[tableName][columnName] = true
 
 		formattedType := m.formatMySQLPullType(columnType)
-
 		column := types.SchemaColumn{
 			Name:      columnName,
 			Type:      formattedType,
@@ -401,12 +441,45 @@ func (m *Adapter) PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, 
 		if referencesTable.Valid && referencesColumn.Valid {
 			column.ForeignKeyTable = referencesTable.String
 			column.ForeignKeyColumn = referencesColumn.String
-			if onDelete.Valid {
+			if onDelete.Valid && onDelete.String != "NO ACTION" {
 				column.OnDeleteAction = onDelete.String
+			}
+			if onUpdate.Valid && onUpdate.String != "NO ACTION" {
+				column.OnUpdateAction = onUpdate.String
 			}
 		}
 
 		tableMap[tableName].Columns = append(tableMap[tableName].Columns, column)
+	}
+
+	// Fetch CHECK constraints (MySQL 8.0.16+)
+	checkRows, err := m.db.QueryContext(ctx, `
+		SELECT tc.TABLE_NAME, cc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
+		FROM information_schema.CHECK_CONSTRAINTS cc
+		JOIN information_schema.TABLE_CONSTRAINTS tc
+			ON cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+			AND cc.CONSTRAINT_SCHEMA = tc.TABLE_SCHEMA
+		WHERE tc.TABLE_SCHEMA = DATABASE()
+		  AND tc.CONSTRAINT_TYPE = 'CHECK'
+		  AND tc.TABLE_NAME NOT LIKE '_flash_%'
+	`)
+	if err == nil {
+		defer checkRows.Close()
+		for checkRows.Next() {
+			var tableName, constraintName, checkClause string
+			if err := checkRows.Scan(&tableName, &constraintName, &checkClause); err != nil {
+				continue
+			}
+			if tbl, ok := tableMap[tableName]; ok {
+				colName := extractColumnFromCheckName(constraintName, tableName)
+				for i := range tbl.Columns {
+					if strings.EqualFold(tbl.Columns[i].Name, colName) {
+						tbl.Columns[i].Check = checkClause
+						break
+					}
+				}
+			}
+		}
 	}
 
 	tables := make([]types.SchemaTable, 0, len(tableMap))
@@ -484,4 +557,17 @@ func (m *Adapter) formatMySQLDefault(defaultValue, columnType string) string {
 	}
 
 	return defaultValue
+}
+
+// extractColumnFromCheckName tries to extract a column name from a constraint name
+// using the convention: {table}_{column}_check → returns {column}
+func extractColumnFromCheckName(constraintName, tableName string) string {
+	prefix := tableName + "_"
+	suffix := "_check"
+	name := strings.ToLower(constraintName)
+	if strings.HasPrefix(name, strings.ToLower(prefix)) {
+		name = name[len(prefix):]
+	}
+	name = strings.TrimSuffix(name, suffix)
+	return name
 }

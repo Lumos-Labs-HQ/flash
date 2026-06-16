@@ -53,13 +53,58 @@ async function loadTables() {
 function renderTablesList(tables) {
     const el = document.getElementById('tables-list');
     if (!tables?.length) { el.innerHTML = '<div style="padding:12px;color:#444;font-size:12px;">No models found</div>'; return; }
-    el.innerHTML = tables.map(t => `
-        <div class="table-item" data-table="${escapeHtml(t.name)}" onclick="selectTable('${escapeHtml(t.name)}')" title="${escapeHtml(t.name)}">
+
+    // Group by keyspace if any table has keyspace info
+    const hasKeyspaces = tables.some(t => t.keyspace);
+    if (!hasKeyspaces) {
+        el.innerHTML = renderTableItems(tables);
+        return;
+    }
+
+    // Build keyspace groups
+    const groups = {};
+    tables.forEach(t => {
+        const ks = t.keyspace || 'default';
+        if (!groups[ks]) groups[ks] = [];
+        groups[ks].push(t);
+    });
+
+    let html = '';
+    Object.keys(groups).sort().forEach(ks => {
+        const key = ks.replace(/[^a-zA-Z0-9]/g, '_');
+        html += `<div class="keyspace-group" data-keyspace="${escapeHtml(ks)}">
+            <div class="keyspace-header" onclick="toggleKeyspace('${key}')">
+                <span class="iconify keyspace-caret" data-icon="mdi:chevron-down" id="caret-${key}"></span>
+                <span class="iconify keyspace-icon" data-icon="mdi:database"></span>
+                <span class="keyspace-name">${escapeHtml(ks)}</span>
+                <span class="keyspace-count">${groups[ks].length} tables</span>
+            </div>
+            <div class="keyspace-tables" id="ks-${key}">
+                ${renderTableItems(groups[ks])}
+            </div>
+        </div>`;
+    });
+    el.innerHTML = html;
+}
+
+function renderTableItems(tables) {
+    return tables.map(t => `
+        <div class="table-item" data-table="${escapeHtml(t.full_name || t.name)}" data-name="${escapeHtml(t.name)}" onclick="selectTable('${escapeHtml(t.full_name || t.name)}')" title="${escapeHtml(t.full_name || t.name)}">
             <span class="iconify table-item-icon" data-icon="mdi:table"></span>
             <span class="table-item-name">${escapeHtml(t.name)}</span>
             <span class="table-count">${t.row_count}</span>
         </div>`).join('');
 }
+
+function toggleKeyspace(key) {
+    const el = document.getElementById('ks-' + key);
+    const caret = document.getElementById('caret-' + key);
+    if (!el) return;
+    const collapsed = el.style.display === 'none';
+    el.style.display = collapsed ? 'block' : 'none';
+    caret.setAttribute('data-icon', collapsed ? 'mdi:chevron-down' : 'mdi:chevron-right');
+}
+window.toggleKeyspace = toggleKeyspace;
 
 function filterTables(e) {
     const q = (e?.target?.value || document.getElementById('search-tables')?.value || '').toLowerCase();
@@ -70,10 +115,15 @@ window.filterTables = filterTables;
 
 async function selectTable(name) {
     closeMobileSidebar();
+    // Find the table info from cache to get display name
+    const info = state.tablesCache?.find(t => (t.full_name || t.name) === name);
+    const displayName = info?.name || name;
     state.currentTable = name; state.page = 1; state.changes.clear();
-    document.getElementById('current-table').textContent = name;
+    document.getElementById('current-table').textContent = displayName;
     document.getElementById('save-btn').style.display = 'none';
-    document.querySelectorAll('.table-item').forEach(i => i.classList.toggle('active', i.dataset.table === name));
+    document.querySelectorAll('.table-item').forEach(i => {
+        i.classList.toggle('active', (i.dataset.table) === name);
+    });
     showLoadingSkeleton();
     await loadTableData();
     if (state.data?.columns) currentColumns = state.data.columns;

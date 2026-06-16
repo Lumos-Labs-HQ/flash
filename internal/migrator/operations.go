@@ -328,6 +328,26 @@ func (m *Migrator) Reset(ctx context.Context, force bool) error {
 		fmt.Println("⚡ Force mode: Skipping confirmations and backup")
 	}
 
+	// ScyllaDB/Cassandra: just drop the entire keyspace — cascades to all tables/views/types/UDTs
+	if m.provider == "scylla" || m.provider == "scylladb" || m.provider == "cassandra" {
+		keyspaces, err := m.adapter.GetKeyspaces(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get keyspaces: %w", err)
+		}
+		for _, ks := range keyspaces {
+			if ks == "system" || ks == "system_schema" || ks == "system_auth" || ks == "system_distributed" || ks == "system_traces" {
+				continue
+			}
+			dropSQL := fmt.Sprintf("DROP KEYSPACE IF EXISTS \"%s\"", ks)
+			fmt.Printf("  Dropping keyspace: %s\n", ks)
+			if err := m.adapter.ExecuteMigration(ctx, dropSQL); err != nil {
+				fmt.Printf("Warning: Failed to drop keyspace %s: %v\n", ks, err)
+			}
+		}
+		fmt.Println("✅ Database reset completed")
+		return nil
+	}
+
 	// Drop all tables first
 	tables, err := m.adapter.GetAllTableNames(ctx)
 	if err != nil {

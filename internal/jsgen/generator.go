@@ -122,11 +122,30 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 		} else {
 			g.generateMySQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 		}
+	case "scylla", "scylladb", "cassandra":
+		g.generateScyllaExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 	default:
 		g.generatePostgreSQLExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns, isHotQuery)
 	}
 
 	w.WriteString("  }\n\n")
+}
+
+func (g *Generator) generateScyllaExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
+	if len(paramNames) > 0 {
+		w.WriteString("    const r = await this.db.execute(stmt, [" + strings.Join(paramNames, ", ") + "], { prepare: true });\n")
+	} else {
+		w.WriteString("    const r = await this.db.execute(stmt, [], { prepare: true });\n")
+	}
+	if hasColumns {
+		if cmd == ":one" {
+			w.WriteString("    return r.first() || null;\n")
+		} else {
+			w.WriteString("    return r.rows;\n")
+		}
+	} else {
+		w.WriteString("    return r;\n")
+	}
 }
 
 func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn, isHotQuery bool) {
@@ -411,14 +430,19 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 
 	w.WriteString("/**\n")
 	w.WriteString(" * Create a new database client\n")
-	w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
+	provider := g.Config.Database.Provider
+	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		w.WriteString(" * @param {Object} db - ScyllaDB/Cassandra client (from cassandra-driver)\n")
+	} else {
+		w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
+	}
 	w.WriteString(" * @returns {Queries}\n")
 	w.WriteString(" */\n")
-	w.WriteString("function New(db) {\n")
+	w.WriteString("function Newq(db) {\n")
 	w.WriteString("  return new Queries(db);\n")
 	w.WriteString("}\n\n")
 
-	w.WriteString("module.exports = { New, Queries };\n")
+	w.WriteString("module.exports = { Newq, Queries };\n")
 
 	path := filepath.Join(g.Config.Gen.JS.Out, "index.js")
 	return os.WriteFile(path, []byte(w.String()), 0644)
@@ -467,6 +491,8 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 		return "Object"
 	case strings.Contains(sqlTypeLower, "timestamp"), strings.Contains(sqlTypeLower, "date"), strings.Contains(sqlTypeLower, "time"):
 		return "Date"
+	case sqlTypeLower == "interval":
+		return "number" // interval as milliseconds
 	case strings.Contains(sqlTypeLower, "bytea"), strings.Contains(sqlTypeLower, "blob"):
 		return "Uint8Array"
 	// ClickHouse-specific types
@@ -482,6 +508,15 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	case strings.HasPrefix(sqlTypeLower, "array("):
 		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
 		return g.mapSQLTypeToJS(inner) + "[]"
+	// ScyllaDB/Cassandra CQL types
+	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid", sqlTypeLower == "inet":
+		return "string"
+	case sqlTypeLower == "varint", sqlTypeLower == "counter", sqlTypeLower == "duration":
+		return "number"
+	case strings.HasPrefix(sqlTypeLower, "frozen<"), strings.HasPrefix(sqlTypeLower, "list<"),
+		strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "map<"),
+		strings.HasPrefix(sqlTypeLower, "tuple<"):
+		return "any"
 	default:
 		return "string"
 	}
@@ -620,7 +655,7 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 	}
 
 	w.WriteString("}\n\n")
-	w.WriteString("export function New(db: any): Queries;\n")
+	w.WriteString("export function Newq(db: any): Queries;\n")
 
 	path := filepath.Join(g.Config.Gen.JS.Out, "index.d.ts")
 	return os.WriteFile(path, []byte(w.String()), 0644)

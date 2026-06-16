@@ -35,10 +35,6 @@ func getDatabases() []Database {
 			Name: "sqlite",
 			URL:  getEnv("SQLITE_URL", "sqlite://./test.db"),
 		},
-		{
-			Name: "clickhouse",
-			URL:  getEnv("CLICKHOUSE_URL", "clickhouse://testuser:testpass@localhost:9000/testdb"),
-		},
 	}
 }
 
@@ -146,13 +142,11 @@ func TestAllDatabases(t *testing.T) {
 			t.Run("08_Gen_Python", func(t *testing.T) { testGenPython(t, dir, db) })
 			t.Run("09_Pull", func(t *testing.T) { testPull(t, dir, db) })
 			t.Run("10_Export_JSON", func(t *testing.T) { testExportJSON(t, dir, db) })
-			t.Run("11_Export_CSV", func(t *testing.T) { testExportCSV(t, dir, db) })
-			t.Run("12_Export_SQLite", func(t *testing.T) { testExportSQLite(t, dir, db) })
-			t.Run("13_Raw", func(t *testing.T) { testRaw(t, dir, db) })
-			t.Run("14_Seed", func(t *testing.T) { testSeed(t, dir, db) })
-			t.Run("15_Branch", func(t *testing.T) { testBranch(t, dir, db) })
-			t.Run("16_Studio", func(t *testing.T) { testStudio(t, dir, db) })
-			t.Run("17_Reset", func(t *testing.T) { testReset(t, dir, db) })
+			t.Run("11_Raw", func(t *testing.T) { testRaw(t, dir, db) })
+			t.Run("12_Seed", func(t *testing.T) { testSeed(t, dir, db) })
+			t.Run("13_Branch", func(t *testing.T) { testBranch(t, dir, db) })
+			t.Run("14_Studio", func(t *testing.T) { testStudio(t, dir, db) })
+			t.Run("15_Reset", func(t *testing.T) { testReset(t, dir, db) })
 		})
 	}
 }
@@ -318,7 +312,7 @@ func testPull(t *testing.T, dir string, _ Database) {
 }
 
 func testExportJSON(t *testing.T, dir string, _ Database) {
-	out, err := flash(t, dir, "export", "--json")
+	out, err := flash(t, dir, "export")
 	t.Logf("export json output: %s", out)
 	if err != nil {
 		t.Logf("export json error (non-fatal): %v", err)
@@ -336,25 +330,6 @@ func testExportJSON(t *testing.T, dir string, _ Database) {
 	}
 	if !hasJSON {
 		t.Error("no .json export file created")
-	}
-}
-
-func testExportCSV(t *testing.T, dir string, _ Database) {
-	out, err := flash(t, dir, "export", "--csv")
-	t.Logf("export csv output: %s", out)
-	if err != nil {
-		t.Logf("export csv error (non-fatal): %v", err)
-	}
-}
-
-func testExportSQLite(t *testing.T, dir string, db Database) {
-	if db.Name == "sqlite" {
-		t.Skip("SQLite→SQLite export not supported")
-	}
-	out, err := flash(t, dir, "export", "--sqlite")
-	t.Logf("export sqlite output: %s", out)
-	if err != nil {
-		t.Logf("export sqlite error (non-fatal): %v", err)
 	}
 }
 

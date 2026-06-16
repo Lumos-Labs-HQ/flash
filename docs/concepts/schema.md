@@ -99,6 +99,44 @@ CREATE TABLE posts (
 | `UUID` | `string` | `string` | `str` | UUID string |
 | `BYTEA` | `[]byte` | `Buffer` | `bytes` | Binary data |
 
+### ScyllaDB / Cassandra Data Types (Beta)
+
+| SQL Type | Go Type | TypeScript Type | Python Type | Description |
+|----------|---------|-----------------|-------------|-------------|
+| `text` | `string` | `string` | `str` | UTF-8 text |
+| `int` | `int32` | `number` | `int` | 32-bit integer |
+| `bigint` | `int64` | `number` | `int` | 64-bit integer |
+| `boolean` | `bool` | `boolean` | `bool` | True/false |
+| `uuid` | `string` | `string` | `str` | UUID |
+| `timeuuid` | `string` | `string` | `str` | Time-based UUID |
+| `timestamp` | `time.Time` | `Date` | `datetime` | Date and time |
+| `date` | `time.Time` | `Date` | `date` | Date only |
+| `float` | `float32` | `number` | `float` | 32-bit float |
+| `double` | `float64` | `number` | `float` | 64-bit float |
+| `map<K,V>` | `map[K]V` | `Record<K,V>` | `dict` | Typed map |
+| `list<T>` | `[]T` | `T[]` | `list` | Typed list |
+| `set<T>` | `[]T` | `T[]` | `set` | Typed set |
+| `frozen<T>` | custom struct | custom type | custom class | Frozen immutable type |
+
+### ClickHouse Data Types (Beta)
+
+| SQL Type | Go Type | TypeScript Type | Python Type | Description |
+|----------|---------|-----------------|-------------|-------------|
+| `String` | `string` | `string` | `str` | Variable-length string |
+| `Int32` | `int32` | `number` | `int` | 32-bit integer |
+| `UInt32` | `uint32` | `number` | `int` | 32-bit unsigned integer |
+| `Int64` | `int64` | `number` | `int` | 64-bit integer |
+| `UInt64` | `uint64` | `number` | `int` | 64-bit unsigned integer |
+| `Float32` | `float32` | `number` | `float` | 32-bit float |
+| `Float64` | `float64` | `number` | `float` | 64-bit float |
+| `Bool` | `bool` | `boolean` | `bool` | Boolean |
+| `Date` | `time.Time` | `Date` | `date` | Date only |
+| `DateTime` | `time.Time` | `Date` | `datetime` | Date and time |
+| `UUID` | `string` | `string` | `str` | UUID |
+| `Decimal(P,S)` | `string` | `number` | `Decimal` | Fixed-point decimal |
+| `JSON` | `string` | `any` | `dict` | JSON object |
+
+
 ### MySQL Data Types
 
 | SQL Type | Go Type | TypeScript Type | Python Type | Description |
