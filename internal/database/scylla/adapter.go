@@ -110,10 +110,11 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	}
 
 	cluster := gocql.NewCluster(hostList...)
-	cluster.Consistency = gocql.Quorum
+	cluster.Consistency = gocql.One  
 	cluster.Timeout = 10 * time.Second
-	cluster.ConnectTimeout = 3 * time.Second
+	cluster.ConnectTimeout = 5 * time.Second
 	cluster.NumConns = 1
+	cluster.ProtoVersion = 4         // Skip protocol negotiation round-trips (~7s saved on remote hosts)
 	// Skip peer discovery and topology event subscriptions — this is a CLI tool
 	// that runs one command then exits. These save ~10s of connection overhead.
 	cluster.DisableInitialHostLookup = true
@@ -156,7 +157,17 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	}
 
 	if needsAutoKeyspace {
-		// First session: no keyspace, just create the keyspace then close.
+		// Connect once without keyspace, create it if needed, then reconnect.
+		cluster.Keyspace = keyspace
+		if s, err := cluster.CreateSession(); err == nil {
+			// Keyspace exists — skip the auto-create path entirely.
+			a.session = s
+			a.cluster = cluster
+			a.keyspace = keyspace
+			return nil
+		}
+		// Keyspace doesn't exist — create it via a no-keyspace session.
+		cluster.Keyspace = ""
 		s0, err := cluster.CreateSession()
 		if err != nil {
 			return fmt.Errorf("failed to connect to ScyllaDB: %w", err)
@@ -169,7 +180,6 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create keyspace '%s': %w", keyspace, err)
 		}
-		// TokenAwareHostPolicy cannot be reused across sessions — rebuild it.
 		cluster.PoolConfig.HostSelectionPolicy = buildHostSelectionPolicy(dc, tokenAware)
 	}
 
