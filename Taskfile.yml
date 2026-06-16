@@ -22,7 +22,14 @@ tasks:
       - task: build
       - go install -tags="dev,plugins"
       - echo "Installed binary"
-
+  
+  pkg-update:
+    desc: Update all mod files with latest versions
+    cmds:
+      - go get -u ./... && go mod tidy
+      - cd plugins/core && go get -u ./... && go mod tidy
+      - cd plugins/studio && go get -u ./... && go mod tidy
+      
   test:
     desc: Run all tests with dev + plugins tags
     cmds:
