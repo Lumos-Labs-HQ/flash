@@ -6,6 +6,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/database/mongodb"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/mysql"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/postgres"
+	"github.com/Lumos-Labs-HQ/flash/internal/database/scylla"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/sqlite"
 )
 
@@ -21,6 +22,9 @@ func TestNewAdapter_ReturnsCorrectType(t *testing.T) {
 		{"sqlite3", &sqlite.Adapter{}},
 		{"mongodb", &mongodb.Adapter{}},
 		{"mongo", &mongodb.Adapter{}},
+		{"scylla", &scylla.Adapter{}},
+		{"scylladb", &scylla.Adapter{}},
+		{"cassandra", &scylla.Adapter{}},
 		{"unknown", &postgres.Adapter{}}, // default
 	}
 
@@ -47,6 +51,10 @@ func TestNewAdapter_ReturnsCorrectType(t *testing.T) {
 			if _, ok := adapter.(*mongodb.Adapter); !ok {
 				t.Errorf("NewAdapter(%q) = %T, want *mongodb.Adapter", c.provider, adapter)
 			}
+		case *scylla.Adapter:
+			if _, ok := adapter.(*scylla.Adapter); !ok {
+				t.Errorf("NewAdapter(%q) = %T, want *scylla.Adapter", c.provider, adapter)
+			}
 		}
 	}
 }
@@ -54,7 +62,7 @@ func TestNewAdapter_ReturnsCorrectType(t *testing.T) {
 func TestNewAdapter_ImplementsInterface(t *testing.T) {
 	// Compile-time check: all adapters must satisfy DatabaseAdapter.
 	// If any adapter is missing a method, this won't compile.
-	providers := []string{"postgresql", "mysql", "sqlite", "mongodb"}
+	providers := []string{"postgresql", "mysql", "sqlite", "mongodb", "scylla"}
 	for _, p := range providers {
 		adapter := NewAdapter(p)
 		var _ DatabaseAdapter = adapter

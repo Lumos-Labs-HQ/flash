@@ -332,8 +332,8 @@ func (s *Seeder) pickUnusedID(ids []interface{}, used map[interface{}]bool) inte
 }
 
 func isAutoIncrementType(colType, provider string) bool {
-	if provider == "clickhouse" {
-		return false // ClickHouse has no auto-increment; PKs must be supplied
+	if provider == "clickhouse" || provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		return false // ClickHouse/ScyllaDB have no auto-increment
 	}
 	typeUpper := strings.ToUpper(colType)
 	return strings.Contains(typeUpper, "SERIAL") ||
@@ -601,8 +601,8 @@ func (s *Seeder) formatValue(val interface{}) string {
 }
 
 func (s *Seeder) beginTransaction(ctx context.Context) error {
-	if s.config.Database.Provider == "clickhouse" {
-		return fmt.Errorf("clickhouse does not support transactions")
+	if s.config.Database.Provider == "clickhouse" || s.config.Database.Provider == "scylla" || s.config.Database.Provider == "scylladb" || s.config.Database.Provider == "cassandra" {
+		return fmt.Errorf("%s does not support transactions", s.config.Database.Provider)
 	}
 	var query string
 	switch s.config.Database.Provider {
@@ -704,9 +704,25 @@ func splitColumnDefs(body string) []string {
 	var defs []string
 	var current strings.Builder
 	depth := 0
+	inString := false
 	for i := 0; i < len(body); i++ {
 		ch := body[i]
+		if inString {
+			current.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < len(body) && body[i+1] == '\'' {
+					i++
+					current.WriteByte(body[i])
+				} else {
+					inString = false
+				}
+			}
+			continue
+		}
 		switch ch {
+		case '\'':
+			inString = true
+			current.WriteByte(ch)
 		case '(':
 			depth++
 			current.WriteByte(ch)
@@ -855,8 +871,10 @@ func (s *Seeder) truncateTables(ctx context.Context, order []string) error {
 				_, _ = s.adapter.ExecuteQuery(ctx, resetQuery)
 			}
 		case "clickhouse":
-			// ClickHouse uses lightweight deletes via ALTER TABLE ... DELETE
 			query = fmt.Sprintf("ALTER TABLE `%s` DELETE WHERE 1=1", tableName)
+			_, err = s.adapter.ExecuteQuery(ctx, query)
+		case "scylla", "scylladb", "cassandra":
+			query = fmt.Sprintf("TRUNCATE TABLE \"%s\"", tableName)
 			_, err = s.adapter.ExecuteQuery(ctx, query)
 		default:
 			query = fmt.Sprintf("DELETE FROM %s", tableName)

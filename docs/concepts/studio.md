@@ -13,12 +13,12 @@ FlashORM provides specialized studio interfaces for different database types:
 
 | Studio | Database Types | ORM Support | Documentation |
 |--------|---------------|-------------|---------------|
-| **SQL Studio** | PostgreSQL, MySQL, SQLite | Full (migrations, code gen, seeding) | This page |
+| **SQL Studio** | PostgreSQL, MySQL, SQLite, ScyllaDB, ClickHouse | Full (migrations, code gen, seeding) | This page |
 | **MongoDB Studio** | MongoDB | Visual management only | [MongoDB Studio Guide](/concepts/mongodb-studio) |
 | **Redis Studio** | Redis | Visual management only | [Redis Studio Guide](/concepts/redis-studio) |
 
 ::: tip
-**SQL databases** (PostgreSQL, MySQL, SQLite) have full ORM support including migrations, type-safe code generation, and database seeding.
+**SQL databases** (PostgreSQL, MySQL, SQLite, ScyllaDB / Cassandra, ClickHouse) have full ORM support including migrations, type-safe code generation, and database seeding.
 
 **MongoDB and Redis Studios** are visual management tools for browsing and editing data, but do not include ORM features like migrations or code generation.
 :::
@@ -31,6 +31,8 @@ flash studio
 flash studio "postgres://localhost:5432/mydb"
 flash studio "mysql://localhost:3306/mydb"
 flash studio "sqlite:///path/to/db.sqlite"
+flash studio "scylla://localhost:9042/keyspace"
+flash studio "clickhouse://localhost:9000"
 
 # MongoDB Studio - auto-detected from mongodb:// URL
 flash studio "mongodb://localhost:27017/mydb"
@@ -83,6 +85,8 @@ FlashORM Studio is a visual database management interface that provides:
 flash studio
 
 # Launch with specific database URL
+flash studio "scylla://localhost:9042/keyspace"
+flash studio "clickhouse://localhost:9000"
 flash studio "postgres://user:pass@localhost:5432/mydb"
 
 # Launch with custom port

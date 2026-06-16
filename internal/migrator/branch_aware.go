@@ -16,7 +16,23 @@ type BranchAwareMigrator struct {
 }
 
 func NewBranchAwareMigrator(cfg *config.Config) (*BranchAwareMigrator, error) {
-	migrator, err := NewMigrator(cfg)
+	return newBranchAwareMigratorWith(cfg, false)
+}
+
+func NewBranchAwareMigratorForGenerate(cfg *config.Config) (*BranchAwareMigrator, error) {
+	return newBranchAwareMigratorWith(cfg, true)
+}
+
+func newBranchAwareMigratorWith(cfg *config.Config, forGenerate bool) (*BranchAwareMigrator, error) {
+	var (
+		migrator *Migrator
+		err      error
+	)
+	if forGenerate {
+		migrator, err = NewMigratorForGenerate(cfg)
+	} else {
+		migrator, err = NewMigrator(cfg)
+	}
 	if err != nil {
 		return nil, err
 	}

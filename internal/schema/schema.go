@@ -12,7 +12,7 @@ import (
 )
 
 type foreignKeyConstraint struct {
-	ColumnName, ReferencedTable, ReferencedColumn, OnDeleteAction string
+	ColumnName, ReferencedTable, ReferencedColumn, OnDeleteAction, OnUpdateAction string
 }
 
 type SchemaManager struct {
@@ -35,17 +35,29 @@ func (sm *SchemaManager) ParseSchemaFile(schemaPath string) ([]types.SchemaTable
 
 // ParseSchemaDir parses all .sql files in a directory
 func (sm *SchemaManager) ParseSchemaDir(schemaDir string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, error) {
+	tables, enums, indexes, _, err := sm.parseSchemaDirAll(schemaDir)
+	return tables, enums, indexes, err
+}
+
+func (sm *SchemaManager) parseSchemaDirAll(schemaDir string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, []types.SchemaKeyspace, error) {
+	tables, enums, indexes, keyspaces, _, _, err := sm.parseSchemaDirAllV2(schemaDir)
+	return tables, enums, indexes, keyspaces, err
+}
+
+func (sm *SchemaManager) parseSchemaDirAllV2(schemaDir string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, []types.SchemaKeyspace, []types.SchemaUDT, []string, error) {
 	entries, err := os.ReadDir(schemaDir)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read schema directory: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to read schema directory: %w", err)
 	}
 
 	var allTables []types.SchemaTable
 	var allEnums []types.SchemaEnum
 	var allIndexes []types.SchemaIndex
+	var allKeyspaces []types.SchemaKeyspace
+	var allUDTs []types.SchemaUDT
+	var allRaw []string
 	tableMap := make(map[string]*types.SchemaTable)
 
-	// Sort entries for consistent ordering
 	var sqlFiles []string
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
@@ -58,18 +70,16 @@ func (sm *SchemaManager) ParseSchemaDir(schemaDir string) ([]types.SchemaTable, 
 		filePath := fmt.Sprintf("%s/%s", schemaDir, fileName)
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to read schema file %s: %w", filePath, err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to read schema file %s: %w", filePath, err)
 		}
 
-		tables, enums, indexes, err := sm.parseSchemaContentWithIndexes(string(content))
+		tables, enums, indexes, keyspaces, udts, raw, err := sm.parseSchemaContentAllV2(string(content))
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("failed to parse schema file %s: %w", filePath, err)
+			return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to parse schema file %s: %w", filePath, err)
 		}
 
-		// Merge tables (handle same table in multiple files)
 		for _, table := range tables {
 			if existing, ok := tableMap[table.Name]; ok {
-				// Merge columns (avoid duplicates)
 				existingCols := make(map[string]bool)
 				for _, col := range existing.Columns {
 					existingCols[col.Name] = true
@@ -79,7 +89,6 @@ func (sm *SchemaManager) ParseSchemaDir(schemaDir string) ([]types.SchemaTable, 
 						existing.Columns = append(existing.Columns, col)
 					}
 				}
-				// Merge indexes
 				existing.Indexes = append(existing.Indexes, table.Indexes...)
 			} else {
 				tableCopy := table
@@ -89,28 +98,37 @@ func (sm *SchemaManager) ParseSchemaDir(schemaDir string) ([]types.SchemaTable, 
 
 		allEnums = append(allEnums, enums...)
 		allIndexes = append(allIndexes, indexes...)
+		allKeyspaces = append(allKeyspaces, keyspaces...)
+		allUDTs = append(allUDTs, udts...)
+		allRaw = append(allRaw, raw...)
 	}
 
-	// Convert map back to slice
 	for _, table := range tableMap {
 		allTables = append(allTables, *table)
 	}
 
-	// Validate foreign key references and sort tables by dependencies
 	allTables, err = sm.sortTablesByDependencies(allTables)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 
-	return allTables, allEnums, allIndexes, nil
+	return allTables, allEnums, allIndexes, allKeyspaces, allUDTs, allRaw, nil
 }
 
-// sortTablesByDependencies sorts tables so that referenced tables come before referencing tables
-// Also validates that all referenced tables exist
+// sortTablesByDependencies sorts tables so that referenced tables come before referencing tables.
+// Also validates that all referenced tables exist.
+// Providers without FK support (ScyllaDB, ClickHouse) skip validation — REFERENCES in schemas
+// are treated as documentation hints, not enforceable constraints.
 func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([]types.SchemaTable, error) {
 	tableMap := make(map[string]*types.SchemaTable)
 	for i := range tables {
 		tableMap[tables[i].Name] = &tables[i]
+	}
+
+	skipFKs := false
+	if sm.adapter != nil {
+		provider := sm.adapter.ProviderName()
+		skipFKs = provider == "scylla" || provider == "clickhouse"
 	}
 
 	// Build dependency graph and validate references
@@ -120,7 +138,11 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 		var deps []string
 		for _, col := range table.Columns {
 			if col.ForeignKeyTable != "" {
-				// Validate that referenced table exists
+				if skipFKs {
+					// ScyllaDB/ClickHouse don't support FKs — REFERENCES is documentation-only.
+					// Ignore for dependency ordering and skip existence validation.
+					continue
+				}
 				if _, exists := tableMap[col.ForeignKeyTable]; !exists {
 					return nil, fmt.Errorf("table '%s' references non-existent table '%s' (column '%s' has REFERENCES %s(%s))",
 						table.Name, col.ForeignKeyTable, col.Name, col.ForeignKeyTable, col.ForeignKeyColumn)
@@ -206,33 +228,60 @@ func (sm *SchemaManager) sortTablesByDependencies(tables []types.SchemaTable) ([
 
 // ParseSchemaPath parses schema from either a file or directory
 func (sm *SchemaManager) ParseSchemaPath(schemaPath string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, error) {
+	tables, enums, indexes, _, err := sm.ParseSchemaPathAll(schemaPath)
+	return tables, enums, indexes, err
+}
+
+func (sm *SchemaManager) ParseSchemaPathAll(schemaPath string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, []types.SchemaKeyspace, error) {
+	tables, enums, indexes, keyspaces, _, _, err := sm.ParseSchemaPathAllV2(schemaPath)
+	return tables, enums, indexes, keyspaces, err
+}
+
+func (sm *SchemaManager) ParseSchemaPathAllV2(schemaPath string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, []types.SchemaKeyspace, []types.SchemaUDT, []string, error) {
 	info, err := os.Stat(schemaPath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to stat schema path: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to stat schema path: %w", err)
 	}
 
 	if info.IsDir() {
-		return sm.ParseSchemaDir(schemaPath)
+		return sm.parseSchemaDirAllV2(schemaPath)
 	}
 
-	// It's a file - use legacy method
-	tables, enums, err := sm.ParseSchemaFileWithEnums(schemaPath)
+	content, err := os.ReadFile(schemaPath)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to read schema file: %w", err)
 	}
+	var allTables []types.SchemaTable
+	var allEnums []types.SchemaEnum
+	var allIndexes []types.SchemaIndex
+	var allKeyspaces []types.SchemaKeyspace
+	var allUDTs []types.SchemaUDT
+	var allRaw []string
 
-	// Validate foreign key references and sort tables by dependencies
+	allTables, allEnums, allIndexes, allKeyspaces, allUDTs, allRaw, err = sm.parseSchemaContentAllV2(string(content))
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	allTables, err = sm.sortTablesByDependencies(allTables)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	return allTables, allEnums, allIndexes, allKeyspaces, allUDTs, allRaw, nil
+}
+
+func (sm *SchemaManager) ParseSchemaFileWithEnumsAndIndexes(schemaPath string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, error) {
+	content, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to read schema file: %w", err)
+	}
+	tables, enums, indexes, _, _, _, parseErr := sm.parseSchemaContentAllV2(string(content))
+	if parseErr != nil {
+		return nil, nil, nil, parseErr
+	}
 	tables, err = sm.sortTablesByDependencies(tables)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	// Extract indexes from tables
-	var indexes []types.SchemaIndex
-	for _, table := range tables {
-		indexes = append(indexes, table.Indexes...)
-	}
-
 	return tables, enums, indexes, nil
 }
 
@@ -250,11 +299,22 @@ func (sm *SchemaManager) parseSchemaContent(content string) ([]types.SchemaTable
 }
 
 func (sm *SchemaManager) parseSchemaContentWithIndexes(content string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, error) {
+	tables, enums, indexes, _, _, _, err := sm.parseSchemaContentAllV2(content)
+	return tables, enums, indexes, err
+}
+
+func (sm *SchemaManager) parseSchemaContentAllV2(content string) ([]types.SchemaTable, []types.SchemaEnum, []types.SchemaIndex, []types.SchemaKeyspace, []types.SchemaUDT, []string, error) {
 	var tables []types.SchemaTable
 	var enums []types.SchemaEnum
 	var indexes []types.SchemaIndex
-	statements := sm.splitStatements(sm.cleanSQL(content))
+	var keyspaces []types.SchemaKeyspace
+	var udts []types.SchemaUDT
 
+	// Extract raw statements (functions, triggers, DOMAIN, PARTITION OF, composite types)
+	// from original content before cleanSQL destroys dollar-quote bodies and comments.
+	rawStatements := extractRawStatements(content)
+
+	statements := sm.splitStatements(sm.cleanSQL(content))
 	tableMap := make(map[string]*types.SchemaTable)
 
 	for _, stmt := range statements {
@@ -263,9 +323,41 @@ func (sm *SchemaManager) parseSchemaContentWithIndexes(content string) ([]types.
 			continue
 		}
 
-		if sm.isCreateTypeStatement(stmt) {
+		upper := strings.ToUpper(stmt)
+		// Skip statements that were already captured as raw
+		if strings.HasPrefix(upper, "CREATE DOMAIN") ||
+			strings.HasPrefix(upper, "CREATE OR REPLACE FUNCTION") ||
+			strings.HasPrefix(upper, "CREATE FUNCTION") ||
+			strings.HasPrefix(upper, "CREATE OR REPLACE TRIGGER") ||
+			strings.HasPrefix(upper, "CREATE TRIGGER") ||
+			(strings.HasPrefix(upper, "CREATE TABLE") && strings.Contains(upper, "PARTITION OF")) {
+			continue
+		}
+
+		if sm.isCreateUDTStatement(stmt) {
+			// PostgreSQL composite types (CREATE TYPE name AS (...)) look like CQL UDTs.
+			// Treat them as raw passthrough — they've already been captured above if they
+			// contain dollar quotes; plain composite types fall through here.
+			// We store them as UDTs for schema tracking (diff/snapshot) only.
+			if udt, err := sm.parseCreateUDTStatement(stmt); err == nil {
+				udts = append(udts, udt)
+			}
+		} else if sm.isCreateTypeStatement(stmt) {
 			if enum, err := sm.parseCreateTypeStatement(stmt); err == nil {
 				enums = append(enums, enum)
+			}
+		} else if sm.isCreateViewStatement(stmt) {
+			// Views and MATERIALIZED VIEWs are stored as metadata tables for diff tracking.
+			// The marker column distinguishes plain views from materialized views.
+			if viewName, viewSQL, err := sm.parseCreateViewStatement(stmt); err == nil {
+				marker := "/* VIEW */"
+				if strings.Contains(strings.ToUpper(viewSQL), "MATERIALIZED VIEW") {
+					marker = "/* MATERIALIZED VIEW */"
+				}
+				tables = append(tables, types.SchemaTable{
+					Name:    viewName,
+					Columns: []types.SchemaColumn{{Name: marker, Type: viewSQL, IsPrimary: true}},
+				})
 			}
 		} else if sm.isCreateTableStatement(stmt) {
 			if table, err := sm.parseCreateTableStatement(stmt); err == nil {
@@ -279,61 +371,250 @@ func (sm *SchemaManager) parseSchemaContentWithIndexes(content string) ([]types.
 					table.Indexes = append(table.Indexes, index)
 				}
 			}
+		} else if sm.isCreateKeyspaceStatement(stmt) {
+			if ks, err := sm.parseCreateKeyspaceStatement(stmt); err == nil {
+				keyspaces = append(keyspaces, ks)
+			}
 		}
 	}
-	return tables, enums, indexes, nil
+	return tables, enums, indexes, keyspaces, udts, rawStatements, nil
+}
+
+// extractRawStatements splits the original SQL (preserving dollar-quote bodies)
+// and returns statements that should be passed through verbatim into migrations:
+// DOMAIN types, composite types (CREATE TYPE ... AS (...)), PARTITION OF tables,
+// functions (CREATE [OR REPLACE] FUNCTION), and triggers.
+func extractRawStatements(content string) []string {
+	stmts := splitStatementsDollarAware(content)
+	var raw []string
+	for _, s := range stmts {
+		upper := strings.ToUpper(strings.TrimSpace(s))
+		if strings.HasPrefix(upper, "CREATE DOMAIN") ||
+			strings.HasPrefix(upper, "CREATE OR REPLACE FUNCTION") ||
+			strings.HasPrefix(upper, "CREATE FUNCTION") ||
+			strings.HasPrefix(upper, "CREATE OR REPLACE TRIGGER") ||
+			strings.HasPrefix(upper, "CREATE TRIGGER") ||
+			(strings.HasPrefix(upper, "CREATE TABLE") && strings.Contains(upper, "PARTITION OF")) ||
+			isCompositeType(upper) {
+			t := strings.TrimSpace(s)
+			if !strings.HasSuffix(t, ";") {
+				t += ";"
+			}
+			raw = append(raw, t)
+		}
+	}
+	return raw
+}
+
+// isCompositeType returns true for PostgreSQL composite type declarations:
+// CREATE TYPE name AS ( field type, ... )
+// Distinguishes from ENUM types (CREATE TYPE name AS ENUM) and CQL UDTs.
+func isCompositeType(upper string) bool {
+	if !strings.HasPrefix(upper, "CREATE TYPE") {
+		return false
+	}
+	// Must have AS ( but NOT AS ENUM
+	asIdx := strings.Index(upper, " AS ")
+	if asIdx == -1 {
+		return false
+	}
+	after := strings.TrimSpace(upper[asIdx+4:])
+	return strings.HasPrefix(after, "(") && !strings.HasPrefix(after, "ENUM")
+}
+
+// splitStatementsDollarAware splits SQL on top-level semicolons, treating
+// $$ ... $$ and $tag$ ... $tag$ blocks as opaque (no splitting inside them).
+// Also skips -- line comments and /* block comments */ at the top level.
+func splitStatementsDollarAware(sql string) []string {
+	var result []string
+	var cur strings.Builder
+	i := 0
+	n := len(sql)
+
+	for i < n {
+		// -- line comment
+		if i+1 < n && sql[i] == '-' && sql[i+1] == '-' {
+			for i < n && sql[i] != '\n' {
+				i++
+			}
+			continue
+		}
+		// /* block comment */
+		if i+1 < n && sql[i] == '/' && sql[i+1] == '*' {
+			i += 2
+			for i+1 < n && !(sql[i] == '*' && sql[i+1] == '/') {
+				i++
+			}
+			i += 2
+			continue
+		}
+		// Dollar-quote: $tag$ or $$
+		if sql[i] == '$' {
+			// find closing $
+			j := i + 1
+			for j < n && sql[j] != '$' && sql[j] != '\n' && sql[j] != ' ' {
+				j++
+			}
+			if j < n && sql[j] == '$' {
+				tag := sql[i : j+1] // e.g. "$$" or "$func$"
+				cur.WriteString(tag)
+				i = j + 1
+				// scan until closing tag
+				for i < n {
+					if strings.HasPrefix(sql[i:], tag) {
+						cur.WriteString(tag)
+						i += len(tag)
+						break
+					}
+					cur.WriteByte(sql[i])
+					i++
+				}
+				continue
+			}
+		}
+		// Single-quoted string
+		if sql[i] == '\'' {
+			cur.WriteByte(sql[i])
+			i++
+			for i < n {
+				cur.WriteByte(sql[i])
+				if sql[i] == '\'' {
+					if i+1 < n && sql[i+1] == '\'' {
+						i++
+						cur.WriteByte(sql[i])
+					} else {
+						i++
+						break
+					}
+				}
+				i++
+			}
+			continue
+		}
+		// Statement terminator
+		if sql[i] == ';' {
+			s := strings.TrimSpace(cur.String())
+			if s != "" {
+				result = append(result, s)
+			}
+			cur.Reset()
+			i++
+			continue
+		}
+		cur.WriteByte(sql[i])
+		i++
+	}
+	if s := strings.TrimSpace(cur.String()); s != "" {
+		result = append(result, s)
+	}
+	return result
 }
 
 func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string, snapshotPath string) (*types.SchemaDiff, error) {
 	var currentTables []types.SchemaTable
 	var currentEnums []types.SchemaEnum
-	var currentIndexes []types.SchemaIndex
 
-	// 1. Prefer the local schema snapshot (accurate even when migrations are pending).
 	snap, err := LoadSchemaSnapshot(snapshotPath)
 	if err != nil {
-		// Corrupted snapshot → warn and fall back to DB
 		fmt.Printf("⚠️  Schema snapshot corrupted (%v). Falling back to live database.\n", err)
 	}
-
-	snapshotMissing := snap == nil && err == nil
 
 	if snap != nil && err == nil {
 		currentTables = snap.Tables
 		currentEnums = snap.Enums
-		_ = snap.Indexes // indexes from snapshot not used in diff; live DB path populates currentIndexes
+		for i, table := range currentTables {
+			for _, idx := range snap.Indexes {
+				if strings.EqualFold(idx.Table, table.Name) {
+					dup := false
+					for _, existing := range table.Indexes {
+						if existing.Name == idx.Name {
+							dup = true
+							break
+						}
+					}
+					if !dup {
+						currentTables[i].Indexes = append(currentTables[i].Indexes, idx)
+					}
+				}
+			}
+		}
 	} else {
-		// 2. Snapshot missing or invalid → fall back to live database introspection.
+		// No snapshot — fall back to live database introspection.
+		// If the DB has tables, use them as the baseline so we don't
+		// regenerate CREATE TABLE for already-applied tables.
 		currentTables, err = sm.adapter.GetCurrentSchema(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get current schema: %w", err)
 		}
 
+		// Filter system tables for ScyllaDB/Cassandra (internal keyspace tables)
+		filtered := make([]types.SchemaTable, 0, len(currentTables))
+		for _, t := range currentTables {
+			name := strings.ToLower(t.Name)
+			if strings.HasPrefix(name, "system.") || strings.HasPrefix(name, "system_") {
+				continue
+			}
+			if name == "indexinfo" || name == "batchlog" || name == "batchlog_v2" {
+				continue
+			}
+			filtered = append(filtered, t)
+		}
+		currentTables = filtered
+
 		currentEnums, err = sm.adapter.GetCurrentEnums(ctx)
 		if err != nil {
 			currentEnums = []types.SchemaEnum{}
 		}
-		// Extract indexes from current tables since DB introspection returns them inline
-		for _, table := range currentTables {
-			currentIndexes = append(currentIndexes, table.Indexes...)
-		}
 
-		if snapshotMissing {
-			_ = SaveSchemaSnapshot(snapshotPath, currentTables, currentEnums, currentIndexes)
-		}
+		// DO NOT save live-DB state as snapshot here.
+		// The snapshot is saved AFTER migration generation (in GenerateMigration)
+		// from the parsed schema files, not the live DB. This keeps the snapshot
+		// as the authoritative "last schema we generated a migration for."
 	}
 
-	// Use the new ParseSchemaPath that handles both files and directories
-	// Standalone CREATE INDEX statements are kept separate from table definitions.
-	targetTables, targetEnums, targetIndexes, err := sm.ParseSchemaPath(targetSchemaPath)
+	// Parse target schema including keyspaces and UDTs
+	targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs, targetRaw, err := sm.ParseSchemaPathAllV2(targetSchemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse target schema: %w", err)
 	}
 
-	// Pass both tables and standalone indexes to compareSchemas
 	diff := sm.compareSchemas(currentTables, targetTables, currentEnums, targetEnums, targetIndexes)
+	sm.compareKeyspaces(snap, targetKeyspaces, diff)
+	sm.compareUDTs(snap, targetUDTs, diff)
+	sm.compareRawStatements(snap, targetRaw, diff)
 
 	return diff, nil
+}
+
+func (sm *SchemaManager) compareKeyspaces(snap *SchemaSnapshot, target []types.SchemaKeyspace, diff *types.SchemaDiff) {
+	currentMap := make(map[string]types.SchemaKeyspace)
+	if snap != nil {
+		for _, ks := range snap.Keyspaces {
+			currentMap[ks.Name] = ks
+		}
+	}
+
+	for _, ks := range target {
+		if _, exists := currentMap[ks.Name]; !exists {
+			diff.NewKeyspaces = append(diff.NewKeyspaces, ks)
+		}
+	}
+	// Note: DroppedKeyspaces not handled automatically — user must manually add DROP KEYSPACE
+}
+
+func (sm *SchemaManager) compareUDTs(snap *SchemaSnapshot, target []types.SchemaUDT, diff *types.SchemaDiff) {
+	currentMap := make(map[string]types.SchemaUDT)
+	if snap != nil {
+		for _, u := range snap.UDTs {
+			currentMap[u.Name] = u
+		}
+	}
+
+	for _, u := range target {
+		if _, exists := currentMap[u.Name]; !exists {
+			diff.NewUDTs = append(diff.NewUDTs, u)
+		}
+	}
 }
 
 func (sm *SchemaManager) GenerateSchemaSQL(tables []types.SchemaTable) string {

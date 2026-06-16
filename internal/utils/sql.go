@@ -10,15 +10,16 @@ import (
 // Pre-compiled regex patterns for SQL parsing (performance optimization)
 var (
 	blockCommentRegex   = regexp.MustCompile(`/\*[\s\S]*?\*/`)
-	insertIntoRegex     = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\w+)`)
-	fromTableRegex      = regexp.MustCompile(`(?i)FROM\s+(\w+)`)
-	updateTableRegex    = regexp.MustCompile(`(?i)UPDATE\s+(\w+)`)
-	deleteFromRegex     = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\w+)`)
+	insertIntoRegex     = regexp.MustCompile(`(?i)INSERT\s+INTO\s+(\S+)`)
+	fromTableRegex      = regexp.MustCompile(`(?i)FROM\s+(\S+)`)
+	updateTableRegex    = regexp.MustCompile(`(?i)UPDATE\s+(\S+)`)
+	deleteFromRegex     = regexp.MustCompile(`(?i)DELETE\s+FROM\s+(\S+)`)
 	modifyingQueryRegex = regexp.MustCompile(`(?i)\b(INSERT|UPDATE|DELETE)\b`)
 )
 
 // ExtractTableName extracts the primary table name from a SQL query.
 // Works with INSERT INTO, SELECT FROM, UPDATE, and DELETE FROM statements.
+// Uses word-boundary matching to avoid matching function-internal FROM (e.g. EXTRACT(EPOCH FROM ...)).
 func ExtractTableName(sql string) string {
 	sqlUpper := strings.ToUpper(sql)
 
@@ -28,25 +29,41 @@ func ExtractTableName(sql string) string {
 		}
 	}
 
-	if strings.Contains(sqlUpper, "FROM") {
-		if matches := fromTableRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
-		}
+	// Match FROM/UPDATE/DELETE as standalone keywords (word boundary), not inside functions.
+	// Strip parentheses content first to avoid matching EXTRACT(EPOCH FROM ...).
+	stripped := StripParenthesizedContent(sqlUpper)
+	if matches := fromTableRegex.FindStringSubmatch(stripped); len(matches) > 1 {
+		return strings.ToLower(matches[1])
 	}
 
-	if strings.Contains(sqlUpper, "UPDATE") {
-		if matches := updateTableRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
-		}
+	if matches := updateTableRegex.FindStringSubmatch(stripped); len(matches) > 1 {
+		return strings.ToLower(matches[1])
 	}
 
-	if strings.Contains(sqlUpper, "DELETE") {
-		if matches := deleteFromRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
-		}
+	if matches := deleteFromRegex.FindStringSubmatch(stripped); len(matches) > 1 {
+		return strings.ToLower(matches[1])
 	}
 
 	return ""
+}
+
+// StripParenthesizedContent replaces everything between balanced parentheses with spaces.
+func StripParenthesizedContent(s string) string {
+	var result strings.Builder
+	result.Grow(len(s))
+	depth := 0
+	for _, ch := range s {
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+		} else if depth == 0 {
+			result.WriteRune(ch)
+		}
+	}
+	return result.String()
 }
 
 // IsModifyingQuery returns true if the SQL contains INSERT, UPDATE, or DELETE.
@@ -80,30 +97,62 @@ func RemoveComments(sql string) string {
 
 // SplitColumns splits a comma-separated column string, respecting parentheses depth.
 // This handles cases like "col1, COALESCE(a, b), col2" correctly.
+// Also handles CQL angle-bracket types like map<text,text> by tracking <> depth
+// only outside parentheses (inside parens, < is a SQL comparison operator).
 func SplitColumns(columnsStr string) []string {
-	result := make([]string, 0, 8) // Pre-allocate with reasonable capacity
+	result := make([]string, 0, 8)
 	var current strings.Builder
-	current.Grow(64) // Pre-allocate buffer for column strings
+	current.Grow(64)
 	parenDepth := 0
+	angleDepth := 0
+	inString := false
 
-	for _, char := range columnsStr {
-		switch char {
+	for i := 0; i < len(columnsStr); i++ {
+		ch := columnsStr[i]
+		if inString {
+			current.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < len(columnsStr) && columnsStr[i+1] == '\'' {
+					i++
+					current.WriteByte(columnsStr[i])
+				} else {
+					inString = false
+				}
+			}
+			continue
+		}
+		switch ch {
+		case '\'':
+			inString = true
+			current.WriteByte(ch)
 		case '(':
 			parenDepth++
-			current.WriteRune(char)
+			current.WriteByte(ch)
 		case ')':
 			parenDepth--
-			current.WriteRune(char)
-		case ',':
+			current.WriteByte(ch)
+		case '<':
+			// Only track angle brackets at depth 0 (CQL types: frozen<type>, map<k,v>).
+			// Inside parens, < is a comparison operator (e.g. age < 18, ARRAY[0,10)).
 			if parenDepth == 0 {
+				angleDepth++
+			}
+			current.WriteByte(ch)
+		case '>':
+			if parenDepth == 0 && angleDepth > 0 {
+				angleDepth--
+			}
+			current.WriteByte(ch)
+		case ',':
+			if parenDepth == 0 && angleDepth == 0 {
 				result = append(result, current.String())
 				current.Reset()
-				current.Grow(64) // Reset with pre-allocation
+				current.Grow(64)
 			} else {
-				current.WriteRune(char)
+				current.WriteByte(ch)
 			}
 		default:
-			current.WriteRune(char)
+			current.WriteByte(ch)
 		}
 	}
 
@@ -188,6 +237,42 @@ func extractColumnsFromSelect(sql string, selectIdx int) string {
 		start++
 	}
 
+	// Skip DISTINCT ON (col1, col2) — it's not part of the column list
+	restUpper := sqlUpper[start:]
+	if strings.HasPrefix(restUpper, "DISTINCT") {
+		distinctEnd := start + 8 // "DISTINCT"
+		after := distinctEnd
+		for after < len(sql) && (sql[after] == ' ' || sql[after] == '\t' || sql[after] == '\n') {
+			after++
+		}
+		if after+2 < len(sql) && strings.ToUpper(sql[after:after+2]) == "ON" {
+			// Skip "ON (col1, col2)"
+			after += 2
+			for after < len(sql) && (sql[after] == ' ' || sql[after] == '\t' || sql[after] == '\n') {
+				after++
+			}
+			if after < len(sql) && sql[after] == '(' {
+				depth := 0
+				for after < len(sql) {
+					if sql[after] == '(' {
+						depth++
+					} else if sql[after] == ')' {
+						depth--
+						if depth == 0 {
+							after++
+							break
+						}
+					}
+					after++
+				}
+				start = after
+				for start < len(sql) && (sql[start] == ' ' || sql[start] == '\t' || sql[start] == '\n') {
+					start++
+				}
+			}
+		}
+	}
+
 	parenDepth := 0
 	fromIdx := -1
 
@@ -265,14 +350,21 @@ func isAlphaNum(ch byte) bool {
 var sqlKeywords = map[string]bool{
 	"SELECT": true, "FROM": true, "WHERE": true, "JOIN": true, "INNER": true,
 	"LEFT": true, "RIGHT": true, "OUTER": true, "ON": true, "AND": true,
-	"OR": true, "NOT": true, "IN": true, "LIKE": true, "BETWEEN": true,
-	"IS": true, "NULL": true, "GROUP": true, "BY": true, "HAVING": true,
+	"OR": true, "NOT": true, "IN": true, "LIKE": true, "ILIKE": true, "SIMILAR": true,
+	"BETWEEN": true, "IS": true, "NULL": true, "GROUP": true, "BY": true, "HAVING": true,
 	"ORDER": true, "ASC": true, "DESC": true, "LIMIT": true, "OFFSET": true,
 	"INSERT": true, "UPDATE": true, "DELETE": true, "CREATE": true, "DROP": true,
 	"ALTER": true, "TABLE": true, "INDEX": true, "VIEW": true, "AS": true,
 	"DISTINCT": true, "COUNT": true, "SUM": true, "AVG": true, "MIN": true,
 	"MAX": true, "CASE": true, "WHEN": true, "THEN": true, "ELSE": true,
-	"END": true, "WITH": true, "RECURSIVE": true,
+	"END": true, "WITH": true, "RECURSIVE": true, "ANY": true, "ALL": true,
+	"EXISTS": true, "NULLS": true, "LAST": true, "FIRST": true, "FILTER": true,
+	"OVER": true, "PARTITION": true, "ROWS": true, "RANGE": true, "FOLLOWING": true,
+	"PRECEDING": true, "UNBOUNDED": true, "CURRENT": true, "ROW": true,
+	"LATERAL": true, "PLAINTO_TSQUERY": true, "TS_RANK": true,
+	"UNNEST": true, "INTERVAL": true,
+	"EXCEPT": true, "INTERSECT": true, "UNION": true, "RETURNING": true,
+	"CONFLICT": true, "DO": true, "NOTHING": true, "EXCLUDED": true,
 }
 
 func IsSQLKeyword(word string) bool {
@@ -289,27 +381,37 @@ func ValidateSchemaSyntax(content, filePath string) error {
 	for lineNum, line := range lines {
 		lineNumber := lineNum + 1
 		trimmed := strings.TrimSpace(line)
+		upper := strings.ToUpper(trimmed)
 
-		if strings.Contains(strings.ToUpper(trimmed), "CREATE TABLE") {
+		if strings.Contains(upper, "CREATE TABLE") {
 			inCreateTable = true
 			tableStartLine = lineNumber
 			parenDepth = 0
 		}
 
-		for _, ch := range line {
-			switch ch {
-			case '(':
-				parenDepth++
-			case ')':
-				parenDepth--
+		// Track paren depth inside CREATE TABLE
+		if inCreateTable {
+			for _, ch := range line {
+				switch ch {
+				case '(':
+					parenDepth++
+				case ')':
+					parenDepth--
+				}
 			}
 		}
 
-		if inCreateTable && parenDepth == 0 && strings.Contains(trimmed, ");") {
+		// End of CREATE TABLE: look for ");
+		if inCreateTable && strings.Contains(trimmed, ");") {
 			for i := lineNum - 1; i >= 0; i-- {
 				prevLine := strings.TrimSpace(lines[i])
+				prevUpper := strings.ToUpper(prevLine)
 				if prevLine == "" {
 					continue
+				}
+				// CQL-compatible: skip PRIMARY KEY lines (trailing commas required in CQL)
+				if strings.HasPrefix(prevUpper, "PRIMARY KEY") {
+					break
 				}
 				if strings.HasSuffix(prevLine, ",") {
 					relPath := filepath.Base(filePath)
@@ -318,9 +420,14 @@ func ValidateSchemaSyntax(content, filePath string) error {
 				break
 			}
 			inCreateTable = false
+			parenDepth = 0
 		}
 
-		if parenDepth < 0 {
+		// Only check for unmatched ')' when NOT inside a CREATE TABLE.
+		// CQL uses nested parens for composite partition keys like
+		// PRIMARY KEY ((col1, col2), col3) which naturally resolves
+		// multiple paren levels in one line.
+		if parenDepth < 0 && !inCreateTable {
 			relPath := filepath.Base(filePath)
 			return fmt.Errorf("# package flash\n%s:%d:2: syntax error: unexpected ')'", relPath, lineNumber)
 		}

@@ -183,7 +183,9 @@ func (m *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 }
 
 func (m *Adapter) GenerateAddColumnSQL(tableName string, column types.SchemaColumn) string {
-	return fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN `%s` %s;",
+	// MySQL 8.0+ supports IF NOT EXISTS for ADD COLUMN.
+	// Using it unconditionally; older MySQL versions (<8.0) will error on IF NOT EXISTS.
+	return fmt.Sprintf("ALTER TABLE `%s` ADD COLUMN IF NOT EXISTS `%s` %s;",
 		tableName, column.Name, m.FormatColumnType(column))
 }
 
@@ -216,7 +218,7 @@ func (m *Adapter) FormatColumnType(column types.SchemaColumn) string {
 	return m.formatColumnTypeInternal(column, false)
 }
 
-// formatColumnTypeInternal builds the column type string. When forAlter is true,
+// formatColumnTypeInternal builds the column type string.
 func (m *Adapter) formatColumnTypeInternal(column types.SchemaColumn, forAlter bool) string {
 	var parts []string
 	columnType := m.convertTypeToMySQL(column.Type)
@@ -230,15 +232,12 @@ func (m *Adapter) formatColumnTypeInternal(column types.SchemaColumn, forAlter b
 			parts = append(parts, "AUTO_INCREMENT")
 		}
 	}
-
 	if column.IsUnique && !column.IsPrimary {
 		parts = append(parts, "UNIQUE")
 	}
-
 	if !column.Nullable && !column.IsPrimary {
 		parts = append(parts, "NOT NULL")
 	}
-
 	if column.Default != "" {
 		defaultValue := column.Default
 		if strings.HasPrefix(strings.ToUpper(columnType), "ENUM(") {
@@ -250,7 +249,9 @@ func (m *Adapter) formatColumnTypeInternal(column types.SchemaColumn, forAlter b
 		}
 		parts = append(parts, fmt.Sprintf("DEFAULT %s", defaultValue))
 	}
-
+	if column.Generated != "" {
+		parts = append(parts, fmt.Sprintf("AS (%s) STORED", column.Generated))
+	}
 	if column.Check != "" {
 		parts = append(parts, fmt.Sprintf("CHECK (%s)", column.Check))
 	}

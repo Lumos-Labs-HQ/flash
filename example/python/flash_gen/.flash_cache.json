@@ -19,9 +19,9 @@
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/other.py": "0b6e4217fa45a840cc0972533c19f1367ac94d89817a66481cd26d136979918e",
-    "flash_gen/post.py": "a8476a00b51d34c1d69f3fdfc8143b1ce9f12ae659e3204c17f2de0d44cc5577",
-    "flash_gen/users.py": "cec49b4c6f3f2cf106e5940c22d66b1a9da5f5dfda275b8c6e2891218f9ba63d"
+    "flash_gen/other.py": "24ac0842381e8456e35728cfe23f23eb44a6124e728483f0df6bbcc1141834c1",
+    "flash_gen/post.py": "aad219bff424f07f3b82cd99aaca418de8f2f2d7232ec4d1eb36fbbe17b23854",
+    "flash_gen/users.py": "966fc83a27403aeb1a3362afa609f08876b20b60ad1ef4c9dd2f98bbb88ec9cf"
   },
-  "last_generation": "2026-05-27T01:27:50.802284962+05:30"
+  "last_generation": "2026-06-16T17:51:29.448192402+05:30"
 }

@@ -37,7 +37,7 @@ func ConnectDatabase() {
 		log.Fatal("Failed to ping database:", err)
 	}
 
-	Queries = flash_gen.New(DB)
+	Queries = flash_gen.Newq(DB)
 	log.Println("Database connected successfully")
 }
 

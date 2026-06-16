@@ -425,3 +425,15 @@ input[type="checkbox"] {
 /* Save button — dark green */
 #save-btn { background: #14532d !important; color: #4ade80 !important; border-color: #166534 !important; }
 #save-btn:hover { background: #166534 !important; border-color: #16a34a !important; }
+
+/* ===== Keyspace Groups (ScyllaDB) ===== */
+.keyspace-group { margin-bottom: 2px; }
+.keyspace-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; cursor: pointer; background: #141414; border-bottom: 1px solid #1a1a1a; user-select: none; }
+.keyspace-header:hover { background: #1a1a1a; }
+.keyspace-caret { font-size: 14px; color: #555; transition: transform 0.15s; }
+.keyspace-icon { font-size: 15px; color: #4a9eff; }
+.keyspace-name { font-size: 12px; font-weight: 500; color: #ccc; flex: 1; }
+.keyspace-count { font-size: 10px; color: #555; }
+.keyspace-tables { display: block; }
+.keyspace-tables .table-item { padding-left: 24px; }
+

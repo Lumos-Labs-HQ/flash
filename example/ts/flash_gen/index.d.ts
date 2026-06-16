@@ -36,27 +36,6 @@ export interface Comments {
   created_at: Date;
 }
 
-export interface GetComplexUserAnalyticsResult {
-  id: number;
-  name: string;
-  email: string;
-  role: 'admin' | 'moderator' | 'user' | 'guest';
-  isadmin: boolean;
-  user_created_at: string;
-  total_posts: string;
-  published_posts: string;
-  draft_posts: string;
-  total_comments: string;
-  posts_commented_on: string;
-  categories_used: string;
-  category_names: string;
-  last_post_date: string;
-  last_comment_date: string;
-  avg_post_length: number;
-  activity_level: string;
-  engagement_score: string;
-}
-
 export interface GetPostWithCommentsResult {
   post_id: number;
   title: string;
@@ -73,11 +52,11 @@ export interface GetPostDetailsWithAllRelationsResult {
   status: 'draft' | 'published' | 'archived';
   created_at: Date;
   updated_at: Date;
-  author_id: string;
+  author_id: number;
   author_name: string;
   author_email: string;
-  author_role: string;
-  author_is_admin: string;
+  author_role: 'admin' | 'moderator' | 'user' | 'guest';
+  author_is_admin: boolean;
   category_id: number;
   category_name: string;
   comment_count: number;
@@ -87,6 +66,27 @@ export interface GetPostDetailsWithAllRelationsResult {
   last_comment_date: Date | null;
   content_length: number | null;
   hours_since_created: number | null;
+}
+
+export interface GetComplexUserAnalyticsResult {
+  id: number;
+  name: string;
+  email: string;
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+  isadmin: boolean;
+  user_created_at: Date;
+  total_posts: number;
+  published_posts: number;
+  draft_posts: number;
+  total_comments: number;
+  posts_commented_on: number;
+  categories_used: number;
+  category_names: string;
+  last_post_date: Date | null;
+  last_comment_date: Date | null;
+  avg_post_length: number;
+  activity_level: string;
+  engagement_score: number;
 }
 
 export class Queries {
@@ -99,7 +99,7 @@ export class Queries {
   createComment(post_id: number, user_id: number, content: string): Promise<Comments | null>;
   getPostWithComments(id: number): Promise<GetPostWithCommentsResult[]>;
   getPostDetailsWithAllRelations(id: number): Promise<GetPostDetailsWithAllRelationsResult | null>;
-  getComplexUserAnalytics(total_posts: number, total_comments: number, limit: number): Promise<GetComplexUserAnalyticsResult[]>;
+  getComplexUserAnalytics(total_posts: string, total_comments: string, limit: string): Promise<GetComplexUserAnalyticsResult[]>;
 }
 
-export function New(db: any): Queries;
+export function Newq(db: any): Queries;

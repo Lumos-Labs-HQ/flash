@@ -19,6 +19,8 @@ func init() {
 	initCmd.Flags().Bool("postgres", false, "Initialize project for PostgreSQL database (alias)")
 	initCmd.Flags().Bool("mysql", false, "Initialize project for MySQL database")
 	initCmd.Flags().Bool("clickhouse", false, "Initialize project for ClickHouse database")
+	initCmd.Flags().Bool("scylla", false, "Initialize project for ScyllaDB database")
+	initCmd.Flags().Bool("cassandra", false, "Initialize project for Cassandra database (ScyllaDB-compatible)")
 }
 
 var initCmd = &cobra.Command{
@@ -54,9 +56,13 @@ func runInit(cmd *cobra.Command, args []string) {
 		dbType = tmpl.ClickHouse
 		flagCount++
 	}
+	if cmd.Flags().Changed("scylla") || cmd.Flags().Changed("cassandra") {
+		dbType = tmpl.ScyllaDB
+		flagCount++
+	}
 
 	if flagCount > 1 {
-		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, --mysql, or --clickhouse)")
+		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, --mysql, --clickhouse, --scylla, or --cassandra)")
 		os.Exit(1)
 	}
 
@@ -142,13 +148,6 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 	fmt.Println("  2. Run 'flash apply' to create the database tables")
 	fmt.Println("  3. Run 'flash generate' to generate the code")
 	fmt.Println("  4. Run 'flash studio' to open the database studio")
-
-	// Write a first-run marker so docs can guide the user
-	if projectName != "" {
-		_ = os.WriteFile(filepath.Join(projectName, ".flash"), []byte("new=true\n"), 0644)
-	} else {
-		_ = os.WriteFile(".flash", []byte("new=true\n"), 0644)
-	}
 
 	// Reset config cache so subsequent commands pick up the new config
 	config.ResetConfigCache()

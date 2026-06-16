@@ -51,6 +51,17 @@ const SQLITE_KEYWORDS = {
   other: ['AUTOINCREMENT', 'ROWID', 'WITHOUT', 'STRICT']
 };
 
+// ===== ScyllaDB/CQL-specific keywords =====
+const SCYLLA_KEYWORDS = {
+  statements: ['USE', 'LIST', 'DESCRIBE', 'TRUNCATE', 'COPY'],
+  clauses: ['ALLOW', 'FILTERING', 'CONTAINS', 'KEY', 'CLUSTERING', 'ORDER', 'BY', 'PER', 'PARTITION', 'LIMIT', 'TOKEN', 'USING', 'TTL', 'TIMESTAMP', 'IF', 'EXISTS', 'NOT', 'STATIC'],
+  functions: ['NOW', 'TODATE', 'TOTIMESTAMP', 'TOUUID', 'TOTIMEUUID', 'UUID', 'DATEOF', 'UNIXTIMESTAMPOF', 'BLOBASBIGINT', 'BIGINTASBLOB', 'WRITETIME', 'TTL', 'MIN', 'MAX', 'COUNT', 'AVG', 'SUM', 'CAST'],
+  types: ['text', 'int', 'bigint', 'smallint', 'tinyint', 'varint', 'boolean', 'float', 'double', 'decimal', 'timestamp', 'date', 'time', 'uuid', 'timeuuid', 'inet', 'counter', 'ascii', 'varchar', 'blob', 'frozen', 'list', 'set', 'map', 'tuple', 'duration'],
+  create: ['KEYSPACE', 'MATERIALIZED', 'VIEW', 'SECONDARY', 'TYPE', 'REPLICATION', 'STRATEGY', 'AND', 'DURABLE_WRITES', 'WITH', 'CLUSTERING', 'ORDER', 'COMPACT', 'STORAGE'],
+  alter: ['WITH', 'REPLICATION'],
+  other: ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'IN', 'AS', 'PRIMARY', 'DESC', 'ASC', 'INTO', 'VALUES', 'SET', 'TABLE', 'IF', 'EXISTS', 'TRUSTED', 'CACHING', 'MEMTABLE', 'CDC']
+};
+
 // All keywords combined (used for context detection only)
 const ALL_SQL_KEYWORDS = [
   ...new Set([
@@ -79,6 +90,11 @@ function getActiveKeywords() {
     case 'sqlite':
     case 'sqlite3':
       extra = Object.values(SQLITE_KEYWORDS).flat();
+      break;
+    case 'scylla':
+    case 'scylladb':
+    case 'cassandra':
+      extra = Object.values(SCYLLA_KEYWORDS).flat();
       break;
     default:
       extra = [

@@ -37,6 +37,7 @@ type DatabaseAdapter interface {
 	GetTableColumns(ctx context.Context, tableName string) ([]types.SchemaColumn, error) // Compatibility - prefer batch versions
 	GetTableIndexes(ctx context.Context, tableName string) ([]types.SchemaIndex, error)  // Compatibility - prefer batch versions
 	GetAllTableNames(ctx context.Context) ([]string, error)
+	GetKeyspaces(ctx context.Context) ([]string, error)
 	PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
 
 	// Conflict detection

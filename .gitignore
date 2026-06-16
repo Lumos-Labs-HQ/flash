@@ -40,6 +40,8 @@ db/migrations/.snapshots/
 .DS_Store?
 ._*
 .Spotlight-V100
+.kiro/
+.commandcode/
 .Trashes
 ehthumbs.db
 Thumbs.db
@@ -57,7 +59,7 @@ not_tests
 
 testss/
 test/speed_test
-
+build/
 
 .exe
 

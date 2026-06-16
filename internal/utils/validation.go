@@ -62,17 +62,18 @@ var (
 	havingClauseRegex          *regexp.Regexp
 	paramCheckRegex            *regexp.Regexp
 	unqualifiedColPatternRegex *regexp.Regexp
+	selectAliasRegex           *regexp.Regexp
 )
 
 func init() {
 	ctePatternRegex = regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
-	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+(\w+)`)
-	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+(\w+)\s+(\w+)`)
-	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+(\w+)\s+(\w+)`)
+	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([^\s;]+)`)
+	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+([^\s;]+)\s+(\w+)`)
+	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+([^\s;]+)\s+(\w+)`)
 	columnRefPatternRegex = regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
-	aliasExtractPatternRegex = regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?`)
-	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+(\w+)`)
-	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+(\w+)`)
+	aliasExtractPatternRegex = regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+([^\s;]+)(?:\s+(?:AS\s+)?(\w+))?`)
+	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+([^\s;]+)`)
+	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+([^\s;]+)`)
 	joinCheckRegex = regexp.MustCompile(`(?i)\bJOIN\b`)
 	whereClauseRegex = regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`)
 	setClauseRegex = regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`)
@@ -81,6 +82,7 @@ func init() {
 	havingClauseRegex = regexp.MustCompile(`(?i)\bHAVING\s+(.*?)(?:\s+(?:ORDER|LIMIT|;|$))`)
 	paramCheckRegex = regexp.MustCompile(`^\d+$|^\$\d+$|\?`)
 	unqualifiedColPatternRegex = regexp.MustCompile(`\b(\w+)\b`)
+	selectAliasRegex = regexp.MustCompile(`(?i)\s+AS\s+(\w+)`)
 }
 
 // ValidateTableReferences checks if tables referenced in queries exist in the schema
@@ -111,7 +113,7 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		}
 	}
 
-	matches := tablePatternRegex.FindAllStringSubmatch(sql, -1)
+	matches := tablePatternRegex.FindAllStringSubmatch(StripParenthesizedContent(sql), -1)
 
 	foundTableRefs := false
 
@@ -134,6 +136,14 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 
 		// Check if table exists in schema
 		tableExists := tableNames[strings.ToLower(tableName)]
+
+		// Auto-detect: strip keyspace prefix and retry.
+		// e.g. "myapp.users" in query, but schema only has "users" (single-keyspace ScyllaDB mode)
+		if !tableExists && strings.Contains(tableName, ".") {
+			dotIdx := strings.LastIndex(tableName, ".")
+			stripped := strings.ToLower(tableName[dotIdx+1:])
+			tableExists = tableNames[stripped]
+		}
 
 		if !tableExists {
 			lines := strings.Split(sql, "\n")
@@ -159,6 +169,117 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 	}
 
 	return nil
+}
+
+// stripOverClauses removes all OVER(...) blocks from SQL to prevent
+// ORDER BY inside window functions from being matched by clause-level regexes.
+func stripOverClauses(sql string) string {
+	sqlUpper := strings.ToUpper(sql)
+	var result strings.Builder
+	result.Grow(len(sql))
+	i := 0
+	for i < len(sql) {
+		// Look for OVER with optional whitespace, then '('
+		if i+4 <= len(sql) && sqlUpper[i:i+4] == "OVER" {
+			next := i + 4
+			for next < len(sql) && (sql[next] == ' ' || sql[next] == '\t' || sql[next] == '\n') {
+				next++
+			}
+			if next < len(sql) && sql[next] == '(' {
+				// Found OVER (...), skip the parenthesized content
+				result.WriteString(sql[i:next])
+				depth := 0
+				for next < len(sql) {
+					if sql[next] == '(' {
+						depth++
+					} else if sql[next] == ')' {
+						depth--
+						if depth == 0 {
+							result.WriteByte(')')
+							next++
+							break
+						}
+					}
+					next++
+				}
+				i = next
+				continue
+			}
+		}
+		result.WriteByte(sql[i])
+		i++
+	}
+	return result.String()
+}
+
+// stripSubqueryBlocks replaces parenthesized subquery blocks — typically
+// (SELECT ... FROM ... WHERE ...) — with empty parens so clause-level
+// regexes don't match keywords (WHERE, ORDER BY, etc.) inside subqueries.
+func stripSubqueryBlocks(sql string) string {
+	sqlUpper := strings.ToUpper(sql)
+	var result strings.Builder
+	result.Grow(len(sql))
+	i := 0
+	for i < len(sql) {
+		if sql[i] == '(' {
+			after := i + 1
+			for after < len(sql) && (sql[after] == ' ' || sql[after] == '\t' || sql[after] == '\n') {
+				after++
+			}
+			isSubQuery := false
+			if after+6 <= len(sql) && sqlUpper[after:after+6] == "SELECT" &&
+				(after+6 >= len(sql) || !isAlphaNum(sql[after+6])) {
+				isSubQuery = true
+			}
+			if !isSubQuery && after+4 <= len(sql) && sqlUpper[after:after+4] == "WITH" &&
+				(after+4 >= len(sql) || !isAlphaNum(sql[after+4])) {
+				isSubQuery = true
+			}
+			if isSubQuery {
+				result.WriteString("(...)")
+				depth := 1
+				i++
+				for i < len(sql) && depth > 0 {
+					if sql[i] == '(' {
+						depth++
+					} else if sql[i] == ')' {
+						depth--
+					}
+					i++
+				}
+				continue
+			}
+		}
+		result.WriteByte(sql[i])
+		i++
+	}
+	return result.String()
+}
+
+// stripStringLiterals removes single-quoted SQL literals so their contents
+// don't get falsely flagged as column references.
+func stripStringLiterals(sql string) string {
+	var result strings.Builder
+	result.Grow(len(sql))
+	inString := false
+	for i := 0; i < len(sql); i++ {
+		ch := sql[i]
+		if ch == '\'' {
+			if inString && i+1 < len(sql) && sql[i+1] == '\'' {
+				// Escaped quote
+				result.WriteString("''")
+				i++
+				continue
+			}
+			inString = !inString
+			result.WriteString("''") // placeholder
+			continue
+		}
+		if !inString {
+			result.WriteByte(ch)
+		}
+	}
+	return result.String()
 }
 
 // extractTableNamesFromSchema extracts table names from various schema types
@@ -232,6 +353,10 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		return nil
 	}
 
+	// Pre-process SQL: strip subqueries and OVER(...) blocks so clause-level
+	// regexes don't match keywords inside subqueries or window functions.
+	outerSQL := stripSubqueryBlocks(stripOverClauses(sql))
+
 	schemaVal := reflect.ValueOf(schema)
 	if schemaVal.Kind() == reflect.Ptr {
 		schemaVal = schemaVal.Elem()
@@ -263,10 +388,17 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 			columnsField := tablePtr.FieldByName("Columns")
 
 			if nameField.IsValid() && nameField.Kind() == reflect.String {
-				tableName := strings.ToLower(nameField.String())
+				key := strings.ToLower(nameField.String())
 				tblInfo := &tableInfo{
 					name:    nameField.String(),
 					columns: make(map[string]bool),
+				}
+
+				// Register both keyspace-qualified and plain name for ScyllaDB auto-detection.
+				// e.g. "ap.users" → both "ap.users" and "users" match.
+				tables[key] = tblInfo
+				if dotIdx := strings.LastIndex(key, "."); dotIdx >= 0 {
+					tables[key[dotIdx+1:]] = tblInfo
 				}
 
 				if columnsField.IsValid() && columnsField.Kind() == reflect.Slice {
@@ -283,7 +415,6 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 						}
 					}
 				}
-				tables[tableName] = tblInfo
 			}
 		}
 	}
@@ -362,20 +493,32 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 	}
 
+	// Extract SELECT aliases (e.g. RANK() OVER (...) AS rank, COUNT(*) AS cnt)
+	// so ORDER BY rank, GROUP BY cnt don't get falsely flagged as missing columns.
+	selectAliasMatches := selectAliasRegex.FindAllStringSubmatch(sql, -1)
+	for _, match := range selectAliasMatches {
+		if len(match) >= 2 {
+			alias := strings.ToLower(match[1])
+			if !IsSQLKeyword(alias) {
+				knownAliases[alias] = true
+			}
+		}
+	}
+
 	var primaryTable *tableInfo
-	if fromMatch := fromPatternRegex.FindStringSubmatch(sql); len(fromMatch) > 1 {
+	if fromMatch := fromPatternRegex.FindStringSubmatch(outerSQL); len(fromMatch) > 1 {
 		tableName := strings.ToLower(fromMatch[1])
 		primaryTable = tables[tableName]
 	}
 
 	if primaryTable == nil {
-		if insertMatch := insertPatternRegex.FindStringSubmatch(sql); len(insertMatch) > 1 {
+		if insertMatch := insertPatternRegex.FindStringSubmatch(outerSQL); len(insertMatch) > 1 {
 			tableName := strings.ToLower(insertMatch[1])
 			primaryTable = tables[tableName]
 		}
 	}
 
-	hasJoin := joinCheckRegex.MatchString(sql)
+	hasJoin := joinCheckRegex.MatchString(outerSQL)
 
 	if primaryTable != nil && !hasJoin {
 		clausePatterns := []*regexp.Regexp{
@@ -387,8 +530,12 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 		}
 
 		for _, pattern := range clausePatterns {
-			if matches := pattern.FindStringSubmatch(sql); len(matches) > 1 {
+			if matches := pattern.FindStringSubmatch(outerSQL); len(matches) > 1 {
 				clauseText := matches[1]
+
+				// Strip SQL string literals so quoted values
+				// (e.g. status = 'published') don't get flagged as column names.
+				clauseText = stripStringLiterals(clauseText)
 
 				colMatches := unqualifiedColPatternRegex.FindAllString(clauseText, -1)
 

@@ -23,6 +23,7 @@ export default defineConfig({
         ]
       },
       { text: 'Examples', link: '/examples/' },
+      { text: 'Release Notes', link: '/notes/RELEASE_NOTES' },
       { text: 'SQL Studio', link: '/concepts/studio' },
       { text: 'MongoDB Studio', link: '/concepts/mongodb-studio' },
       { text: 'Redis Studio', link: '/concepts/redis-studio' }
@@ -80,7 +81,9 @@ export default defineConfig({
           items: [
             { text: 'PostgreSQL', link: '/databases/postgresql' },
             { text: 'MySQL', link: '/databases/mysql' },
-            { text: 'SQLite', link: '/databases/sqlite' }
+            { text: 'SQLite', link: '/databases/sqlite' },
+            { text: 'ScyllaDB / Cassandra', link: '/databases/scylladb' },
+            { text: 'ClickHouse', link: '/databases/clickhouse' }
           ]
         }
       ],
