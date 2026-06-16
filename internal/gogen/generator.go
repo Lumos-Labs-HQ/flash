@@ -223,10 +223,15 @@ func (g *Generator) generateDB() error {
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 
 	if isScylla {
-		code.WriteString("import (\n")
-		code.WriteString("\t\"context\"\n\n")
-		code.WriteString("\t\"github.com/apache/cassandra-gocql-driver/v2\"\n")
-		code.WriteString(")\n\n")
+		isGocql := g.Config.Gen.Go.Driver == "gocql"
+		importPath := "github.com/apache/cassandra-gocql-driver/v2"
+		execBody := "return q.db.Query(query, args...).ExecContext(ctx)"
+		if isGocql {
+			importPath = "github.com/gocql/gocql"
+			execBody = "return q.db.Query(query, args...).WithContext(ctx).Exec()"
+		}
+
+		code.WriteString(fmt.Sprintf("import (\n\t\"context\"\n\n\t%q\n)\n\n", importPath))
 		code.WriteString("type DBTX interface {\n")
 		code.WriteString("\tQuery(stmt string, values ...interface{}) *gocql.Query\n")
 		code.WriteString("}\n\n")
@@ -237,7 +242,7 @@ func (g *Generator) generateDB() error {
 		code.WriteString("\tdb DBTX\n")
 		code.WriteString("}\n\n")
 		code.WriteString("func (q *Queries) exec(ctx context.Context, query string, args ...interface{}) error {\n")
-		code.WriteString("\treturn q.db.Query(query, args...).ExecContext(ctx)\n")
+		code.WriteString(fmt.Sprintf("\t%s\n", execBody))
 		code.WriteString("}\n\n")
 	} else {
 		isPGX := g.Config.Gen.Go.Driver == "pgx"

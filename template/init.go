@@ -290,10 +290,10 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case ScyllaDB:
 		return `# FlashORM — ScyllaDB/Cassandra Drivers
-#   Go:     "apache/cassandra-gocql-driver/v2"
+#   Go:     "apache/cassandra-gocql-driver/v2" (default) | "gocql" (github.com/gocql/gocql)
 #   JS:     "cassandra-driver"
 #   Python: "scylla-driver" (sync) | "cassandra-driver" (async)
-# Add driver = "<name>" inside the [gen.*] block below.`
+# Add driver = "gocql" inside the [gen.go] block to use gocql/gocql instead.`
 	default:
 		return `# FlashORM — See docs for available drivers per database.`
 	}
