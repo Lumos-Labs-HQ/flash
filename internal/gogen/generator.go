@@ -905,13 +905,15 @@ func (g *Generator) mapParamTypeToGo(paramType string) string {
 		}
 	}
 
-	// For gocql, collection types map to []string (gocql handles the conversion)
+	// For gocql, collection types map to []ElemType
 	provider := g.Config.Database.Provider
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 	if isScylla {
 		lower := strings.ToLower(paramType)
 		if strings.HasPrefix(lower, "set<") || strings.HasPrefix(lower, "list<") {
-			return "[]string"
+			inner := extractCollectionInner(lower)
+			elemGo := g.mapSQLTypeToGo(inner, false)
+			return "[]" + elemGo
 		}
 	}
 

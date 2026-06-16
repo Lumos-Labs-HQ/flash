@@ -29,11 +29,17 @@ tasks:
       - go get -u ./... && go mod tidy
       - cd plugins/core && go get -u ./... && go mod tidy
       - cd plugins/studio && go get -u ./... && go mod tidy
-      
+
   test:
     desc: Run all tests with dev + plugins tags
     cmds:
       - go test -tags="dev,plugins" -v ./...
+
+  smoke:
+    desc: Run all unit tests (excludes integration tests requiring Docker/DB)
+    cmds:
+      - go test -tags="dev,plugins" -v $(go list -tags="dev,plugins" ./... | grep -v test/integration)
+      - echo "Smoke tests passed"
 
   test-integration:
     desc: Run all command integration tests

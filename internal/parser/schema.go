@@ -69,7 +69,23 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 				tables := p.parseCreateTables(string(content))
 				schema.Tables = append(schema.Tables, tables...)
 				views := p.parseCreateViews(string(content))
-				schema.Tables = append(schema.Tables, views...)
+				// Resolve wildcard views and skip those with no columns (unresolvable SELECT *)
+				for _, v := range views {
+					if len(v.Columns) == 1 && v.Columns[0].Name == "*" {
+						continue // skip unresolvable wildcard views
+					}
+					// Skip if already added (dedup between tables and views)
+					dup := false
+					for _, t := range schema.Tables {
+						if strings.EqualFold(t.Name, v.Name) {
+							dup = true
+							break
+						}
+					}
+					if !dup {
+						schema.Tables = append(schema.Tables, v)
+					}
+				}
 				enums := p.parseCreateEnums(string(content))
 				schema.Enums = append(schema.Enums, enums...)
 				udts := p.parseCreateUDTs(string(content))
@@ -104,7 +120,18 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 		tables := p.parseCreateTables(string(content))
 		schema.Tables = append(schema.Tables, tables...)
 		views := p.parseCreateViews(string(content))
-		schema.Tables = append(schema.Tables, views...)
+		for _, v := range views {
+			if len(v.Columns) == 1 && v.Columns[0].Name == "*" {
+				continue
+			}
+			dup := false
+			for _, t := range schema.Tables {
+				if strings.EqualFold(t.Name, v.Name) { dup = true; break }
+			}
+			if !dup {
+				schema.Tables = append(schema.Tables, v)
+			}
+		}
 		enums := p.parseCreateEnums(string(content))
 		schema.Enums = append(schema.Enums, enums...)
 		udts := p.parseCreateUDTs(string(content))

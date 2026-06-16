@@ -19,12 +19,12 @@ const cacheFileName = ".flash_cache.json"
 type GenerationCache struct {
 	Version string `json:"version"`
 
-	QueryFileChecksums     map[string]string `json:"query_file_checksums"`
-	SchemaChecksum         string            `json:"schema_checksum"`
-	ConfigChecksum         string            `json:"config_checksum"`
+	QueryFileChecksums     map[string]string   `json:"query_file_checksums"`
+	SchemaChecksum         string              `json:"schema_checksum"`
+	ConfigChecksum         string              `json:"config_checksum"`
 	QueryTableDeps         map[string][]string `json:"query_table_deps"`
-	GeneratedFileChecksums map[string]string `json:"generated_file_checksums"`
-	LastGeneration         time.Time         `json:"last_generation"`
+	GeneratedFileChecksums map[string]string   `json:"generated_file_checksums"`
+	LastGeneration         time.Time           `json:"last_generation"`
 
 	OutDir string // output directory — not persisted, set by generator
 	mu     sync.RWMutex
