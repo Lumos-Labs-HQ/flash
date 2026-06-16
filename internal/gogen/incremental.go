@@ -107,6 +107,9 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	needsTime, needsSQL, needsPGConn := false, false, false
 	isPGX := g.Config.Gen.Go.Driver == "pgx"
 	isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
+	isGocql := g.Config.Gen.Go.Driver == "gocql"
+	needsGocqlImport := false
+	needsUUIDImport := false
 	for _, query := range fileQueries {
 		for _, col := range query.Columns {
 			colType := g.mapColumnTypeToGo(col.Type, col.Nullable)
@@ -115,6 +118,21 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 			}
 			if strings.Contains(colType, "sql.Null") {
 				needsSQL = true
+			}
+			if strings.Contains(colType, "gocql.UUID") {
+				needsGocqlImport = true
+			}
+			if strings.Contains(colType, "uuid.UUID") {
+				needsUUIDImport = true
+			}
+		}
+		for _, param := range query.Params {
+			pt := g.mapParamTypeToGo(param.Type)
+			if strings.Contains(pt, "gocql.UUID") {
+				needsGocqlImport = true
+			}
+			if strings.Contains(pt, "uuid.UUID") {
+				needsUUIDImport = true
 			}
 		}
 		if strings.ToLower(query.Cmd) == ":one" && !isPGX && !isScylla {
@@ -128,6 +146,13 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	imports := []string{}
 	if isScylla {
 		imports = append(imports, "\"context\"")
+		if needsGocqlImport {
+			if isGocql {
+				imports = append(imports, "\"github.com/gocql/gocql\"")
+			} else {
+				imports = append(imports, "\"github.com/apache/cassandra-gocql-driver/v2\"")
+			}
+		}
 	} else if isPGX {
 		imports = append(imports, "\"context\"")
 	}
@@ -136,6 +161,9 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	}
 	if needsTime {
 		imports = append(imports, "\"time\"")
+	}
+	if needsUUIDImport {
+		imports = append(imports, "\"github.com/google/uuid\"")
 	}
 	if needsPGConn {
 		imports = append(imports, "\"github.com/jackc/pgx/v5/pgconn\"")
@@ -155,7 +183,7 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 		}
 	}
 
-	baseName := strings.TrimSuffix(sourceFile, ".sql")
+	baseName := strings.TrimSuffix(strings.TrimSuffix(sourceFile, ".sql"), ".cql")
 
 	// Thread-safe name deduplication
 	usedNamesMu.Lock()

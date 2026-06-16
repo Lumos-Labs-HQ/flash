@@ -34,7 +34,7 @@ func TestSQLTypeToPython(t *testing.T) {
 		{"SMALLINT", false, "int"},
 		{"TEXT", false, "str"},
 		{"VARCHAR(255)", false, "str"},
-		{"UUID", false, "str"},
+		{"UUID", false, "UUID"},
 		{"BOOLEAN", false, "bool"},
 		{"FLOAT", false, "float"},
 		{"DOUBLE", false, "float"},

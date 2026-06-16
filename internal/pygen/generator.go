@@ -93,7 +93,24 @@ func (g *Generator) generateModels(schema *parser.Schema) error {
 	w.WriteString("from dataclasses import dataclass\n")
 	w.WriteString("from typing import Optional, List, Literal\n")
 	w.WriteString("from datetime import datetime, timedelta\n")
-	w.WriteString("from decimal import Decimal\n\n")
+	w.WriteString("from decimal import Decimal\n")
+
+	// Add UUID import if any column uses UUID type
+	needsUUID := false
+	for _, table := range schema.Tables {
+		for _, col := range table.Columns {
+			if strings.Contains(strings.ToLower(col.Type), "uuid") {
+				isScyllaDB := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
+				if !isScyllaDB {
+					needsUUID = true
+				}
+			}
+		}
+	}
+	if needsUUID {
+		w.WriteString("from uuid import UUID\n")
+	}
+	w.WriteString("\n")
 
 	for _, table := range schema.Tables {
 		w.WriteString("@dataclass\n")
@@ -722,6 +739,13 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		pyType = "timedelta"
 	case strings.Contains(sqlTypeLower, "json"):
 		pyType = "dict"
+	case strings.Contains(sqlTypeLower, "uuid"):
+		isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
+		if isScylla {
+			pyType = "str"
+		} else {
+			pyType = "UUID"
+		}
 	// ClickHouse-specific types
 	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64",
 		sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64":
@@ -738,7 +762,14 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		elemType := g.sqlTypeToPython(inner, false)
 		pyType = "List[" + elemType + "]"
 	// ScyllaDB/Cassandra CQL types
-	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid", sqlTypeLower == "inet":
+	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid":
+		isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
+		if isScylla {
+			pyType = "str" // gocql returns UUID as string representation
+		} else {
+			pyType = "UUID" // stdlib uuid.UUID for PostgreSQL/MySQL
+		}
+	case sqlTypeLower == "inet":
 		pyType = "str"
 	case sqlTypeLower == "varint", sqlTypeLower == "counter", sqlTypeLower == "duration":
 		pyType = "int"

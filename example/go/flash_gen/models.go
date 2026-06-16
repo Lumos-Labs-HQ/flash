@@ -5,6 +5,7 @@ package flash_gen
 import (
 	"database/sql"
 	"time"
+	"github.com/google/uuid"
 )
 
 type PostStatus string
@@ -54,7 +55,7 @@ type Users struct {
 	Email string `json:"email" db:"email"`
 	Preferences *[]byte `json:"preferences" db:"preferences"`
 	Tags []string `json:"tags" db:"tags"`
-	AvatarHash sql.NullString `json:"avatar_hash" db:"avatar_hash"`
+	AvatarHash *uuid.UUID `json:"avatar_hash" db:"avatar_hash"`
 	Shipping sql.NullString `json:"shipping" db:"shipping"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
@@ -106,7 +107,7 @@ type Subscriptions struct {
 }
 
 type Orders struct {
-	Id string `json:"id" db:"id"`
+	Id uuid.UUID `json:"id" db:"id"`
 	UserId int64 `json:"user_id" db:"user_id"`
 	TotalAmount float64 `json:"total_amount" db:"total_amount"`
 	DiscountPct sql.NullString `json:"discount_pct" db:"discount_pct"`
@@ -129,7 +130,7 @@ type AuditLog struct {
 }
 
 type UserSessions struct {
-	Id string `json:"id" db:"id"`
+	Id uuid.UUID `json:"id" db:"id"`
 	UserId int64 `json:"user_id" db:"user_id"`
 	Token string `json:"token" db:"token"`
 	IpAddress sql.NullString `json:"ip_address" db:"ip_address"`
@@ -162,7 +163,7 @@ type PostTags struct {
 }
 
 type Media struct {
-	Id string `json:"id" db:"id"`
+	Id uuid.UUID `json:"id" db:"id"`
 	UserId int64 `json:"user_id" db:"user_id"`
 	PostId sql.NullInt64 `json:"post_id" db:"post_id"`
 	Type string `json:"type" db:"type"`

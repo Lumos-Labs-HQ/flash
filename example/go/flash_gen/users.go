@@ -5,6 +5,7 @@ package flash_gen
 import (
 	"database/sql"
 	"time"
+	"github.com/google/uuid"
 )
 
 func (q *Queries) Createuser(name string, email string) (CreateuserRow, error) {
@@ -47,7 +48,7 @@ type CreateuserRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -95,7 +96,7 @@ type CreateuserfullRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -142,7 +143,7 @@ type GetuserRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -189,7 +190,7 @@ type GetuserbyemailRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -236,7 +237,7 @@ type UpdateusernameRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -318,7 +319,7 @@ type ListusersRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -365,7 +366,7 @@ type UpsertuserRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -412,7 +413,7 @@ type UpsertuserwithcoalesceRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -716,7 +717,7 @@ type GetrecentusersRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -1876,7 +1877,7 @@ type GetusersinidsRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -2254,7 +2255,7 @@ func (q *Queries) Getordersbyuser(user_id int64, limit int64) ([]Getordersbyuser
 }
 
 type GetordersbyuserRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	TotalAmount float64 `json:"total_amount"`
 	DiscountPct string `json:"discount_pct"`
 	State OrderState `json:"state"`
@@ -2293,7 +2294,7 @@ func (q *Queries) Getordersinstate(state OrderState, limit int64) ([]Getordersin
 }
 
 type GetordersinstateRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	UserId int64 `json:"user_id"`
 	UserName string `json:"user_name"`
 	TotalAmount float64 `json:"total_amount"`
@@ -3126,7 +3127,7 @@ func (q *Queries) Uploadmedia(arg UploadmediaParams) (UploadmediaRow, error) {
 }
 
 type UploadmediaRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	UserId int64 `json:"user_id"`
 	PostId int64 `json:"post_id"`
 	Type string `json:"type"`
@@ -3170,7 +3171,7 @@ func (q *Queries) Getmediabypost(post_id int64) ([]GetmediabypostRow, error) {
 }
 
 type GetmediabypostRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	Type string `json:"type"`
 	Url string `json:"url"`
 	SizeBytes int64 `json:"size_bytes"`
@@ -3211,7 +3212,7 @@ func (q *Queries) Getmediabyuser(user_id int64, limit int64, offset int64) ([]Ge
 }
 
 type GetmediabyuserRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	Type string `json:"type"`
 	Url string `json:"url"`
 	SizeBytes int64 `json:"size_bytes"`
@@ -3250,7 +3251,7 @@ func (q *Queries) Getmediabytype(user_id int64, type_ string) ([]GetmediabytypeR
 }
 
 type GetmediabytypeRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	UserId int64 `json:"user_id"`
 	Url string `json:"url"`
 	SizeBytes int64 `json:"size_bytes"`
@@ -3258,7 +3259,7 @@ type GetmediabytypeRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Deletemedia(id string, user_id int64) (error) {
+func (q *Queries) Deletemedia(id uuid.UUID, user_id int64) (error) {
 	const query = `DELETE FROM media WHERE id = $1 AND user_id = $2;`
 	stmt := q.stmts["Deletemedia_stmt"]
 	if stmt == nil {
@@ -3343,7 +3344,7 @@ func (q *Queries) Getlargemediafiles(size_bytes int64, limit int64) ([]Getlargem
 }
 
 type GetlargemediafilesRow struct {
-	Id string `json:"id"`
+	Id uuid.UUID `json:"id"`
 	UserId int64 `json:"user_id"`
 	Type string `json:"type"`
 	Url string `json:"url"`
@@ -3390,7 +3391,7 @@ type GetuserfeedRow struct {
 	CreatedAt time.Time `json:"created_at"`
 	AuthorId int64 `json:"author_id"`
 	AuthorName string `json:"author_name"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	CommentCount int64 `json:"comment_count"`
 	TagCount int64 `json:"tag_count"`
 }
@@ -3492,7 +3493,7 @@ type GetuserwithstatsRow struct {
 	Email string `json:"email"`
 	Preferences []byte `json:"preferences"`
 	Tags []string `json:"tags"`
-	AvatarHash string `json:"avatar_hash"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
 	Shipping string `json:"shipping"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

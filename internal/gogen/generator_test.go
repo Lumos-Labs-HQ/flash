@@ -38,7 +38,7 @@ func TestMapSQLTypeToGo(t *testing.T) {
 		{"FLOAT", false, "float64"},
 		{"DECIMAL", false, "float64"},
 		{"NUMERIC", false, "float64"},
-		{"UUID", false, "string"},
+		{"UUID", false, "uuid.UUID"},
 		{"JSONB", false, "[]byte"},
 		{"JSON", false, "[]byte"},
 		// Nullable variants
