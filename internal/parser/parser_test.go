@@ -314,3 +314,186 @@ func TestTypeInferrer_MySQLQuestionMark(t *testing.T) {
 		t.Errorf("param2 name = %q, want email", got)
 	}
 }
+
+// ── String literal in GENERATED ALWAYS AS (the bug that started it all) ─────
+
+func TestParseCreateTables_GeneratedColumnWithStringLiteral(t *testing.T) {
+	p := newSchemaParser(t, t.TempDir())
+	sql := `CREATE TABLE IF NOT EXISTS users (
+		id          SERIAL PRIMARY KEY,
+		name        VARCHAR(255) NOT NULL,
+		age         INT,
+		age_range   INT4RANGE GENERATED ALWAYS AS (
+		                CASE WHEN age IS NULL THEN NULL
+		                     WHEN age < 18  THEN '[0,18)'::int4range
+		                     WHEN age < 35  THEN '[18,35)'::int4range
+		                     ELSE                '[55,)'::int4range
+		                END
+		            ) STORED,
+		bio         VARCHAR(500),
+		email       VARCHAR(255) UNIQUE NOT NULL,
+		preferences JSONB DEFAULT '{"theme":"light","notifications":true}',
+		tags        TEXT[] DEFAULT '{}',
+		role        user_role NOT NULL DEFAULT 'user'
+	);`
+	tables := p.parseCreateTables(sql)
+	if len(tables) != 1 {
+		t.Fatalf("expected 1 table, got %d", len(tables))
+	}
+	// Columns after age_range must all be present — this was the bug
+	expected := []string{"id", "name", "age", "age_range", "bio", "email", "preferences", "tags", "role"}
+	got := map[string]bool{}
+	for _, c := range tables[0].Columns {
+		got[c.Name] = true
+	}
+	for _, name := range expected {
+		if !got[name] {
+			t.Errorf("column %q missing — string literal in GENERATED caused early split", name)
+		}
+	}
+}
+
+// ── View column extraction ────────────────────────────────────────────────────
+
+func TestParseCreateViews_PlainView(t *testing.T) {
+	p := newSchemaParser(t, t.TempDir())
+	sql := `CREATE VIEW active_users AS SELECT id, name, email, role, created_at FROM users WHERE isadmin = FALSE;`
+	views := p.parseCreateViews(sql)
+	if len(views) != 1 {
+		t.Fatalf("views = %d, want 1", len(views))
+	}
+	if views[0].Name != "active_users" {
+		t.Errorf("name = %q, want active_users", views[0].Name)
+	}
+	cols := map[string]bool{}
+	for _, c := range views[0].Columns {
+		cols[c.Name] = true
+	}
+	for _, want := range []string{"id", "name", "email", "role", "created_at"} {
+		if !cols[want] {
+			t.Errorf("view column %q missing", want)
+		}
+	}
+}
+
+func TestParseCreateViews_SubqueryColumns(t *testing.T) {
+	// View with subqueries in SELECT — FROM inside subquery must not be treated as main FROM
+	p := newSchemaParser(t, t.TempDir())
+	sql := `CREATE VIEW user_summary AS
+		SELECT u.id, u.name,
+		       (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count,
+		       (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.id) AS comment_count
+		FROM users u;`
+	views := p.parseCreateViews(sql)
+	if len(views) != 1 {
+		t.Fatalf("views = %d, want 1", len(views))
+	}
+	cols := map[string]bool{}
+	for _, c := range views[0].Columns {
+		cols[c.Name] = true
+	}
+	for _, want := range []string{"id", "name", "post_count", "comment_count"} {
+		if !cols[want] {
+			t.Errorf("view column %q missing — non-greedy FROM regex bug", want)
+		}
+	}
+}
+
+// ── Param naming: new patterns ────────────────────────────────────────────────
+
+func TestInferParamName_JsonbOperators(t *testing.T) {
+	ti := NewTypeInferrer()
+	cases := []struct {
+		sql   string
+		param int
+		want  string
+	}{
+		{`SELECT * FROM users WHERE preferences @> $1::jsonb`, 1, "preferences"},
+		{`SELECT * FROM users WHERE tags && $1::text[]`, 1, "tags"},
+		{`UPDATE users SET preferences = preferences || $2 WHERE id = $1`, 2, "preferences"},
+		{`SELECT * FROM users WHERE preferences->>'theme' = $1`, 1, "preferences"},
+		{`SELECT * FROM users WHERE $1 = ANY(tags)`, 1, "tags"},
+		{`SELECT * FROM users WHERE id = ANY($1::bigint[])`, 1, "id"},
+	}
+	for _, c := range cases {
+		if got := ti.InferParamName(c.sql, c.param); got != c.want {
+			t.Errorf("sql=%q param=%d: got %q, want %q", c.sql, c.param, got, c.want)
+		}
+	}
+}
+
+func TestInferParamName_ArrayFunctions(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `UPDATE users SET tags = array_append(tags, $2), updated_at = NOW() WHERE id = $1`
+	if got := ti.InferParamName(sql, 2); got != "tags" {
+		t.Errorf("array_append param2 = %q, want tags", got)
+	}
+	sql2 := `UPDATE users SET tags = array_remove(tags, $2) WHERE id = $1`
+	if got := ti.InferParamName(sql2, 2); got != "tags" {
+		t.Errorf("array_remove param2 = %q, want tags", got)
+	}
+}
+
+func TestInferParamName_CTEQualified(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `WITH ac AS (SELECT * FROM comments) SELECT * FROM ac WHERE ac.post_id = $1 AND ac.rn <= $2`
+	if got := ti.InferParamName(sql, 1); got != "post_id" {
+		t.Errorf("CTE param1 = %q, want post_id", got)
+	}
+	if got := ti.InferParamName(sql, 2); got != "rn" {
+		t.Errorf("CTE param2 = %q, want rn", got)
+	}
+}
+
+func TestInferParamName_FullTextSearch(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `SELECT id, ts_rank(to_tsvector('english', title), plainto_tsquery('english', $1)) FROM posts`
+	if got := ti.InferParamName(sql, 1); got != "search_query" {
+		t.Errorf("tsquery param = %q, want search_query", got)
+	}
+}
+
+func TestInferParamName_InList(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `SELECT * FROM users WHERE name IN ($1, $2, $3)`
+	if got := ti.InferParamName(sql, 1); got != "name1" {
+		t.Errorf("IN param1 = %q, want name1", got)
+	}
+	if got := ti.InferParamName(sql, 2); got != "name2" {
+		t.Errorf("IN param2 = %q, want name2", got)
+	}
+}
+
+func TestInferParamName_CQL_CounterIncrement(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `UPDATE ap.leaderboard SET score = score + ? WHERE game_id = ? AND user_id = ?`
+	if got := ti.InferParamName(sql, 1); got != "score_delta" {
+		t.Errorf("counter param1 = %q, want score_delta", got)
+	}
+	if got := ti.InferParamName(sql, 2); got != "game_id" {
+		t.Errorf("WHERE param2 = %q, want game_id", got)
+	}
+	if got := ti.InferParamName(sql, 3); got != "user_id" {
+		t.Errorf("WHERE param3 = %q, want user_id", got)
+	}
+}
+
+func TestInferParamName_CQL_LimitQuestion(t *testing.T) {
+	ti := NewTypeInferrer()
+	sql := `SELECT * FROM ap.notifications WHERE user_id = ? LIMIT ?`
+	if got := ti.InferParamName(sql, 1); got != "user_id" {
+		t.Errorf("WHERE param1 = %q, want user_id", got)
+	}
+	if got := ti.InferParamName(sql, 2); got != "limit" {
+		t.Errorf("LIMIT param2 = %q, want limit", got)
+	}
+}
+
+func TestInferParamName_MultiColSet(t *testing.T) {
+	ti := NewTypeInferrer()
+	// SET name = $2, email = $3 WHERE id = $1
+	sql := `UPDATE users SET name = $2, email = $3 WHERE id = $1`
+	if got := ti.InferParamName(sql, 3); got != "email" {
+		t.Errorf("SET multi-col $3 = %q, want email", got)
+	}
+}
