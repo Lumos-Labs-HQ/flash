@@ -274,8 +274,22 @@ func findMatchingParen(s string, start int) int {
 		return -1
 	}
 	depth := 0
+	inString := false
 	for i := start; i < len(s); i++ {
+		if inString {
+			if s[i] == '\'' {
+				// Check for escaped quote ''
+				if i+1 < len(s) && s[i+1] == '\'' {
+					i++ // skip escaped quote
+					continue
+				}
+				inString = false
+			}
+			continue
+		}
 		switch s[i] {
+		case '\'':
+			inString = true
 		case '(':
 			depth++
 		case ')':
@@ -352,9 +366,27 @@ func (sm *SchemaManager) splitColumnDefinitions(defs string) []string {
 	var current strings.Builder
 	parenLevel := 0
 	angleLevel := 0
+	inString := false
 
-	for _, char := range defs {
+	for i := 0; i < len(defs); i++ {
+		char := rune(defs[i])
+		if inString {
+			current.WriteByte(defs[i])
+			if char == '\'' {
+				// Handle escaped quote ''
+				if i+1 < len(defs) && defs[i+1] == '\'' {
+					i++
+					current.WriteByte(defs[i])
+				} else {
+					inString = false
+				}
+			}
+			continue
+		}
 		switch char {
+		case '\'':
+			inString = true
+			current.WriteRune(char)
 		case '(':
 			parenLevel++
 			current.WriteRune(char)
@@ -362,10 +394,14 @@ func (sm *SchemaManager) splitColumnDefinitions(defs string) []string {
 			parenLevel--
 			current.WriteRune(char)
 		case '<':
-			angleLevel++
+			// Track angle brackets only at depth 0 (CQL types: frozen<type>, map<k,v>).
+			// Inside parens, < is a SQL comparison operator (e.g. age < 18).
+			if parenLevel == 0 {
+				angleLevel++
+			}
 			current.WriteRune(char)
 		case '>':
-			if angleLevel > 0 {
+			if angleLevel > 0 && parenLevel == 0 {
 				angleLevel--
 			}
 			current.WriteRune(char)
@@ -450,9 +486,15 @@ func (sm *SchemaManager) parseColumnDefinition(colDef string) (types.SchemaColum
 			case ')':
 				parenDepth--
 			case '<':
-				angleDepth++
+				// Only track angle brackets outside parens (CQL types).
+				// Inside parens < is a SQL comparison operator.
+				if parenDepth == 0 {
+					angleDepth++
+				}
 			case '>':
-				angleDepth--
+				if parenDepth == 0 && angleDepth > 0 {
+					angleDepth--
+				}
 			case ' ', '\t':
 				if parenDepth <= 0 && angleDepth <= 0 {
 					typeEnd = i
@@ -507,18 +549,33 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 			if len(rest) > 0 && rest[0] == '(' {
 				depth := 0
 				end := 0
+				inLiteral := false
 				for end < len(rest) {
-					if rest[end] == '(' {
-						depth++
-					} else if rest[end] == ')' {
-						depth--
-						if depth == 0 {
-							end++
-							break
+					if inLiteral {
+						if rest[end] == '\'' {
+							if end+1 < len(rest) && rest[end+1] == '\'' {
+								end++ // skip escaped quote
+							} else {
+								inLiteral = false
+							}
+						}
+					} else {
+						switch rest[end] {
+						case '\'':
+							inLiteral = true
+						case '(':
+							depth++
+						case ')':
+							depth--
+							if depth == 0 {
+								end++
+								goto genDone
+							}
 						}
 					}
 					end++
 				}
+			genDone:
 				if depth == 0 && end > 1 {
 					column.Generated = strings.TrimSpace(rest[1 : end-1])
 					// Generated columns are nullable only if explicitly stated

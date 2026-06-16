@@ -122,7 +122,8 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 		len(diff.NewEnums) == 0 && len(diff.DroppedEnums) == 0 && len(diff.ModifiedEnums) == 0 &&
 		len(diff.NewIndexes) == 0 && len(diff.DroppedIndexes) == 0 &&
 		len(diff.NewKeyspaces) == 0 && len(diff.DroppedKeyspaces) == 0 &&
-		len(diff.NewUDTs) == 0 && len(diff.DroppedUDTs) == 0 {
+		len(diff.NewUDTs) == 0 && len(diff.DroppedUDTs) == 0 &&
+		len(diff.NewRawStatements) == 0 {
 		fmt.Println("No changes detected in schema, creating empty migration template")
 		sqlContent = m.generateEmptyMigrationTemplate(name)
 	} else {
@@ -135,12 +136,12 @@ func (m *Migrator) GenerateMigration(ctx context.Context, name string, schemaPat
 
 	// After generating the migration, update the snapshot so the next
 	// generation diffs against this new schema state.
-	targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs, err := m.schemaManager.ParseSchemaPathAllV2(schemaPath)
+	targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs, targetRaw, err := m.schemaManager.ParseSchemaPathAllV2(schemaPath)
 	if err != nil {
 		return fmt.Errorf("failed to parse target schema for snapshot: %w", err)
 	}
 
-	if err := schema.SaveSchemaSnapshotFullV2(snapshotPath, targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs); err != nil {
+	if err := schema.SaveSchemaSnapshotFullV3(snapshotPath, targetTables, targetEnums, targetIndexes, targetKeyspaces, targetUDTs, targetRaw); err != nil {
 		return fmt.Errorf("failed to save schema snapshot: %w", err)
 	}
 
@@ -253,19 +254,35 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS %s;", udt.Name)}, downStatements...)
 	}
 
+	// UP: Emit raw passthrough statements (DOMAIN types, composite types, PARTITION OF, functions, triggers).
+	// These are emitted before tables since DOMAINs/composite types may be referenced by table columns.
+	for _, raw := range diff.NewRawStatements {
+		upStatements = append(upStatements, raw)
+		hasExecutableSQL = true
+	}
+
 	// UP: Create new tables and their indexes.
 	// Defer MATERIALIZED VIEWs — they must be created AFTER the tables they reference.
 	var viewUpStatements []string
 	var viewDownStatements []string
 	for _, table := range diff.NewTables {
-		if len(table.Columns) == 1 && strings.HasPrefix(table.Columns[0].Name, "/* MATERIALIZED VIEW */") {
+		if len(table.Columns) == 1 && (strings.HasPrefix(table.Columns[0].Name, "/* VIEW */") || strings.HasPrefix(table.Columns[0].Name, "/* MATERIALIZED VIEW */")) {
 			viewSQL := table.Columns[0].Type
+			isMaterialized := strings.HasPrefix(table.Columns[0].Name, "/* MATERIALIZED VIEW */")
 			// Inject IF NOT EXISTS for idempotent apply
 			if !strings.Contains(strings.ToUpper(viewSQL), "IF NOT EXISTS") {
-				viewSQL = strings.Replace(viewSQL, "CREATE MATERIALIZED VIEW", "CREATE MATERIALIZED VIEW IF NOT EXISTS", 1)
+				if isMaterialized {
+					viewSQL = strings.Replace(viewSQL, "CREATE MATERIALIZED VIEW", "CREATE MATERIALIZED VIEW IF NOT EXISTS", 1)
+				} else {
+					viewSQL = strings.Replace(viewSQL, "CREATE VIEW", "CREATE VIEW", 1)
+				}
 			}
 			viewUpStatements = append(viewUpStatements, viewSQL)
-			viewDownStatements = append(viewDownStatements, fmt.Sprintf("DROP MATERIALIZED VIEW IF EXISTS \"%s\";", table.Name))
+			if isMaterialized {
+				viewDownStatements = append(viewDownStatements, fmt.Sprintf("DROP MATERIALIZED VIEW IF EXISTS \"%s\";", table.Name))
+			} else {
+				viewDownStatements = append(viewDownStatements, fmt.Sprintf("DROP VIEW IF EXISTS \"%s\";", table.Name))
+			}
 			// Ensure referenced tables exist: parse the view SQL for table names
 			// and emit CREATE TABLE IF NOT EXISTS for any that aren't in newTables.
 			if m.provider == "scylla" || m.provider == "scylladb" || m.provider == "cassandra" {

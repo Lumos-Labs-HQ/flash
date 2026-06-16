@@ -308,3 +308,17 @@ func (sm *SchemaManager) getColumnChanges(old, new types.SchemaColumn) []string 
 
 	return changes
 }
+
+func (sm *SchemaManager) compareRawStatements(snap *SchemaSnapshot, target []string, diff *types.SchemaDiff) {
+	existing := make(map[string]bool)
+	if snap != nil {
+		for _, s := range snap.RawStatements {
+			existing[s] = true
+		}
+	}
+	for _, s := range target {
+		if !existing[s] {
+			diff.NewRawStatements = append(diff.NewRawStatements, s)
+		}
+	}
+}

@@ -1,7 +1,29 @@
 {
   "version": "2",
-  "generated_at": "2026-06-14T13:25:45.114433569Z",
+  "generated_at": "2026-06-16T05:42:13.665266064Z",
   "tables": [
+    {
+      "Name": "active_users",
+      "Columns": [
+        {
+          "Name": "/* VIEW */",
+          "Type": "CREATE VIEW active_users AS SELECT id, name, email, role, created_at FROM users WHERE isadmin = FALSE",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": null
+    },
     {
       "Name": "categories",
       "Columns": [
@@ -38,6 +60,54 @@
           "IsIdentity": false
         },
         {
+          "Name": "slug",
+          "Type": "VARCHAR(255)",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": true,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "lower(regexp_replace(name, '\\s+', '-', 'g'))",
+          "IsIdentity": false
+        },
+        {
+          "Name": "color",
+          "Type": "hex_color",
+          "Nullable": true,
+          "Default": "'#000000'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "metadata",
+          "Type": "JSONB",
+          "Nullable": true,
+          "Default": "'{}'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
           "Name": "created_at",
           "Type": "TIMESTAMP WITH TIME ZONE",
           "Nullable": false,
@@ -55,6 +125,50 @@
         }
       ],
       "Indexes": []
+    },
+    {
+      "Name": "post_stats",
+      "Columns": [
+        {
+          "Name": "/* MATERIALIZED VIEW */",
+          "Type": "CREATE MATERIALIZED VIEW post_stats AS SELECT p.id AS post_id, p.title, COUNT(c.id) AS comment_count, COUNT(DISTINCT c.user_id) AS unique_commenters, MAX(c.created_at) AS last_comment_at FROM posts p LEFT JOIN comments c ON c.post_id = p.id GROUP BY p.id, p.title",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": null
+    },
+    {
+      "Name": "user_activity_summary",
+      "Columns": [
+        {
+          "Name": "/* VIEW */",
+          "Type": "CREATE VIEW user_activity_summary AS SELECT u.id, u.name, u.email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS post_count, (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.id) AS comment_count, (SELECT MAX(p.created_at) FROM posts p WHERE p.user_id = u.id) AS last_post_at, CASE WHEN u.isadmin THEN 'admin' WHEN (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) \u003e 10 THEN 'power_user' ELSE 'regular' END AS user_type FROM users u",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": null
     },
     {
       "Name": "users",
@@ -140,6 +254,22 @@
           "IsIdentity": false
         },
         {
+          "Name": "age_range",
+          "Type": "INT4RANGE",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "CASE WHEN age IS NULL THEN NULL WHEN age \u003c 18 THEN '[0,18)'::int4range WHEN age \u003c 35 THEN '[18,35)'::int4range WHEN age \u003c 55 THEN '[35,55)'::int4range ELSE '[55,)'::int4range END",
+          "IsIdentity": false
+        },
+        {
           "Name": "bio",
           "Type": "VARCHAR(500)",
           "Nullable": true,
@@ -162,6 +292,70 @@
           "Default": "",
           "IsPrimary": false,
           "IsUnique": true,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "preferences",
+          "Type": "JSONB",
+          "Nullable": true,
+          "Default": "'{\"theme\":\"light\",\"notifications\":true}'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "tags",
+          "Type": "TEXT[]",
+          "Nullable": true,
+          "Default": "'{}'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "avatar_hash",
+          "Type": "UUID",
+          "Nullable": true,
+          "Default": "gen_random_uuid()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "shipping",
+          "Type": "address_type",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
           "IsAutoIncrement": false,
           "ForeignKeyTable": "",
           "ForeignKeyColumn": "",
@@ -208,6 +402,290 @@
           "Type": "user_role",
           "Nullable": false,
           "Default": "'user'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": []
+    },
+    {
+      "Name": "audit_log",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "BIGSERIAL",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": true,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "table_name",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "record_id",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "action",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "action IN ('INSERT', 'UPDATE', 'DELETE')",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "old_data",
+          "Type": "JSONB",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "new_data",
+          "Type": "JSONB",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "changed_by",
+          "Type": "INT",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "users",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "changed_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": []
+    },
+    {
+      "Name": "orders",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "UUID",
+          "Nullable": true,
+          "Default": "gen_random_uuid()",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "user_id",
+          "Type": "INT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "users",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "RESTRICT",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "total_amount",
+          "Type": "NUMERIC(12,2)",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "total_amount \u003e 0",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "discount_pct",
+          "Type": "percentage",
+          "Nullable": true,
+          "Default": "0",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "shipping_addr",
+          "Type": "address_type",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "line_items",
+          "Type": "JSONB",
+          "Nullable": false,
+          "Default": "'[]'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "state",
+          "Type": "order_state",
+          "Nullable": false,
+          "Default": "'pending'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "placed_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "updated_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": false,
+          "Default": "NOW()",
           "IsPrimary": false,
           "IsUnique": false,
           "IsAutoIncrement": false,
@@ -293,6 +771,102 @@
           "Name": "content",
           "Type": "TEXT",
           "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "excerpt",
+          "Type": "TEXT",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "left(content, 200)",
+          "IsIdentity": false
+        },
+        {
+          "Name": "tags",
+          "Type": "TEXT[]",
+          "Nullable": true,
+          "Default": "'{}'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "metadata",
+          "Type": "JSONB",
+          "Nullable": true,
+          "Default": "'{}'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "view_count",
+          "Type": "BIGINT",
+          "Nullable": false,
+          "Default": "0",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "is_featured",
+          "Type": "BOOLEAN",
+          "Nullable": false,
+          "Default": "FALSE",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "published_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": true,
           "Default": "",
           "IsPrimary": false,
           "IsUnique": false,
@@ -408,8 +982,244 @@
           "IsIdentity": false
         },
         {
+          "Name": "parent_id",
+          "Type": "INT",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "comments",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
           "Name": "content",
           "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "created_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": []
+    },
+    {
+      "Name": "subscriptions",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "SERIAL",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": true,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "user_id",
+          "Type": "INT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "users",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "tier",
+          "Type": "subscription_tier",
+          "Nullable": false,
+          "Default": "'free'",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "started_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "expires_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "auto_renew",
+          "Type": "BOOLEAN",
+          "Nullable": false,
+          "Default": "TRUE",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": []
+    },
+    {
+      "Name": "user_sessions",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "UUID",
+          "Nullable": true,
+          "Default": "gen_random_uuid()",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "user_id",
+          "Type": "INT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "users",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "token",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": true,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "ip_address",
+          "Type": "INET",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "user_agent",
+          "Type": "TEXT",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "expires_at",
+          "Type": "TIMESTAMP WITH TIME ZONE",
           "Nullable": false,
           "Default": "",
           "IsPrimary": false,
@@ -460,9 +1270,224 @@
         "user",
         "guest"
       ]
+    },
+    {
+      "name": "subscription_tier",
+      "values": [
+        "free",
+        "pro",
+        "enterprise"
+      ]
+    },
+    {
+      "name": "order_state",
+      "values": [
+        "pending",
+        "confirmed",
+        "shipped",
+        "delivered",
+        "cancelled",
+        "refunded"
+      ]
     }
   ],
-  "indexes": null,
+  "indexes": [
+    {
+      "Name": "idx_users_email",
+      "Table": "users",
+      "Columns": [
+        "email"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_user_id",
+      "Table": "posts",
+      "Columns": [
+        "user_id"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_category_id",
+      "Table": "posts",
+      "Columns": [
+        "category_id"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_status_created",
+      "Table": "posts",
+      "Columns": [
+        "status",
+        "created_at"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_comments_post_id_created",
+      "Table": "comments",
+      "Columns": [
+        "post_id",
+        "created_at"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_comments_user_id",
+      "Table": "comments",
+      "Columns": [
+        "user_id"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_published",
+      "Table": "posts",
+      "Columns": [
+        "published_at",
+        "view_count"
+      ],
+      "Unique": false,
+      "Where": "status = 'published'",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_comments_top_level",
+      "Table": "comments",
+      "Columns": [
+        "post_id",
+        "created_at"
+      ],
+      "Unique": false,
+      "Where": "parent_id IS NULL",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_users_lower_email",
+      "Table": "users",
+      "Columns": [
+        "lower(email)"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": [
+        "lower(email)"
+      ]
+    },
+    {
+      "Name": "idx_posts_title_trgm",
+      "Table": "posts",
+      "Columns": [
+        "title gin_trgm_ops"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "gin",
+      "Expr": null
+    },
+    {
+      "Name": "idx_users_preferences",
+      "Table": "users",
+      "Columns": [
+        "preferences"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "gin",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_metadata",
+      "Table": "posts",
+      "Columns": [
+        "metadata"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "gin",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_tags",
+      "Table": "posts",
+      "Columns": [
+        "tags"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "gin",
+      "Expr": null
+    },
+    {
+      "Name": "idx_users_active_email",
+      "Table": "users",
+      "Columns": [
+        "email"
+      ],
+      "Unique": true,
+      "Where": "isadmin = TRUE",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_covering",
+      "Table": "posts",
+      "Columns": [
+        "user_id",
+        "status"
+      ],
+      "Unique": false,
+      "Where": "status = 'published'",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_post_stats_id",
+      "Table": "post_stats",
+      "Columns": [
+        "post_id"
+      ],
+      "Unique": true,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    }
+  ],
   "keyspaces": null,
-  "udts": null
+  "udts": null,
+  "raw_statements": [
+    "CREATE DOMAIN percentage AS NUMERIC(5,2)\n    CHECK (VALUE \u003e= 0 AND VALUE \u003c= 100);",
+    "CREATE DOMAIN hex_color AS TEXT\n    CHECK (VALUE ~ '^#[0-9a-fA-F]{6}$');",
+    "CREATE TYPE address_type AS (\n    street  TEXT,\n    city    TEXT,\n    state   TEXT,\n    zip     VARCHAR(10),\n    country TEXT\n);",
+    "CREATE TABLE audit_log_2024 PARTITION OF audit_log\n    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');",
+    "CREATE TABLE audit_log_2025 PARTITION OF audit_log\n    FOR VALUES FROM ('2025-01-01') TO ('2026-01-01');",
+    "CREATE TABLE audit_log_2026 PARTITION OF audit_log\n    FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');",
+    "CREATE OR REPLACE FUNCTION update_updated_at_column()\nRETURNS TRIGGER AS $$\nBEGIN\n    NEW.updated_at = NOW();\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;",
+    "CREATE OR REPLACE FUNCTION log_audit_event()\nRETURNS TRIGGER AS $$\nBEGIN\n    IF TG_OP = 'INSERT' THEN\n        INSERT INTO audit_log (table_name, record_id, action, new_data, changed_by, changed_at)\n        VALUES (TG_TABLE_NAME, NEW.id::TEXT, 'INSERT', to_jsonb(NEW), NEW.user_id, NOW());\n        RETURN NEW;\n    ELSIF TG_OP = 'UPDATE' THEN\n        INSERT INTO audit_log (table_name, record_id, action, old_data, new_data, changed_by, changed_at)\n        VALUES (TG_TABLE_NAME, NEW.id::TEXT, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW), NEW.user_id, NOW());\n        RETURN NEW;\n    ELSIF TG_OP = 'DELETE' THEN\n        INSERT INTO audit_log (table_name, record_id, action, old_data, changed_by, changed_at)\n        VALUES (TG_TABLE_NAME, OLD.id::TEXT, 'DELETE', to_jsonb(OLD), OLD.user_id, NOW());\n        RETURN OLD;\n    END IF;\nEND;\n$$ LANGUAGE plpgsql;",
+    "CREATE TRIGGER trg_users_updated_at\n    BEFORE UPDATE ON users\n    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();",
+    "CREATE TRIGGER trg_posts_updated_at\n    BEFORE UPDATE ON posts\n    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();"
+  ]
 }

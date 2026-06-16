@@ -704,9 +704,25 @@ func splitColumnDefs(body string) []string {
 	var defs []string
 	var current strings.Builder
 	depth := 0
+	inString := false
 	for i := 0; i < len(body); i++ {
 		ch := body[i]
+		if inString {
+			current.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < len(body) && body[i+1] == '\'' {
+					i++
+					current.WriteByte(body[i])
+				} else {
+					inString = false
+				}
+			}
+			continue
+		}
 		switch ch {
+		case '\'':
+			inString = true
+			current.WriteByte(ch)
 		case '(':
 			depth++
 			current.WriteByte(ch)
