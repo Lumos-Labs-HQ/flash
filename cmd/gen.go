@@ -62,7 +62,7 @@ Configuration is read from flash.toml`,
 				return fmt.Errorf("failed to generate Go code: %w", err)
 			}
 			fmt.Println("🎉 Go code generated successfully!")
-			fmt.Println("   Output: flash_gen/")
+			fmt.Printf("   Output: %s/\n", cfg.Gen.Go.Out)
 		}
 
 		return nil

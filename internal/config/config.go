@@ -47,6 +47,7 @@ type Gen struct {
 type GoGen struct {
 	Enabled bool   `toml:"enabled"`
 	Driver  string `toml:"driver"` // "database/sql" (default) or "pgx"
+	Out     string `toml:"out"`
 }
 
 type JSGen struct {
@@ -221,6 +222,9 @@ func loadUncached() (*Config, error) {
 	}
 	if cfg.Gen.Python.Out == "" && cfg.Gen.Python.Enabled {
 		cfg.Gen.Python.Out = "flash_gen"
+	}
+	if cfg.Gen.Go.Out == "" {
+		cfg.Gen.Go.Out = "flash_gen"
 	}
 	if cfg.Gen.Python.Enabled && !pythonAsyncSet {
 		cfg.Gen.Python.Async = true

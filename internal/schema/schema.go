@@ -60,7 +60,7 @@ func (sm *SchemaManager) parseSchemaDirAllV2(schemaDir string) ([]types.SchemaTa
 
 	var sqlFiles []string
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") || strings.HasSuffix(entry.Name(), ".cql") {
 			sqlFiles = append(sqlFiles, entry.Name())
 		}
 	}

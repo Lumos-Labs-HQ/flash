@@ -52,8 +52,10 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 	}
 
 	if info, err := os.Stat(schemaDir); err == nil && info.IsDir() {
-		files, err := filepath.Glob(filepath.Join(schemaDir, "*.sql"))
-		if err == nil && len(files) > 0 {
+		files, _ := filepath.Glob(filepath.Join(schemaDir, "*.sql"))
+		cqlFiles, _ := filepath.Glob(filepath.Join(schemaDir, "*.cql"))
+		files = append(files, cqlFiles...)
+		if len(files) > 0 {
 			for _, file := range files {
 				content, err := os.ReadFile(file)
 				if err != nil {

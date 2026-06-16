@@ -17,23 +17,25 @@ const cacheFileName = ".flash_cache.json"
 
 // GenerationCache tracks file checksums and dependencies for incremental generation
 type GenerationCache struct {
-	Version string `json:"version"` // Cache format version for compatibility
+	Version string `json:"version"`
 
-	// File checksums (SHA256)
-	QueryFileChecksums map[string]string `json:"query_file_checksums"` // filename → hash
-	SchemaChecksum     string            `json:"schema_checksum"`      // schema hash
-	ConfigChecksum     string            `json:"config_checksum"`      // config hash
+	QueryFileChecksums     map[string]string `json:"query_file_checksums"`
+	SchemaChecksum         string            `json:"schema_checksum"`
+	ConfigChecksum         string            `json:"config_checksum"`
+	QueryTableDeps         map[string][]string `json:"query_table_deps"`
+	GeneratedFileChecksums map[string]string `json:"generated_file_checksums"`
+	LastGeneration         time.Time         `json:"last_generation"`
 
-	// Dependency tracking (which queries use which tables)
-	QueryTableDeps map[string][]string `json:"query_table_deps"` // query file → table names
+	OutDir string // output directory — not persisted, set by generator
+	mu     sync.RWMutex
+}
 
-	// Generated file checksums (to detect manual edits)
-	GeneratedFileChecksums map[string]string `json:"generated_file_checksums"` // generated file → hash
-
-	// Metadata
-	LastGeneration time.Time `json:"last_generation"`
-
-	mu sync.RWMutex
+// outDir returns the output directory, defaulting to "flash_gen".
+func (c *GenerationCache) outDir() string {
+	if c.OutDir != "" {
+		return c.OutDir
+	}
+	return "flash_gen"
 }
 
 // NewGenerationCache creates a new cache or loads existing one
@@ -285,10 +287,10 @@ func (c *GenerationCache) Save() error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	cacheFile := filepath.Join("flash_gen", cacheFileName)
+	outDir := c.outDir()
+	cacheFile := filepath.Join(outDir, cacheFileName)
 
-	// Ensure directory exists
-	if err := os.MkdirAll("flash_gen", 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
 
@@ -302,7 +304,7 @@ func (c *GenerationCache) Save() error {
 
 // Load reads the cache from disk
 func (c *GenerationCache) Load() error {
-	cacheFile := filepath.Join("flash_gen", cacheFileName)
+	cacheFile := filepath.Join(c.outDir(), cacheFileName)
 
 	data, err := os.ReadFile(cacheFile)
 	if err != nil {

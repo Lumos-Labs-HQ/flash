@@ -73,10 +73,9 @@ func (p *QueryParser) Parse(schema *Schema) ([]*Query, error) {
 		queriesPath = filepath.Join(cwd, queriesPath)
 	}
 
-	files, err := filepath.Glob(filepath.Join(queriesPath, "*.sql"))
-	if err != nil {
-		return nil, err
-	}
+	files, _ := filepath.Glob(filepath.Join(queriesPath, "*.sql"))
+	cqlFiles, _ := filepath.Glob(filepath.Join(queriesPath, "*.cql"))
+	files = append(files, cqlFiles...)
 
 	if len(files) == 0 {
 		return []*Query{}, nil
