@@ -110,11 +110,11 @@ func (a *Adapter) Connect(ctx context.Context, urlStr string) error {
 	}
 
 	cluster := gocql.NewCluster(hostList...)
-	cluster.Consistency = gocql.One  
+	cluster.Consistency = gocql.One
 	cluster.Timeout = 10 * time.Second
 	cluster.ConnectTimeout = 5 * time.Second
 	cluster.NumConns = 1
-	cluster.ProtoVersion = 4         // Skip protocol negotiation round-trips (~7s saved on remote hosts)
+	cluster.ProtoVersion = 4 // Skip protocol negotiation round-trips (~7s saved on remote hosts)
 	// Skip peer discovery and topology event subscriptions — this is a CLI tool
 	// that runs one command then exits. These save ~10s of connection overhead.
 	cluster.DisableInitialHostLookup = true

@@ -131,9 +131,9 @@ func (a *Adapter) CheckUniqueConstraint(_ context.Context, _, _ string) (bool, e
 
 func (a *Adapter) GetTableData(ctx context.Context, tableName string) ([]map[string]interface{}, error) {
 	tblRef := a.qualifiedTableName(tableName)
-	q := a.session.Query(fmt.Sprintf(`SELECT * FROM %s`, tblRef)).WithContext(ctx)
+	q := a.session.Query(fmt.Sprintf(`SELECT * FROM %s`, tblRef))
 	q.PageSize(500)
-	iter := q.Iter()
+	iter := q.IterContext(ctx)
 	defer iter.Close()
 
 	var result []map[string]interface{}

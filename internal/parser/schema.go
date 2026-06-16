@@ -14,7 +14,6 @@ import (
 
 var (
 	createTableRegex    *regexp.Regexp
-	createViewRegex     *regexp.Regexp
 	enumRegex           *regexp.Regexp
 	createKeyspaceRegex *regexp.Regexp
 	createUDTRegex      *regexp.Regexp
@@ -23,7 +22,6 @@ var (
 
 func initRegex() {
 	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s*\(([\s\S]*?)\);`)
-	createViewRegex = regexp.MustCompile(`(?i)CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT`)
 	enumRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 	createKeyspaceRegex = regexp.MustCompile(`(?i)CREATE\s+KEYSPACE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)`)
 	createUDTRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\S+)\s*\(([\s\S]*?)\);`)

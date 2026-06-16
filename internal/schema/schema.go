@@ -510,18 +510,6 @@ func splitStatementsDollarAware(sql string) []string {
 	return result
 }
 
-// isRawStatement is kept for legacy callers but logic is now in extractRawStatements.
-func isRawStatement(stmt string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(stmt))
-	return strings.HasPrefix(upper, "CREATE DOMAIN") ||
-		strings.HasPrefix(upper, "CREATE OR REPLACE FUNCTION") ||
-		strings.HasPrefix(upper, "CREATE FUNCTION") ||
-		strings.HasPrefix(upper, "CREATE OR REPLACE TRIGGER") ||
-		strings.HasPrefix(upper, "CREATE TRIGGER") ||
-		(strings.HasPrefix(upper, "CREATE TABLE") && strings.Contains(upper, "PARTITION OF")) ||
-		isCompositeType(upper)
-}
-
 func (sm *SchemaManager) GenerateSchemaDiff(ctx context.Context, targetSchemaPath string, snapshotPath string) (*types.SchemaDiff, error) {
 	var currentTables []types.SchemaTable
 	var currentEnums []types.SchemaEnum
