@@ -125,6 +125,39 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
 }
 
 func (pt *ProjectTemplate) GetSchema() string {
+	switch pt.DatabaseType {
+	case ScyllaDB:
+		return scyllaSchema
+	default:
+		return pt.getRelationalSchema()
+	}
+}
+
+const scyllaSchema = `-- === KEYSPACE ===
+CREATE KEYSPACE myapp
+WITH replication = {
+    'class': 'SimpleStrategy',
+    'replication_factor': 1
+};
+
+-- === TABLES ===
+
+CREATE TABLE myapp.users (
+    id          uuid PRIMARY KEY,
+    username    text,
+    email       text,
+    full_name   text,
+    is_active   boolean,
+    tags        set<text>,
+    metadata    map<text, text>,
+    created_at  timestamp,
+    updated_at  timestamp
+);
+
+CREATE INDEX myapp.users_email_idx ON myapp.users (email);
+`
+
+func (pt *ProjectTemplate) getRelationalSchema() string {
 	cfg := dbConfigs[pt.DatabaseType]
 	updateClause := ""
 	if pt.DatabaseType == MySQL {
@@ -143,6 +176,9 @@ func (pt *ProjectTemplate) GetSchema() string {
 }
 
 func (pt *ProjectTemplate) GetQueries() string {
+	if pt.DatabaseType == ScyllaDB {
+		return scyllaQueries
+	}
 	cfg := dbConfigs[pt.DatabaseType]
 	param2 := cfg.queryParam
 	if pt.DatabaseType == PostgreSQL {
@@ -158,6 +194,23 @@ INSERT INTO users (name, email)
 VALUES (%s, %s)%s;
 `, cfg.queryParam, cfg.returnType, cfg.queryParam, param2, pt.getReturningClause())
 }
+
+const scyllaQueries = `-- name: CreateUser :exec
+INSERT INTO myapp.users (id, username, email, full_name, is_active, tags, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetUserByID :one
+SELECT * FROM myapp.users WHERE id = ?;
+
+-- name: GetUserByEmail :many
+SELECT id, username, email, created_at FROM myapp.users WHERE email = ? ALLOW FILTERING;
+
+-- name: UpdateUserProfile :exec
+UPDATE myapp.users SET full_name = ?, updated_at = ? WHERE id = ?;
+
+-- name: DeleteUser :exec
+DELETE FROM myapp.users WHERE id = ?;
+`
 
 func (pt *ProjectTemplate) getReturningClause() string {
 	if pt.DatabaseType == MySQL {

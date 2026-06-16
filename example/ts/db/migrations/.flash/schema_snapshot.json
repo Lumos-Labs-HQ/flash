@@ -1,0 +1,49 @@
+{
+  "version": "2",
+  "generated_at": "2026-06-16T16:05:38.241635181Z",
+  "tables": [
+    {
+      "Name": "users",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "ulid",
+          "Nullable": false,
+          "Default": "gen_ulid()",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "name",
+          "Type": "text",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [],
+      "CompositePK": ""
+    }
+  ],
+  "enums": null,
+  "indexes": null,
+  "keyspaces": null,
+  "udts": null
+}
