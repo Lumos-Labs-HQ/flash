@@ -97,39 +97,62 @@ func RemoveComments(sql string) string {
 
 // SplitColumns splits a comma-separated column string, respecting parentheses depth.
 // This handles cases like "col1, COALESCE(a, b), col2" correctly.
+// Also handles CQL angle-bracket types like map<text,text> by tracking <> depth
+// only outside parentheses (inside parens, < is a SQL comparison operator).
 func SplitColumns(columnsStr string) []string {
 	result := make([]string, 0, 8)
 	var current strings.Builder
 	current.Grow(64)
 	parenDepth := 0
 	angleDepth := 0
+	inString := false
 
-	for _, char := range columnsStr {
-		switch char {
+	for i := 0; i < len(columnsStr); i++ {
+		ch := columnsStr[i]
+		if inString {
+			current.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < len(columnsStr) && columnsStr[i+1] == '\'' {
+					i++
+					current.WriteByte(columnsStr[i])
+				} else {
+					inString = false
+				}
+			}
+			continue
+		}
+		switch ch {
+		case '\'':
+			inString = true
+			current.WriteByte(ch)
 		case '(':
 			parenDepth++
-			current.WriteRune(char)
+			current.WriteByte(ch)
 		case ')':
 			parenDepth--
-			current.WriteRune(char)
+			current.WriteByte(ch)
 		case '<':
-			angleDepth++
-			current.WriteRune(char)
+			// Only track angle brackets at depth 0 (CQL types: frozen<type>, map<k,v>).
+			// Inside parens, < is a comparison operator (e.g. age < 18, ARRAY[0,10)).
+			if parenDepth == 0 {
+				angleDepth++
+			}
+			current.WriteByte(ch)
 		case '>':
-			if angleDepth > 0 {
+			if parenDepth == 0 && angleDepth > 0 {
 				angleDepth--
 			}
-			current.WriteRune(char)
+			current.WriteByte(ch)
 		case ',':
 			if parenDepth == 0 && angleDepth == 0 {
 				result = append(result, current.String())
 				current.Reset()
 				current.Grow(64)
 			} else {
-				current.WriteRune(char)
+				current.WriteByte(ch)
 			}
 		default:
-			current.WriteRune(char)
+			current.WriteByte(ch)
 		}
 	}
 

@@ -23,7 +23,7 @@ var (
 
 func initRegex() {
 	createTableRegex = regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s*\(([\s\S]*?)\);`)
-	createViewRegex = regexp.MustCompile(`(?i)CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT`)
+	createViewRegex = regexp.MustCompile(`(?i)CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT`)
 	enumRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\w+)\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 	createKeyspaceRegex = regexp.MustCompile(`(?i)CREATE\s+KEYSPACE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)`)
 	createUDTRegex = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(\S+)\s*\(([\s\S]*?)\);`)
@@ -218,19 +218,118 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 
 func (p *SchemaParser) parseCreateViews(sql string) []*Table {
 	sql = utils.RemoveComments(sql)
-	matches := createViewRegex.FindAllStringSubmatch(sql, -1)
 
-	views := make([]*Table, 0, len(matches))
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
+	views := make([]*Table, 0, 4)
+	viewNameRegex := regexp.MustCompile(`(?i)CREATE\s+(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+AS\s+SELECT\s+`)
+	nameMatches := viewNameRegex.FindAllStringSubmatchIndex(sql, -1)
+
+	for _, loc := range nameMatches {
+		name := stripTableNameQuotes(sql[loc[2]:loc[3]])
+		afterSelect := sql[loc[1]:]
+		// Scope to the current statement only (up to the next top-level semicolon)
+		stmtEnd := findTopLevelSemicolon(afterSelect)
+		if stmtEnd != -1 {
+			afterSelect = afterSelect[:stmtEnd]
 		}
-		views = append(views, &Table{
-			Name:    stripTableNameQuotes(match[1]),
-			Columns: []*Column{{Name: "id", Type: "text", Nullable: false}},
-		})
+		selectList := extractTopLevelSelectList(afterSelect)
+		cols := parseViewSelectColumns(selectList)
+		if len(cols) == 0 {
+			cols = []*Column{{Name: "*", Type: "text", Nullable: true}}
+		}
+		views = append(views, &Table{Name: name, Columns: cols})
 	}
 	return views
+}
+
+// findTopLevelSemicolon returns the index of the first `;` not inside parentheses.
+func findTopLevelSemicolon(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case ';':
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// extractTopLevelSelectList finds the select column list by scanning for the
+// last top-level FROM (not inside parentheses).
+func extractTopLevelSelectList(afterSelect string) string {
+	upper := strings.ToUpper(afterSelect)
+	depth := 0
+	lastFrom := -1
+	for i := 0; i < len(upper); i++ {
+		switch upper[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		default:
+			if depth == 0 && strings.HasPrefix(upper[i:], "FROM ") {
+				lastFrom = i
+			}
+		}
+	}
+	if lastFrom == -1 {
+		return afterSelect
+	}
+	return strings.TrimSpace(afterSelect[:lastFrom])
+}
+
+// parseViewSelectColumns extracts named columns from a SELECT column list.
+// Handles: bare names, aliases (expr AS alias), qualified names (t.col).
+// Returns nil if it looks like SELECT * (wildcard).
+func parseViewSelectColumns(selectList string) []*Column {
+	selectList = strings.TrimSpace(selectList)
+	if selectList == "*" {
+		return nil
+	}
+
+	parts := utils.SplitColumns(selectList)
+	cols := make([]*Column, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "*" {
+			continue
+		}
+		name := extractSelectColumnName(part)
+		if name == "" || name == "*" {
+			continue
+		}
+		cols = append(cols, &Column{Name: name, Type: "text", Nullable: true})
+	}
+	return cols
+}
+
+// extractSelectColumnName returns the output column name for a SELECT expression.
+// Handles: "col", "t.col", "expr AS alias", "expr alias".
+func extractSelectColumnName(expr string) string {
+	upper := strings.ToUpper(expr)
+	// Check for AS alias
+	if idx := strings.LastIndex(upper, " AS "); idx != -1 {
+		return strings.Trim(strings.TrimSpace(expr[idx+4:]), `"`)
+	}
+	// Last word after space (implicit alias)
+	// But only if it doesn't look like a function call — heuristic: no parens in last token
+	parts := strings.Fields(expr)
+	if len(parts) > 1 {
+		last := parts[len(parts)-1]
+		if !strings.Contains(last, "(") && !strings.Contains(last, ")") {
+			return strings.Trim(last, `"`)
+		}
+	}
+	// Qualified name: t.col → col
+	if idx := strings.LastIndex(expr, "."); idx != -1 {
+		return strings.Trim(expr[idx+1:], `"`)
+	}
+	return strings.Trim(expr, `"`)
 }
 
 func (p *SchemaParser) parseCreateEnums(sql string) []*Enum {

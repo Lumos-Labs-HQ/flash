@@ -1,22 +1,29 @@
 {
   "version": "1.0",
   "query_file_checksums": {
-    "db/queries/users.sql": "0b23d253f800735bd186851c4cef5ad2756f1a9ba381bf24a02d644c91331660"
+    "db/queries/users.sql": "56d94b925a23a297445d8034c43526196b710d2b387d915588b187191cde9467"
   },
-  "schema_checksum": "5c1b55106efcfeaa843dee48ba07f67dbc85c3a633b96483e2954408c35acb1d",
+  "schema_checksum": "438c6d105084c3788a86965816fdd89f6403e574e3533fd2e76ad103ff3d3412",
   "config_checksum": "2b830583743a1e919dfbb71ac169ec632459c70b9335cd180c7d80a891f75537",
   "query_table_deps": {
     "db/queries/users.sql": [
+      "post_stats",
+      "orders",
+      "audit_log",
+      "active_commenters",
       "users;",
-      "users",
+      "active_users",
+      "subscriptions",
       "categories",
-      "posts",
       "comments",
-      "user_post_stats"
+      "users",
+      "user_post_stats",
+      "posts",
+      "user_activity_summary"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/users.go": "b2106b9142b6c5c9115df656afbac360d8e63c89ea483e2f7380b05ee47a2c7a"
+    "flash_gen/users.go": "b399c02436adb5f68181a20d221317727a5bdb476819cc28dc6a123888970355"
   },
-  "last_generation": "2026-06-15T11:28:18.494778616+05:30"
+  "last_generation": "2026-06-16T11:22:23.532375304+05:30"
 }

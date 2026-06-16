@@ -73,6 +73,7 @@ type SchemaDiff struct {
 	DroppedKeyspaces   []string
 	NewUDTs            []SchemaUDT // CQL user-defined types (ScyllaDB/Cassandra)
 	DroppedUDTs        []string    // CQL UDT names to drop
+	NewRawStatements   []string    // Raw SQL statements (DOMAIN, PARTITION OF, composite types, triggers, functions)
 }
 
 type SchemaUDT struct {

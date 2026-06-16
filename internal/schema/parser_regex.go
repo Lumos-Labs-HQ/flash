@@ -11,7 +11,7 @@ var (
 	enumRegex  = regexp.MustCompile(`(?i)CREATE\s+TYPE\s+(?:"?(\w+)"?|(\w+))\s+AS\s+ENUM\s*\(\s*([^)]+)\s*\)`)
 
 	// Index — captures (UNIQUE? INDEX name ON table(cols))
-	indexRegex      = regexp.MustCompile(`(?i)CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+ON\s+(\S+)\s*\(([^)]+)\)`)
+	indexRegex      = regexp.MustCompile(`(?i)CREATE\s+(UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?(\S+)\s+ON\s+([^\s(]+)\s*\(((?:[^()]*|\([^)]*\))*)\)`)
 	indexOrderRegex = regexp.MustCompile(`(?i)\s+(ASC|DESC)$`)
 	indexWhereRegex = regexp.MustCompile(`(?i)\s+WHERE\s+(.+)$`)
 	indexUsingRegex = regexp.MustCompile(`(?i)\s+USING\s+(\w+)`)

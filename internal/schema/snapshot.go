@@ -16,13 +16,14 @@ import (
 // against the *last known schema* instead of the live DB, which solves the
 // "unapplied migration" edge case cleanly.
 type SchemaSnapshot struct {
-	Version     string                 `json:"version"`
-	GeneratedAt time.Time              `json:"generated_at"`
-	Tables      []types.SchemaTable    `json:"tables"`
-	Enums       []types.SchemaEnum     `json:"enums"`
-	Indexes     []types.SchemaIndex    `json:"indexes"`
-	Keyspaces   []types.SchemaKeyspace `json:"keyspaces"`
-	UDTs        []types.SchemaUDT      `json:"udts"`
+	Version       string                 `json:"version"`
+	GeneratedAt   time.Time              `json:"generated_at"`
+	Tables        []types.SchemaTable    `json:"tables"`
+	Enums         []types.SchemaEnum     `json:"enums"`
+	Indexes       []types.SchemaIndex    `json:"indexes"`
+	Keyspaces     []types.SchemaKeyspace `json:"keyspaces"`
+	UDTs          []types.SchemaUDT      `json:"udts"`
+	RawStatements []string               `json:"raw_statements,omitempty"`
 }
 
 const snapshotVersion = "2"
@@ -69,18 +70,23 @@ func SaveSchemaSnapshotFull(path string, tables []types.SchemaTable, enums []typ
 }
 
 func SaveSchemaSnapshotFullV2(path string, tables []types.SchemaTable, enums []types.SchemaEnum, indexes interface{}, keyspaces []types.SchemaKeyspace, udts []types.SchemaUDT) error {
+	return SaveSchemaSnapshotFullV3(path, tables, enums, indexes, keyspaces, udts, nil)
+}
+
+func SaveSchemaSnapshotFullV3(path string, tables []types.SchemaTable, enums []types.SchemaEnum, indexes interface{}, keyspaces []types.SchemaKeyspace, udts []types.SchemaUDT, rawStatements []string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
 
 	snap := SchemaSnapshot{
-		Version:     snapshotVersion,
-		GeneratedAt: time.Now().UTC(),
-		Tables:      tables,
-		Enums:       enums,
-		Keyspaces:   keyspaces,
-		UDTs:        udts,
+		Version:       snapshotVersion,
+		GeneratedAt:   time.Now().UTC(),
+		Tables:        tables,
+		Enums:         enums,
+		Keyspaces:     keyspaces,
+		UDTs:          udts,
+		RawStatements: rawStatements,
 	}
 	switch v := indexes.(type) {
 	case []types.SchemaIndex:

@@ -3,6 +3,7 @@ package schema
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
@@ -848,3 +849,71 @@ func TestParseOnUpdateFK(t *testing.T) {
 }
 
 // ── Date/Time type parsing ────────────────────────────────────────────────────
+
+
+func TestParseUsersTableFromExampleSchema(t *testing.T) {
+	sql := `
+CREATE TABLE IF NOT EXISTS users (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(255) NOT NULL,
+    address     VARCHAR(255),
+    isadmin     BOOLEAN NOT NULL DEFAULT FALSE,
+    age         INT CHECK (age >= 0),
+    age_range   INT4RANGE GENERATED ALWAYS AS (
+                    CASE WHEN age IS NULL THEN NULL
+                         WHEN age < 18  THEN '[0,18)'::int4range
+                         WHEN age < 35  THEN '[18,35)'::int4range
+                         WHEN age < 55  THEN '[35,55)'::int4range
+                         ELSE                '[55,)'::int4range
+                    END
+                ) STORED,
+    bio         VARCHAR(500),
+    email       VARCHAR(255) UNIQUE NOT NULL,
+    preferences JSONB DEFAULT '{"theme":"light","notifications":true}',
+    role        VARCHAR(50) NOT NULL DEFAULT 'user',
+    created_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);`
+	sm := NewSchemaManager(nil)
+	table, err := sm.parseCreateTableStatement(sql)
+	if err != nil {
+		t.Fatalf("parseCreateTableStatement failed: %v", err)
+	}
+	if table.Name != "users" {
+		t.Errorf("expected table name 'users', got %q", table.Name)
+	}
+
+	expectedCols := map[string]string{
+		"id":          "SERIAL",
+		"name":        "VARCHAR(255)",
+		"address":     "VARCHAR(255)",
+		"isadmin":     "BOOLEAN",
+		"age":         "INT",
+		"age_range":   "INT4RANGE",
+		"bio":         "VARCHAR(500)",
+		"email":       "VARCHAR(255)",
+		"preferences": "JSONB",
+		"role":        "VARCHAR(50)",
+		"created_at":  "TIMESTAMP WITH TIME ZONE",
+	}
+	if len(table.Columns) != len(expectedCols) {
+		t.Errorf("expected %d columns, got %d", len(expectedCols), len(table.Columns))
+	}
+	for _, col := range table.Columns {
+		expectedType, exists := expectedCols[col.Name]
+		if !exists {
+			t.Errorf("unexpected column %q (type %q)", col.Name, col.Type)
+		} else if col.Type != expectedType {
+			t.Errorf("column %q: expected type %q, got %q", col.Name, expectedType, col.Type)
+		}
+	}
+	for _, col := range table.Columns {
+		if col.Name == "age_range" {
+			if col.Generated == "" {
+				t.Error("age_range should have Generated expression")
+			}
+			if !strings.Contains(col.Generated, "CASE WHEN") {
+				t.Errorf("age_range Generated should contain CASE, got: %s", col.Generated)
+			}
+		}
+	}
+}
