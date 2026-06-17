@@ -409,10 +409,57 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 	return g.generateSQLQueryMethod(code, query)
 }
 
+// modelTypeForQuery returns the model struct name if the query columns exactly match
+// a table in the schema — enabling reuse of the model type instead of a duplicate *Row struct.
+func (g *Generator) modelTypeForQuery(query *parser.Query, columns []*parser.QueryColumn) string {
+	if len(columns) == 0 || g.schema == nil {
+		return ""
+	}
+	tableName := utils.ExtractTableName(query.SQL)
+	if tableName == "" {
+		return ""
+	}
+	// Strip keyspace prefix for lookup
+	if idx := strings.LastIndex(tableName, "."); idx >= 0 {
+		tableName = tableName[idx+1:]
+	}
+	var table *parser.Table
+	for _, t := range g.schema.Tables {
+		name := t.Name
+		if idx := strings.LastIndex(name, "."); idx >= 0 {
+			name = name[idx+1:]
+		}
+		if strings.EqualFold(name, tableName) {
+			table = t
+			break
+		}
+	}
+	if table == nil || len(table.Columns) == 0 {
+		return ""
+	}
+	// Skip views (marker columns)
+	if len(table.Columns) == 1 && (table.Columns[0].Name == "*" || strings.HasPrefix(table.Columns[0].Name, "/*")) {
+		return ""
+	}
+	if len(columns) != len(table.Columns) {
+		return ""
+	}
+	for i, col := range columns {
+		tblCol := table.Columns[i]
+		if !strings.EqualFold(col.Name, tblCol.Name) {
+			return ""
+		}
+	}
+	return utils.ToPascalCase(tableName)
+}
+
 func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)
-
 	methodName := utils.ToPascalCase(query.Name)
+	rowTypeName := methodName + "Row"
+	if mt := g.modelTypeForQuery(query, columns); mt != "" {
+		rowTypeName = mt
+	}
 
 	useStructParams := len(query.Params) > 3
 
@@ -452,13 +499,13 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
-			code.WriteString(fmt.Sprintf("%sRow, error", methodName))
+			code.WriteString(fmt.Sprintf("%s, error", rowTypeName))
 		}
 	case cmd == ":many":
 		if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("[]%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
-			code.WriteString(fmt.Sprintf("[]%sRow, error", methodName))
+			code.WriteString(fmt.Sprintf("[]%s, error", rowTypeName))
 		}
 	case cmd == ":exec" || isModifying:
 		code.WriteString("error")
@@ -505,7 +552,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 					code.WriteString(g.getZeroValue(g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 					code.WriteString(", err\n")
 				} else {
-					code.WriteString(fmt.Sprintf("\t\t\treturn %sRow{}, err\n", methodName))
+					code.WriteString(fmt.Sprintf("\t\t\treturn %s{}, err\n", rowTypeName))
 				}
 			} else {
 				// :many or default (returns slice)
@@ -543,7 +590,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		if len(columns) == 0 {
 			code.WriteString("\n\treturn nil, fmt.Errorf(\"query has no return columns\")\n")
 		} else if len(columns) > 1 {
-			code.WriteString(fmt.Sprintf("\n\tvar result %sRow\n", methodName))
+			code.WriteString(fmt.Sprintf("\n\tvar result %s\n", rowTypeName))
 			if isHotQuery {
 				code.WriteString("\trows, err := stmt.Query(")
 				if len(query.Params) > 0 {
@@ -626,14 +673,14 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 			code.WriteString("\tdefer rows.Close()\n\n")
 
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\titems := make([]%sRow, 0, 8) \n", methodName))
+				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) \n", rowTypeName))
 			} else {
 				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) \n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 			}
 
 			code.WriteString("\tfor rows.Next() {\n")
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\t\tvar item %sRow\n", methodName))
+				code.WriteString(fmt.Sprintf("\t\tvar item %s\n", rowTypeName))
 				code.WriteString("\t\tif err := rows.Scan(")
 				for i, col := range columns {
 					if i > 0 {
@@ -689,7 +736,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 
 	code.WriteString("}\n\n")
 
-	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 {
+	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
 			fieldName := utils.ToPascalCase(col.Name)
@@ -1092,6 +1139,10 @@ func extractCQLMap(typ string) (string, string, bool) {
 func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)
 	methodName := utils.ToPascalCase(query.Name)
+	rowTypeName := methodName + "Row"
+	if mt := g.modelTypeForQuery(query, columns); mt != "" {
+		rowTypeName = mt
+	}
 	useStructParams := len(query.Params) > 3
 
 	cmd := strings.ToLower(query.Cmd)
@@ -1134,7 +1185,7 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 		} else if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
-			code.WriteString(fmt.Sprintf("%sRow, error", methodName))
+			code.WriteString(fmt.Sprintf("%s, error", rowTypeName))
 		}
 	case ":many":
 		if len(columns) == 0 {
@@ -1142,7 +1193,7 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 		} else if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("[]%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
-			code.WriteString(fmt.Sprintf("[]%sRow, error", methodName))
+			code.WriteString(fmt.Sprintf("[]%s, error", rowTypeName))
 		}
 	default:
 		code.WriteString("error")
@@ -1205,7 +1256,7 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 			code.WriteString(fmt.Sprintf("\t\treturn %s, err\n", gocqlZero(g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable))))
 			code.WriteString("\t}\n\treturn result, nil\n")
 		} else {
-			code.WriteString(fmt.Sprintf("\n\tvar result %sRow\n", methodName))
+			code.WriteString(fmt.Sprintf("\n\tvar result %s\n", rowTypeName))
 			code.WriteString("\terr := q.db.Query(query")
 			if len(query.Params) > 0 {
 				code.WriteString(", args...")
@@ -1232,13 +1283,13 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 			code.WriteString("\tfor iter.Scan(&v) {\n\t\titems = append(items, v)\n\t}\n")
 			code.WriteString("\treturn items, iter.Close()\n")
 		} else {
-			code.WriteString(fmt.Sprintf("\n\tvar items []%sRow\n", methodName))
+			code.WriteString(fmt.Sprintf("\n\tvar items []%s\n", rowTypeName))
 			code.WriteString("\titer := q.db.Query(query")
 			if len(query.Params) > 0 {
 				code.WriteString(", args...")
 			}
 			code.WriteString(").WithContext(ctx).Iter()\n")
-			code.WriteString(fmt.Sprintf("\tvar item %sRow\n", methodName))
+			code.WriteString(fmt.Sprintf("\tvar item %s\n", rowTypeName))
 			code.WriteString("\tfor iter.Scan(\n")
 			for _, col := range columns {
 				code.WriteString(fmt.Sprintf("\t\t&item.%s,\n", utils.ToPascalCase(col.Name)))
@@ -1256,7 +1307,7 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	code.WriteString("}\n\n")
 
 	// Row struct
-	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 {
+	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
 			goType := g.mapSQLTypeToGo(col.Type, false)
@@ -1300,6 +1351,10 @@ func gocqlZero(goType string) string {
 func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.Query) error {
 	columns := g.expandWildcardColumns(query)
 	methodName := utils.ToPascalCase(query.Name)
+	rowTypeName := methodName + "Row"
+	if mt := g.modelTypeForQuery(query, columns); mt != "" {
+		rowTypeName = mt
+	}
 	useStructParams := len(query.Params) > 3
 
 	if useStructParams && len(query.Params) > 0 {
@@ -1338,13 +1393,13 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 		if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
-			code.WriteString(fmt.Sprintf("%sRow, error", methodName))
+			code.WriteString(fmt.Sprintf("%s, error", rowTypeName))
 		}
 	case cmd == ":many":
 		if len(columns) == 1 {
 			code.WriteString(fmt.Sprintf("[]%s, error", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 		} else {
-			code.WriteString(fmt.Sprintf("[]%sRow, error", methodName))
+			code.WriteString(fmt.Sprintf("[]%s, error", rowTypeName))
 		}
 	case cmd == ":exec" || isModifying:
 		code.WriteString("error")
@@ -1391,7 +1446,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 		if len(columns) == 0 {
 			code.WriteString("\n\treturn nil, fmt.Errorf(\"query has no return columns\")\n")
 		} else if len(columns) > 1 {
-			code.WriteString(fmt.Sprintf("\n\tvar result %sRow\n", methodName))
+			code.WriteString(fmt.Sprintf("\n\tvar result %s\n", rowTypeName))
 			code.WriteString("\trow := q.db.QueryRow(ctx, query")
 			if len(query.Params) > 0 {
 				code.WriteString(", args...")
@@ -1433,14 +1488,14 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 			code.WriteString("\tdefer rows.Close()\n\n")
 
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\titems := make([]%sRow, 0, 8) \n", methodName))
+				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) \n", rowTypeName))
 			} else {
 				code.WriteString(fmt.Sprintf("\titems := make([]%s, 0, 8) \n", g.mapColumnTypeToGo(columns[0].Type, columns[0].Nullable)))
 			}
 
 			code.WriteString("\tfor rows.Next() {\n")
 			if len(columns) > 1 {
-				code.WriteString(fmt.Sprintf("\t\tvar item %sRow\n", methodName))
+				code.WriteString(fmt.Sprintf("\t\tvar item %s\n", rowTypeName))
 				code.WriteString("\t\tif err := rows.Scan(")
 				for i, col := range columns {
 					if i > 0 {
@@ -1482,7 +1537,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 
 	code.WriteString("}\n\n")
 
-	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 {
+	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
 			fieldName := utils.ToPascalCase(col.Name)

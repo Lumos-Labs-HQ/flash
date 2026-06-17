@@ -8,20 +8,20 @@ import (
 	"github.com/google/uuid"
 )
 
-func (q *Queries) Createuser(name string, email string) (CreateuserRow, error) {
+func (q *Queries) Createuser(name string, email string) (Users, error) {
 	const query = `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *;`
 	stmt := q.stmts["Createuser_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return CreateuserRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Createuser_stmt"] = stmt
 	}
 	args := []interface{}{name, email}
 
-	var result CreateuserRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -37,24 +37,6 @@ func (q *Queries) Createuser(name string, email string) (CreateuserRow, error) {
 	return result, err
 }
 
-type CreateuserRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
-}
-
 type CreateuserfullParams struct {
 	Name string `json:"name"`
 	Email string `json:"email"`
@@ -65,11 +47,11 @@ type CreateuserfullParams struct {
 	Role UserRole `json:"role"`
 }
 
-func (q *Queries) Createuserfull(arg CreateuserfullParams) (CreateuserfullRow, error) {
+func (q *Queries) Createuserfull(arg CreateuserfullParams) (Users, error) {
 	const query = `INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;`
 	args := []interface{}{arg.Name, arg.Email, arg.Age, arg.Bio, arg.Preferences, arg.Tags, arg.Role}
 
-	var result CreateuserfullRow
+	var result Users
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
 		return result, err
@@ -85,38 +67,20 @@ func (q *Queries) Createuserfull(arg CreateuserfullParams) (CreateuserfullRow, e
 	return result, err
 }
 
-type CreateuserfullRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
-}
-
-func (q *Queries) Getuser(id int64) (GetuserRow, error) {
+func (q *Queries) Getuser(id int64) (Users, error) {
 	const query = `SELECT * FROM users WHERE id = $1;`
 	stmt := q.stmts["Getuser_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return GetuserRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Getuser_stmt"] = stmt
 	}
 	args := []interface{}{id}
 
-	var result GetuserRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -132,38 +96,20 @@ func (q *Queries) Getuser(id int64) (GetuserRow, error) {
 	return result, err
 }
 
-type GetuserRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
-}
-
-func (q *Queries) Getuserbyemail(email string) (GetuserbyemailRow, error) {
+func (q *Queries) Getuserbyemail(email string) (Users, error) {
 	const query = `SELECT * FROM users WHERE email = $1;`
 	stmt := q.stmts["Getuserbyemail_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return GetuserbyemailRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Getuserbyemail_stmt"] = stmt
 	}
 	args := []interface{}{email}
 
-	var result GetuserbyemailRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -179,38 +125,20 @@ func (q *Queries) Getuserbyemail(email string) (GetuserbyemailRow, error) {
 	return result, err
 }
 
-type GetuserbyemailRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
-}
-
-func (q *Queries) Updateusername(name string, id int64) (UpdateusernameRow, error) {
+func (q *Queries) Updateusername(name string, id int64) (Users, error) {
 	const query = `UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *;`
 	stmt := q.stmts["Updateusername_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return UpdateusernameRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Updateusername_stmt"] = stmt
 	}
 	args := []interface{}{name, id}
 
-	var result UpdateusernameRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -224,24 +152,6 @@ func (q *Queries) Updateusername(name string, id int64) (UpdateusernameRow, erro
 	}
 	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role)
 	return result, err
-}
-
-type UpdateusernameRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
 }
 
 func (q *Queries) Updateuserrole(role UserRole, id int64) (error) {
@@ -278,7 +188,7 @@ func (q *Queries) Deleteuser(id int64) (error) {
 	return err
 }
 
-func (q *Queries) Listusers(limit int64, offset int64) ([]ListusersRow, error) {
+func (q *Queries) Listusers(limit int64, offset int64) ([]Users, error) {
 	const query = `SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2;`
 	stmt := q.stmts["Listusers_stmt"]
 	if stmt == nil {
@@ -297,9 +207,9 @@ func (q *Queries) Listusers(limit int64, offset int64) ([]ListusersRow, error) {
 	}
 	defer rows.Close()
 
-	items := make([]ListusersRow, 0, 8) 
+	items := make([]Users, 0, 8) 
 	for rows.Next() {
-		var item ListusersRow
+		var item Users
 		if err := rows.Scan(&item.Id, &item.Name, &item.Address, &item.Isadmin, &item.Age, &item.AgeRange, &item.Bio, &item.Email, &item.Preferences, &item.Tags, &item.AvatarHash, &item.Shipping, &item.CreatedAt, &item.UpdatedAt, &item.Role); err != nil {
 			return nil, err
 		}
@@ -308,38 +218,20 @@ func (q *Queries) Listusers(limit int64, offset int64) ([]ListusersRow, error) {
 	return items, rows.Err()
 }
 
-type ListusersRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
-}
-
-func (q *Queries) Upsertuser(name string, email string, role UserRole) (UpsertuserRow, error) {
+func (q *Queries) Upsertuser(name string, email string, role UserRole) (Users, error) {
 	const query = `INSERT INTO users (name, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;`
 	stmt := q.stmts["Upsertuser_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return UpsertuserRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Upsertuser_stmt"] = stmt
 	}
 	args := []interface{}{name, email, role}
 
-	var result UpsertuserRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -355,38 +247,20 @@ func (q *Queries) Upsertuser(name string, email string, role UserRole) (Upsertus
 	return result, err
 }
 
-type UpsertuserRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
-}
-
-func (q *Queries) Upsertuserwithcoalesce(name string, email string, bio string) (UpsertuserwithcoalesceRow, error) {
+func (q *Queries) Upsertuserwithcoalesce(name string, email string, bio string) (Users, error) {
 	const query = `INSERT INTO users (name, email, bio) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;`
 	stmt := q.stmts["Upsertuserwithcoalesce_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return UpsertuserwithcoalesceRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Upsertuserwithcoalesce_stmt"] = stmt
 	}
 	args := []interface{}{name, email, bio}
 
-	var result UpsertuserwithcoalesceRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -400,24 +274,6 @@ func (q *Queries) Upsertuserwithcoalesce(name string, email string, bio string) 
 	}
 	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role)
 	return result, err
-}
-
-type UpsertuserwithcoalesceRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
 }
 
 func (q *Queries) Getuserswithnulladdress() ([]GetuserswithnulladdressRow, error) {
@@ -676,7 +532,7 @@ type GetusersbygeneratedrangeRow struct {
 	AgeRange int64 `json:"age_range"`
 }
 
-func (q *Queries) Getrecentusers(created_at time.Time, limit int64, offset int64) ([]GetrecentusersRow, error) {
+func (q *Queries) Getrecentusers(created_at time.Time, limit int64, offset int64) ([]Users, error) {
 	const query = `SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getrecentusers_stmt"]
 	if stmt == nil {
@@ -695,33 +551,15 @@ func (q *Queries) Getrecentusers(created_at time.Time, limit int64, offset int64
 	}
 	defer rows.Close()
 
-	items := make([]GetrecentusersRow, 0, 8) 
+	items := make([]Users, 0, 8) 
 	for rows.Next() {
-		var item GetrecentusersRow
+		var item Users
 		if err := rows.Scan(&item.Id, &item.Name, &item.Address, &item.Isadmin, &item.Age, &item.AgeRange, &item.Bio, &item.Email, &item.Preferences, &item.Tags, &item.AvatarHash, &item.Shipping, &item.CreatedAt, &item.UpdatedAt, &item.Role); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GetrecentusersRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
 }
 
 func (q *Queries) Getuserpreferences(id int64) (GetuserpreferencesRow, error) {
@@ -1211,7 +1049,7 @@ type GetpostcountbyuserRow struct {
 	CommentCount int64 `json:"comment_count"`
 }
 
-func (q *Queries) Getuserswithmanyposts(min_count string) ([]GetuserswithmanypostsRow, error) {
+func (q *Queries) Getuserswithmanyposts(min_count int64) ([]GetuserswithmanypostsRow, error) {
 	const query = `SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;`
 	stmt := q.stmts["Getuserswithmanyposts_stmt"]
 	if stmt == nil {
@@ -1549,7 +1387,7 @@ type GetuseragestatsRow struct {
 	AvgNameLength float64 `json:"avg_name_length"`
 }
 
-func (q *Queries) Getpostsgroupedbystatus(count_threshold string) ([]GetpostsgroupedbystatusRow, error) {
+func (q *Queries) Getpostsgroupedbystatus(count_threshold int64) ([]GetpostsgroupedbystatusRow, error) {
 	const query = `SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM posts GROUP BY status HAVING COUNT(*) > $1 ORDER BY count DESC;`
 	stmt := q.stmts["Getpostsgroupedbystatus_stmt"]
 	if stmt == nil {
@@ -1836,7 +1674,7 @@ type GetweeklypoststatsRow struct {
 	TotalViews float64 `json:"total_views"`
 }
 
-func (q *Queries) Getusersinids(id int64) ([]GetusersinidsRow, error) {
+func (q *Queries) Getusersinids(id int64) ([]Users, error) {
 	const query = `SELECT * FROM users WHERE id = ANY($1::bigint[]);`
 	stmt := q.stmts["Getusersinids_stmt"]
 	if stmt == nil {
@@ -1855,33 +1693,15 @@ func (q *Queries) Getusersinids(id int64) ([]GetusersinidsRow, error) {
 	}
 	defer rows.Close()
 
-	items := make([]GetusersinidsRow, 0, 8) 
+	items := make([]Users, 0, 8) 
 	for rows.Next() {
-		var item GetusersinidsRow
+		var item Users
 		if err := rows.Scan(&item.Id, &item.Name, &item.Address, &item.Isadmin, &item.Age, &item.AgeRange, &item.Bio, &item.Email, &item.Preferences, &item.Tags, &item.AvatarHash, &item.Shipping, &item.CreatedAt, &item.UpdatedAt, &item.Role); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GetusersinidsRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
 }
 
 func (q *Queries) Getusersbynames(name1 string, name2 string, name3 string) ([]GetusersbynamesRow, error) {
@@ -2018,7 +1838,7 @@ type GetallcontentbyuserRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Getactiveusers(limit int64) ([]GetactiveusersRow, error) {
+func (q *Queries) Getactiveusers(limit int64) ([]ActiveUsers, error) {
 	const query = `SELECT * FROM active_users ORDER BY created_at DESC LIMIT $1;`
 	stmt := q.stmts["Getactiveusers_stmt"]
 	if stmt == nil {
@@ -2037,9 +1857,9 @@ func (q *Queries) Getactiveusers(limit int64) ([]GetactiveusersRow, error) {
 	}
 	defer rows.Close()
 
-	items := make([]GetactiveusersRow, 0, 8) 
+	items := make([]ActiveUsers, 0, 8) 
 	for rows.Next() {
-		var item GetactiveusersRow
+		var item ActiveUsers
 		if err := rows.Scan(&item.Id, &item.Name, &item.Email, &item.Role, &item.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -2048,15 +1868,7 @@ func (q *Queries) Getactiveusers(limit int64) ([]GetactiveusersRow, error) {
 	return items, rows.Err()
 }
 
-type GetactiveusersRow struct {
-	Id string `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Role string `json:"role"`
-	CreatedAt string `json:"created_at"`
-}
-
-func (q *Queries) Getuseractivitysummary(post_count string, comment_count string) ([]GetuseractivitysummaryRow, error) {
+func (q *Queries) Getuseractivitysummary(post_count string, comment_count string) ([]UserActivitySummary, error) {
 	const query = `SELECT * FROM user_activity_summary WHERE post_count > $1 OR comment_count > $2 ORDER BY post_count DESC;`
 	stmt := q.stmts["Getuseractivitysummary_stmt"]
 	if stmt == nil {
@@ -2075,25 +1887,15 @@ func (q *Queries) Getuseractivitysummary(post_count string, comment_count string
 	}
 	defer rows.Close()
 
-	items := make([]GetuseractivitysummaryRow, 0, 8) 
+	items := make([]UserActivitySummary, 0, 8) 
 	for rows.Next() {
-		var item GetuseractivitysummaryRow
+		var item UserActivitySummary
 		if err := rows.Scan(&item.Id, &item.Name, &item.Email, &item.PostCount, &item.CommentCount, &item.LastPostAt, &item.UserType); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GetuseractivitysummaryRow struct {
-	Id string `json:"id"`
-	Name string `json:"name"`
-	Email string `json:"email"`
-	PostCount string `json:"post_count"`
-	CommentCount string `json:"comment_count"`
-	LastPostAt string `json:"last_post_at"`
-	UserType string `json:"user_type"`
 }
 
 func (q *Queries) Refreshpoststats() (error) {
@@ -2112,7 +1914,7 @@ func (q *Queries) Refreshpoststats() (error) {
 	return err
 }
 
-func (q *Queries) Getpoststats(limit int64) ([]GetpoststatsRow, error) {
+func (q *Queries) Getpoststats(limit int64) ([]PostStats, error) {
 	const query = `SELECT * FROM post_stats ORDER BY comment_count DESC LIMIT $1;`
 	stmt := q.stmts["Getpoststats_stmt"]
 	if stmt == nil {
@@ -2131,23 +1933,15 @@ func (q *Queries) Getpoststats(limit int64) ([]GetpoststatsRow, error) {
 	}
 	defer rows.Close()
 
-	items := make([]GetpoststatsRow, 0, 8) 
+	items := make([]PostStats, 0, 8) 
 	for rows.Next() {
-		var item GetpoststatsRow
+		var item PostStats
 		if err := rows.Scan(&item.PostId, &item.Title, &item.CommentCount, &item.UniqueCommenters, &item.LastCommentAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GetpoststatsRow struct {
-	PostId string `json:"post_id"`
-	Title string `json:"title"`
-	CommentCount string `json:"comment_count"`
-	UniqueCommenters string `json:"unique_commenters"`
-	LastCommentAt string `json:"last_comment_at"`
 }
 
 func (q *Queries) Getusersubscriptions(user_id int64) ([]GetusersubscriptionsRow, error) {
@@ -2195,11 +1989,11 @@ type CreatesubscriptionParams struct {
 	AutoRenew bool `json:"auto_renew"`
 }
 
-func (q *Queries) Createsubscription(arg CreatesubscriptionParams) (CreatesubscriptionRow, error) {
+func (q *Queries) Createsubscription(arg CreatesubscriptionParams) (Subscriptions, error) {
 	const query = `INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES ($1, $2, $3, $4) RETURNING *;`
 	args := []interface{}{arg.UserId, arg.Tier, arg.ExpiresAt, arg.AutoRenew}
 
-	var result CreatesubscriptionRow
+	var result Subscriptions
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
 		return result, err
@@ -2213,15 +2007,6 @@ func (q *Queries) Createsubscription(arg CreatesubscriptionParams) (Createsubscr
 	}
 	err = rows.Scan(&result.Id, &result.UserId, &result.Tier, &result.StartedAt, &result.ExpiresAt, &result.AutoRenew)
 	return result, err
-}
-
-type CreatesubscriptionRow struct {
-	Id int64 `json:"id"`
-	UserId int64 `json:"user_id"`
-	Tier SubscriptionTier `json:"tier"`
-	StartedAt time.Time `json:"started_at"`
-	ExpiresAt time.Time `json:"expires_at"`
-	AutoRenew bool `json:"auto_renew"`
 }
 
 func (q *Queries) Getordersbyuser(user_id int64, limit int64) ([]GetordersbyuserRow, error) {
@@ -2485,20 +2270,20 @@ type GetengagementtimeseriesRow struct {
 	EventType string `json:"event_type"`
 }
 
-func (q *Queries) Createcategory(name string) (CreatecategoryRow, error) {
+func (q *Queries) Createcategory(name string) (Categories, error) {
 	const query = `INSERT INTO categories (name) VALUES ($1) RETURNING *;`
 	stmt := q.stmts["Createcategory_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return CreatecategoryRow{}, err
+			return Categories{}, err
 		}
 		q.stmts["Createcategory_stmt"] = stmt
 	}
 	args := []interface{}{name}
 
-	var result CreatecategoryRow
+	var result Categories
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -2514,15 +2299,6 @@ func (q *Queries) Createcategory(name string) (CreatecategoryRow, error) {
 	return result, err
 }
 
-type CreatecategoryRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Color string `json:"color"`
-	Metadata []byte `json:"metadata"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 type CreatepostParams struct {
 	UserId int64 `json:"user_id"`
 	CategoryId int64 `json:"category_id"`
@@ -2530,11 +2306,11 @@ type CreatepostParams struct {
 	Content string `json:"content"`
 }
 
-func (q *Queries) Createpost(arg CreatepostParams) (CreatepostRow, error) {
+func (q *Queries) Createpost(arg CreatepostParams) (Posts, error) {
 	const query = `INSERT INTO posts (user_id, category_id, title, content) VALUES ($1, $2, $3, $4) RETURNING *;`
 	args := []interface{}{arg.UserId, arg.CategoryId, arg.Title, arg.Content}
 
-	var result CreatepostRow
+	var result Posts
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
 		return result, err
@@ -2550,37 +2326,20 @@ func (q *Queries) Createpost(arg CreatepostParams) (CreatepostRow, error) {
 	return result, err
 }
 
-type CreatepostRow struct {
-	Id int64 `json:"id"`
-	UserId int64 `json:"user_id"`
-	CategoryId int64 `json:"category_id"`
-	Title string `json:"title"`
-	Content string `json:"content"`
-	Excerpt string `json:"excerpt"`
-	Tags []string `json:"tags"`
-	Metadata []byte `json:"metadata"`
-	ViewCount int64 `json:"view_count"`
-	IsFeatured bool `json:"is_featured"`
-	PublishedAt time.Time `json:"published_at"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Status PostStatus `json:"status"`
-}
-
-func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (CreatecommentRow, error) {
+func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (Comments, error) {
 	const query = `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;`
 	stmt := q.stmts["Createcomment_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return CreatecommentRow{}, err
+			return Comments{}, err
 		}
 		q.stmts["Createcomment_stmt"] = stmt
 	}
 	args := []interface{}{post_id, user_id, content}
 
-	var result CreatecommentRow
+	var result Comments
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -2594,15 +2353,6 @@ func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (C
 	}
 	err = rows.Scan(&result.Id, &result.PostId, &result.UserId, &result.ParentId, &result.Content, &result.CreatedAt)
 	return result, err
-}
-
-type CreatecommentRow struct {
-	Id int64 `json:"id"`
-	PostId int64 `json:"post_id"`
-	UserId int64 `json:"user_id"`
-	ParentId int64 `json:"parent_id"`
-	Content string `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) Deleteoldusers(created_at time.Time) (error) {
@@ -2647,11 +2397,11 @@ type CreatenotificationParams struct {
 	Metadata []byte `json:"metadata"`
 }
 
-func (q *Queries) Createnotification(arg CreatenotificationParams) (CreatenotificationRow, error) {
+func (q *Queries) Createnotification(arg CreatenotificationParams) (Notifications, error) {
 	const query = `INSERT INTO notifications (user_id, type, title, body, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING *;`
 	args := []interface{}{arg.UserId, arg.Type, arg.Title, arg.Body, arg.Metadata}
 
-	var result CreatenotificationRow
+	var result Notifications
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
 		return result, err
@@ -2667,18 +2417,7 @@ func (q *Queries) Createnotification(arg CreatenotificationParams) (Createnotifi
 	return result, err
 }
 
-type CreatenotificationRow struct {
-	Id int64 `json:"id"`
-	UserId int64 `json:"user_id"`
-	Type string `json:"type"`
-	Title string `json:"title"`
-	Body string `json:"body"`
-	IsRead bool `json:"is_read"`
-	Metadata []byte `json:"metadata"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-func (q *Queries) Getnotificationsbyuser(user_id int64, limit int64, offset int64) ([]GetnotificationsbyuserRow, error) {
+func (q *Queries) Getnotificationsbyuser(user_id int64, limit int64, offset int64) ([]Notifications, error) {
 	const query = `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getnotificationsbyuser_stmt"]
 	if stmt == nil {
@@ -2697,26 +2436,15 @@ func (q *Queries) Getnotificationsbyuser(user_id int64, limit int64, offset int6
 	}
 	defer rows.Close()
 
-	items := make([]GetnotificationsbyuserRow, 0, 8) 
+	items := make([]Notifications, 0, 8) 
 	for rows.Next() {
-		var item GetnotificationsbyuserRow
+		var item Notifications
 		if err := rows.Scan(&item.Id, &item.UserId, &item.Type, &item.Title, &item.Body, &item.IsRead, &item.Metadata, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GetnotificationsbyuserRow struct {
-	Id int64 `json:"id"`
-	UserId int64 `json:"user_id"`
-	Type string `json:"type"`
-	Title string `json:"title"`
-	Body string `json:"body"`
-	IsRead bool `json:"is_read"`
-	Metadata []byte `json:"metadata"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) Getunreadcount(user_id int64) (int64, error) {
@@ -2838,20 +2566,20 @@ type GetnotificationsbytypeRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Createtag(name string, slug string, color string) (CreatetagRow, error) {
+func (q *Queries) Createtag(name string, slug string, color string) (Tags, error) {
 	const query = `INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;`
 	stmt := q.stmts["Createtag_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return CreatetagRow{}, err
+			return Tags{}, err
 		}
 		q.stmts["Createtag_stmt"] = stmt
 	}
 	args := []interface{}{name, slug, color}
 
-	var result CreatetagRow
+	var result Tags
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -2867,27 +2595,20 @@ func (q *Queries) Createtag(name string, slug string, color string) (CreatetagRo
 	return result, err
 }
 
-type CreatetagRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Color string `json:"color"`
-}
-
-func (q *Queries) Gettagbyslug(slug string) (GettagbyslugRow, error) {
+func (q *Queries) Gettagbyslug(slug string) (Tags, error) {
 	const query = `SELECT * FROM tags WHERE slug = $1;`
 	stmt := q.stmts["Gettagbyslug_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return GettagbyslugRow{}, err
+			return Tags{}, err
 		}
 		q.stmts["Gettagbyslug_stmt"] = stmt
 	}
 	args := []interface{}{slug}
 
-	var result GettagbyslugRow
+	var result Tags
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -2903,14 +2624,7 @@ func (q *Queries) Gettagbyslug(slug string) (GettagbyslugRow, error) {
 	return result, err
 }
 
-type GettagbyslugRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Color string `json:"color"`
-}
-
-func (q *Queries) Getalltags() ([]GetalltagsRow, error) {
+func (q *Queries) Getalltags() ([]Tags, error) {
 	const query = `SELECT * FROM tags ORDER BY name ASC;`
 	stmt := q.stmts["Getalltags_stmt"]
 	if stmt == nil {
@@ -2928,22 +2642,15 @@ func (q *Queries) Getalltags() ([]GetalltagsRow, error) {
 	}
 	defer rows.Close()
 
-	items := make([]GetalltagsRow, 0, 8) 
+	items := make([]Tags, 0, 8) 
 	for rows.Next() {
-		var item GetalltagsRow
+		var item Tags
 		if err := rows.Scan(&item.Id, &item.Name, &item.Slug, &item.Color); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GetalltagsRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Color string `json:"color"`
 }
 
 func (q *Queries) Addtagtopost(post_id int64, tag_id int64) (error) {
@@ -2980,7 +2687,7 @@ func (q *Queries) Removetagfrompost(post_id int64, tag_id int64) (error) {
 	return err
 }
 
-func (q *Queries) Gettagsforpost(post_id int64) ([]GettagsforpostRow, error) {
+func (q *Queries) Gettagsforpost(post_id int64) ([]Tags, error) {
 	const query = `SELECT t.id, t.name, t.slug, t.color FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1 ORDER BY t.name;`
 	stmt := q.stmts["Gettagsforpost_stmt"]
 	if stmt == nil {
@@ -2999,22 +2706,15 @@ func (q *Queries) Gettagsforpost(post_id int64) ([]GettagsforpostRow, error) {
 	}
 	defer rows.Close()
 
-	items := make([]GettagsforpostRow, 0, 8) 
+	items := make([]Tags, 0, 8) 
 	for rows.Next() {
-		var item GettagsforpostRow
+		var item Tags
 		if err := rows.Scan(&item.Id, &item.Name, &item.Slug, &item.Color); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
-}
-
-type GettagsforpostRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-	Color string `json:"color"`
 }
 
 func (q *Queries) Getpostsbytag(slug string, limit int64, offset int64) ([]GetpostsbytagRow, error) {
@@ -3106,11 +2806,11 @@ type UploadmediaParams struct {
 	Metadata []byte `json:"metadata"`
 }
 
-func (q *Queries) Uploadmedia(arg UploadmediaParams) (UploadmediaRow, error) {
+func (q *Queries) Uploadmedia(arg UploadmediaParams) (Media, error) {
 	const query = `INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;`
 	args := []interface{}{arg.UserId, arg.PostId, arg.Type, arg.Url, arg.SizeBytes, arg.MimeType, arg.Width, arg.Height, arg.Metadata}
 
-	var result UploadmediaRow
+	var result Media
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
 		return result, err
@@ -3124,20 +2824,6 @@ func (q *Queries) Uploadmedia(arg UploadmediaParams) (UploadmediaRow, error) {
 	}
 	err = rows.Scan(&result.Id, &result.UserId, &result.PostId, &result.Type, &result.Url, &result.SizeBytes, &result.MimeType, &result.Width, &result.Height, &result.Metadata, &result.CreatedAt)
 	return result, err
-}
-
-type UploadmediaRow struct {
-	Id uuid.UUID `json:"id"`
-	UserId int64 `json:"user_id"`
-	PostId int64 `json:"post_id"`
-	Type string `json:"type"`
-	Url string `json:"url"`
-	SizeBytes int64 `json:"size_bytes"`
-	MimeType string `json:"mime_type"`
-	Width int64 `json:"width"`
-	Height int64 `json:"height"`
-	Metadata []byte `json:"metadata"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) Getmediabypost(post_id int64) ([]GetmediabypostRow, error) {
@@ -3453,20 +3139,20 @@ func (q *Queries) Bulkmarknotificationsread(user_id int64, id int64) (error) {
 	return err
 }
 
-func (q *Queries) Getuserwithstats(id int64) (GetuserwithstatsRow, error) {
+func (q *Queries) Getuserwithstats(id int64) (Users, error) {
 	const query = `SELECT u.*, (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') AS published_posts, (SELECT COUNT(*) FROM comments WHERE user_id = u.id) AS total_comments, (SELECT COUNT(*) FROM notifications WHERE user_id = u.id AND is_read = FALSE) AS unread_notifications, (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used FROM users u WHERE u.id = $1;`
 	stmt := q.stmts["Getuserwithstats_stmt"]
 	if stmt == nil {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return GetuserwithstatsRow{}, err
+			return Users{}, err
 		}
 		q.stmts["Getuserwithstats_stmt"] = stmt
 	}
 	args := []interface{}{id}
 
-	var result GetuserwithstatsRow
+	var result Users
 	rows, err := stmt.Query(args...)
 	if err != nil {
 		return result, err
@@ -3480,23 +3166,5 @@ func (q *Queries) Getuserwithstats(id int64) (GetuserwithstatsRow, error) {
 	}
 	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role)
 	return result, err
-}
-
-type GetuserwithstatsRow struct {
-	Id int64 `json:"id"`
-	Name string `json:"name"`
-	Address string `json:"address"`
-	Isadmin bool `json:"isadmin"`
-	Age int64 `json:"age"`
-	AgeRange int64 `json:"age_range"`
-	Bio string `json:"bio"`
-	Email string `json:"email"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	AvatarHash uuid.UUID `json:"avatar_hash"`
-	Shipping string `json:"shipping"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Role UserRole `json:"role"`
 }
 

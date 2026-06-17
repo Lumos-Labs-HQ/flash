@@ -128,6 +128,9 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 		}
 		for _, param := range query.Params {
 			pt := g.mapParamTypeToGo(param.Type)
+			if strings.Contains(pt, "time.Time") {
+				needsTime = true
+			}
 			if strings.Contains(pt, "gocql.UUID") {
 				needsGocqlImport = true
 			}
