@@ -35,6 +35,12 @@ func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table,
 }
 
 func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table *Table, paramName string) string {
+	// Well-known param names that always have fixed types
+	switch strings.ToLower(paramName) {
+	case "limit", "offset", "count", "min_count", "count_threshold":
+		return "INTEGER"
+	}
+
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) ||
@@ -235,7 +241,7 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 
 		// WHERE clause with ? params
-		whereRegex := regexp.MustCompile(`(?i)WHERE\s+(.+?)(?:LIMIT|ORDER|GROUP|HAVING|ALLOW|$)`)
+		whereRegex := regexp.MustCompile(`(?is)WHERE\s+([\s\S]+?)(?:LIMIT|ORDER|GROUP|HAVING|ALLOW FILTERING|$)`)
 		if whereMatch := whereRegex.FindStringSubmatch(sql); len(whereMatch) > 1 {
 			whereClause := whereMatch[1]
 			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*\?`)
@@ -252,10 +258,10 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 				return allContains[paramIndex-1][1]
 			}
 			// Also match >= AND <= BETWEEN-style
-			whereParamIndex := paramIndex
+			whereParamIndex := paramIndex - len(matches)
 			rangePattern := regexp.MustCompile(`(?i)(\w+)\s*(>=|<=|>|<)\s*\?`)
 			rangeMatches := rangePattern.FindAllStringSubmatch(whereClause, -1)
-			if whereParamIndex <= len(rangeMatches) {
+			if whereParamIndex > 0 && whereParamIndex <= len(rangeMatches) {
 				return rangeMatches[whereParamIndex-1][1]
 			}
 		}
