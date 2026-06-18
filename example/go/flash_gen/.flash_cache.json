@@ -7,28 +7,28 @@
   "config_checksum": "2b830583743a1e919dfbb71ac169ec632459c70b9335cd180c7d80a891f75537",
   "query_table_deps": {
     "db/queries/users.sql": [
-      "users",
+      "user_post_stats",
       "active_commenters",
-      "post_stats",
-      "orders",
+      "users;",
+      "subscriptions",
       "audit_log",
       "comments",
-      "users;",
+      "media",
+      "users",
       "active_users",
-      "subscriptions",
+      "user_activity_summary",
+      "post_stats",
       "categories",
-      "post_tags",
-      "user_post_stats",
-      "posts",
       "notifications",
       "tags",
-      "media",
-      "user_activity_summary"
+      "posts",
+      "orders",
+      "post_tags"
     ]
   },
   "generated_file_checksums": {
     "flash_gen/users.go": "5db367a352e26a27671faa939ebf628fd29da72bb61ee29655e1d1716e178a59"
   },
-  "last_generation": "2026-06-18T03:09:09.745511507+05:30",
+  "last_generation": "2026-06-18T12:13:12.513360145+05:30",
   "OutDir": "flash_gen"
 }

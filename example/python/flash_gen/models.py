@@ -4,48 +4,163 @@ from dataclasses import dataclass
 from typing import Optional, List, Literal
 from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 @dataclass
 class Users:
     id: int
     name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
     email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+@dataclass
+class Categories:
+    id: int
+    name: str
+    slug: Optional[str]
+    color: Optional[str]
+    metadata: Optional[dict]
     created_at: datetime
 
 @dataclass
 class Posts:
     id: int
     user_id: int
+    category_id: int
     title: str
     content: str
+    excerpt: Optional[str]
+    tags: Optional[List[str]]
+    metadata: Optional[dict]
+    view_count: int
+    is_featured: bool
+    published_at: Optional[datetime]
     created_at: datetime
+    updated_at: datetime
+    status: Literal['draft', 'published', 'archived']
 
 @dataclass
 class Comments:
     id: int
     post_id: int
+    user_id: int
+    parent_id: Optional[int]
     content: str
     created_at: datetime
 
 @dataclass
-class Likes:
+class Subscriptions:
     id: int
-    post_id: int
-    comment_id: int
-    content: str
-    created_at: datetime
+    user_id: int
+    tier: Literal['free', 'pro', 'enterprise']
+    started_at: datetime
+    expires_at: Optional[datetime]
+    auto_renew: bool
 
 @dataclass
-class Shares:
+class Orders:
+    id: UUID
+    user_id: int
+    total_amount: Decimal
+    discount_pct: Optional[str]
+    shipping_addr: str
+    line_items: dict
+    state: Literal['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded']
+    placed_at: datetime
+    updated_at: datetime
+
+@dataclass
+class AuditLog:
     id: int
-    post_id: int
-    content: str
+    table_name: str
+    record_id: str
+    action: str
+    old_data: Optional[dict]
+    new_data: Optional[dict]
+    changed_by: Optional[int]
+    changed_at: datetime
+
+@dataclass
+class UserSessions:
+    id: UUID
+    user_id: int
+    token: str
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    expires_at: datetime
     created_at: datetime
 
 @dataclass
-class Hshsh:
+class Notifications:
+    id: int
+    user_id: int
+    type: str
+    title: str
+    body: str
+    is_read: bool
+    metadata: Optional[dict]
+    created_at: datetime
+
+@dataclass
+class Tags:
     id: int
     name: str
-    email: str
+    slug: str
+    color: Optional[str]
+
+@dataclass
+class PostTags:
+    post_id: int
+    tag_id: int
+
+@dataclass
+class Media:
+    id: UUID
+    user_id: int
+    post_id: Optional[int]
+    type: str
+    url: str
+    size_bytes: int
+    mime_type: str
+    width: Optional[int]
+    height: Optional[int]
+    metadata: Optional[dict]
     created_at: datetime
+
+@dataclass
+class ActiveUsers:
+    id: Optional[str]
+    name: Optional[str]
+    email: Optional[str]
+    role: Optional[str]
+    created_at: Optional[str]
+
+@dataclass
+class UserActivitySummary:
+    id: Optional[str]
+    name: Optional[str]
+    email: Optional[str]
+    post_count: Optional[str]
+    comment_count: Optional[str]
+    last_post_at: Optional[str]
+    user_type: Optional[str]
+
+@dataclass
+class PostStats:
+    post_id: Optional[str]
+    title: Optional[str]
+    comment_count: Optional[str]
+    unique_commenters: Optional[str]
+    last_comment_at: Optional[str]
 

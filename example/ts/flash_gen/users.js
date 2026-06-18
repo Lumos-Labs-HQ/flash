@@ -6,14 +6,940 @@ class Queries {
     this._stmts = new Map();
   }
 
-  async getusers() {
-    let stmt = this._stmts.get('getusers');
+  async createUser(name, email) {
+    let stmt = this._stmts.get('createUser');
     if (!stmt) {
-      stmt = { name: 'getusers', text: `SELECT name FROM users;` };
-      this._stmts.set('getusers', stmt);
+      stmt = `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *;`;
+      this._stmts.set('createUser', stmt);
+    }
+    const r = await this.db.query(stmt, [name, email]);
+    return r.rows[0] || null;
+  }
+
+  async createUserFull(name, email, age, bio, preferences, tags, role) {
+    let stmt = this._stmts.get('createUserFull');
+    if (!stmt) {
+      stmt = `INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;`;
+      this._stmts.set('createUserFull', stmt);
+    }
+    const r = await this.db.query(stmt, [name, email, age, bio, preferences, tags, role]);
+    return r.rows[0] || null;
+  }
+
+  async getUser(id) {
+    let stmt = this._stmts.get('getUser');
+    if (!stmt) {
+      stmt = `SELECT * FROM users WHERE id = $1;`;
+      this._stmts.set('getUser', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rows[0] || null;
+  }
+
+  async getUserByEmail(email) {
+    let stmt = this._stmts.get('getUserByEmail');
+    if (!stmt) {
+      stmt = `SELECT * FROM users WHERE email = $1;`;
+      this._stmts.set('getUserByEmail', stmt);
+    }
+    const r = await this.db.query(stmt, [email]);
+    return r.rows[0] || null;
+  }
+
+  async updateUserName(name, id) {
+    let stmt = this._stmts.get('updateUserName');
+    if (!stmt) {
+      stmt = `UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *;`;
+      this._stmts.set('updateUserName', stmt);
+    }
+    const r = await this.db.query(stmt, [name, id]);
+    return r.rows[0] || null;
+  }
+
+  async updateUserRole(role, id) {
+    let stmt = this._stmts.get('updateUserRole');
+    if (!stmt) {
+      stmt = `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2;`;
+      this._stmts.set('updateUserRole', stmt);
+    }
+    const r = await this.db.query(stmt, [role, id]);
+    return r.rowCount;
+  }
+
+  async deleteUser(id) {
+    let stmt = this._stmts.get('deleteUser');
+    if (!stmt) {
+      stmt = `DELETE FROM users WHERE id = $1;`;
+      this._stmts.set('deleteUser', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rowCount;
+  }
+
+  async listUsers(limit, offset) {
+    let stmt = this._stmts.get('listUsers');
+    if (!stmt) {
+      stmt = `SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2;`;
+      this._stmts.set('listUsers', stmt);
+    }
+    const r = await this.db.query(stmt, [limit, offset]);
+  }
+
+  async upsertUser(name, email, role) {
+    let stmt = this._stmts.get('upsertUser');
+    if (!stmt) {
+      stmt = `INSERT INTO users (name, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;`;
+      this._stmts.set('upsertUser', stmt);
+    }
+    const r = await this.db.query(stmt, [name, email, role]);
+    return r.rows[0] || null;
+  }
+
+  async upsertUserWithCOALESCE(name, email, bio) {
+    let stmt = this._stmts.get('upsertUserWithCOALESCE');
+    if (!stmt) {
+      stmt = `INSERT INTO users (name, email, bio) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;`;
+      this._stmts.set('upsertUserWithCOALESCE', stmt);
+    }
+    const r = await this.db.query(stmt, [name, email, bio]);
+    return r.rows[0] || null;
+  }
+
+  async getUsersWithNullAddress() {
+    let stmt = this._stmts.get('getUsersWithNullAddress');
+    if (!stmt) {
+      stmt = { name: 'getUsersWithNullAddress', text: `SELECT id, name, email FROM users WHERE address IS NULL;` };
+      this._stmts.set('getUsersWithNullAddress', stmt);
     }
     const r = await this.db.query(stmt);
-    return r.rows.map(row => row.name);
+  }
+
+  async getUsersWithBio() {
+    let stmt = this._stmts.get('getUsersWithBio');
+    if (!stmt) {
+      stmt = { name: 'getUsersWithBio', text: `SELECT id, name, email, COALESCE(bio, '') AS bio FROM users WHERE bio IS NOT NULL;` };
+      this._stmts.set('getUsersWithBio', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getUserDisplayInfo(id) {
+    let stmt = this._stmts.get('getUserDisplayInfo');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, COALESCE(address, 'No address provided') AS display_address, COALESCE(age, 0) AS age, COALESCE(bio, '') AS bio FROM users WHERE id = $1;`;
+      this._stmts.set('getUserDisplayInfo', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rows[0] || null;
+  }
+
+  async searchUsersWithCOALESCE(name, email, age, limit, offset) {
+    let stmt = this._stmts.get('searchUsersWithCOALESCE');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;`;
+      this._stmts.set('searchUsersWithCOALESCE', stmt);
+    }
+    const r = await this.db.query(stmt, [name, email, age, limit, offset]);
+  }
+
+  async getUsersCreatedBetween(created_at, created_at2) {
+    let stmt = this._stmts.get('getUsersCreatedBetween');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, created_at FROM users WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC;`;
+      this._stmts.set('getUsersCreatedBetween', stmt);
+    }
+    const r = await this.db.query(stmt, [created_at, created_at2]);
+  }
+
+  async getUsersByAgeRange(age, age2) {
+    let stmt = this._stmts.get('getUsersByAgeRange');
+    if (!stmt) {
+      stmt = `SELECT id, name, age, age_range FROM users WHERE age >= $1 AND age <= $2 ORDER BY age;`;
+      this._stmts.set('getUsersByAgeRange', stmt);
+    }
+    const r = await this.db.query(stmt, [age, age2]);
+  }
+
+  async getUsersByGeneratedRange(age_range) {
+    let stmt = this._stmts.get('getUsersByGeneratedRange');
+    if (!stmt) {
+      stmt = `SELECT id, name, age, age_range FROM users WHERE age_range @> $1::integer;`;
+      this._stmts.set('getUsersByGeneratedRange', stmt);
+    }
+    const r = await this.db.query(stmt, [age_range]);
+  }
+
+  async getRecentUsers(created_at, limit, offset) {
+    let stmt = this._stmts.get('getRecentUsers');
+    if (!stmt) {
+      stmt = `SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;`;
+      this._stmts.set('getRecentUsers', stmt);
+    }
+    const r = await this.db.query(stmt, [created_at, limit, offset]);
+  }
+
+  async getUserPreferences(id) {
+    let stmt = this._stmts.get('getUserPreferences');
+    if (!stmt) {
+      stmt = `SELECT id, name, preferences FROM users WHERE id = $1;`;
+      this._stmts.set('getUserPreferences', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rows[0] || null;
+  }
+
+  async updateUserPreferences(preferences, id) {
+    let stmt = this._stmts.get('updateUserPreferences');
+    if (!stmt) {
+      stmt = `UPDATE users SET preferences = preferences || $1, updated_at = NOW() WHERE id = $2;`;
+      this._stmts.set('updateUserPreferences', stmt);
+    }
+    const r = await this.db.query(stmt, [preferences, id]);
+    return r.rowCount;
+  }
+
+  async findUsersByJsonKey(preferences) {
+    let stmt = this._stmts.get('findUsersByJsonKey');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, preferences FROM users WHERE preferences->>'theme' = $1;`;
+      this._stmts.set('findUsersByJsonKey', stmt);
+    }
+    const r = await this.db.query(stmt, [preferences]);
+  }
+
+  async findUsersByJsonContains(preferences) {
+    let stmt = this._stmts.get('findUsersByJsonContains');
+    if (!stmt) {
+      stmt = `SELECT id, name, email FROM users WHERE preferences @> $1::jsonb;`;
+      this._stmts.set('findUsersByJsonContains', stmt);
+    }
+    const r = await this.db.query(stmt, [preferences]);
+  }
+
+  async getUsersWithTag(tags) {
+    let stmt = this._stmts.get('getUsersWithTag');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, tags FROM users WHERE $1 = ANY(tags);`;
+      this._stmts.set('getUsersWithTag', stmt);
+    }
+    const r = await this.db.query(stmt, [tags]);
+  }
+
+  async getUsersWithAnyTag(tags) {
+    let stmt = this._stmts.get('getUsersWithAnyTag');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, tags FROM users WHERE tags && $1::text[];`;
+      this._stmts.set('getUsersWithAnyTag', stmt);
+    }
+    const r = await this.db.query(stmt, [tags]);
+  }
+
+  async addUserTag(tags, id) {
+    let stmt = this._stmts.get('addUserTag');
+    if (!stmt) {
+      stmt = `UPDATE users SET tags = array_append(tags, $1), updated_at = NOW() WHERE id = $2;`;
+      this._stmts.set('addUserTag', stmt);
+    }
+    const r = await this.db.query(stmt, [tags, id]);
+    return r.rowCount;
+  }
+
+  async removeUserTag(tags, id) {
+    let stmt = this._stmts.get('removeUserTag');
+    if (!stmt) {
+      stmt = `UPDATE users SET tags = array_remove(tags, $1), updated_at = NOW() WHERE id = $2;`;
+      this._stmts.set('removeUserTag', stmt);
+    }
+    const r = await this.db.query(stmt, [tags, id]);
+    return r.rowCount;
+  }
+
+  async getUserShippingAddress(id) {
+    let stmt = this._stmts.get('getUserShippingAddress');
+    if (!stmt) {
+      stmt = `SELECT id, name, shipping, (shipping).city AS shipping_city, (shipping).country AS shipping_country FROM users WHERE id = $1;`;
+      this._stmts.set('getUserShippingAddress', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rows[0] || null;
+  }
+
+  async updateUserShipping(shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id) {
+    let stmt = this._stmts.get('updateUserShipping');
+    if (!stmt) {
+      stmt = `UPDATE users SET shipping = ROW($1, $2, $3, $4, $5), updated_at = NOW() WHERE id = $6;`;
+      this._stmts.set('updateUserShipping', stmt);
+    }
+    const r = await this.db.query(stmt, [shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id]);
+    return r.rowCount;
+  }
+
+  async getComplexUserAnalytics(total_posts, total_comments, limit) {
+    let stmt = this._stmts.get('getComplexUserAnalytics');
+    if (!stmt) {
+      stmt = `WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;`;
+      this._stmts.set('getComplexUserAnalytics', stmt);
+    }
+    const r = await this.db.query(stmt, [total_posts, total_comments, limit]);
+  }
+
+  async getPostWithActiveCommenters(rn, post_id) {
+    let stmt = this._stmts.get('getPostWithActiveCommenters');
+    if (!stmt) {
+      stmt = `WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;`;
+      this._stmts.set('getPostWithActiveCommenters', stmt);
+    }
+    const r = await this.db.query(stmt, [rn, post_id]);
+  }
+
+  async getUserPostRankings(limit) {
+    let stmt = this._stmts.get('getUserPostRankings');
+    if (!stmt) {
+      stmt = `SELECT u.id, u.name, COUNT(p.id) AS post_count, RANK() OVER (ORDER BY COUNT(p.id) DESC) AS post_rank, DENSE_RANK() OVER (ORDER BY COUNT(p.id) DESC) AS dense_post_rank, ROW_NUMBER() OVER (ORDER BY COUNT(p.id) DESC, u.name ASC) AS row_num FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name ORDER BY post_count DESC LIMIT $1;`;
+      this._stmts.set('getUserPostRankings', stmt);
+    }
+    const r = await this.db.query(stmt, [limit]);
+  }
+
+  async getUserTrendingPosts(user_id, limit) {
+    let stmt = this._stmts.get('getUserTrendingPosts');
+    if (!stmt) {
+      stmt = `SELECT p.id, p.title, p.user_id, p.view_count, p.created_at, LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS prev_view_count, LEAD(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS next_view_count, p.view_count - LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS view_delta FROM posts p WHERE p.user_id = $1 ORDER BY p.created_at DESC LIMIT $2;`;
+      this._stmts.set('getUserTrendingPosts', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, limit]);
+  }
+
+  async getPostCountByUser(user_id) {
+    let stmt = this._stmts.get('getPostCountByUser');
+    if (!stmt) {
+      stmt = `SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;`;
+      this._stmts.set('getPostCountByUser', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id]);
+    return r.rows[0] || null;
+  }
+
+  async getUsersWithManyPosts(min_count) {
+    let stmt = this._stmts.get('getUsersWithManyPosts');
+    if (!stmt) {
+      stmt = `SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;`;
+      this._stmts.set('getUsersWithManyPosts', stmt);
+    }
+    const r = await this.db.query(stmt, [min_count]);
+  }
+
+  async getPostsWithCommentCount(limit, offset) {
+    let stmt = this._stmts.get('getPostsWithCommentCount');
+    if (!stmt) {
+      stmt = `SELECT p.id, p.title, p.created_at, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count, (SELECT COUNT(DISTINCT c2.user_id) FROM comments c2 WHERE c2.post_id = p.id) AS unique_commenters, (SELECT MAX(c3.created_at) FROM comments c3 WHERE c3.post_id = p.id) AS last_comment_at FROM posts p WHERE p.status = 'published' ORDER BY comment_count DESC LIMIT $1 OFFSET $2;`;
+      this._stmts.set('getPostsWithCommentCount', stmt);
+    }
+    const r = await this.db.query(stmt, [limit, offset]);
+  }
+
+  async getUsersWithActivityLevel() {
+    let stmt = this._stmts.get('getUsersWithActivityLevel');
+    if (!stmt) {
+      stmt = { name: 'getUsersWithActivityLevel', text: `SELECT id, name, email, created_at, CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 'new' WHEN created_at >= NOW() - INTERVAL '30 days' THEN 'recent' WHEN created_at >= NOW() - INTERVAL '1 year' THEN 'established' ELSE 'veteran' END AS account_age_category, CASE WHEN isadmin THEN 'administrator' ELSE role::TEXT END AS effective_role FROM users ORDER BY created_at DESC;` };
+      this._stmts.set('getUsersWithActivityLevel', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getPostWithComments(id) {
+    let stmt = this._stmts.get('getPostWithComments');
+    if (!stmt) {
+      stmt = `SELECT p.id AS post_id, p.title, p.content, u.name AS author, c.content AS comment_text, cu.name AS commenter FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = $1;`;
+      this._stmts.set('getPostWithComments', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+  }
+
+  async getPostDetailsWithAllRelations(id) {
+    let stmt = this._stmts.get('getPostDetailsWithAllRelations');
+    if (!stmt) {
+      stmt = `SELECT p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id AS author_id, u.name AS author_name, u.email AS author_email, u.role AS author_role, u.isadmin AS author_is_admin, cat.id AS category_id, cat.name AS category_name, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT c.user_id) AS unique_commenters, STRING_AGG(DISTINCT c.content, ' | ' ORDER BY c.content) AS all_comments, ARRAY_AGG(DISTINCT cu.name ORDER BY cu.name) AS commenter_names, MAX(c.created_at) AS last_comment_date, LENGTH(p.content) AS content_length, EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 AS hours_since_created FROM posts p INNER JOIN users u ON p.user_id = u.id INNER JOIN categories cat ON p.category_id = cat.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = $1 GROUP BY p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id, u.name, u.email, u.role, u.isadmin, cat.id, cat.name;`;
+      this._stmts.set('getPostDetailsWithAllRelations', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rows[0] || null;
+  }
+
+  async countUsersByRole(role) {
+    let stmt = this._stmts.get('countUsersByRole');
+    if (!stmt) {
+      stmt = { name: 'countUsersByRole', text: `SELECT COUNT(*) FROM users WHERE role = $1;` };
+      this._stmts.set('countUsersByRole', stmt);
+    }
+    stmt.values = [role];
+    const r = await this.db.query(stmt);
+    return r.rows[0] ? Object.values(r.rows[0])[0] : null;
+  }
+
+  async countUsers() {
+    let stmt = this._stmts.get('countUsers');
+    if (!stmt) {
+      stmt = { name: 'countUsers', text: `SELECT COUNT(*) AS total_users, COUNT(CASE WHEN isadmin = TRUE THEN 1 END) AS admin_count, COUNT(CASE WHEN isadmin = FALSE THEN 1 END) AS regular_count FROM users;` };
+      this._stmts.set('countUsers', stmt);
+    }
+    const r = await this.db.query(stmt);
+    return r.rows[0] || null;
+  }
+
+  async getUserRoleCount() {
+    let stmt = this._stmts.get('getUserRoleCount');
+    if (!stmt) {
+      stmt = { name: 'getUserRoleCount', text: `SELECT role, COUNT(*) AS count FROM users GROUP BY role ORDER BY count DESC;` };
+      this._stmts.set('getUserRoleCount', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getUserAgeStats() {
+    let stmt = this._stmts.get('getUserAgeStats');
+    if (!stmt) {
+      stmt = { name: 'getUserAgeStats', text: `SELECT MIN(created_at) AS first_joined, MAX(created_at) AS last_joined, COUNT(*) AS total, AVG(COALESCE(age, 0))::NUMERIC(10,2) AS avg_age, AVG(LENGTH(COALESCE(name, '')))::NUMERIC(10,2) AS avg_name_length FROM users;` };
+      this._stmts.set('getUserAgeStats', stmt);
+    }
+    const r = await this.db.query(stmt);
+    return r.rows[0] || null;
+  }
+
+  async getPostsGroupedByStatus(count_threshold) {
+    let stmt = this._stmts.get('getPostsGroupedByStatus');
+    if (!stmt) {
+      stmt = `SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM posts GROUP BY status HAVING COUNT(*) > $1 ORDER BY count DESC;`;
+      this._stmts.set('getPostsGroupedByStatus', stmt);
+    }
+    const r = await this.db.query(stmt, [count_threshold]);
+  }
+
+  async getDistinctCommenters() {
+    let stmt = this._stmts.get('getDistinctCommenters');
+    if (!stmt) {
+      stmt = { name: 'getDistinctCommenters', text: `SELECT DISTINCT u.id, u.name, u.email FROM users u JOIN comments c ON u.id = c.user_id ORDER BY u.name;` };
+      this._stmts.set('getDistinctCommenters', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getLatestPostPerUser() {
+    let stmt = this._stmts.get('getLatestPostPerUser');
+    if (!stmt) {
+      stmt = { name: 'getLatestPostPerUser', text: `SELECT DISTINCT ON (user_id) user_id, id AS post_id, title, status, created_at FROM posts ORDER BY user_id, created_at DESC;` };
+      this._stmts.set('getLatestPostPerUser', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async searchUsers(name, email, limit, offset) {
+    let stmt = this._stmts.get('searchUsers');
+    if (!stmt) {
+      stmt = `SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $2 ORDER BY name ASC LIMIT $3 OFFSET $4;`;
+      this._stmts.set('searchUsers', stmt);
+    }
+    const r = await this.db.query(stmt, [name, email, limit, offset]);
+  }
+
+  async searchPostsByTitle(title, limit, offset) {
+    let stmt = this._stmts.get('searchPostsByTitle');
+    if (!stmt) {
+      stmt = `SELECT id, title, status, created_at FROM posts WHERE title ILIKE $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`;
+      this._stmts.set('searchPostsByTitle', stmt);
+    }
+    const r = await this.db.query(stmt, [title, limit, offset]);
+  }
+
+  async fullTextSearchPosts(search_query, limit) {
+    let stmt = this._stmts.get('fullTextSearchPosts');
+    if (!stmt) {
+      stmt = `SELECT id, title, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $1)) AS rank FROM posts WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $1) ORDER BY rank DESC LIMIT $2;`;
+      this._stmts.set('fullTextSearchPosts', stmt);
+    }
+    const r = await this.db.query(stmt, [search_query, limit]);
+  }
+
+  async getUserRegistrationStats() {
+    let stmt = this._stmts.get('getUserRegistrationStats');
+    if (!stmt) {
+      stmt = { name: 'getUserRegistrationStats', text: `SELECT EXTRACT(YEAR FROM created_at)::INT AS year, EXTRACT(MONTH FROM created_at)::INT AS month, COUNT(*) AS signups FROM users GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at) ORDER BY year DESC, month DESC;` };
+      this._stmts.set('getUserRegistrationStats', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getWeeklyPostStats(created_at) {
+    let stmt = this._stmts.get('getWeeklyPostStats');
+    if (!stmt) {
+      stmt = `SELECT DATE_TRUNC('week', created_at) AS week_start, COUNT(*) AS posts_created, SUM(view_count) AS total_views FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('week', created_at) ORDER BY week_start DESC;`;
+      this._stmts.set('getWeeklyPostStats', stmt);
+    }
+    const r = await this.db.query(stmt, [created_at]);
+  }
+
+  async getUsersInIds(id) {
+    let stmt = this._stmts.get('getUsersInIds');
+    if (!stmt) {
+      stmt = `SELECT * FROM users WHERE id = ANY($1::bigint[]);`;
+      this._stmts.set('getUsersInIds', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+  }
+
+  async getUsersByNames(name1, name2, name3) {
+    let stmt = this._stmts.get('getUsersByNames');
+    if (!stmt) {
+      stmt = `SELECT id, name, email FROM users WHERE name IN ($1, $2, $3);`;
+      this._stmts.set('getUsersByNames', stmt);
+    }
+    const r = await this.db.query(stmt, [name1, name2, name3]);
+  }
+
+  async getUsersWhoCommented() {
+    let stmt = this._stmts.get('getUsersWhoCommented');
+    if (!stmt) {
+      stmt = { name: 'getUsersWhoCommented', text: `SELECT id, name, email FROM users u WHERE EXISTS (SELECT 1 FROM comments c WHERE c.user_id = u.id) ORDER BY u.name;` };
+      this._stmts.set('getUsersWhoCommented', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getUsersWithNoPosts() {
+    let stmt = this._stmts.get('getUsersWithNoPosts');
+    if (!stmt) {
+      stmt = { name: 'getUsersWithNoPosts', text: `SELECT id, name, email FROM users u WHERE NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = u.id) ORDER BY u.created_at DESC;` };
+      this._stmts.set('getUsersWithNoPosts', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async getAllContentByUser(user_id, limit) {
+    let stmt = this._stmts.get('getAllContentByUser');
+    if (!stmt) {
+      stmt = `SELECT 'post' AS content_type, id::TEXT AS content_id, title AS content_summary, created_at FROM posts WHERE user_id = $1 UNION ALL SELECT 'comment' AS content_type, id::TEXT AS content_id, LEFT(content, 100) AS content_summary, created_at FROM comments WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2;`;
+      this._stmts.set('getAllContentByUser', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, limit]);
+  }
+
+  async getActiveUsers(limit) {
+    let stmt = this._stmts.get('getActiveUsers');
+    if (!stmt) {
+      stmt = `SELECT * FROM active_users ORDER BY created_at DESC LIMIT $1;`;
+      this._stmts.set('getActiveUsers', stmt);
+    }
+    const r = await this.db.query(stmt, [limit]);
+  }
+
+  async getUserActivitySummary(post_count, comment_count) {
+    let stmt = this._stmts.get('getUserActivitySummary');
+    if (!stmt) {
+      stmt = `SELECT * FROM user_activity_summary WHERE post_count > $1 OR comment_count > $2 ORDER BY post_count DESC;`;
+      this._stmts.set('getUserActivitySummary', stmt);
+    }
+    const r = await this.db.query(stmt, [post_count, comment_count]);
+  }
+
+  async refreshPostStats() {
+    let stmt = this._stmts.get('refreshPostStats');
+    if (!stmt) {
+      stmt = { name: 'refreshPostStats', text: `REFRESH MATERIALIZED VIEW CONCURRENTLY post_stats;` };
+      this._stmts.set('refreshPostStats', stmt);
+    }
+    const r = await this.db.query(stmt);
+    return r.rowCount;
+  }
+
+  async getPostStats(limit) {
+    let stmt = this._stmts.get('getPostStats');
+    if (!stmt) {
+      stmt = `SELECT * FROM post_stats ORDER BY comment_count DESC LIMIT $1;`;
+      this._stmts.set('getPostStats', stmt);
+    }
+    const r = await this.db.query(stmt, [limit]);
+  }
+
+  async getUserSubscriptions(user_id) {
+    let stmt = this._stmts.get('getUserSubscriptions');
+    if (!stmt) {
+      stmt = `SELECT s.id, s.tier, s.started_at, s.expires_at, s.auto_renew FROM subscriptions s WHERE s.user_id = $1 ORDER BY s.started_at DESC;`;
+      this._stmts.set('getUserSubscriptions', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id]);
+  }
+
+  async createSubscription(user_id, tier, expires_at, auto_renew) {
+    let stmt = this._stmts.get('createSubscription');
+    if (!stmt) {
+      stmt = `INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES ($1, $2, $3, $4) RETURNING *;`;
+      this._stmts.set('createSubscription', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, tier, expires_at, auto_renew]);
+    return r.rows[0] || null;
+  }
+
+  async getOrdersByUser(user_id, limit) {
+    let stmt = this._stmts.get('getOrdersByUser');
+    if (!stmt) {
+      stmt = `SELECT id, total_amount, discount_pct, state, shipping_addr, placed_at FROM orders WHERE user_id = $1 ORDER BY placed_at DESC LIMIT $2;`;
+      this._stmts.set('getOrdersByUser', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, limit]);
+  }
+
+  async getOrdersInState(state, limit) {
+    let stmt = this._stmts.get('getOrdersInState');
+    if (!stmt) {
+      stmt = `SELECT o.id, o.user_id, u.name AS user_name, o.total_amount, o.state, o.placed_at FROM orders o JOIN users u ON o.user_id = u.id WHERE o.state = $1 ORDER BY o.placed_at DESC LIMIT $2;`;
+      this._stmts.set('getOrdersInState', stmt);
+    }
+    const r = await this.db.query(stmt, [state, limit]);
+  }
+
+  async getAuditLogForUser(changed_by, limit, offset) {
+    let stmt = this._stmts.get('getAuditLogForUser');
+    if (!stmt) {
+      stmt = `SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = $1 ORDER BY changed_at DESC LIMIT $2 OFFSET $3;`;
+      this._stmts.set('getAuditLogForUser', stmt);
+    }
+    const r = await this.db.query(stmt, [changed_by, limit, offset]);
+  }
+
+  async getAuditLogForTable(table_name, limit) {
+    let stmt = this._stmts.get('getAuditLogForTable');
+    if (!stmt) {
+      stmt = `SELECT id, table_name, record_id, action, changed_by, changed_at FROM audit_log WHERE table_name = $1 ORDER BY changed_at DESC LIMIT $2;`;
+      this._stmts.set('getAuditLogForTable', stmt);
+    }
+    const r = await this.db.query(stmt, [table_name, limit]);
+  }
+
+  async getDashboardStats() {
+    let stmt = this._stmts.get('getDashboardStats');
+    if (!stmt) {
+      stmt = { name: 'getDashboardStats', text: `SELECT (SELECT COUNT(*) FROM users) AS total_users, (SELECT COUNT(*) FROM posts) AS total_posts, (SELECT COUNT(*) FROM comments) AS total_comments, (SELECT COUNT(*) FROM posts WHERE status = 'published') AS published_posts, (SELECT COUNT(*) FROM posts WHERE created_at >= NOW() - INTERVAL '7 days') AS posts_this_week, (SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '7 days') AS signups_this_week, (SELECT COUNT(*) FROM comments WHERE created_at >= NOW() - INTERVAL '24 hours') AS comments_last_24h, (SELECT COUNT(*) FROM orders WHERE state = 'pending') AS pending_orders;` };
+      this._stmts.set('getDashboardStats', stmt);
+    }
+    const r = await this.db.query(stmt);
+    return r.rows[0] || null;
+  }
+
+  async getTopCommenters(limit) {
+    let stmt = this._stmts.get('getTopCommenters');
+    if (!stmt) {
+      stmt = `SELECT u.id, u.name, u.email, COUNT(c.id) AS comment_count, RANK() OVER (ORDER BY COUNT(c.id) DESC) AS rank FROM users u JOIN comments c ON u.id = c.user_id GROUP BY u.id, u.name, u.email ORDER BY comment_count DESC LIMIT $1;`;
+      this._stmts.set('getTopCommenters', stmt);
+    }
+    const r = await this.db.query(stmt, [limit]);
+  }
+
+  async getEngagementTimeSeries(created_at) {
+    let stmt = this._stmts.get('getEngagementTimeSeries');
+    if (!stmt) {
+      stmt = `SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;`;
+      this._stmts.set('getEngagementTimeSeries', stmt);
+    }
+    const r = await this.db.query(stmt, [created_at]);
+  }
+
+  async createCategory(name) {
+    let stmt = this._stmts.get('createCategory');
+    if (!stmt) {
+      stmt = `INSERT INTO categories (name) VALUES ($1) RETURNING *;`;
+      this._stmts.set('createCategory', stmt);
+    }
+    const r = await this.db.query(stmt, [name]);
+    return r.rows[0] || null;
+  }
+
+  async createPost(user_id, category_id, title, content) {
+    let stmt = this._stmts.get('createPost');
+    if (!stmt) {
+      stmt = `INSERT INTO posts (user_id, category_id, title, content) VALUES ($1, $2, $3, $4) RETURNING *;`;
+      this._stmts.set('createPost', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, category_id, title, content]);
+    return r.rows[0] || null;
+  }
+
+  async createComment(post_id, user_id, content) {
+    let stmt = this._stmts.get('createComment');
+    if (!stmt) {
+      stmt = `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;`;
+      this._stmts.set('createComment', stmt);
+    }
+    const r = await this.db.query(stmt, [post_id, user_id, content]);
+    return r.rows[0] || null;
+  }
+
+  async deleteOldUsers(created_at) {
+    let stmt = this._stmts.get('deleteOldUsers');
+    if (!stmt) {
+      stmt = `DELETE FROM users WHERE created_at < $1 AND isadmin = FALSE;`;
+      this._stmts.set('deleteOldUsers', stmt);
+    }
+    const r = await this.db.query(stmt, [created_at]);
+    return r.rowCount;
+  }
+
+  async updateUserTimestamp(updated_at, id) {
+    let stmt = this._stmts.get('updateUserTimestamp');
+    if (!stmt) {
+      stmt = `UPDATE users SET updated_at = $1 WHERE id = $2;`;
+      this._stmts.set('updateUserTimestamp', stmt);
+    }
+    const r = await this.db.query(stmt, [updated_at, id]);
+    return r.rowCount;
+  }
+
+  async createNotification(user_id, type, title, body, metadata) {
+    let stmt = this._stmts.get('createNotification');
+    if (!stmt) {
+      stmt = `INSERT INTO notifications (user_id, type, title, body, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
+      this._stmts.set('createNotification', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, type, title, body, metadata]);
+    return r.rows[0] || null;
+  }
+
+  async getNotificationsByUser(user_id, limit, offset) {
+    let stmt = this._stmts.get('getNotificationsByUser');
+    if (!stmt) {
+      stmt = `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`;
+      this._stmts.set('getNotificationsByUser', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, limit, offset]);
+  }
+
+  async getUnreadCount(user_id) {
+    let stmt = this._stmts.get('getUnreadCount');
+    if (!stmt) {
+      stmt = { name: 'getUnreadCount', text: `SELECT COUNT(*) AS unread_count FROM notifications WHERE user_id = $1 AND is_read = FALSE;` };
+      this._stmts.set('getUnreadCount', stmt);
+    }
+    stmt.values = [user_id];
+    const r = await this.db.query(stmt);
+    return r.rows[0] ? r.rows[0].unread_count : null;
+  }
+
+  async markNotificationRead(id, user_id) {
+    let stmt = this._stmts.get('markNotificationRead');
+    if (!stmt) {
+      stmt = `UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2;`;
+      this._stmts.set('markNotificationRead', stmt);
+    }
+    const r = await this.db.query(stmt, [id, user_id]);
+    return r.rowCount;
+  }
+
+  async markAllNotificationsRead(user_id) {
+    let stmt = this._stmts.get('markAllNotificationsRead');
+    if (!stmt) {
+      stmt = `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE;`;
+      this._stmts.set('markAllNotificationsRead', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id]);
+    return r.rowCount;
+  }
+
+  async deleteOldNotifications(user_id, created_at) {
+    let stmt = this._stmts.get('deleteOldNotifications');
+    if (!stmt) {
+      stmt = `DELETE FROM notifications WHERE user_id = $1 AND created_at < $2;`;
+      this._stmts.set('deleteOldNotifications', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, created_at]);
+    return r.rowCount;
+  }
+
+  async getNotificationsByType(user_id, type, limit) {
+    let stmt = this._stmts.get('getNotificationsByType');
+    if (!stmt) {
+      stmt = `SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT $3;`;
+      this._stmts.set('getNotificationsByType', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, type, limit]);
+  }
+
+  async createTag(name, slug, color) {
+    let stmt = this._stmts.get('createTag');
+    if (!stmt) {
+      stmt = `INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;`;
+      this._stmts.set('createTag', stmt);
+    }
+    const r = await this.db.query(stmt, [name, slug, color]);
+    return r.rows[0] || null;
+  }
+
+  async getTagBySlug(slug) {
+    let stmt = this._stmts.get('getTagBySlug');
+    if (!stmt) {
+      stmt = `SELECT * FROM tags WHERE slug = $1;`;
+      this._stmts.set('getTagBySlug', stmt);
+    }
+    const r = await this.db.query(stmt, [slug]);
+    return r.rows[0] || null;
+  }
+
+  async getAllTags() {
+    let stmt = this._stmts.get('getAllTags');
+    if (!stmt) {
+      stmt = { name: 'getAllTags', text: `SELECT * FROM tags ORDER BY name ASC;` };
+      this._stmts.set('getAllTags', stmt);
+    }
+    const r = await this.db.query(stmt);
+  }
+
+  async addTagToPost(post_id, tag_id) {
+    let stmt = this._stmts.get('addTagToPost');
+    if (!stmt) {
+      stmt = `INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;`;
+      this._stmts.set('addTagToPost', stmt);
+    }
+    const r = await this.db.query(stmt, [post_id, tag_id]);
+    return r.rowCount;
+  }
+
+  async removeTagFromPost(post_id, tag_id) {
+    let stmt = this._stmts.get('removeTagFromPost');
+    if (!stmt) {
+      stmt = `DELETE FROM post_tags WHERE post_id = $1 AND tag_id = $2;`;
+      this._stmts.set('removeTagFromPost', stmt);
+    }
+    const r = await this.db.query(stmt, [post_id, tag_id]);
+    return r.rowCount;
+  }
+
+  async getTagsForPost(post_id) {
+    let stmt = this._stmts.get('getTagsForPost');
+    if (!stmt) {
+      stmt = `SELECT t.id, t.name, t.slug, t.color FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1 ORDER BY t.name;`;
+      this._stmts.set('getTagsForPost', stmt);
+    }
+    const r = await this.db.query(stmt, [post_id]);
+  }
+
+  async getPostsByTag(slug, limit, offset) {
+    let stmt = this._stmts.get('getPostsByTag');
+    if (!stmt) {
+      stmt = `SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = $1 AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`;
+      this._stmts.set('getPostsByTag', stmt);
+    }
+    const r = await this.db.query(stmt, [slug, limit, offset]);
+  }
+
+  async getTopTags(limit) {
+    let stmt = this._stmts.get('getTopTags');
+    if (!stmt) {
+      stmt = `SELECT t.id, t.name, t.slug, t.color, COUNT(pt.post_id) AS post_count FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON pt.post_id = p.id WHERE p.status = 'published' GROUP BY t.id, t.name, t.slug, t.color ORDER BY post_count DESC LIMIT $1;`;
+      this._stmts.set('getTopTags', stmt);
+    }
+    const r = await this.db.query(stmt, [limit]);
+  }
+
+  async uploadMedia(user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) {
+    let stmt = this._stmts.get('uploadMedia');
+    if (!stmt) {
+      stmt = `INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;`;
+      this._stmts.set('uploadMedia', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata]);
+    return r.rows[0] || null;
+  }
+
+  async getMediaByPost(post_id) {
+    let stmt = this._stmts.get('getMediaByPost');
+    if (!stmt) {
+      stmt = `SELECT id, type, url, size_bytes, mime_type, width, height, created_at FROM media WHERE post_id = $1 ORDER BY created_at DESC;`;
+      this._stmts.set('getMediaByPost', stmt);
+    }
+    const r = await this.db.query(stmt, [post_id]);
+  }
+
+  async getMediaByUser(user_id, limit, offset) {
+    let stmt = this._stmts.get('getMediaByUser');
+    if (!stmt) {
+      stmt = `SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`;
+      this._stmts.set('getMediaByUser', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, limit, offset]);
+  }
+
+  async getMediaByType(user_id, type) {
+    let stmt = this._stmts.get('getMediaByType');
+    if (!stmt) {
+      stmt = `SELECT id, user_id, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC;`;
+      this._stmts.set('getMediaByType', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, type]);
+  }
+
+  async deleteMedia(id, user_id) {
+    let stmt = this._stmts.get('deleteMedia');
+    if (!stmt) {
+      stmt = `DELETE FROM media WHERE id = $1 AND user_id = $2;`;
+      this._stmts.set('deleteMedia', stmt);
+    }
+    const r = await this.db.query(stmt, [id, user_id]);
+    return r.rowCount;
+  }
+
+  async getStorageUsedByUser(user_id) {
+    let stmt = this._stmts.get('getStorageUsedByUser');
+    if (!stmt) {
+      stmt = `SELECT SUM(size_bytes) AS total_bytes, COUNT(*) AS total_files, COUNT(*) FILTER (WHERE type = 'image') AS image_count, COUNT(*) FILTER (WHERE type = 'video') AS video_count, COUNT(*) FILTER (WHERE type = 'document') AS document_count FROM media WHERE user_id = $1;`;
+      this._stmts.set('getStorageUsedByUser', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id]);
+    return r.rows[0] || null;
+  }
+
+  async getLargeMediaFiles(size_bytes, limit) {
+    let stmt = this._stmts.get('getLargeMediaFiles');
+    if (!stmt) {
+      stmt = `SELECT id, user_id, type, url, size_bytes, mime_type, created_at FROM media WHERE size_bytes > $1 ORDER BY size_bytes DESC LIMIT $2;`;
+      this._stmts.set('getLargeMediaFiles', stmt);
+    }
+    const r = await this.db.query(stmt, [size_bytes, limit]);
+  }
+
+  async getUserFeed(user_id, limit, offset) {
+    let stmt = this._stmts.get('getUserFeed');
+    if (!stmt) {
+      stmt = `WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = $1 ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`;
+      this._stmts.set('getUserFeed', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, limit, offset]);
+  }
+
+  async searchPostsFullText(search_query, limit) {
+    let stmt = this._stmts.get('searchPostsFullText');
+    if (!stmt) {
+      stmt = `SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.name AS author_name, ts_rank(to_tsvector('english', p.title || ' ' || p.content), plainto_tsquery('english', $1)) AS rank FROM posts p JOIN users u ON p.user_id = u.id WHERE to_tsvector('english', p.title || ' ' || p.content) @@ plainto_tsquery('english', $1) AND p.status = 'published' ORDER BY rank DESC, p.created_at DESC LIMIT $2;`;
+      this._stmts.set('searchPostsFullText', stmt);
+    }
+    const r = await this.db.query(stmt, [search_query, limit]);
+  }
+
+  async bulkMarkNotificationsRead(user_id, id) {
+    let stmt = this._stmts.get('bulkMarkNotificationsRead');
+    if (!stmt) {
+      stmt = `UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND id = ANY($2::bigint[]);`;
+      this._stmts.set('bulkMarkNotificationsRead', stmt);
+    }
+    const r = await this.db.query(stmt, [user_id, id]);
+    return r.rowCount;
+  }
+
+  async getUserWithStats(id) {
+    let stmt = this._stmts.get('getUserWithStats');
+    if (!stmt) {
+      stmt = `SELECT u.*, (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') AS published_posts, (SELECT COUNT(*) FROM comments WHERE user_id = u.id) AS total_comments, (SELECT COUNT(*) FROM notifications WHERE user_id = u.id AND is_read = FALSE) AS unread_notifications, (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used FROM users u WHERE u.id = $1;`;
+      this._stmts.set('getUserWithStats', stmt);
+    }
+    const r = await this.db.query(stmt, [id]);
+    return r.rows[0] || null;
   }
 
 }

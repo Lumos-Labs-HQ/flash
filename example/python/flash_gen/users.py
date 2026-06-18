@@ -4,9 +4,380 @@ from typing import Optional, List, Any, Literal
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import UUID
+
+@dataclass
+class CreateuserRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class CreateuserfullRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class GetuserRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class GetuserbyemailRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class UpdateusernameRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
 
 @dataclass
 class ListusersRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class UpsertuserRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class UpsertuserwithcoalesceRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class GetuserswithnulladdressRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class GetuserswithbioRow:
+    id: int
+    name: str
+    email: str
+    bio: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['bio']
+        )
+
+@dataclass
+class GetuserdisplayinfoRow:
+    id: int
+    name: str
+    email: str
+    display_address: str
+    age: str
+    bio: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['display_address'],
+            record['age'],
+            record['bio']
+        )
+
+@dataclass
+class SearchuserswithcoalesceRow:
+    id: int
+    name: str
+    email: str
+    bio_text: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['bio_text']
+        )
+
+@dataclass
+class GetuserscreatedbetweenRow:
     id: int
     name: str
     email: str
@@ -22,11 +393,95 @@ class ListusersRow:
         )
 
 @dataclass
-class UpdateuserRow:
+class GetusersbyagerangeRow:
+    id: int
+    name: str
+    age: Optional[int]
+    age_range: Optional[int]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['age'],
+            record['age_range']
+        )
+
+@dataclass
+class GetusersbygeneratedrangeRow:
+    id: int
+    name: str
+    age: Optional[int]
+    age_range: Optional[int]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['age'],
+            record['age_range']
+        )
+
+@dataclass
+class GetrecentusersRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class GetuserpreferencesRow:
+    id: int
+    name: str
+    preferences: Optional[dict]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['preferences']
+        )
+
+@dataclass
+class FindusersbyjsonkeyRow:
     id: int
     name: str
     email: str
-    created_at: datetime
+    preferences: Optional[dict]
 
     @classmethod
     def _make_fast(cls, record):
@@ -34,7 +489,1249 @@ class UpdateuserRow:
             record['id'],
             record['name'],
             record['email'],
+            record['preferences']
+        )
+
+@dataclass
+class FindusersbyjsoncontainsRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class GetuserswithtagRow:
+    id: int
+    name: str
+    email: str
+    tags: Optional[List[str]]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['tags']
+        )
+
+@dataclass
+class GetuserswithanytagRow:
+    id: int
+    name: str
+    email: str
+    tags: Optional[List[str]]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['tags']
+        )
+
+@dataclass
+class GetusershippingaddressRow:
+    id: int
+    name: str
+    shipping: Optional[str]
+    shipping_city: str
+    shipping_country: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['shipping'],
+            record['shipping_city'],
+            record['shipping_country']
+        )
+
+@dataclass
+class GetcomplexuseranalyticsRow:
+    id: int
+    name: str
+    email: str
+    role: Literal['admin', 'moderator', 'user', 'guest']
+    isadmin: bool
+    user_created_at: datetime
+    total_posts: int
+    published_posts: int
+    draft_posts: int
+    total_comments: int
+    posts_commented_on: int
+    categories_used: int
+    category_names: str
+    last_post_date: Optional[datetime]
+    last_comment_date: Optional[datetime]
+    avg_post_length: Decimal
+    activity_level: str
+    engagement_score: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['role'],
+            record['isadmin'],
+            record['user_created_at'],
+            record['total_posts'],
+            record['published_posts'],
+            record['draft_posts'],
+            record['total_comments'],
+            record['posts_commented_on'],
+            record['categories_used'],
+            record['category_names'],
+            record['last_post_date'],
+            record['last_comment_date'],
+            record['avg_post_length'],
+            record['activity_level'],
+            record['engagement_score']
+        )
+
+@dataclass
+class GetpostwithactivecommentersRow:
+    commenter_name: str
+    last_comment_at: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['commenter_name'],
+            record['last_comment_at']
+        )
+
+@dataclass
+class GetuserpostrankingsRow:
+    id: int
+    name: str
+    post_count: int
+    post_rank: int
+    dense_post_rank: int
+    row_num: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['post_count'],
+            record['post_rank'],
+            record['dense_post_rank'],
+            record['row_num']
+        )
+
+@dataclass
+class GetusertrendingpostsRow:
+    id: int
+    title: str
+    user_id: int
+    view_count: int
+    created_at: datetime
+    prev_view_count: int
+    next_view_count: int
+    view_delta: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['user_id'],
+            record['view_count'],
+            record['created_at'],
+            record['prev_view_count'],
+            record['next_view_count'],
+            record['view_delta']
+        )
+
+@dataclass
+class GetpostcountbyuserRow:
+    post_count: int
+    comment_count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['post_count'],
+            record['comment_count']
+        )
+
+@dataclass
+class GetuserswithmanypostsRow:
+    id: int
+    name: str
+    email: str
+    total_posts: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['total_posts']
+        )
+
+@dataclass
+class GetpostswithcommentcountRow:
+    id: int
+    title: str
+    created_at: datetime
+    comment_count: int
+    unique_commenters: int
+    last_comment_at: Optional[datetime]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['created_at'],
+            record['comment_count'],
+            record['unique_commenters'],
+            record['last_comment_at']
+        )
+
+@dataclass
+class GetuserswithactivitylevelRow:
+    id: int
+    name: str
+    email: str
+    created_at: datetime
+    account_age_category: str
+    effective_role: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['created_at'],
+            record['account_age_category'],
+            record['effective_role']
+        )
+
+@dataclass
+class GetpostwithcommentsRow:
+    post_id: int
+    title: str
+    content: str
+    author: str
+    comment_text: str
+    commenter: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['post_id'],
+            record['title'],
+            record['content'],
+            record['author'],
+            record['comment_text'],
+            record['commenter']
+        )
+
+@dataclass
+class GetpostdetailswithallrelationsRow:
+    id: int
+    title: str
+    content: str
+    status: Literal['draft', 'published', 'archived']
+    created_at: datetime
+    updated_at: datetime
+    author_id: int
+    author_name: str
+    author_email: str
+    author_role: Literal['admin', 'moderator', 'user', 'guest']
+    author_is_admin: bool
+    category_id: int
+    category_name: str
+    comment_count: int
+    unique_commenters: int
+    all_comments: Optional[str]
+    commenter_names: Optional[List[str]]
+    last_comment_date: Optional[datetime]
+    content_length: Optional[int]
+    hours_since_created: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['content'],
+            record['status'],
+            record['created_at'],
+            record['updated_at'],
+            record['author_id'],
+            record['author_name'],
+            record['author_email'],
+            record['author_role'],
+            record['author_is_admin'],
+            record['category_id'],
+            record['category_name'],
+            record['comment_count'],
+            record['unique_commenters'],
+            record['all_comments'],
+            record['commenter_names'],
+            record['last_comment_date'],
+            record['content_length'],
+            record['hours_since_created']
+        )
+
+@dataclass
+class CountusersRow:
+    total_users: int
+    admin_count: int
+    regular_count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['total_users'],
+            record['admin_count'],
+            record['regular_count']
+        )
+
+@dataclass
+class GetuserrolecountRow:
+    role: Literal['admin', 'moderator', 'user', 'guest']
+    count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['role'],
+            record['count']
+        )
+
+@dataclass
+class GetuseragestatsRow:
+    first_joined: Optional[datetime]
+    last_joined: Optional[datetime]
+    total: int
+    avg_age: Optional[Decimal]
+    avg_name_length: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['first_joined'],
+            record['last_joined'],
+            record['total'],
+            record['avg_age'],
+            record['avg_name_length']
+        )
+
+@dataclass
+class GetpostsgroupedbystatusRow:
+    status: Literal['draft', 'published', 'archived']
+    count: int
+    oldest: Optional[datetime]
+    newest: Optional[datetime]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['status'],
+            record['count'],
+            record['oldest'],
+            record['newest']
+        )
+
+@dataclass
+class GetdistinctcommentersRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class GetlatestpostperuserRow:
+    user_id: int
+    post_id: int
+    title: str
+    status: Literal['draft', 'published', 'archived']
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['user_id'],
+            record['post_id'],
+            record['title'],
+            record['status'],
             record['created_at']
+        )
+
+@dataclass
+class SearchusersRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class SearchpostsbytitleRow:
+    id: int
+    title: str
+    status: Literal['draft', 'published', 'archived']
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['status'],
+            record['created_at']
+        )
+
+@dataclass
+class FulltextsearchpostsRow:
+    id: int
+    title: str
+    rank: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['rank']
+        )
+
+@dataclass
+class GetuserregistrationstatsRow:
+    year: Optional[Decimal]
+    month: Optional[Decimal]
+    signups: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['year'],
+            record['month'],
+            record['signups']
+        )
+
+@dataclass
+class GetweeklypoststatsRow:
+    week_start: str
+    posts_created: int
+    total_views: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['week_start'],
+            record['posts_created'],
+            record['total_views']
+        )
+
+@dataclass
+class GetusersinidsRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role']
+        )
+
+@dataclass
+class GetusersbynamesRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class GetuserswhocommentedRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class GetuserswithnopostsRow:
+    id: int
+    name: str
+    email: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email']
+        )
+
+@dataclass
+class GetallcontentbyuserRow:
+    content_type: str
+    content_id: str
+    content_summary: str
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['content_type'],
+            record['content_id'],
+            record['content_summary'],
+            record['created_at']
+        )
+
+@dataclass
+class GetactiveusersRow:
+    id: Optional[str]
+    name: Optional[str]
+    email: Optional[str]
+    role: Optional[str]
+    created_at: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['role'],
+            record['created_at']
+        )
+
+@dataclass
+class GetuseractivitysummaryRow:
+    id: Optional[str]
+    name: Optional[str]
+    email: Optional[str]
+    post_count: Optional[str]
+    comment_count: Optional[str]
+    last_post_at: Optional[str]
+    user_type: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['post_count'],
+            record['comment_count'],
+            record['last_post_at'],
+            record['user_type']
+        )
+
+@dataclass
+class GetpoststatsRow:
+    post_id: Optional[str]
+    title: Optional[str]
+    comment_count: Optional[str]
+    unique_commenters: Optional[str]
+    last_comment_at: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['post_id'],
+            record['title'],
+            record['comment_count'],
+            record['unique_commenters'],
+            record['last_comment_at']
+        )
+
+@dataclass
+class GetusersubscriptionsRow:
+    id: int
+    tier: Literal['free', 'pro', 'enterprise']
+    started_at: datetime
+    expires_at: Optional[datetime]
+    auto_renew: bool
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['tier'],
+            record['started_at'],
+            record['expires_at'],
+            record['auto_renew']
+        )
+
+@dataclass
+class CreatesubscriptionRow:
+    id: int
+    user_id: int
+    tier: Literal['free', 'pro', 'enterprise']
+    started_at: datetime
+    expires_at: Optional[datetime]
+    auto_renew: bool
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['tier'],
+            record['started_at'],
+            record['expires_at'],
+            record['auto_renew']
+        )
+
+@dataclass
+class GetordersbyuserRow:
+    id: UUID
+    total_amount: Decimal
+    discount_pct: Optional[str]
+    state: Literal['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded']
+    shipping_addr: str
+    placed_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['total_amount'],
+            record['discount_pct'],
+            record['state'],
+            record['shipping_addr'],
+            record['placed_at']
+        )
+
+@dataclass
+class GetordersinstateRow:
+    id: UUID
+    user_id: int
+    user_name: str
+    total_amount: Decimal
+    state: Literal['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded']
+    placed_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['user_name'],
+            record['total_amount'],
+            record['state'],
+            record['placed_at']
+        )
+
+@dataclass
+class GetauditlogforuserRow:
+    id: int
+    table_name: str
+    record_id: str
+    action: str
+    old_data: Optional[dict]
+    new_data: Optional[dict]
+    changed_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['table_name'],
+            record['record_id'],
+            record['action'],
+            record['old_data'],
+            record['new_data'],
+            record['changed_at']
+        )
+
+@dataclass
+class GetauditlogfortableRow:
+    id: int
+    table_name: str
+    record_id: str
+    action: str
+    changed_by: Optional[int]
+    changed_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['table_name'],
+            record['record_id'],
+            record['action'],
+            record['changed_by'],
+            record['changed_at']
+        )
+
+@dataclass
+class GetdashboardstatsRow:
+    total_users: int
+    total_posts: int
+    total_comments: int
+    published_posts: int
+    posts_this_week: int
+    signups_this_week: int
+    comments_last_24h: int
+    pending_orders: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['total_users'],
+            record['total_posts'],
+            record['total_comments'],
+            record['published_posts'],
+            record['posts_this_week'],
+            record['signups_this_week'],
+            record['comments_last_24h'],
+            record['pending_orders']
+        )
+
+@dataclass
+class GettopcommentersRow:
+    id: int
+    name: str
+    email: str
+    comment_count: int
+    rank: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['email'],
+            record['comment_count'],
+            record['rank']
+        )
+
+@dataclass
+class GetengagementtimeseriesRow:
+    day: str
+    count: int
+    event_type: str
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['day'],
+            record['count'],
+            record['event_type']
+        )
+
+@dataclass
+class CreatecategoryRow:
+    id: int
+    name: str
+    slug: Optional[str]
+    color: Optional[str]
+    metadata: Optional[dict]
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['slug'],
+            record['color'],
+            record['metadata'],
+            record['created_at']
+        )
+
+@dataclass
+class CreatepostRow:
+    id: int
+    user_id: int
+    category_id: int
+    title: str
+    content: str
+    excerpt: Optional[str]
+    tags: Optional[List[str]]
+    metadata: Optional[dict]
+    view_count: int
+    is_featured: bool
+    published_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    status: Literal['draft', 'published', 'archived']
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['category_id'],
+            record['title'],
+            record['content'],
+            record['excerpt'],
+            record['tags'],
+            record['metadata'],
+            record['view_count'],
+            record['is_featured'],
+            record['published_at'],
+            record['created_at'],
+            record['updated_at'],
+            record['status']
+        )
+
+@dataclass
+class CreatecommentRow:
+    id: int
+    post_id: int
+    user_id: int
+    parent_id: Optional[int]
+    content: str
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['post_id'],
+            record['user_id'],
+            record['parent_id'],
+            record['content'],
+            record['created_at']
+        )
+
+@dataclass
+class CreatenotificationRow:
+    id: int
+    user_id: int
+    type: str
+    title: str
+    body: str
+    is_read: bool
+    metadata: Optional[dict]
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['type'],
+            record['title'],
+            record['body'],
+            record['is_read'],
+            record['metadata'],
+            record['created_at']
+        )
+
+@dataclass
+class GetnotificationsbyuserRow:
+    id: int
+    user_id: int
+    type: str
+    title: str
+    body: str
+    is_read: bool
+    metadata: Optional[dict]
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['type'],
+            record['title'],
+            record['body'],
+            record['is_read'],
+            record['metadata'],
+            record['created_at']
+        )
+
+@dataclass
+class GetnotificationsbytypeRow:
+    id: int
+    type: str
+    title: str
+    body: str
+    is_read: bool
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['type'],
+            record['title'],
+            record['body'],
+            record['is_read'],
+            record['created_at']
+        )
+
+@dataclass
+class CreatetagRow:
+    id: int
+    name: str
+    slug: str
+    color: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['slug'],
+            record['color']
+        )
+
+@dataclass
+class GettagbyslugRow:
+    id: int
+    name: str
+    slug: str
+    color: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['slug'],
+            record['color']
+        )
+
+@dataclass
+class GetalltagsRow:
+    id: int
+    name: str
+    slug: str
+    color: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['slug'],
+            record['color']
+        )
+
+@dataclass
+class GettagsforpostRow:
+    id: int
+    name: str
+    slug: str
+    color: Optional[str]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['slug'],
+            record['color']
+        )
+
+@dataclass
+class GetpostsbytagRow:
+    id: int
+    title: str
+    status: Literal['draft', 'published', 'archived']
+    created_at: datetime
+    author_name: str
+    comment_count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['status'],
+            record['created_at'],
+            record['author_name'],
+            record['comment_count']
+        )
+
+@dataclass
+class GettoptagsRow:
+    id: int
+    name: str
+    slug: str
+    color: Optional[str]
+    post_count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['name'],
+            record['slug'],
+            record['color'],
+            record['post_count']
+        )
+
+@dataclass
+class UploadmediaRow:
+    id: UUID
+    user_id: int
+    post_id: Optional[int]
+    type: str
+    url: str
+    size_bytes: int
+    mime_type: str
+    width: Optional[int]
+    height: Optional[int]
+    metadata: Optional[dict]
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['post_id'],
+            record['type'],
+            record['url'],
+            record['size_bytes'],
+            record['mime_type'],
+            record['width'],
+            record['height'],
+            record['metadata'],
+            record['created_at']
+        )
+
+@dataclass
+class GetmediabypostRow:
+    id: UUID
+    type: str
+    url: str
+    size_bytes: int
+    mime_type: str
+    width: Optional[int]
+    height: Optional[int]
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['type'],
+            record['url'],
+            record['size_bytes'],
+            record['mime_type'],
+            record['width'],
+            record['height'],
+            record['created_at']
+        )
+
+@dataclass
+class GetmediabyuserRow:
+    id: UUID
+    type: str
+    url: str
+    size_bytes: int
+    mime_type: str
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['type'],
+            record['url'],
+            record['size_bytes'],
+            record['mime_type'],
+            record['created_at']
+        )
+
+@dataclass
+class GetmediabytypeRow:
+    id: UUID
+    user_id: int
+    url: str
+    size_bytes: int
+    mime_type: str
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['url'],
+            record['size_bytes'],
+            record['mime_type'],
+            record['created_at']
+        )
+
+@dataclass
+class GetstorageusedbyuserRow:
+    total_bytes: Optional[Decimal]
+    total_files: int
+    image_count: int
+    video_count: int
+    document_count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['total_bytes'],
+            record['total_files'],
+            record['image_count'],
+            record['video_count'],
+            record['document_count']
+        )
+
+@dataclass
+class GetlargemediafilesRow:
+    id: UUID
+    user_id: int
+    type: str
+    url: str
+    size_bytes: int
+    mime_type: str
+    created_at: datetime
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['user_id'],
+            record['type'],
+            record['url'],
+            record['size_bytes'],
+            record['mime_type'],
+            record['created_at']
+        )
+
+@dataclass
+class GetuserfeedRow:
+    id: int
+    title: str
+    excerpt: Optional[str]
+    status: Literal['draft', 'published', 'archived']
+    created_at: datetime
+    author_id: int
+    author_name: str
+    avatar_hash: Optional[UUID]
+    comment_count: int
+    tag_count: int
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['excerpt'],
+            record['status'],
+            record['created_at'],
+            record['author_id'],
+            record['author_name'],
+            record['avatar_hash'],
+            record['comment_count'],
+            record['tag_count']
+        )
+
+@dataclass
+class SearchpostsfulltextRow:
+    id: int
+    title: str
+    excerpt: Optional[str]
+    status: Literal['draft', 'published', 'archived']
+    created_at: datetime
+    author_name: str
+    rank: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['id'],
+            record['title'],
+            record['excerpt'],
+            record['status'],
+            record['created_at'],
+            record['author_name'],
+            record['rank']
+        )
+
+@dataclass
+class GetuserwithstatsRow:
+    *: str
+    published_posts: int
+    total_comments: int
+    unread_notifications: int
+    storage_used: Optional[Decimal]
+
+    @classmethod
+    def _make_fast(cls, record):
+        return cls(
+            record['*'],
+            record['published_posts'],
+            record['total_comments'],
+            record['unread_notifications'],
+            record['storage_used']
         )
 
 class Queries:
@@ -42,21 +1739,53 @@ class Queries:
         self.db = db
         self._stmts = {}
 
-    async def list_users(self) -> List[ListusersRow]:
-        _key = 'list_users'
+    async def create_user(self, name: str, email: str) -> Optional[CreateuserRow]:
+        _key = 'create_user'
         if _key not in self._stmts:
-            self._stmts[_key] = """SELECT id, name, email, created_at FROM users ORDER BY created_at DESC;"""
+            self._stmts[_key] = """INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt)
-        return [ListusersRow._make_fast(row) for row in result]
+        result = await self.db.fetch(stmt, name, email)
+        return CreateuserRow._make_fast(result[0]) if result else None
 
-    async def update_user(self, name: str, email: str, id: int) -> Optional[UpdateuserRow]:
-        _key = 'update_user'
+    async def create_user_full(self, name: str, email: str, age: int, bio: str, preferences: dict, tags: List[str], role: Literal['admin', 'moderator', 'user', 'guest']) -> Optional[CreateuserfullRow]:
+        _key = 'create_user_full'
         if _key not in self._stmts:
-            self._stmts[_key] = """UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, name, email, created_at;"""
+            self._stmts[_key] = """INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, name, email, id)
-        return UpdateuserRow._make_fast(result[0]) if result else None
+        result = await self.db.fetch(stmt, name, email, age, bio, preferences, tags, role)
+        return CreateuserfullRow._make_fast(result[0]) if result else None
+
+    async def get_user(self, id: int) -> Optional[GetuserRow]:
+        _key = 'get_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM users WHERE id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return GetuserRow._make_fast(result[0]) if result else None
+
+    async def get_user_by_email(self, email: str) -> Optional[GetuserbyemailRow]:
+        _key = 'get_user_by_email'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM users WHERE email = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, email)
+        return GetuserbyemailRow._make_fast(result[0]) if result else None
+
+    async def update_user_name(self, name: str, id: int) -> Optional[UpdateusernameRow]:
+        _key = 'update_user_name'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name, id)
+        return UpdateusernameRow._make_fast(result[0]) if result else None
+
+    async def update_user_role(self, role: Literal['admin', 'moderator', 'user', 'guest'], id: int) -> int:
+        _key = 'update_user_role'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, role, id)
+        return 1
 
     async def delete_user(self, id: int) -> int:
         _key = 'delete_user'
@@ -65,4 +1794,740 @@ class Queries:
         stmt = self._stmts[_key]
         await self.db.execute(stmt, id)
         return 1
+
+    async def list_users(self, limit: int, offset: int) -> List[ListusersRow]:
+        _key = 'list_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit, offset)
+        return [ListusersRow._make_fast(row) for row in result]
+
+    async def upsert_user(self, name: str, email: str, role: Literal['admin', 'moderator', 'user', 'guest']) -> Optional[UpsertuserRow]:
+        _key = 'upsert_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO users (name, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name, email, role)
+        return UpsertuserRow._make_fast(result[0]) if result else None
+
+    async def upsert_user_with_c_o_a_l_e_s_c_e(self, name: str, email: str, bio: str) -> Optional[UpsertuserwithcoalesceRow]:
+        _key = 'upsert_user_with_c_o_a_l_e_s_c_e'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO users (name, email, bio) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name, email, bio)
+        return UpsertuserwithcoalesceRow._make_fast(result[0]) if result else None
+
+    async def get_users_with_null_address(self) -> List[GetuserswithnulladdressRow]:
+        _key = 'get_users_with_null_address'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email FROM users WHERE address IS NULL;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserswithnulladdressRow._make_fast(row) for row in result]
+
+    async def get_users_with_bio(self) -> List[GetuserswithbioRow]:
+        _key = 'get_users_with_bio'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, COALESCE(bio, '') AS bio FROM users WHERE bio IS NOT NULL;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserswithbioRow._make_fast(row) for row in result]
+
+    async def get_user_display_info(self, id: int) -> Optional[GetuserdisplayinfoRow]:
+        _key = 'get_user_display_info'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, COALESCE(address, 'No address provided') AS display_address, COALESCE(age, 0) AS age, COALESCE(bio, '') AS bio FROM users WHERE id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return GetuserdisplayinfoRow._make_fast(result[0]) if result else None
+
+    async def search_users_with_c_o_a_l_e_s_c_e(self, name: str, email: str, age: int, limit: int, offset: int) -> List[SearchuserswithcoalesceRow]:
+        _key = 'search_users_with_c_o_a_l_e_s_c_e'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name, email, age, limit, offset)
+        return [SearchuserswithcoalesceRow._make_fast(row) for row in result]
+
+    async def get_users_created_between(self, created_at: datetime, created_at2: datetime) -> List[GetuserscreatedbetweenRow]:
+        _key = 'get_users_created_between'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, created_at FROM users WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, created_at, created_at2)
+        return [GetuserscreatedbetweenRow._make_fast(row) for row in result]
+
+    async def get_users_by_age_range(self, age: int, age2: int) -> List[GetusersbyagerangeRow]:
+        _key = 'get_users_by_age_range'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, age, age_range FROM users WHERE age >= $1 AND age <= $2 ORDER BY age;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, age, age2)
+        return [GetusersbyagerangeRow._make_fast(row) for row in result]
+
+    async def get_users_by_generated_range(self, age_range: int) -> List[GetusersbygeneratedrangeRow]:
+        _key = 'get_users_by_generated_range'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, age, age_range FROM users WHERE age_range @> $1::integer;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, age_range)
+        return [GetusersbygeneratedrangeRow._make_fast(row) for row in result]
+
+    async def get_recent_users(self, created_at: datetime, limit: int, offset: int) -> List[GetrecentusersRow]:
+        _key = 'get_recent_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, created_at, limit, offset)
+        return [GetrecentusersRow._make_fast(row) for row in result]
+
+    async def get_user_preferences(self, id: int) -> Optional[GetuserpreferencesRow]:
+        _key = 'get_user_preferences'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, preferences FROM users WHERE id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return GetuserpreferencesRow._make_fast(result[0]) if result else None
+
+    async def update_user_preferences(self, preferences: dict, id: int) -> int:
+        _key = 'update_user_preferences'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET preferences = preferences || $1, updated_at = NOW() WHERE id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, preferences, id)
+        return 1
+
+    async def find_users_by_json_key(self, preferences: dict) -> List[FindusersbyjsonkeyRow]:
+        _key = 'find_users_by_json_key'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, preferences FROM users WHERE preferences->>'theme' = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, preferences)
+        return [FindusersbyjsonkeyRow._make_fast(row) for row in result]
+
+    async def find_users_by_json_contains(self, preferences: dict) -> List[FindusersbyjsoncontainsRow]:
+        _key = 'find_users_by_json_contains'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email FROM users WHERE preferences @> $1::jsonb;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, preferences)
+        return [FindusersbyjsoncontainsRow._make_fast(row) for row in result]
+
+    async def get_users_with_tag(self, tags: List[str]) -> List[GetuserswithtagRow]:
+        _key = 'get_users_with_tag'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, tags FROM users WHERE $1 = ANY(tags);"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, tags)
+        return [GetuserswithtagRow._make_fast(row) for row in result]
+
+    async def get_users_with_any_tag(self, tags: List[str]) -> List[GetuserswithanytagRow]:
+        _key = 'get_users_with_any_tag'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, tags FROM users WHERE tags && $1::text[];"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, tags)
+        return [GetuserswithanytagRow._make_fast(row) for row in result]
+
+    async def add_user_tag(self, tags: List[str], id: int) -> int:
+        _key = 'add_user_tag'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET tags = array_append(tags, $1), updated_at = NOW() WHERE id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, tags, id)
+        return 1
+
+    async def remove_user_tag(self, tags: List[str], id: int) -> int:
+        _key = 'remove_user_tag'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET tags = array_remove(tags, $1), updated_at = NOW() WHERE id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, tags, id)
+        return 1
+
+    async def get_user_shipping_address(self, id: int) -> Optional[GetusershippingaddressRow]:
+        _key = 'get_user_shipping_address'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, shipping, (shipping).city AS shipping_city, (shipping).country AS shipping_country FROM users WHERE id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return GetusershippingaddressRow._make_fast(result[0]) if result else None
+
+    async def update_user_shipping(self, shipping_field1: str, shipping_field2: str, shipping_field3: str, shipping_field4: str, shipping_field5: str, id: int) -> int:
+        _key = 'update_user_shipping'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET shipping = ROW($1, $2, $3, $4, $5), updated_at = NOW() WHERE id = $6;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id)
+        return 1
+
+    async def get_complex_user_analytics(self, total_posts: str, total_comments: str, limit: str) -> List[GetcomplexuseranalyticsRow]:
+        _key = 'get_complex_user_analytics'
+        if _key not in self._stmts:
+            self._stmts[_key] = """WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, total_posts, total_comments, limit)
+        return [GetcomplexuseranalyticsRow._make_fast(row) for row in result]
+
+    async def get_post_with_active_commenters(self, rn: str, post_id: str) -> List[GetpostwithactivecommentersRow]:
+        _key = 'get_post_with_active_commenters'
+        if _key not in self._stmts:
+            self._stmts[_key] = """WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, rn, post_id)
+        return [GetpostwithactivecommentersRow._make_fast(row) for row in result]
+
+    async def get_user_post_rankings(self, limit: int) -> List[GetuserpostrankingsRow]:
+        _key = 'get_user_post_rankings'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT u.id, u.name, COUNT(p.id) AS post_count, RANK() OVER (ORDER BY COUNT(p.id) DESC) AS post_rank, DENSE_RANK() OVER (ORDER BY COUNT(p.id) DESC) AS dense_post_rank, ROW_NUMBER() OVER (ORDER BY COUNT(p.id) DESC, u.name ASC) AS row_num FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name ORDER BY post_count DESC LIMIT $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit)
+        return [GetuserpostrankingsRow._make_fast(row) for row in result]
+
+    async def get_user_trending_posts(self, user_id: int, limit: int) -> List[GetusertrendingpostsRow]:
+        _key = 'get_user_trending_posts'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT p.id, p.title, p.user_id, p.view_count, p.created_at, LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS prev_view_count, LEAD(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS next_view_count, p.view_count - LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS view_delta FROM posts p WHERE p.user_id = $1 ORDER BY p.created_at DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, limit)
+        return [GetusertrendingpostsRow._make_fast(row) for row in result]
+
+    async def get_post_count_by_user(self, user_id: str) -> Optional[GetpostcountbyuserRow]:
+        _key = 'get_post_count_by_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id)
+        return GetpostcountbyuserRow._make_fast(result[0]) if result else None
+
+    async def get_users_with_many_posts(self, min_count: int) -> List[GetuserswithmanypostsRow]:
+        _key = 'get_users_with_many_posts'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, min_count)
+        return [GetuserswithmanypostsRow._make_fast(row) for row in result]
+
+    async def get_posts_with_comment_count(self, limit: int, offset: int) -> List[GetpostswithcommentcountRow]:
+        _key = 'get_posts_with_comment_count'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT p.id, p.title, p.created_at, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count, (SELECT COUNT(DISTINCT c2.user_id) FROM comments c2 WHERE c2.post_id = p.id) AS unique_commenters, (SELECT MAX(c3.created_at) FROM comments c3 WHERE c3.post_id = p.id) AS last_comment_at FROM posts p WHERE p.status = 'published' ORDER BY comment_count DESC LIMIT $1 OFFSET $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit, offset)
+        return [GetpostswithcommentcountRow._make_fast(row) for row in result]
+
+    async def get_users_with_activity_level(self) -> List[GetuserswithactivitylevelRow]:
+        _key = 'get_users_with_activity_level'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email, created_at, CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 'new' WHEN created_at >= NOW() - INTERVAL '30 days' THEN 'recent' WHEN created_at >= NOW() - INTERVAL '1 year' THEN 'established' ELSE 'veteran' END AS account_age_category, CASE WHEN isadmin THEN 'administrator' ELSE role::TEXT END AS effective_role FROM users ORDER BY created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserswithactivitylevelRow._make_fast(row) for row in result]
+
+    async def get_post_with_comments(self, id: int) -> List[GetpostwithcommentsRow]:
+        _key = 'get_post_with_comments'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT p.id AS post_id, p.title, p.content, u.name AS author, c.content AS comment_text, cu.name AS commenter FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return [GetpostwithcommentsRow._make_fast(row) for row in result]
+
+    async def get_post_details_with_all_relations(self, id: int) -> Optional[GetpostdetailswithallrelationsRow]:
+        _key = 'get_post_details_with_all_relations'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id AS author_id, u.name AS author_name, u.email AS author_email, u.role AS author_role, u.isadmin AS author_is_admin, cat.id AS category_id, cat.name AS category_name, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT c.user_id) AS unique_commenters, STRING_AGG(DISTINCT c.content, ' | ' ORDER BY c.content) AS all_comments, ARRAY_AGG(DISTINCT cu.name ORDER BY cu.name) AS commenter_names, MAX(c.created_at) AS last_comment_date, LENGTH(p.content) AS content_length, EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 AS hours_since_created FROM posts p INNER JOIN users u ON p.user_id = u.id INNER JOIN categories cat ON p.category_id = cat.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = $1 GROUP BY p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id, u.name, u.email, u.role, u.isadmin, cat.id, cat.name;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return GetpostdetailswithallrelationsRow._make_fast(result[0]) if result else None
+
+    async def count_users_by_role(self, role: Literal['admin', 'moderator', 'user', 'guest']) -> Optional[int]:
+        _key = 'count_users_by_role'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT COUNT(*) FROM users WHERE role = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, role)
+        return result[0]['COUNT(*)'] if result else None
+
+    async def count_users(self) -> Optional[CountusersRow]:
+        _key = 'count_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT COUNT(*) AS total_users, COUNT(CASE WHEN isadmin = TRUE THEN 1 END) AS admin_count, COUNT(CASE WHEN isadmin = FALSE THEN 1 END) AS regular_count FROM users;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return CountusersRow._make_fast(result[0]) if result else None
+
+    async def get_user_role_count(self) -> List[GetuserrolecountRow]:
+        _key = 'get_user_role_count'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT role, COUNT(*) AS count FROM users GROUP BY role ORDER BY count DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserrolecountRow._make_fast(row) for row in result]
+
+    async def get_user_age_stats(self) -> Optional[GetuseragestatsRow]:
+        _key = 'get_user_age_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT MIN(created_at) AS first_joined, MAX(created_at) AS last_joined, COUNT(*) AS total, AVG(COALESCE(age, 0))::NUMERIC(10,2) AS avg_age, AVG(LENGTH(COALESCE(name, '')))::NUMERIC(10,2) AS avg_name_length FROM users;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return GetuseragestatsRow._make_fast(result[0]) if result else None
+
+    async def get_posts_grouped_by_status(self, count_threshold: int) -> List[GetpostsgroupedbystatusRow]:
+        _key = 'get_posts_grouped_by_status'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM posts GROUP BY status HAVING COUNT(*) > $1 ORDER BY count DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, count_threshold)
+        return [GetpostsgroupedbystatusRow._make_fast(row) for row in result]
+
+    async def get_distinct_commenters(self) -> List[GetdistinctcommentersRow]:
+        _key = 'get_distinct_commenters'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT DISTINCT u.id, u.name, u.email FROM users u JOIN comments c ON u.id = c.user_id ORDER BY u.name;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetdistinctcommentersRow._make_fast(row) for row in result]
+
+    async def get_latest_post_per_user(self) -> List[GetlatestpostperuserRow]:
+        _key = 'get_latest_post_per_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT DISTINCT ON (user_id) user_id, id AS post_id, title, status, created_at FROM posts ORDER BY user_id, created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetlatestpostperuserRow._make_fast(row) for row in result]
+
+    async def search_users(self, name: str, email: str, limit: int, offset: int) -> List[SearchusersRow]:
+        _key = 'search_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $2 ORDER BY name ASC LIMIT $3 OFFSET $4;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name, email, limit, offset)
+        return [SearchusersRow._make_fast(row) for row in result]
+
+    async def search_posts_by_title(self, title: str, limit: int, offset: int) -> List[SearchpostsbytitleRow]:
+        _key = 'search_posts_by_title'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, title, status, created_at FROM posts WHERE title ILIKE $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, title, limit, offset)
+        return [SearchpostsbytitleRow._make_fast(row) for row in result]
+
+    async def full_text_search_posts(self, search_query: str, limit: int) -> List[FulltextsearchpostsRow]:
+        _key = 'full_text_search_posts'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, title, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', $1)) AS rank FROM posts WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', $1) ORDER BY rank DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, search_query, limit)
+        return [FulltextsearchpostsRow._make_fast(row) for row in result]
+
+    async def get_user_registration_stats(self) -> List[GetuserregistrationstatsRow]:
+        _key = 'get_user_registration_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT EXTRACT(YEAR FROM created_at)::INT AS year, EXTRACT(MONTH FROM created_at)::INT AS month, COUNT(*) AS signups FROM users GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at) ORDER BY year DESC, month DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserregistrationstatsRow._make_fast(row) for row in result]
+
+    async def get_weekly_post_stats(self, created_at: datetime) -> List[GetweeklypoststatsRow]:
+        _key = 'get_weekly_post_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT DATE_TRUNC('week', created_at) AS week_start, COUNT(*) AS posts_created, SUM(view_count) AS total_views FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('week', created_at) ORDER BY week_start DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, created_at)
+        return [GetweeklypoststatsRow._make_fast(row) for row in result]
+
+    async def get_users_in_ids(self, id: int) -> List[GetusersinidsRow]:
+        _key = 'get_users_in_ids'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM users WHERE id = ANY($1::bigint[]);"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return [GetusersinidsRow._make_fast(row) for row in result]
+
+    async def get_users_by_names(self, name1: str, name2: str, name3: str) -> List[GetusersbynamesRow]:
+        _key = 'get_users_by_names'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email FROM users WHERE name IN ($1, $2, $3);"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name1, name2, name3)
+        return [GetusersbynamesRow._make_fast(row) for row in result]
+
+    async def get_users_who_commented(self) -> List[GetuserswhocommentedRow]:
+        _key = 'get_users_who_commented'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email FROM users u WHERE EXISTS (SELECT 1 FROM comments c WHERE c.user_id = u.id) ORDER BY u.name;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserswhocommentedRow._make_fast(row) for row in result]
+
+    async def get_users_with_no_posts(self) -> List[GetuserswithnopostsRow]:
+        _key = 'get_users_with_no_posts'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, name, email FROM users u WHERE NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = u.id) ORDER BY u.created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetuserswithnopostsRow._make_fast(row) for row in result]
+
+    async def get_all_content_by_user(self, user_id: int, limit: int) -> List[GetallcontentbyuserRow]:
+        _key = 'get_all_content_by_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT 'post' AS content_type, id::TEXT AS content_id, title AS content_summary, created_at FROM posts WHERE user_id = $1 UNION ALL SELECT 'comment' AS content_type, id::TEXT AS content_id, LEFT(content, 100) AS content_summary, created_at FROM comments WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, limit)
+        return [GetallcontentbyuserRow._make_fast(row) for row in result]
+
+    async def get_active_users(self, limit: int) -> List[GetactiveusersRow]:
+        _key = 'get_active_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM active_users ORDER BY created_at DESC LIMIT $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit)
+        return [GetactiveusersRow._make_fast(row) for row in result]
+
+    async def get_user_activity_summary(self, post_count: str, comment_count: str) -> List[GetuseractivitysummaryRow]:
+        _key = 'get_user_activity_summary'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM user_activity_summary WHERE post_count > $1 OR comment_count > $2 ORDER BY post_count DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, post_count, comment_count)
+        return [GetuseractivitysummaryRow._make_fast(row) for row in result]
+
+    async def refresh_post_stats(self) -> int:
+        _key = 'refresh_post_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """REFRESH MATERIALIZED VIEW CONCURRENTLY post_stats;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt)
+        return 1
+
+    async def get_post_stats(self, limit: int) -> List[GetpoststatsRow]:
+        _key = 'get_post_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM post_stats ORDER BY comment_count DESC LIMIT $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit)
+        return [GetpoststatsRow._make_fast(row) for row in result]
+
+    async def get_user_subscriptions(self, user_id: int) -> List[GetusersubscriptionsRow]:
+        _key = 'get_user_subscriptions'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT s.id, s.tier, s.started_at, s.expires_at, s.auto_renew FROM subscriptions s WHERE s.user_id = $1 ORDER BY s.started_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id)
+        return [GetusersubscriptionsRow._make_fast(row) for row in result]
+
+    async def create_subscription(self, user_id: int, tier: Literal['free', 'pro', 'enterprise'], expires_at: datetime, auto_renew: bool) -> Optional[CreatesubscriptionRow]:
+        _key = 'create_subscription'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES ($1, $2, $3, $4) RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, tier, expires_at, auto_renew)
+        return CreatesubscriptionRow._make_fast(result[0]) if result else None
+
+    async def get_orders_by_user(self, user_id: int, limit: int) -> List[GetordersbyuserRow]:
+        _key = 'get_orders_by_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, total_amount, discount_pct, state, shipping_addr, placed_at FROM orders WHERE user_id = $1 ORDER BY placed_at DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, limit)
+        return [GetordersbyuserRow._make_fast(row) for row in result]
+
+    async def get_orders_in_state(self, state: Literal['pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'refunded'], limit: int) -> List[GetordersinstateRow]:
+        _key = 'get_orders_in_state'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT o.id, o.user_id, u.name AS user_name, o.total_amount, o.state, o.placed_at FROM orders o JOIN users u ON o.user_id = u.id WHERE o.state = $1 ORDER BY o.placed_at DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, state, limit)
+        return [GetordersinstateRow._make_fast(row) for row in result]
+
+    async def get_audit_log_for_user(self, changed_by: int, limit: int, offset: int) -> List[GetauditlogforuserRow]:
+        _key = 'get_audit_log_for_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = $1 ORDER BY changed_at DESC LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, changed_by, limit, offset)
+        return [GetauditlogforuserRow._make_fast(row) for row in result]
+
+    async def get_audit_log_for_table(self, table_name: str, limit: int) -> List[GetauditlogfortableRow]:
+        _key = 'get_audit_log_for_table'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, table_name, record_id, action, changed_by, changed_at FROM audit_log WHERE table_name = $1 ORDER BY changed_at DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, table_name, limit)
+        return [GetauditlogfortableRow._make_fast(row) for row in result]
+
+    async def get_dashboard_stats(self) -> Optional[GetdashboardstatsRow]:
+        _key = 'get_dashboard_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT (SELECT COUNT(*) FROM users) AS total_users, (SELECT COUNT(*) FROM posts) AS total_posts, (SELECT COUNT(*) FROM comments) AS total_comments, (SELECT COUNT(*) FROM posts WHERE status = 'published') AS published_posts, (SELECT COUNT(*) FROM posts WHERE created_at >= NOW() - INTERVAL '7 days') AS posts_this_week, (SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '7 days') AS signups_this_week, (SELECT COUNT(*) FROM comments WHERE created_at >= NOW() - INTERVAL '24 hours') AS comments_last_24h, (SELECT COUNT(*) FROM orders WHERE state = 'pending') AS pending_orders;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return GetdashboardstatsRow._make_fast(result[0]) if result else None
+
+    async def get_top_commenters(self, limit: int) -> List[GettopcommentersRow]:
+        _key = 'get_top_commenters'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT u.id, u.name, u.email, COUNT(c.id) AS comment_count, RANK() OVER (ORDER BY COUNT(c.id) DESC) AS rank FROM users u JOIN comments c ON u.id = c.user_id GROUP BY u.id, u.name, u.email ORDER BY comment_count DESC LIMIT $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit)
+        return [GettopcommentersRow._make_fast(row) for row in result]
+
+    async def get_engagement_time_series(self, created_at: datetime) -> List[GetengagementtimeseriesRow]:
+        _key = 'get_engagement_time_series'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, created_at)
+        return [GetengagementtimeseriesRow._make_fast(row) for row in result]
+
+    async def create_category(self, name: str) -> Optional[CreatecategoryRow]:
+        _key = 'create_category'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO categories (name) VALUES ($1) RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name)
+        return CreatecategoryRow._make_fast(result[0]) if result else None
+
+    async def create_post(self, user_id: int, category_id: int, title: str, content: str) -> Optional[CreatepostRow]:
+        _key = 'create_post'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO posts (user_id, category_id, title, content) VALUES ($1, $2, $3, $4) RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, category_id, title, content)
+        return CreatepostRow._make_fast(result[0]) if result else None
+
+    async def create_comment(self, post_id: int, user_id: int, content: str) -> Optional[CreatecommentRow]:
+        _key = 'create_comment'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, post_id, user_id, content)
+        return CreatecommentRow._make_fast(result[0]) if result else None
+
+    async def delete_old_users(self, created_at: datetime) -> int:
+        _key = 'delete_old_users'
+        if _key not in self._stmts:
+            self._stmts[_key] = """DELETE FROM users WHERE created_at < $1 AND isadmin = FALSE;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, created_at)
+        return 1
+
+    async def update_user_timestamp(self, updated_at: datetime, id: int) -> int:
+        _key = 'update_user_timestamp'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE users SET updated_at = $1 WHERE id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, updated_at, id)
+        return 1
+
+    async def create_notification(self, user_id: int, type: str, title: str, body: str, metadata: dict) -> Optional[CreatenotificationRow]:
+        _key = 'create_notification'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO notifications (user_id, type, title, body, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, type, title, body, metadata)
+        return CreatenotificationRow._make_fast(result[0]) if result else None
+
+    async def get_notifications_by_user(self, user_id: int, limit: int, offset: int) -> List[GetnotificationsbyuserRow]:
+        _key = 'get_notifications_by_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, limit, offset)
+        return [GetnotificationsbyuserRow._make_fast(row) for row in result]
+
+    async def get_unread_count(self, user_id: int) -> Optional[int]:
+        _key = 'get_unread_count'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT COUNT(*) AS unread_count FROM notifications WHERE user_id = $1 AND is_read = FALSE;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id)
+        return result[0]['unread_count'] if result else None
+
+    async def mark_notification_read(self, id: int, user_id: int) -> int:
+        _key = 'mark_notification_read'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, id, user_id)
+        return 1
+
+    async def mark_all_notifications_read(self, user_id: int) -> int:
+        _key = 'mark_all_notifications_read'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, user_id)
+        return 1
+
+    async def delete_old_notifications(self, user_id: int, created_at: datetime) -> int:
+        _key = 'delete_old_notifications'
+        if _key not in self._stmts:
+            self._stmts[_key] = """DELETE FROM notifications WHERE user_id = $1 AND created_at < $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, user_id, created_at)
+        return 1
+
+    async def get_notifications_by_type(self, user_id: int, type: str, limit: int) -> List[GetnotificationsbytypeRow]:
+        _key = 'get_notifications_by_type'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, type, limit)
+        return [GetnotificationsbytypeRow._make_fast(row) for row in result]
+
+    async def create_tag(self, name: str, slug: str, color: str) -> Optional[CreatetagRow]:
+        _key = 'create_tag'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, name, slug, color)
+        return CreatetagRow._make_fast(result[0]) if result else None
+
+    async def get_tag_by_slug(self, slug: str) -> Optional[GettagbyslugRow]:
+        _key = 'get_tag_by_slug'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM tags WHERE slug = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, slug)
+        return GettagbyslugRow._make_fast(result[0]) if result else None
+
+    async def get_all_tags(self) -> List[GetalltagsRow]:
+        _key = 'get_all_tags'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT * FROM tags ORDER BY name ASC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt)
+        return [GetalltagsRow._make_fast(row) for row in result]
+
+    async def add_tag_to_post(self, post_id: int, tag_id: int) -> int:
+        _key = 'add_tag_to_post'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, post_id, tag_id)
+        return 1
+
+    async def remove_tag_from_post(self, post_id: int, tag_id: int) -> int:
+        _key = 'remove_tag_from_post'
+        if _key not in self._stmts:
+            self._stmts[_key] = """DELETE FROM post_tags WHERE post_id = $1 AND tag_id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, post_id, tag_id)
+        return 1
+
+    async def get_tags_for_post(self, post_id: int) -> List[GettagsforpostRow]:
+        _key = 'get_tags_for_post'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT t.id, t.name, t.slug, t.color FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1 ORDER BY t.name;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, post_id)
+        return [GettagsforpostRow._make_fast(row) for row in result]
+
+    async def get_posts_by_tag(self, slug: str, limit: int, offset: int) -> List[GetpostsbytagRow]:
+        _key = 'get_posts_by_tag'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = $1 AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, slug, limit, offset)
+        return [GetpostsbytagRow._make_fast(row) for row in result]
+
+    async def get_top_tags(self, limit: int) -> List[GettoptagsRow]:
+        _key = 'get_top_tags'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT t.id, t.name, t.slug, t.color, COUNT(pt.post_id) AS post_count FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON pt.post_id = p.id WHERE p.status = 'published' GROUP BY t.id, t.name, t.slug, t.color ORDER BY post_count DESC LIMIT $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, limit)
+        return [GettoptagsRow._make_fast(row) for row in result]
+
+    async def upload_media(self, user_id: int, post_id: int, type: str, url: str, size_bytes: int, mime_type: str, width: int, height: int, metadata: dict) -> Optional[UploadmediaRow]:
+        _key = 'upload_media'
+        if _key not in self._stmts:
+            self._stmts[_key] = """INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata)
+        return UploadmediaRow._make_fast(result[0]) if result else None
+
+    async def get_media_by_post(self, post_id: int) -> List[GetmediabypostRow]:
+        _key = 'get_media_by_post'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, type, url, size_bytes, mime_type, width, height, created_at FROM media WHERE post_id = $1 ORDER BY created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, post_id)
+        return [GetmediabypostRow._make_fast(row) for row in result]
+
+    async def get_media_by_user(self, user_id: int, limit: int, offset: int) -> List[GetmediabyuserRow]:
+        _key = 'get_media_by_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, limit, offset)
+        return [GetmediabyuserRow._make_fast(row) for row in result]
+
+    async def get_media_by_type(self, user_id: int, type: str) -> List[GetmediabytypeRow]:
+        _key = 'get_media_by_type'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, user_id, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, type)
+        return [GetmediabytypeRow._make_fast(row) for row in result]
+
+    async def delete_media(self, id: UUID, user_id: int) -> int:
+        _key = 'delete_media'
+        if _key not in self._stmts:
+            self._stmts[_key] = """DELETE FROM media WHERE id = $1 AND user_id = $2;"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, id, user_id)
+        return 1
+
+    async def get_storage_used_by_user(self, user_id: int) -> Optional[GetstorageusedbyuserRow]:
+        _key = 'get_storage_used_by_user'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT SUM(size_bytes) AS total_bytes, COUNT(*) AS total_files, COUNT(*) FILTER (WHERE type = 'image') AS image_count, COUNT(*) FILTER (WHERE type = 'video') AS video_count, COUNT(*) FILTER (WHERE type = 'document') AS document_count FROM media WHERE user_id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id)
+        return GetstorageusedbyuserRow._make_fast(result[0]) if result else None
+
+    async def get_large_media_files(self, size_bytes: int, limit: int) -> List[GetlargemediafilesRow]:
+        _key = 'get_large_media_files'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT id, user_id, type, url, size_bytes, mime_type, created_at FROM media WHERE size_bytes > $1 ORDER BY size_bytes DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, size_bytes, limit)
+        return [GetlargemediafilesRow._make_fast(row) for row in result]
+
+    async def get_user_feed(self, user_id: int, limit: int, offset: int) -> List[GetuserfeedRow]:
+        _key = 'get_user_feed'
+        if _key not in self._stmts:
+            self._stmts[_key] = """WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = $1 ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, user_id, limit, offset)
+        return [GetuserfeedRow._make_fast(row) for row in result]
+
+    async def search_posts_full_text(self, search_query: str, limit: int) -> List[SearchpostsfulltextRow]:
+        _key = 'search_posts_full_text'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.name AS author_name, ts_rank(to_tsvector('english', p.title || ' ' || p.content), plainto_tsquery('english', $1)) AS rank FROM posts p JOIN users u ON p.user_id = u.id WHERE to_tsvector('english', p.title || ' ' || p.content) @@ plainto_tsquery('english', $1) AND p.status = 'published' ORDER BY rank DESC, p.created_at DESC LIMIT $2;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, search_query, limit)
+        return [SearchpostsfulltextRow._make_fast(row) for row in result]
+
+    async def bulk_mark_notifications_read(self, user_id: int, id: int) -> int:
+        _key = 'bulk_mark_notifications_read'
+        if _key not in self._stmts:
+            self._stmts[_key] = """UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND id = ANY($2::bigint[]);"""
+        stmt = self._stmts[_key]
+        await self.db.execute(stmt, user_id, id)
+        return 1
+
+    async def get_user_with_stats(self, id: int) -> Optional[GetuserwithstatsRow]:
+        _key = 'get_user_with_stats'
+        if _key not in self._stmts:
+            self._stmts[_key] = """SELECT u.*, (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') AS published_posts, (SELECT COUNT(*) FROM comments WHERE user_id = u.id) AS total_comments, (SELECT COUNT(*) FROM notifications WHERE user_id = u.id AND is_read = FALSE) AS unread_notifications, (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used FROM users u WHERE u.id = $1;"""
+        stmt = self._stmts[_key]
+        result = await self.db.fetch(stmt, id)
+        return GetuserwithstatsRow._make_fast(result[0]) if result else None
 

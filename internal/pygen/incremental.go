@@ -97,7 +97,27 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 	w.WriteString("from typing import Optional, List, Any, Literal\n")
 	w.WriteString("from dataclasses import dataclass\n")
 	w.WriteString("from datetime import datetime, timedelta\n")
-	w.WriteString("from decimal import Decimal\n\n")
+	w.WriteString("from decimal import Decimal\n")
+
+	// Add UUID import if any query column or param uses UUID
+	needsUUID := false
+	isScyllaDB := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
+	for _, query := range fileQueries {
+		for _, col := range query.Columns {
+			if strings.Contains(strings.ToLower(col.Type), "uuid") && !isScyllaDB {
+				needsUUID = true
+			}
+		}
+		for _, param := range query.Params {
+			if strings.Contains(strings.ToLower(param.Type), "uuid") && !isScyllaDB {
+				needsUUID = true
+			}
+		}
+	}
+	if needsUUID {
+		w.WriteString("from uuid import UUID\n")
+	}
+	w.WriteString("\n")
 
 	for _, query := range fileQueries {
 		if g.needsResultClass(query) {

@@ -1,28 +1,34 @@
 {
   "version": "1.0",
   "query_file_checksums": {
-    "db/queries/other.sql": "8fbd283a3cadc5d721fa0e1d09289810d583fb040f4b720bc7dd07c3f14df178",
-    "db/queries/post.sql": "eb65a36d70fadb51522a712e06f6c9383caa47c10fde432026548c4c4a37b138",
-    "db/queries/users.sql": "77b78604de0b6783237a6d9c5e27de9eae2f2915d472e05b3ab6bd56ee1b626e"
+    "db/queries/users.sql": "173ae13b1b54f512d432abb99ac44cc3de014641603014ad8aaf71c4bd4819cf"
   },
-  "schema_checksum": "d3894cb5528c100ff8a03d9d9c80c4aa489516d9613c378cf4ea25c5f59ccd5e",
+  "schema_checksum": "171ee2528639fefc00afe1f6aa4bcacbb98359e6d077dab8d08aa3e2e14cd4c7",
   "config_checksum": "706f737467726573716c7c666c6173685f67656e7c747275657c6173796e637067",
   "query_table_deps": {
-    "db/queries/other.sql": [
-      "users"
-    ],
-    "db/queries/post.sql": [
-      "users"
-    ],
     "db/queries/users.sql": [
-      "users"
+      "audit_log",
+      "notifications",
+      "post_tags",
+      "comments",
+      "user_post_stats",
+      "posts",
+      "orders",
+      "categories",
+      "tags",
+      "media",
+      "users",
+      "active_commenters",
+      "users;",
+      "active_users",
+      "user_activity_summary",
+      "post_stats",
+      "subscriptions"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/other.py": "24ac0842381e8456e35728cfe23f23eb44a6124e728483f0df6bbcc1141834c1",
-    "flash_gen/post.py": "aad219bff424f07f3b82cd99aaca418de8f2f2d7232ec4d1eb36fbbe17b23854",
-    "flash_gen/users.py": "966fc83a27403aeb1a3362afa609f08876b20b60ad1ef4c9dd2f98bbb88ec9cf"
+    "flash_gen/users.py": "3c916a756aab3ce4d588ff45bf1ea06183e5dcdd059248ce318469af11f6f283"
   },
-  "last_generation": "2026-06-17T02:20:59.319532363+05:30",
+  "last_generation": "2026-06-18T12:13:12.721749351+05:30",
   "OutDir": ""
 }

@@ -168,14 +168,23 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 	if hasColumns {
 		if cmd == ":one" {
 			if isSingleColumn && len(columns) > 0 {
-				w.WriteString(fmt.Sprintf("    return r.rows[0] ? r.rows[0].%s : null;\n", columns[0].Name))
+				colName := columns[0].Name
+				if strings.Contains(colName, "(") || colName == "*" {
+					w.WriteString("    return r.rows[0] ? Object.values(r.rows[0])[0] : null;\n")
+				} else {
+					w.WriteString(fmt.Sprintf("    return r.rows[0] ? r.rows[0].%s : null;\n", colName))
+				}
 			} else {
 				w.WriteString("    return r.rows[0] || null;\n")
 			}
 		} else {
 			if isSingleColumn && len(columns) > 0 {
-				w.WriteString(fmt.Sprintf("    return r.rows.map(row => row.%s);\n", columns[0].Name))
-			} else {
+				colName := columns[0].Name
+				if strings.Contains(colName, "(") || colName == "*" {
+					w.WriteString("    return r.rows.map(row => Object.values(row)[0]);\n")
+				} else {
+					w.WriteString(fmt.Sprintf("    return r.rows.map(row => row.%s);\n", colName))
+				}
 				w.WriteString("    return r.rows;\n")
 			}
 		}
@@ -230,13 +239,13 @@ func (g *Generator) generateMySQL2Execution(w *strings.Builder, paramNames []str
 	if hasColumns {
 		if cmd == ":one" {
 			if isSingleColumn && len(columns) > 0 {
-				w.WriteString(fmt.Sprintf("    return rows[0] ? rows[0].%s : null;\n", columns[0].Name))
+				w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows[0] ? Object.values(rows[0])[0] : null;\n" }; return fmt.Sprintf("    return rows[0] ? rows[0].%s : null;\n", n) }())
 			} else {
 				w.WriteString("    return rows[0] || null;\n")
 			}
 		} else {
 			if isSingleColumn && len(columns) > 0 {
-				w.WriteString(fmt.Sprintf("    return rows.map(row => row.%s);\n", columns[0].Name))
+				w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows.map(row => Object.values(row)[0]);\n" }; return fmt.Sprintf("    return rows.map(row => row.%s);\n", n) }())
 			} else {
 				w.WriteString("    return rows;\n")
 			}
@@ -306,14 +315,14 @@ func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []str
 			if len(paramNames) > 0 {
 				if isSingleColumn && len(columns) > 0 {
 					w.WriteString("    const rows = prepared.all(" + strings.Join(paramNames, ", ") + ");\n")
-					w.WriteString(fmt.Sprintf("    return rows.map(row => row.%s);\n", columns[0].Name))
+					w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows.map(row => Object.values(row)[0]);\n" }; return fmt.Sprintf("    return rows.map(row => row.%s);\n", n) }())
 				} else {
 					w.WriteString("    return prepared.all(" + strings.Join(paramNames, ", ") + ");\n")
 				}
 			} else {
 				if isSingleColumn && len(columns) > 0 {
 					w.WriteString("    const rows = prepared.all();\n")
-					w.WriteString(fmt.Sprintf("    return rows.map(row => row.%s);\n", columns[0].Name))
+					w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows.map(row => Object.values(row)[0]);\n" }; return fmt.Sprintf("    return rows.map(row => row.%s);\n", n) }())
 				} else {
 					w.WriteString("    return prepared.all();\n")
 				}
@@ -590,6 +599,10 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 		w.WriteString(fmt.Sprintf("export interface %s {\n", interfaceName))
 
 		for _, col := range query.Columns {
+			// Skip bare wildcard — unresolvable SELECT *
+			if col.Name == "*" {
+				continue
+			}
 			colType := g.inferColumnTypeFromSchema(col)
 			w.WriteString(fmt.Sprintf("  %s: %s;\n", col.Name, colType))
 		}
