@@ -59,9 +59,9 @@ body { background: #0f0f0f; color: #e0e0e0; font-family: 'Inter', sans-serif; ma
     flex: 0 0 42%; display: flex; flex-direction: column;
     overflow: hidden; background: #111; min-height: 120px;
 }
-#sql-editor { flex: 1; min-height: 0; overflow: hidden; }
+#sql-editor { flex: 1; min-height: 0; overflow: hidden; height: 100%; }
 .cm-editor { height: 100% !important; background: #111 !important; }
-.cm-scroller { overflow: auto !important; }
+.cm-scroller { overflow: auto !important; height: 100% !important; }
 
 /* ===== Resize handle ===== */
 .sql-resize-handle {
@@ -166,6 +166,7 @@ body { background: #0f0f0f; color: #e0e0e0; font-family: 'Inter', sans-serif; ma
 
 /* ===== CM6 overrides ===== */
 .cm-editor, .cm-editor.cm-focused { outline: none !important; }
+.cm-content { color: #e0e0e0 !important; caret-color: #4a9eff !important; }
 .cm-gutters { background: #111 !important; border-right: 1px solid #1e1e1e !important; }
 .cm-lineNumbers .cm-gutterElement { color: #444 !important; }
 .cm-activeLine { background: #171717 !important; }
@@ -178,11 +179,14 @@ body { background: #0f0f0f; color: #e0e0e0; font-family: 'Inter', sans-serif; ma
 .cm-tooltip.cm-tooltip-autocomplete {
     background: #161616 !important; border: 1px solid #2a2a2a !important;
     border-radius: 6px !important; box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
-    font-family: 'JetBrains Mono', monospace !important; font-size: 12px !important;
+    font-family: 'JetBrains Mono', monospace !important; font-size: 14px !important;
+    min-width: 220px !important;
 }
-.cm-tooltip-autocomplete li { padding: 5px 12px !important; color: #ccc !important; }
+.cm-tooltip-autocomplete li { padding: 7px 14px !important; color: #ccc !important; font-size: 14px !important; }
 .cm-tooltip-autocomplete li:hover,
 .cm-tooltip-autocomplete li[aria-selected] { background: #1a2535 !important; color: #e0e0e0 !important; }
+.cm-completionLabel { font-size: 14px !important; }
+.cm-completionDetail { font-size: 12px !important; color: #555 !important; margin-left: 8px !important; }
 
 .cm-completionIcon-keyword::after { content:'K' !important; background:#2a1a3a !important; color:#a78bfa !important; border-radius:3px !important; font-size:9px !important; font-weight:bold !important; width:14px !important; height:14px !important; line-height:14px !important; display:inline-block !important; text-align:center !important; }
 .cm-completionIcon-table::after   { content:'T' !important; background:#1a2535 !important; color:#60a5fa !important; border-radius:3px !important; font-size:9px !important; font-weight:bold !important; width:14px !important; height:14px !important; line-height:14px !important; display:inline-block !important; text-align:center !important; }

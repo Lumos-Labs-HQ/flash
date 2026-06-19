@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,10 @@ func NewService(adapter database.DatabaseAdapter, cfg *config.Config) *Service {
 }
 
 func (s *Service) quote(name string) string {
+	// Handle ks.table qualified names — quote each segment separately
+	if dot := strings.Index(name, "."); dot >= 0 {
+		return s.adapter.QuoteIdentifier(name[:dot]) + "." + s.adapter.QuoteIdentifier(name[dot+1:])
+	}
 	return s.adapter.QuoteIdentifier(name)
 }
 
@@ -236,7 +241,7 @@ func (s *Service) GetTableDataFiltered(tableName string, page, limit int, filter
 func (s *Service) SaveChanges(tableName string, changes []common.RowChange) error {
 	_ = s.ensureCorrectSchema()
 
-	if err := common.ValidateIdentifier(tableName); err != nil {
+	if err := common.ValidateQualifiedIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
 
@@ -282,7 +287,7 @@ func (s *Service) SaveChanges(tableName string, changes []common.RowChange) erro
 func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 	_ = s.ensureCorrectSchema()
 
-	if err := common.ValidateIdentifier(tableName); err != nil {
+	if err := common.ValidateQualifiedIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
 
@@ -312,7 +317,7 @@ func (s *Service) DeleteRows(tableName string, rowIDs []string) error {
 func (s *Service) AddRow(tableName string, data map[string]any) error {
 	_ = s.ensureCorrectSchema()
 
-	if err := common.ValidateIdentifier(tableName); err != nil {
+	if err := common.ValidateQualifiedIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
 
@@ -348,7 +353,7 @@ func (s *Service) AddRow(tableName string, data map[string]any) error {
 }
 
 func (s *Service) DeleteRow(tableName, rowID string) error {
-	if err := common.ValidateIdentifier(tableName); err != nil {
+	if err := common.ValidateQualifiedIdentifier(tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
 
@@ -844,15 +849,140 @@ func stripSQLComments(query string) string {
 	return query
 }
 
+// splitSQLStatements splits a multi-statement SQL string on top-level semicolons,
+// stripping leading comments from each statement.
+func splitSQLStatements(sql string) []string {
+	var stmts []string
+	var cur strings.Builder
+	inSingle := false
+	for i := 0; i < len(sql); i++ {
+		c := sql[i]
+		if inSingle {
+			cur.WriteByte(c)
+			if c == '\'' {
+				if i+1 < len(sql) && sql[i+1] == '\'' {
+					cur.WriteByte(sql[i+1])
+					i++
+				} else {
+					inSingle = false
+				}
+			}
+			continue
+		}
+		if c == '\'' {
+			inSingle = true
+			cur.WriteByte(c)
+			continue
+		}
+		// Skip line comments
+		if c == '-' && i+1 < len(sql) && sql[i+1] == '-' {
+			for i < len(sql) && sql[i] != '\n' {
+				i++
+			}
+			cur.WriteByte('\n')
+			continue
+		}
+		if c == ';' {
+			s := strings.TrimSpace(stripSQLComments(cur.String()))
+			if s != "" {
+				stmts = append(stmts, s)
+			}
+			cur.Reset()
+			continue
+		}
+		cur.WriteByte(c)
+	}
+	if s := strings.TrimSpace(stripSQLComments(cur.String())); s != "" {
+		stmts = append(stmts, s)
+	}
+	return stmts
+}
+
 func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 	_ = s.ensureCorrectSchema()
 	query = strings.TrimSpace(query)
+
+	// Split into individual statements and execute sequentially.
+	// Return the result of the last SELECT-type statement (or last DML result).
+	stmts := splitSQLStatements(query)
+	if len(stmts) > 1 {
+		var lastResult *common.TableData
+		var lastErr error
+		for _, stmt := range stmts {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			res, err := s.ExecuteSQL(stmt)
+			if err != nil {
+				return nil, err
+			}
+			lastResult = res
+			lastErr = err
+		}
+		_ = lastErr
+		if lastResult != nil {
+			return lastResult, nil
+		}
+	}
 
 	// Strip leading comments to detect the actual query type
 	queryForDetection := stripSQLComments(query)
 	queryUpper := strings.ToUpper(queryForDetection)
 
+	// Handle USE <keyspace> for ScyllaDB/Cassandra/ClickHouse/MySQL
+	if strings.HasPrefix(queryUpper, "USE ") {
+		// Extract only the keyspace name — stop at first whitespace or semicolon
+		rest := strings.TrimSpace(queryForDetection[4:])
+		ksName := strings.FieldsFunc(rest, func(r rune) bool {
+			return r == ';' || r == ' ' || r == '\t' || r == '\n'
+		})
+		if len(ksName) == 0 {
+			return nil, fmt.Errorf("USE requires a keyspace name")
+		}
+		ks := strings.Trim(ksName[0], `"'` + "`")
+		provider := ""
+		if s.cfg != nil {
+			provider = s.cfg.Database.Provider
+		}
+		switch provider {
+		case "scylla", "scylladb", "cassandra":
+			type SchemaSwitcher interface {
+				SetActiveSchema(ctx context.Context, schema string) error
+			}
+			if sw, ok := s.adapter.(SchemaSwitcher); ok {
+				if err := sw.SetActiveSchema(s.ctx, ks); err != nil {
+					return nil, fmt.Errorf("USE failed: %w", err)
+				}
+			}
+		case "clickhouse", "mysql":
+			if _, err := s.adapter.ExecuteQuery(s.ctx, "USE "+ks); err != nil {
+				return nil, fmt.Errorf("USE failed: %w", err)
+			}
+		}
+		return &common.TableData{
+			Columns: []common.ColumnInfo{{Name: "result", Type: "TEXT"}},
+			Rows:    []map[string]any{{"result": "Switched to keyspace: " + ks}},
+			Total:   1, Page: 1, Limit: 1,
+		}, nil
+	}
+
 	// Detect query type more comprehensively
+	// For CQL: qualify unqualified table refs using active keyspace
+	provider := ""
+	if s.cfg != nil {
+		provider = s.cfg.Database.Provider
+	}
+	qualifiedQuery := query
+	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		type KSGetter interface{ CurrentKeyspace() string }
+		if kg, ok := s.adapter.(KSGetter); ok {
+			if ks := kg.CurrentKeyspace(); ks != "" && !isSystemKeyspace(ks) {
+				qualifiedQuery = qualifyCQLQuery(query, ks)
+			}
+		}
+	}
+
 	isSelectQuery := strings.HasPrefix(queryUpper, "SELECT") ||
 		strings.HasPrefix(queryUpper, "SHOW") ||
 		strings.HasPrefix(queryUpper, "DESCRIBE") ||
@@ -865,7 +995,7 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 	isSetStatement := strings.HasPrefix(queryUpper, "SET")
 
 	if isSelectQuery {
-		result, err := s.adapter.ExecuteQuery(s.ctx, query)
+		result, err := s.adapter.ExecuteQuery(s.ctx, qualifiedQuery)
 		if err != nil {
 			return nil, fmt.Errorf("query execution failed: %w", err)
 		}
@@ -901,7 +1031,7 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 		}
 	}
 
-	if err := s.adapter.ExecuteMigration(s.ctx, query); err != nil {
+	if err := s.adapter.ExecuteMigration(s.ctx, qualifiedQuery); err != nil {
 		return nil, fmt.Errorf("query execution failed: %w", err)
 	}
 
@@ -919,6 +1049,33 @@ func extractKeyspace(name string) string {
 		return name[:idx]
 	}
 	return ""
+}
+
+// qualifyCQLQuery rewrites unqualified table references to use the given keyspace.
+// Only rewrites when table name is NOT already keyspace-qualified (not followed by a dot).
+func qualifyCQLQuery(query, ks string) string {
+	re := regexp.MustCompile(`(?i)\b(FROM|INTO|UPDATE|JOIN)\s+([a-zA-Z_]\w*)`)
+	matches := re.FindAllStringSubmatchIndex(query, -1)
+	if len(matches) == 0 {
+		return query
+	}
+	var out strings.Builder
+	prev := 0
+	for _, m := range matches {
+		// m[0]:m[1] = full match, m[2]:m[3] = keyword, m[4]:m[5] = table name
+		matchEnd := m[1]
+		// If next char after match is '.', table is already ks.qualified — skip
+		if matchEnd < len(query) && query[matchEnd] == '.' {
+			continue
+		}
+		kw := query[m[2]:m[3]]
+		tbl := query[m[4]:m[5]]
+		out.WriteString(query[prev:m[0]])
+		out.WriteString(kw + " " + ks + "." + tbl)
+		prev = matchEnd
+	}
+	out.WriteString(query[prev:])
+	return out.String()
 }
 
 func (s *Service) UpdateRow(table string, id interface{}, data map[string]interface{}) error {
@@ -1097,8 +1254,65 @@ func (s *Service) GetEditorHints() (map[string]any, error) {
 	type SchemaFetcher interface {
 		PullCompleteSchema(ctx context.Context) ([]types.SchemaTable, error)
 	}
+	type KSGetter interface{ CurrentKeyspace() string }
+
 	if fetcher, ok := s.adapter.(SchemaFetcher); ok {
 		if schemaTables, err := fetcher.PullCompleteSchema(s.ctx); err == nil {
+			currentKS := ""
+			if kg, ok2 := s.adapter.(KSGetter); ok2 {
+				currentKS = kg.CurrentKeyspace()
+				if currentKS == "system" || isSystemKeyspace(currentKS) {
+					currentKS = ""
+				}
+			}
+
+			isCQL := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
+
+			// For CQL: fetch columns for ALL user keyspaces from system_schema
+			if isCQL {
+				if allKS, err2 := s.adapter.GetKeyspaces(s.ctx); err2 == nil {
+					for _, ks := range allKS {
+						if isSystemKeyspace(ks) {
+							continue
+						}
+						r, err3 := s.adapter.ExecuteQuery(s.ctx,
+							fmt.Sprintf(`SELECT table_name, column_name, type FROM system_schema.columns WHERE keyspace_name = '%s' ALLOW FILTERING`, ks))
+						if err3 != nil {
+							continue
+						}
+						tblMap := make(map[string][]map[string]string)
+						for _, row := range r.Rows {
+							tbl := toString(row["table_name"])
+							if tbl == "_flash_migrations" {
+								continue
+							}
+							tblMap[tbl] = append(tblMap[tbl], map[string]string{
+								"name": toString(row["column_name"]),
+								"type": toString(row["type"]),
+							})
+						}
+						for tbl, cols := range tblMap {
+							// Only store as ks.table — no plain name to avoid cross-keyspace collisions
+							schema[ks+"."+tbl] = cols
+						}
+					}
+				}
+				// Collect user keyspaces from schema keys
+				var keyspaces []string
+				ksSet := make(map[string]bool)
+				for key := range schema {
+					if dot := strings.Index(key, "."); dot >= 0 {
+						ks := key[:dot]
+						if !ksSet[ks] {
+							ksSet[ks] = true
+							keyspaces = append(keyspaces, ks)
+						}
+					}
+				}
+				return map[string]any{"provider": provider, "schema": schema, "keyspaces": keyspaces, "currentKeyspace": currentKS}, nil
+			}
+
+			// Non-CQL: use PullCompleteSchema result
 			for _, t := range schemaTables {
 				if t.Name == "_flash_migrations" {
 					continue
@@ -1114,7 +1328,7 @@ func (s *Service) GetEditorHints() (map[string]any, error) {
 				}
 				schema[t.Name] = cols
 			}
-			return map[string]any{"provider": provider, "schema": schema}, nil
+			return map[string]any{"provider": provider, "schema": schema, "keyspaces": []string{}, "currentKeyspace": ""}, nil
 		}
 	}
 
@@ -1147,12 +1361,32 @@ func (s *Service) GetEditorHints() (map[string]any, error) {
 			}
 			mu.Lock()
 			schema[name] = cols
+			if dotIdx := strings.Index(name, "."); dotIdx >= 0 {
+				plainName := name[dotIdx+1:]
+				if _, exists := schema[plainName]; !exists {
+					schema[plainName] = cols
+				}
+			}
 			mu.Unlock()
 		}(tableName)
 	}
 	wg.Wait()
 
-	return map[string]any{"provider": provider, "schema": schema}, nil
+	var keyspaces []string
+	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+		ksSet := make(map[string]bool)
+		for name := range schema {
+			if dotIdx := strings.Index(name, "."); dotIdx >= 0 {
+				ks := name[:dotIdx]
+				if !ksSet[ks] {
+					ksSet[ks] = true
+					keyspaces = append(keyspaces, ks)
+				}
+			}
+		}
+	}
+
+	return map[string]any{"provider": provider, "schema": schema, "keyspaces": keyspaces}, nil
 }
 
 // sortTablesByDependency sorts tables in topological order based on foreign key dependencies.

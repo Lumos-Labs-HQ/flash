@@ -1,5 +1,7 @@
 // Schema cache - populated on page load
 let schemaCache = null;
+let keyspaceCache = []; // keyspace names for CQL USE completions
+let currentKeyspace = ''; // active keyspace (from server or USE statement)
 let dbProvider = 'sql';
 let schemaLoaded = false;
 
@@ -187,6 +189,9 @@ const NEXT_KEYWORDS = {
 // Keywords that expect table names after them
 const TABLE_CONTEXT = new Set(['FROM', 'JOIN', 'INTO', 'UPDATE', 'TABLE', 'REFERENCES']);
 
+// Keywords that expect keyspace names after them (CQL)
+const KEYSPACE_CONTEXT = new Set(['USE']);
+
 // Keywords that expect column names after them
 const COLUMN_CONTEXT = new Set(['SELECT', 'WHERE', 'AND', 'OR', 'SET', 'ON', 'BY', 'HAVING', 'RETURNING', 'ORDER']);
 
@@ -227,16 +232,20 @@ async function loadEditorHints() {
     if (json.success && json.data) {
       schemaCache = json.data.schema || {};
       dbProvider = json.data.provider || 'sql';
+      keyspaceCache = json.data.keyspaces || [];
+      currentKeyspace = json.data.currentKeyspace || '';
       schemaLoaded = true;
-      console.log('[SQL Hints] Schema loaded:', Object.keys(schemaCache).length, 'tables, provider:', dbProvider);
+      console.log('[SQL Hints] provider:', dbProvider, '| keyspaces:', keyspaceCache, '| currentKS:', currentKeyspace, '| schema keys:', Object.keys(schemaCache));
     } else {
       console.warn('[SQL Hints] Failed to load hints:', json.message || 'Unknown error');
       schemaCache = {};
+      keyspaceCache = [];
       schemaLoaded = true;
     }
   } catch (e) {
     console.error('[SQL Hints] Failed to load editor hints:', e);
     schemaCache = {};
+    keyspaceCache = [];
     schemaLoaded = true;
   }
 }
@@ -267,64 +276,133 @@ function sqlCompletionSource(context) {
   const lineText = line.text;
   const ch = pos - line.from;
 
-  // Skip if in a line comment
+  // Skip inside line comments
   const beforeCursor = lineText.substring(0, ch);
   if (beforeCursor.trimStart().startsWith('--')) return null;
 
-  // Find word start (letters, digits, underscore)
+  // Find the start of the current word
   let start = ch;
-  while (start > 0 && /\w/.test(lineText[start - 1])) start--;
+  while (start > 0 && /[\w]/.test(lineText[start - 1])) start--;
 
   const word = lineText.substring(start, ch);
   const prefix = word.toLowerCase();
 
-  // Only trigger on explicit request OR when typing word chars
-  if (!context.explicit && word.length === 0) return null;
-
   const fullText = doc.toString();
-  const textBefore = fullText.substring(0, line.from + start);
+  const textBeforeWord = fullText.substring(0, line.from + start);
+  const isCQL = dbProvider === 'scylla' || dbProvider === 'scylladb' || dbProvider === 'cassandra';
 
-  // table.column pattern
+  // ── 1. Dot completion: ks.⎵ or table.⎵ ─────────────────────────────────
+  // Check BEFORE the empty-word guard so typing "ks." triggers immediately
   const dotMatch = lineText.substring(0, start).match(/(\w+)\.\s*$/);
   if (dotMatch) {
-    const tableName = resolveTableOrAlias(dotMatch[1].toLowerCase(), fullText);
-    if (tableName) {
-      return formatCompletionResult(getColumnsForTable(tableName, prefix), line.from + start, pos);
+    const left = dotMatch[1].toLowerCase();
+    const resolved = resolveTableOrAlias(left, fullText);
+    if (resolved) {
+      return formatCompletionResult(getColumnsForTable(resolved, prefix), line.from + start, pos);
     }
+    const ksTables = getTablesInKeyspace(left, prefix);
+    if (ksTables.length > 0) {
+      return formatCompletionResult(ksTables, line.from + start, pos);
+    }
+    // It's a dot after a word but no match — don't fall through to keyword suggestions
+    return null;
   }
 
-  const lastKeyword = findLastKeyword(textBefore);
-  const expectsTable = TABLE_CONTEXT.has(lastKeyword);
-  const expectsColumn = COLUMN_CONTEXT.has(lastKeyword);
+  if (!context.explicit && word.length === 0) {
+    // At start of a statement with no prefix: show top-level statement keywords
+    const ctx0 = getContext(textBeforeWord);
+    if (ctx0 === '') {
+      const stmtKws = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP',
+                       'TRUNCATE', 'WITH', 'EXPLAIN', 'USE', 'DESCRIBE', 'SHOW'];
+      const opts = stmtKws.map(k => ({ label: k, type: 'keyword' }));
+      return { from: pos, to: pos, options: opts };
+    }
+    return null;
+  }
+
+  // ── 2. Determine context keyword (last meaningful SQL keyword before cursor) ──
+  const ctx = getContext(textBeforeWord);
   const tables = extractTables(fullText);
+  const activeKs = isCQL ? getActiveKeyspace(textBeforeWord) : '';
 
   let completions = [];
-  if (expectsTable) {
-    completions.push(...getTableCompletions(prefix));
-    completions.push(...getKeywordCompletions(prefix, lastKeyword));
-  } else if (expectsColumn) {
-    completions.push(...getColumnCompletions(prefix, tables));
-    completions.push(...getTableCompletions(prefix));
-    completions.push(...getKeywordCompletions(prefix, lastKeyword));
-  } else {
-    completions.push(...getKeywordCompletions(prefix, lastKeyword));
-    completions.push(...getTableCompletions(prefix));
-    completions.push(...getColumnCompletions(prefix, tables));
+
+  switch (ctx) {
+    case 'USE':
+      // Suggest keyspace names
+      completions.push(...getKeyspaceCompletions(prefix));
+      break;
+
+    case 'FROM':
+    case 'JOIN':
+    case 'INTO':
+    case 'UPDATE':
+    case 'TABLE':
+      // For CQL: suggest keyspace names first, then table names
+      if (isCQL) {
+        completions.push(...getKeyspaceCompletions(prefix));
+        completions.push(...getCQLTableCompletions(prefix, activeKs));
+      }
+      completions.push(...getTableCompletions(prefix, activeKs));
+      completions.push(...getKeywordCompletions(prefix, ctx));
+      break;
+
+    case 'SELECT':
+      // Suggest *, columns, then keywords
+      if (!prefix || '*'.startsWith(prefix))
+        completions.push({ text: '*', displayText: '* — all columns', className: 'hint-column', apply: applyColumn });
+      const selectTables = tables.length > 0 ? tables : Object.keys(schemaCache || {}).filter(k => !k.includes('.'));
+      completions.push(...getColumnCompletions(prefix, selectTables));
+      completions.push(...getKeywordCompletions(prefix, ctx));
+      break;
+
+    case 'WHERE':
+    case 'AND':
+    case 'OR':
+    case 'SET':
+    case 'ON':
+    case 'HAVING':
+    case 'RETURNING':
+      // Suggest columns from tables in context
+      completions.push(...getColumnCompletions(prefix, tables));
+      completions.push(...getKeywordCompletions(prefix, ctx));
+      break;
+
+    case 'ORDER':
+    case 'GROUP':
+      // Next must be BY — suggest keyword only
+      completions.push(...getKeywordCompletions(prefix, ctx));
+      break;
+
+    case 'BY':
+      // After ORDER BY / GROUP BY — suggest columns
+      completions.push(...getColumnCompletions(prefix, tables));
+      completions.push(...getKeywordCompletions(prefix, ctx));
+      break;
+
+    default:
+      // No strong context — suggest keywords first, then tables
+      completions.push(...getKeywordCompletions(prefix, ctx));
+      if (isCQL) completions.push(...getCQLTableCompletions(prefix, activeKs));
+      completions.push(...getTableCompletions(prefix, activeKs));
+      break;
   }
 
   return formatCompletionResult(completions, line.from + start, pos);
 }
 
 /**
- * Find the last SQL keyword in text — fast single reverse-scan.
- * Builds a reversed token list and picks the first token that matches a keyword.
+ * Returns the last meaningful SQL keyword before the cursor position.
+ * Scans tokens right-to-left, skipping identifiers and string literals.
  */
-function findLastKeyword(text) {
-  // Tokenize by whitespace/punctuation, scan from the end
-  const tokens = text.trim().split(/[\s,;()]+/).filter(Boolean);
+function getContext(textBefore) {
+  // Tokenise on whitespace/punctuation, get last SQL keyword
+  const tokens = textBefore.trim().split(/[\s,;()\n\r]+/).filter(Boolean);
   for (let i = tokens.length - 1; i >= 0; i--) {
     const upper = tokens[i].toUpperCase();
-    if (TABLE_CONTEXT.has(upper) || COLUMN_CONTEXT.has(upper) || NEXT_KEYWORDS[upper]) {
+    if (TABLE_CONTEXT.has(upper) || COLUMN_CONTEXT.has(upper) ||
+        KEYSPACE_CONTEXT.has(upper) || upper === 'BY' ||
+        upper === 'ORDER' || upper === 'GROUP') {
       return upper;
     }
   }
@@ -332,45 +410,111 @@ function findLastKeyword(text) {
 }
 
 /**
- * Extract table names from query
+ * Parse the active keyspace from USE statements appearing before the cursor.
+ * e.g. "USE ndiscord;\nSELECT * FROM ..." → "ndiscord"
+ * Falls back to currentKeyspace (from server hints).
+ */
+function getActiveKeyspace(textBeforeCursor) {
+  const useRe = /\bUSE\s+([\w]+)/gi;
+  let match, lastKs = '';
+  while ((match = useRe.exec(textBeforeCursor)) !== null) {
+    lastKs = match[1].toLowerCase();
+  }
+  // Only use server currentKeyspace if it's a real user keyspace (in keyspaceCache)
+  if (!lastKs && currentKeyspace && keyspaceCache.includes(currentKeyspace)) {
+    return currentKeyspace;
+  }
+  return lastKs;
+}
+
+/**
+ * For CQL: return table completions from ks.table keys.
+ * If activeKs set, filter to that keyspace only.
+ */
+function getCQLTableCompletions(prefix, activeKs) {
+  if (!schemaCache) return [];
+  const completions = [];
+  const seen = new Set();
+  for (const key of Object.keys(schemaCache)) {
+    const dot = key.indexOf('.');
+    if (dot < 0) continue;
+    const ks = key.substring(0, dot);
+    const tbl = key.substring(dot + 1);
+    if (activeKs && ks.toLowerCase() !== activeKs.toLowerCase()) continue;
+    const dedup = ks + '.' + tbl;
+    if (!seen.has(dedup) && matchesPrefix(tbl, prefix)) {
+      seen.add(dedup);
+      completions.push({ text: tbl, displayText: ks + '.' + tbl, className: 'hint-table', apply: applyTable });
+    }
+  }
+  return completions;
+}
+
+/**
+ * Find the last SQL keyword in text — kept for updateSchemaFromQuery usage.
+ */
+function findLastKeyword(text) {
+  const tokens = text.trim().split(/[\s,;()]+/).filter(Boolean);
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const upper = tokens[i].toUpperCase();
+    if (TABLE_CONTEXT.has(upper) || COLUMN_CONTEXT.has(upper) || KEYSPACE_CONTEXT.has(upper) || NEXT_KEYWORDS[upper]) {
+      return upper;
+    }
+  }
+  return '';
+}
+
+/**
+ * Extract table names from query — returns schemaCache keys (ks.table for CQL, plain for SQL)
  */
 function extractTables(queryText) {
   const tables = [];
   if (!schemaCache) return tables;
+  const isCQL = dbProvider === 'scylla' || dbProvider === 'scylladb' || dbProvider === 'cassandra';
 
-  const patterns = [
-    /\bFROM\s+(\w+)/gi,
-    /\bJOIN\s+(\w+)/gi,
-    /\bUPDATE\s+(\w+)/gi,
-    /\bINTO\s+(\w+)/gi
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(queryText)) !== null) {
-      const name = match[1].toLowerCase();
-      if (schemaCache[name] && !tables.includes(name)) {
-        tables.push(name);
+  const patterns = [/\bFROM\s+([\w.]+)/gi, /\bJOIN\s+([\w.]+)/gi, /\bUPDATE\s+([\w.]+)/gi, /\bINTO\s+([\w.]+)/gi];
+  for (const pat of patterns) {
+    let m;
+    while ((m = pat.exec(queryText)) !== null) {
+      const raw = m[1].toLowerCase();
+      if (isCQL) {
+        // raw may be "ks.table" or "table"
+        if (schemaCache[raw]) { if (!tables.includes(raw)) tables.push(raw); continue; }
+        // try finding ks.raw in cache
+        for (const key of Object.keys(schemaCache)) {
+          if (key.endsWith('.' + raw) && !tables.includes(key)) { tables.push(key); break; }
+        }
+      } else {
+        if (schemaCache[raw] && !tables.includes(raw)) tables.push(raw);
       }
     }
   }
-
   return tables;
 }
 
+
 /**
- * Resolve table name or alias
+ * Resolve table name or alias — returns the schemaCache key for the table
  */
 function resolveTableOrAlias(alias, text) {
   if (!schemaCache) return null;
-  if (schemaCache[alias]) return alias;
-
+  const a = alias.toLowerCase();
+  // Direct hit (non-CQL plain name, or ks.table)
+  if (schemaCache[a]) return a;
+  // For CQL: find any ks.alias key
+  for (const key of Object.keys(schemaCache)) {
+    if (key.endsWith('.' + a)) return key;
+  }
+  // Resolve via alias: "tablename alias" or "tablename AS alias"
   const fullText = text || getEditorText();
-  const regex = new RegExp(`(\\w+)\\s+(?:AS\\s+)?${alias}\\b`, 'gi');
-  const match = regex.exec(fullText);
-  if (match) {
-    const tableName = match[1].toLowerCase();
-    if (schemaCache[tableName]) return tableName;
+  const regex = new RegExp(`(\\w+(?:\\.\\w+)?)\\s+(?:AS\\s+)?${a}\\b`, 'gi');
+  const m = regex.exec(fullText);
+  if (m) {
+    const raw = m[1].toLowerCase();
+    if (schemaCache[raw]) return raw;
+    for (const key of Object.keys(schemaCache)) {
+      if (key.endsWith('.' + raw)) return key;
+    }
   }
   return null;
 }
@@ -414,17 +558,59 @@ function getKeywordCompletions(prefix, lastKeyword) {
 }
 
 /**
+ * Get tables belonging to a keyspace for dot-completion (ks.⎵)
+ */
+function getTablesInKeyspace(ksName, prefix) {
+  if (!schemaCache) return [];
+  const completions = [];
+  const ksLower = ksName.toLowerCase();
+  for (const key of Object.keys(schemaCache)) {
+    const dot = key.indexOf('.');
+    if (dot < 0) continue;
+    if (key.substring(0, dot).toLowerCase() !== ksLower) continue;
+    const tbl = key.substring(dot + 1);
+    if (matchesPrefix(tbl, prefix)) {
+      completions.push({ text: tbl, displayText: key, className: 'hint-table', apply: applyTable });
+    }
+  }
+  return completions;
+}
+
+/**
+ * Get keyspace completions (CQL USE command)
+ */
+function getKeyspaceCompletions(prefix) {
+  const completions = [];
+  for (const ks of keyspaceCache) {
+    if (matchesPrefix(ks, prefix)) {
+      completions.push({
+        text: ks,
+        displayText: ks,
+        className: 'hint-table',
+        apply: applyTable
+      });
+    }
+  }
+  return completions;
+}
+
+/**
  * Get table completions
  */
-function getTableCompletions(prefix) {
+function getTableCompletions(prefix, activeKs) {
   if (!schemaCache) return [];
 
   const completions = [];
+  const seen = new Set();
+
   for (const tableName of Object.keys(schemaCache)) {
-    if (matchesPrefix(tableName, prefix)) {
+    // Skip qualified ks.table keys — they're handled by getCQLTableCompletions / dot-completion
+    if (tableName.includes('.')) continue;
+    if (!seen.has(tableName) && matchesPrefix(tableName, prefix)) {
+      seen.add(tableName);
       completions.push({
         text: tableName,
-        displayText: tableName,
+        displayText: (activeKs ? activeKs + '.' : '') + tableName,
         className: 'hint-table',
         apply: applyTable
       });
@@ -526,7 +712,7 @@ function formatCompletionResult(completions, from, to) {
   });
 
   // Limit results
-  const limited = unique.slice(0, 20);
+  const limited = unique.slice(0, 30);
 
   return {
     from,

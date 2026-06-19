@@ -484,6 +484,9 @@ func (a *Adapter) currentKeyspace() string {
 	return "system"
 }
 
+// CurrentKeyspace returns the active keyspace (exported for hints).
+func (a *Adapter) CurrentKeyspace() string { return a.currentKeyspace() }
+
 func sanitizeKeyspace(name string) string {
 	return strings.ReplaceAll(name, "-", "_")
 }

@@ -426,11 +426,16 @@ func (s *Service) getSQLiteMetrics(ctx context.Context, m *DBMetrics) (*DBMetric
 }
 
 func (s *Service) getScyllaMetrics(ctx context.Context, m *DBMetrics) (*DBMetrics, error) {
-	tables, err := s.adapter.GetAllTableNames(ctx)
-	if err != nil {
-		return m, nil
+	// Get all user keyspaces
+	allKS, _ := s.adapter.GetKeyspaces(ctx)
+	var userKS []string
+	for _, k := range allKS {
+		if !isSystemKeyspace(k) {
+			userKS = append(userKS, k)
+		}
 	}
 
+	// Table count + row counts per table
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -439,30 +444,63 @@ func (s *Service) getScyllaMetrics(ctx context.Context, m *DBMetrics) (*DBMetric
 		go func() { defer wg.Done(); fn() }()
 	}
 
-	// Table sizes + row counts
-	for _, table := range tables {
-		if table == "_flash_migrations" {
+	for _, ks := range userKS {
+		ksName := ks
+		// Get tables in this keyspace
+		r, err := s.adapter.ExecuteQuery(ctx,
+			fmt.Sprintf(`SELECT table_name FROM system_schema.tables WHERE keyspace_name = '%s'`, ksName))
+		if err != nil {
 			continue
 		}
-		tbl := table
-		run(func() {
-			r, err := s.adapter.ExecuteQueryWithArgs(ctx,
-				fmt.Sprintf("SELECT COUNT(*) AS cnt FROM %s", s.quote(tbl)))
-			if err == nil && len(r.Rows) > 0 {
-				cnt := toInt64(r.Rows[0]["cnt"])
-				mu.Lock()
-				m.TableSizes = append(m.TableSizes, TableSize{
-					Name:     tbl,
-					RowCount: cnt,
-				})
-				m.RowsFetched += cnt
-				mu.Unlock()
+		for _, row := range r.Rows {
+			tbl := toString(row["table_name"])
+			if tbl == "" || tbl == "_flash_migrations" {
+				continue
 			}
-		})
+			tbl, ksName := tbl, ksName
+			run(func() {
+				cr, err := s.adapter.ExecuteQuery(ctx,
+					fmt.Sprintf(`SELECT COUNT(*) AS cnt FROM "%s"."%s"`, ksName, tbl))
+				if err == nil && len(cr.Rows) > 0 {
+					cnt := toInt64(cr.Rows[0]["cnt"])
+					mu.Lock()
+					m.TableSizes = append(m.TableSizes, TableSize{
+						Name:     ksName + "." + tbl,
+						RowCount: cnt,
+					})
+					m.RowsFetched += cnt
+					mu.Unlock()
+				}
+			})
+		}
 	}
 
+	// Keyspace / table count as "connections" equivalent
+	run(func() {
+		r, err := s.adapter.ExecuteQuery(ctx,
+			`SELECT COUNT(*) AS cnt FROM system_schema.tables WHERE keyspace_name NOT IN ('system','system_schema','system_auth','system_distributed','system_traces')`)
+		if err == nil && len(r.Rows) > 0 {
+			mu.Lock()
+			m.TotalConnections = toInt(r.Rows[0]["cnt"])
+			mu.Unlock()
+		}
+	})
+
 	wg.Wait()
+	m.ActiveConnections = len(userKS)
+	m.MaxConnections = len(userKS)
 	return m, nil
+}
+
+func isSystemKeyspace(ks string) bool {
+	switch ks {
+	case "system", "system_schema", "system_auth", "system_distributed", "system_traces",
+		"system_virtual_schema", "system_views", "system_replicated_keys",
+		"dse_system", "dse_auth", "dse_leases", "dse_perf", "dse_security",
+		"solr_admin", "OpsCenter", "HiveMetaStore":
+		return true
+	}
+	return false
 }
 
 // helpers

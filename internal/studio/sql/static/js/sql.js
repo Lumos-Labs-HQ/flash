@@ -180,6 +180,11 @@ function initializeEditor() {
         customKeymap,
         languageCompartment.of(sql()),
         oneDark,
+        EditorView.theme({
+          '&': { height: '100%' },
+          '.cm-scroller': { overflow: 'auto' },
+          '.cm-content': { color: '#e0e0e0', caretColor: '#4a9eff' },
+        }),
         updateListener,
         highlightCompartment.of(EditorView.decorations.of(Decoration.none)),
         placeholder('Enter your SQL query here...'),
@@ -407,8 +412,12 @@ async function runQuery() {
 
 // Detect query type (strips leading comments)
 function getQueryType(query) {
+  // For multi-statement queries, detect type from the LAST statement
+  const stmts = query.split(';').map(s => s.trim()).filter(s => s && !s.startsWith('--'));
+  const lastStmt = stmts[stmts.length - 1] || query;
+
   // Remove leading comments and whitespace to find the actual query
-  let cleaned = query.trim();
+  let cleaned = lastStmt.trim();
   // Strip single-line comments at the start
   while (cleaned.startsWith('--') || cleaned.startsWith('#')) {
     const newline = cleaned.indexOf('\n');
