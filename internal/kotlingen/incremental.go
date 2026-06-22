@@ -150,7 +150,10 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 		if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowType == queryPascal(q.Name)+"Row" {
 			w.WriteString(fmt.Sprintf("data class %s(\n", rowType))
 			for i, col := range columns {
-				kt := g.sqlTypeToKotlin(col.Type, col.Nullable)
+				// For JOIN/aggregate result rows, use nullable for non-primitive types
+				// because LEFT JOIN columns and computed columns can be null in JDBC
+				nullable := col.Nullable || col.IsComputed || !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false))
+				kt := g.sqlTypeToKotlin(col.Type, nullable)
 				comma := ","
 				if i == len(columns)-1 {
 					comma = ""

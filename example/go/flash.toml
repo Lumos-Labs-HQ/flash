@@ -13,5 +13,5 @@ export_path = "db/export"
 provider = "postgresql"
 url_env = "DATABASE_URL"
 
-[gen.go]
+[gen.java]
 enabled = true
