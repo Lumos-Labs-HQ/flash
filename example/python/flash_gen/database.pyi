@@ -4,6 +4,7 @@
 from typing import Any, Optional, List, Literal
 from datetime import datetime, timedelta
 from decimal import Decimal
+from uuid import UUID
 from .users import CreateuserRow, CreateuserfullRow, GetuserRow, GetuserbyemailRow, UpdateusernameRow, ListusersRow, UpsertuserRow, UpsertuserwithcoalesceRow, GetuserswithnulladdressRow, GetuserswithbioRow, GetuserdisplayinfoRow, SearchuserswithcoalesceRow, GetuserscreatedbetweenRow, GetusersbyagerangeRow, GetusersbygeneratedrangeRow, GetrecentusersRow, GetuserpreferencesRow, FindusersbyjsonkeyRow, FindusersbyjsoncontainsRow, GetuserswithtagRow, GetuserswithanytagRow, GetusershippingaddressRow, GetcomplexuseranalyticsRow, GetpostwithactivecommentersRow, GetuserpostrankingsRow, GetusertrendingpostsRow, GetpostcountbyuserRow, GetuserswithmanypostsRow, GetpostswithcommentcountRow, GetuserswithactivitylevelRow, GetpostwithcommentsRow, GetpostdetailswithallrelationsRow, CountusersRow, GetuserrolecountRow, GetuseragestatsRow, GetpostsgroupedbystatusRow, GetdistinctcommentersRow, GetlatestpostperuserRow, SearchusersRow, SearchpostsbytitleRow, FulltextsearchpostsRow, GetuserregistrationstatsRow, GetweeklypoststatsRow, GetusersinidsRow, GetusersbynamesRow, GetuserswhocommentedRow, GetuserswithnopostsRow, GetallcontentbyuserRow, GetactiveusersRow, GetuseractivitysummaryRow, GetpoststatsRow, GetusersubscriptionsRow, CreatesubscriptionRow, GetordersbyuserRow, GetordersinstateRow, GetauditlogforuserRow, GetauditlogfortableRow, GetdashboardstatsRow, GettopcommentersRow, GetengagementtimeseriesRow, CreatecategoryRow, CreatepostRow, CreatecommentRow, CreatenotificationRow, GetnotificationsbyuserRow, GetnotificationsbytypeRow, CreatetagRow, GettagbyslugRow, GetalltagsRow, GettagsforpostRow, GetpostsbytagRow, GettoptagsRow, UploadmediaRow, GetmediabypostRow, GetmediabyuserRow, GetmediabytypeRow, GetstorageusedbyuserRow, GetlargemediafilesRow, GetuserfeedRow, SearchpostsfulltextRow, GetuserwithstatsRow
 
 class Queries:
@@ -109,4 +110,4 @@ class Queries:
     async def bulk_mark_notifications_read(self, user_id: int, id: int) -> int: ...
     async def get_user_with_stats(self, id: int) -> Optional[GetuserwithstatsRow]: ...
 
-def new(db: Any) -> Queries: ...
+def newq(db: Any) -> Queries: ...

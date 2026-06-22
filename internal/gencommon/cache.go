@@ -38,10 +38,19 @@ func (c *GenerationCache) outDir() string {
 	return "flash_gen"
 }
 
-// NewGenerationCache creates a new cache or loads existing one
+// NewGenerationCache creates a new cache or loads existing one from default "flash_gen" dir.
+// Use NewGenerationCacheWithDir to specify a different output directory.
 func NewGenerationCache() *GenerationCache {
+	return NewGenerationCacheWithDir("")
+}
+
+// NewGenerationCacheWithDir creates a new cache with the specified output directory.
+// The OutDir is set BEFORE loading, so the cache loads from the correct directory
+// and avoids cross-contamination between generators.
+func NewGenerationCacheWithDir(outDir string) *GenerationCache {
 	cache := &GenerationCache{
 		Version:                "1.0",
+		OutDir:                 outDir,
 		QueryFileChecksums:     make(map[string]string),
 		SchemaChecksum:         "",
 		ConfigChecksum:         "",
@@ -50,7 +59,7 @@ func NewGenerationCache() *GenerationCache {
 		LastGeneration:         time.Time{},
 	}
 
-	// Try to load existing cache
+	// Try to load existing cache (now uses correct OutDir)
 	_ = cache.Load()
 	return cache
 }

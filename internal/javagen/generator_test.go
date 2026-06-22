@@ -4,9 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"os"
+
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
-	"os"
 )
 
 func newGen(provider string) *Generator {
@@ -285,7 +286,8 @@ func TestGenerateQueryMethod_OneRow(t *testing.T) {
 	}
 	if !strings.Contains(src, "throws java.sql.SQLException") {
 		t.Error("missing throws clause for JDBC")
-	}}
+	}
+}
 
 func TestGenerateQueryMethod_Many(t *testing.T) {
 	g := newGen("postgresql")
@@ -352,7 +354,8 @@ func TestGenerateQueryMethod_Exec(t *testing.T) {
 
 	if !strings.Contains(src, "public void deleteUser(") {
 		t.Error("exec method should return void")
-	}}
+	}
+}
 
 func TestGenerateQueryMethod_Scylla(t *testing.T) {
 	g := newGen("scylla")

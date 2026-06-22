@@ -94,6 +94,15 @@ func (g *Generator) generateSingleJavaFile(src string, queries []*parser.Query, 
 				needsLocalDateTime = true
 			}
 		}
+		for _, param := range q.Params {
+			jt := g.sqlTypeToJava(param.Type, false)
+			if jt == "UUID" {
+				needsUUID = true
+			}
+			if jt == "LocalDateTime" {
+				needsLocalDateTime = true
+			}
+		}
 	}
 	if needsUUID {
 		w.WriteString("import java.util.UUID;\n")
@@ -131,7 +140,7 @@ func (g *Generator) generateSingleJavaFile(src string, queries []*parser.Query, 
 	for _, q := range queries {
 		columns := g.expandWildcardColumns(q)
 		cmd := strings.ToLower(q.Cmd)
-		rowType := queryPascal(q.Name) + "Row"
+		rowType := gencommon.QueryPascal(q.Name) + "Row"
 		if mt := g.modelTypeForQuery(q, columns); mt != "" {
 			continue // uses existing model type, no Row file needed
 		}

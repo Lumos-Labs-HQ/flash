@@ -7,28 +7,30 @@
   "config_checksum": "706f737467726573716c7c6b6f746c696e7c",
   "query_table_deps": {
     "db/queries/users.sql": [
-      "user_post_stats",
-      "user_activity_summary",
-      "post_stats",
-      "orders",
-      "audit_log",
       "notifications",
+      "active_commenters",
+      "active_users",
+      "post_stats",
+      "categories",
+      "tags",
+      "users",
+      "subscriptions",
+      "audit_log",
       "post_tags",
       "media",
-      "users",
-      "active_commenters",
-      "subscriptions",
       "posts",
       "users;",
-      "tags",
-      "active_users",
-      "categories",
+      "user_activity_summary",
+      "user_post_stats",
+      "orders",
       "comments"
     ]
   },
   "generated_file_checksums": {
+    "kotlin/Models.kt": "cf35d3a1d9bb3d3d36bee532b62a44dee171c1d711e9b100584b0f1d2dbb5b78",
+    "kotlin/Queries.kt": "03db0ef07535d7f6494d75f5a7f59293b2a6b9d08a5de625aa5c7584c86e5d34",
     "kotlin/Users.kt": "0d8aa3bee4b8bccf7d54f2f5e735d7ca5231d0494f339863c9260a1362ceff05"
   },
-  "last_generation": "2026-06-22T21:32:56.347452427+05:30",
+  "last_generation": "2026-06-23T00:05:51.572460523+05:30",
   "OutDir": "kotlin"
 }

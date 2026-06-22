@@ -101,15 +101,14 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 
 	// Add UUID import if any query column or param uses UUID
 	needsUUID := false
-	isScyllaDB := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
 	for _, query := range fileQueries {
 		for _, col := range query.Columns {
-			if strings.Contains(strings.ToLower(col.Type), "uuid") && !isScyllaDB {
+			if strings.Contains(strings.ToLower(col.Type), "uuid") {
 				needsUUID = true
 			}
 		}
 		for _, param := range query.Params {
-			if strings.Contains(strings.ToLower(param.Type), "uuid") && !isScyllaDB {
+			if strings.Contains(strings.ToLower(param.Type), "uuid") {
 				needsUUID = true
 			}
 		}

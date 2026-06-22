@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "query_file_checksums": {
+    "db/queries/users.sql": "173ae13b1b54f512d432abb99ac44cc3de014641603014ad8aaf71c4bd4819cf"
+  },
+  "schema_checksum": "09990e20105a32c9f615cc91173f07f80a726920547018c116e3f876e0d073c8",
+  "config_checksum": "706f737467726573716c7c666c6173685f67656e7c",
+  "query_table_deps": {
+    "db/queries/users.sql": [
+      "user_post_stats",
+      "users;",
+      "comments",
+      "notifications",
+      "posts",
+      "orders",
+      "categories",
+      "active_commenters",
+      "active_users",
+      "subscriptions",
+      "media",
+      "users",
+      "user_activity_summary",
+      "post_stats",
+      "audit_log",
+      "tags",
+      "post_tags"
+    ]
+  },
+  "generated_file_checksums": {
+    "flash_gen/users.js": "73058e0336d122b871fb385a7fd538ce8c8107e8a59dd8b915d9ff7e4fa79f29"
+  },
+  "last_generation": "2026-06-23T00:06:25.096950677+05:30",
+  "OutDir": "flash_gen"
+}

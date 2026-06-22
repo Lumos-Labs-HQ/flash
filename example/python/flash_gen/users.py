@@ -1718,7 +1718,6 @@ class SearchpostsfulltextRow:
 
 @dataclass
 class GetuserwithstatsRow:
-    *: str
     published_posts: int
     total_comments: int
     unread_notifications: int
@@ -1727,7 +1726,6 @@ class GetuserwithstatsRow:
     @classmethod
     def _make_fast(cls, record):
         return cls(
-            record['*'],
             record['published_posts'],
             record['total_comments'],
             record['unread_notifications'],
