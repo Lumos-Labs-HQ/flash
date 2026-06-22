@@ -18,6 +18,8 @@ type ProjectTemplate struct {
 	IsPythonProject bool
 	IsKotlinProject bool
 	IsJavaProject   bool
+	JavaPackage     string // auto-detected from pom.xml / build.gradle
+	KotlinPackage   string // auto-detected from build.gradle.kts / pom.xml
 }
 
 type dbConfig struct {
@@ -271,14 +273,24 @@ out = "flash_gen"
 async = true`
 	}
 	if pt.IsKotlinProject {
-		return `[gen.kotlin]
+		pkg := pt.KotlinPackage
+		if pkg == "" {
+			pkg = projectDirName(".")
+		}
+		return fmt.Sprintf(`[gen.kotlin]
 enabled = true
-out = "flash_gen"`
+out = "flash_gen"
+package = "%s"`, pkg)
 	}
 	if pt.IsJavaProject {
-		return `[gen.java]
+		pkg := pt.JavaPackage
+		if pkg == "" {
+			pkg = projectDirName(".")
+		}
+		return fmt.Sprintf(`[gen.java]
 enabled = true
-out = "flash_gen"`
+out = "flash_gen"
+package = "%s"`, pkg)
 	}
 	return `[gen.go]
 enabled = true`

@@ -7,28 +7,28 @@
   "config_checksum": "706f737467726573716c7c6a6176617c",
   "query_table_deps": {
     "db/queries/users.sql": [
-      "subscriptions",
-      "orders",
-      "categories",
-      "comments",
-      "post_tags",
-      "users;",
       "audit_log",
-      "users",
-      "user_post_stats",
-      "posts",
-      "post_stats",
-      "notifications",
+      "categories",
       "tags",
       "media",
-      "active_commenters",
       "active_users",
-      "user_activity_summary"
+      "user_activity_summary",
+      "active_commenters",
+      "posts",
+      "post_stats",
+      "subscriptions",
+      "orders",
+      "comments",
+      "notifications",
+      "post_tags",
+      "users",
+      "user_post_stats",
+      "users;"
     ]
   },
   "generated_file_checksums": {
-    "java/UsersQueries.java": "c7851b3517016f2bb3aeae8ddf9d4119b7dec6db989ba18f240809ca5cecd1c3"
+    "java/UsersQueries.java": "9cede61d77dbe0badc204aba12789b570e4259b0e28820ca5eec05bab3a49585"
   },
-  "last_generation": "2026-06-22T13:45:43.475691782+05:30",
+  "last_generation": "2026-06-22T21:32:56.401424648+05:30",
   "OutDir": "java"
 }
