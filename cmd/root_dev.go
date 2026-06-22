@@ -111,4 +111,9 @@ func initConfig() {
 	godotenv.Load(".env.local")
 
 	config.ConfigFile = cfgFile
+
+	// If flash.toml specifies env_path, load that file too (overrides defaults above)
+	if cfg, err := config.Load(); err == nil && cfg.EnvPath != "" {
+		godotenv.Overload(cfg.EnvPath)
+	}
 }

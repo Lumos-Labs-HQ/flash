@@ -8,65 +8,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func (q *Queries) Createuser(name string, email string) (Users, error) {
-	const query = `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *;`
-	stmt := q.stmts["Createuser_stmt"]
-	if stmt == nil {
-		var err error
-		stmt, err = q.db.Prepare(query)
-		if err != nil {
-			return Users{}, err
-		}
-		q.stmts["Createuser_stmt"] = stmt
-	}
-	args := []interface{}{name, email}
-
-	var result Users
-	rows, err := stmt.Query(args...)
-	if err != nil {
-		return result, err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return result, err
-		}
-		return result, sql.ErrNoRows
-	}
-	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role)
-	return result, err
-}
-
-type CreateuserfullParams struct {
-	Name string `json:"name"`
-	Email string `json:"email"`
-	Age int64 `json:"age"`
-	Bio string `json:"bio"`
-	Preferences []byte `json:"preferences"`
-	Tags []string `json:"tags"`
-	Role UserRole `json:"role"`
-}
-
-func (q *Queries) Createuserfull(arg CreateuserfullParams) (Users, error) {
-	const query = `INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;`
-	args := []interface{}{arg.Name, arg.Email, arg.Age, arg.Bio, arg.Preferences, arg.Tags, arg.Role}
-
-	var result Users
-	rows, err := q.db.Query(query, args...)
-	if err != nil {
-		return result, err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		if err := rows.Err(); err != nil {
-			return result, err
-		}
-		return result, sql.ErrNoRows
-	}
-	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role)
-	return result, err
-}
-
 func (q *Queries) Getuser(id int64) (Users, error) {
 	const query = `SELECT * FROM users WHERE id = $1;`
 	stmt := q.stmts["Getuser_stmt"]
