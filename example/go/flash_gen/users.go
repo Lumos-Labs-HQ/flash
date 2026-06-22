@@ -159,7 +159,13 @@ func (q *Queries) Listusers(limit int64, offset int64) ([]Users, error) {
 	return items, rows.Err()
 }
 
-func (q *Queries) Upsertuser(name string, email string, role UserRole) (Users, error) {
+type UpsertuserParams struct {
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Role UserRole `json:"role"`
+}
+
+func (q *Queries) Upsertuser(arg UpsertuserParams) (Users, error) {
 	const query = `INSERT INTO users (name, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;`
 	stmt := q.stmts["Upsertuser_stmt"]
 	if stmt == nil {
@@ -170,7 +176,7 @@ func (q *Queries) Upsertuser(name string, email string, role UserRole) (Users, e
 		}
 		q.stmts["Upsertuser_stmt"] = stmt
 	}
-	args := []interface{}{name, email, role}
+	args := []interface{}{arg.Name, arg.Email, arg.Role}
 
 	var result Users
 	rows, err := stmt.Query(args...)
@@ -188,7 +194,13 @@ func (q *Queries) Upsertuser(name string, email string, role UserRole) (Users, e
 	return result, err
 }
 
-func (q *Queries) Upsertuserwithcoalesce(name string, email string, bio string) (Users, error) {
+type UpsertuserwithcoalesceParams struct {
+	Name string `json:"name"`
+	Email string `json:"email"`
+	Bio string `json:"bio"`
+}
+
+func (q *Queries) Upsertuserwithcoalesce(arg UpsertuserwithcoalesceParams) (Users, error) {
 	const query = `INSERT INTO users (name, email, bio) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;`
 	stmt := q.stmts["Upsertuserwithcoalesce_stmt"]
 	if stmt == nil {
@@ -199,7 +211,7 @@ func (q *Queries) Upsertuserwithcoalesce(name string, email string, bio string) 
 		}
 		q.stmts["Upsertuserwithcoalesce_stmt"] = stmt
 	}
-	args := []interface{}{name, email, bio}
+	args := []interface{}{arg.Name, arg.Email, arg.Bio}
 
 	var result Users
 	rows, err := stmt.Query(args...)
@@ -473,7 +485,13 @@ type GetusersbygeneratedrangeRow struct {
 	AgeRange int64 `json:"age_range"`
 }
 
-func (q *Queries) Getrecentusers(created_at time.Time, limit int64, offset int64) ([]Users, error) {
+type GetrecentusersParams struct {
+	CreatedAt time.Time `json:"created_at"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Getrecentusers(arg GetrecentusersParams) ([]Users, error) {
 	const query = `SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getrecentusers_stmt"]
 	if stmt == nil {
@@ -484,7 +502,7 @@ func (q *Queries) Getrecentusers(created_at time.Time, limit int64, offset int64
 		}
 		q.stmts["Getrecentusers_stmt"] = stmt
 	}
-	args := []interface{}{created_at, limit, offset}
+	args := []interface{}{arg.CreatedAt, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -790,7 +808,13 @@ func (q *Queries) Updateusershipping(arg UpdateusershippingParams) (error) {
 	return err
 }
 
-func (q *Queries) Getcomplexuseranalytics(total_posts string, total_comments string, limit string) ([]GetcomplexuseranalyticsRow, error) {
+type GetcomplexuseranalyticsParams struct {
+	TotalPosts string `json:"total_posts"`
+	TotalComments string `json:"total_comments"`
+	Limit string `json:"limit"`
+}
+
+func (q *Queries) Getcomplexuseranalytics(arg GetcomplexuseranalyticsParams) ([]GetcomplexuseranalyticsRow, error) {
 	const query = `WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;`
 	stmt := q.stmts["Getcomplexuseranalytics_stmt"]
 	if stmt == nil {
@@ -801,7 +825,7 @@ func (q *Queries) Getcomplexuseranalytics(total_posts string, total_comments str
 		}
 		q.stmts["Getcomplexuseranalytics_stmt"] = stmt
 	}
-	args := []interface{}{total_posts, total_comments, limit}
+	args := []interface{}{arg.TotalPosts, arg.TotalComments, arg.Limit}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1471,7 +1495,13 @@ type SearchusersRow struct {
 	Email string `json:"email"`
 }
 
-func (q *Queries) Searchpostsbytitle(title string, limit int64, offset int64) ([]SearchpostsbytitleRow, error) {
+type SearchpostsbytitleParams struct {
+	Title string `json:"title"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Searchpostsbytitle(arg SearchpostsbytitleParams) ([]SearchpostsbytitleRow, error) {
 	const query = `SELECT id, title, status, created_at FROM posts WHERE title ILIKE $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Searchpostsbytitle_stmt"]
 	if stmt == nil {
@@ -1482,7 +1512,7 @@ func (q *Queries) Searchpostsbytitle(title string, limit int64, offset int64) ([
 		}
 		q.stmts["Searchpostsbytitle_stmt"] = stmt
 	}
-	args := []interface{}{title, limit, offset}
+	args := []interface{}{arg.Title, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -1645,8 +1675,8 @@ func (q *Queries) Getusersinids(id int64) ([]Users, error) {
 	return items, rows.Err()
 }
 
-func (q *Queries) Getusersbynames(name1 string, name2 string, name3 string) ([]GetusersbynamesRow, error) {
-	const query = `SELECT id, name, email FROM users WHERE name IN ($1, $2, $3);`
+func (q *Queries) Getusersbynames(name string) ([]GetusersbynamesRow, error) {
+	const query = `SELECT id, name, email FROM users WHERE name = ANY($1);`
 	stmt := q.stmts["Getusersbynames_stmt"]
 	if stmt == nil {
 		var err error
@@ -1656,7 +1686,7 @@ func (q *Queries) Getusersbynames(name1 string, name2 string, name3 string) ([]G
 		}
 		q.stmts["Getusersbynames_stmt"] = stmt
 	}
-	args := []interface{}{name1, name2, name3}
+	args := []interface{}{name}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2028,7 +2058,13 @@ type GetordersinstateRow struct {
 	PlacedAt time.Time `json:"placed_at"`
 }
 
-func (q *Queries) Getauditlogforuser(changed_by int64, limit int64, offset int64) ([]GetauditlogforuserRow, error) {
+type GetauditlogforuserParams struct {
+	ChangedBy int64 `json:"changed_by"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Getauditlogforuser(arg GetauditlogforuserParams) ([]GetauditlogforuserRow, error) {
 	const query = `SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = $1 ORDER BY changed_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getauditlogforuser_stmt"]
 	if stmt == nil {
@@ -2039,7 +2075,7 @@ func (q *Queries) Getauditlogforuser(changed_by int64, limit int64, offset int64
 		}
 		q.stmts["Getauditlogforuser_stmt"] = stmt
 	}
-	args := []interface{}{changed_by, limit, offset}
+	args := []interface{}{arg.ChangedBy, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2267,7 +2303,13 @@ func (q *Queries) Createpost(arg CreatepostParams) (Posts, error) {
 	return result, err
 }
 
-func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (Comments, error) {
+type CreatecommentParams struct {
+	PostId int64 `json:"post_id"`
+	UserId int64 `json:"user_id"`
+	Content string `json:"content"`
+}
+
+func (q *Queries) Createcomment(arg CreatecommentParams) (Comments, error) {
 	const query = `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;`
 	stmt := q.stmts["Createcomment_stmt"]
 	if stmt == nil {
@@ -2278,7 +2320,7 @@ func (q *Queries) Createcomment(post_id int64, user_id int64, content string) (C
 		}
 		q.stmts["Createcomment_stmt"] = stmt
 	}
-	args := []interface{}{post_id, user_id, content}
+	args := []interface{}{arg.PostId, arg.UserId, arg.Content}
 
 	var result Comments
 	rows, err := stmt.Query(args...)
@@ -2358,7 +2400,13 @@ func (q *Queries) Createnotification(arg CreatenotificationParams) (Notification
 	return result, err
 }
 
-func (q *Queries) Getnotificationsbyuser(user_id int64, limit int64, offset int64) ([]Notifications, error) {
+type GetnotificationsbyuserParams struct {
+	UserId int64 `json:"user_id"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Getnotificationsbyuser(arg GetnotificationsbyuserParams) ([]Notifications, error) {
 	const query = `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getnotificationsbyuser_stmt"]
 	if stmt == nil {
@@ -2369,7 +2417,7 @@ func (q *Queries) Getnotificationsbyuser(user_id int64, limit int64, offset int6
 		}
 		q.stmts["Getnotificationsbyuser_stmt"] = stmt
 	}
-	args := []interface{}{user_id, limit, offset}
+	args := []interface{}{arg.UserId, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2468,7 +2516,13 @@ func (q *Queries) Deleteoldnotifications(user_id int64, created_at time.Time) (e
 	return err
 }
 
-func (q *Queries) Getnotificationsbytype(user_id int64, type_ string, limit int64) ([]GetnotificationsbytypeRow, error) {
+type GetnotificationsbytypeParams struct {
+	UserId int64 `json:"user_id"`
+	Type string `json:"type_"`
+	Limit int64 `json:"limit"`
+}
+
+func (q *Queries) Getnotificationsbytype(arg GetnotificationsbytypeParams) ([]GetnotificationsbytypeRow, error) {
 	const query = `SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT $3;`
 	stmt := q.stmts["Getnotificationsbytype_stmt"]
 	if stmt == nil {
@@ -2479,7 +2533,7 @@ func (q *Queries) Getnotificationsbytype(user_id int64, type_ string, limit int6
 		}
 		q.stmts["Getnotificationsbytype_stmt"] = stmt
 	}
-	args := []interface{}{user_id, type_, limit}
+	args := []interface{}{arg.UserId, arg.Type, arg.Limit}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2507,7 +2561,13 @@ type GetnotificationsbytypeRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Createtag(name string, slug string, color string) (Tags, error) {
+type CreatetagParams struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+	Color string `json:"color"`
+}
+
+func (q *Queries) Createtag(arg CreatetagParams) (Tags, error) {
 	const query = `INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;`
 	stmt := q.stmts["Createtag_stmt"]
 	if stmt == nil {
@@ -2518,7 +2578,7 @@ func (q *Queries) Createtag(name string, slug string, color string) (Tags, error
 		}
 		q.stmts["Createtag_stmt"] = stmt
 	}
-	args := []interface{}{name, slug, color}
+	args := []interface{}{arg.Name, arg.Slug, arg.Color}
 
 	var result Tags
 	rows, err := stmt.Query(args...)
@@ -2658,7 +2718,13 @@ func (q *Queries) Gettagsforpost(post_id int64) ([]Tags, error) {
 	return items, rows.Err()
 }
 
-func (q *Queries) Getpostsbytag(slug string, limit int64, offset int64) ([]GetpostsbytagRow, error) {
+type GetpostsbytagParams struct {
+	Slug string `json:"slug"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Getpostsbytag(arg GetpostsbytagParams) ([]GetpostsbytagRow, error) {
 	const query = `SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = $1 AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getpostsbytag_stmt"]
 	if stmt == nil {
@@ -2669,7 +2735,7 @@ func (q *Queries) Getpostsbytag(slug string, limit int64, offset int64) ([]Getpo
 		}
 		q.stmts["Getpostsbytag_stmt"] = stmt
 	}
-	args := []interface{}{slug, limit, offset}
+	args := []interface{}{arg.Slug, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2808,7 +2874,13 @@ type GetmediabypostRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Getmediabyuser(user_id int64, limit int64, offset int64) ([]GetmediabyuserRow, error) {
+type GetmediabyuserParams struct {
+	UserId int64 `json:"user_id"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Getmediabyuser(arg GetmediabyuserParams) ([]GetmediabyuserRow, error) {
 	const query = `SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getmediabyuser_stmt"]
 	if stmt == nil {
@@ -2819,7 +2891,7 @@ func (q *Queries) Getmediabyuser(user_id int64, limit int64, offset int64) ([]Ge
 		}
 		q.stmts["Getmediabyuser_stmt"] = stmt
 	}
-	args := []interface{}{user_id, limit, offset}
+	args := []interface{}{arg.UserId, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2980,7 +3052,13 @@ type GetlargemediafilesRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Getuserfeed(user_id int64, limit int64, offset int64) ([]GetuserfeedRow, error) {
+type GetuserfeedParams struct {
+	UserId int64 `json:"user_id"`
+	Limit int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+func (q *Queries) Getuserfeed(arg GetuserfeedParams) ([]GetuserfeedRow, error) {
 	const query = `WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = $1 ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`
 	stmt := q.stmts["Getuserfeed_stmt"]
 	if stmt == nil {
@@ -2991,7 +3069,7 @@ func (q *Queries) Getuserfeed(user_id int64, limit int64, offset int64) ([]Getus
 		}
 		q.stmts["Getuserfeed_stmt"] = stmt
 	}
-	args := []interface{}{user_id, limit, offset}
+	args := []interface{}{arg.UserId, arg.Limit, arg.Offset}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -3110,7 +3188,6 @@ func (q *Queries) Getuserwithstats(id int64) (GetuserwithstatsRow, error) {
 }
 
 type GetuserwithstatsRow struct {
-	* string `json:"*"`
 	PublishedPosts int64 `json:"published_posts"`
 	TotalComments int64 `json:"total_comments"`
 	UnreadNotifications int64 `json:"unread_notifications"`

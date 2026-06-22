@@ -48,20 +48,30 @@ public class UsersQueries {
         }
     }
 
-    public Users createUserFull(String name, String email, int age, String bio, java.util.Map<String, Object> preferences, java.util.List<String> tags, UserRole role) throws java.sql.SQLException {
+    public record CreateUserFullArgs(
+        String name,
+        String email,
+        int age,
+        String bio,
+        java.util.Map<String, Object> preferences,
+        java.util.List<String> tags,
+        UserRole role
+    ) {}
+
+    public Users createUserFull(CreateUserFullArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("createUserFull", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name.toString());
-        stmt.setString(2, email.toString());
-        stmt.setInt(3, age);
-        stmt.setString(4, bio.toString());
-        stmt.setString(5, preferences.toString());
-        stmt.setString(6, tags.toString());
-        stmt.setString(7, role.toString());
+        stmt.setString(1, args.name().toString());
+        stmt.setString(2, args.email().toString());
+        stmt.setInt(3, args.age());
+        stmt.setString(4, args.bio().toString());
+        stmt.setString(5, args.preferences().toString());
+        stmt.setString(6, args.tags().toString());
+        stmt.setString(7, args.role().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Users(
@@ -232,16 +242,22 @@ public class UsersQueries {
         }
     }
 
-    public Users upsertUser(String name, String email, UserRole role) throws java.sql.SQLException {
+    public record UpsertUserArgs(
+        String name,
+        String email,
+        UserRole role
+    ) {}
+
+    public Users upsertUser(UpsertUserArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO users (name, email, role) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("upsertUser", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name.toString());
-        stmt.setString(2, email.toString());
-        stmt.setString(3, role.toString());
+        stmt.setString(1, args.name().toString());
+        stmt.setString(2, args.email().toString());
+        stmt.setString(3, args.role().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Users(
@@ -264,16 +280,22 @@ public class UsersQueries {
         }
     }
 
-    public Users upsertUserWithCOALESCE(String name, String email, String bio) throws java.sql.SQLException {
+    public record UpsertUserWithCOALESCEArgs(
+        String name,
+        String email,
+        String bio
+    ) {}
+
+    public Users upsertUserWithCOALESCE(UpsertUserWithCOALESCEArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO users (name, email, bio) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("upsertUserWithCOALESCE", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name.toString());
-        stmt.setString(2, email.toString());
-        stmt.setString(3, bio.toString());
+        stmt.setString(1, args.name().toString());
+        stmt.setString(2, args.email().toString());
+        stmt.setString(3, args.bio().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Users(
@@ -358,18 +380,26 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(String name, String email, int age, int limit, int offset) throws java.sql.SQLException {
+    public record SearchUsersWithCOALESCEArgs(
+        String name,
+        String email,
+        int age,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(SearchUsersWithCOALESCEArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE ? OR ? IS NULL) AND (email ILIKE ? OR ? IS NULL) AND COALESCE(age, 0) >= ? ORDER BY name LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("searchUsersWithCOALESCE", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name.toString());
-        stmt.setString(2, email.toString());
-        stmt.setInt(3, age);
-        stmt.setInt(4, limit);
-        stmt.setInt(5, offset);
+        stmt.setString(1, args.name().toString());
+        stmt.setString(2, args.email().toString());
+        stmt.setInt(3, args.age());
+        stmt.setInt(4, args.limit());
+        stmt.setInt(5, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<SearchUsersWithCOALESCERow>();
             while (rs.next()) {
@@ -452,16 +482,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<Users> getRecentUsers(LocalDateTime created_at, int limit, int offset) throws java.sql.SQLException {
+    public record GetRecentUsersArgs(
+        LocalDateTime created_at,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<Users> getRecentUsers(GetRecentUsersArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM users WHERE created_at > ? LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getRecentUsers", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setObject(1, java.sql.Timestamp.valueOf(created_at));
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setObject(1, java.sql.Timestamp.valueOf(args.created_at()));
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<Users>();
             while (rs.next()) {
@@ -648,32 +684,47 @@ public class UsersQueries {
         }
     }
 
-    public void updateUserShipping(String shipping_field1, String shipping_field2, String shipping_field3, String shipping_field4, String shipping_field5, int id) throws java.sql.SQLException {
+    public record UpdateUserShippingArgs(
+        String shipping_field1,
+        String shipping_field2,
+        String shipping_field3,
+        String shipping_field4,
+        String shipping_field5,
+        int id
+    ) {}
+
+    public void updateUserShipping(UpdateUserShippingArgs args) throws java.sql.SQLException {
         final String sql = """
                 UPDATE users SET shipping = ROW(?, ?, ?, ?, ?), updated_at = NOW() WHERE id = ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("updateUserShipping", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, shipping_field1.toString());
-        stmt.setString(2, shipping_field2.toString());
-        stmt.setString(3, shipping_field3.toString());
-        stmt.setString(4, shipping_field4.toString());
-        stmt.setString(5, shipping_field5.toString());
-        stmt.setInt(6, id);
+        stmt.setString(1, args.shipping_field1().toString());
+        stmt.setString(2, args.shipping_field2().toString());
+        stmt.setString(3, args.shipping_field3().toString());
+        stmt.setString(4, args.shipping_field4().toString());
+        stmt.setString(5, args.shipping_field5().toString());
+        stmt.setInt(6, args.id());
         stmt.executeUpdate();
     }
 
-    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(String total_posts, String total_comments, String limit) throws java.sql.SQLException {
+    public record GetComplexUserAnalyticsArgs(
+        String total_posts,
+        String total_comments,
+        String limit
+    ) {}
+
+    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(GetComplexUserAnalyticsArgs args) throws java.sql.SQLException {
         final String sql = """
                 WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > ? OR ucs.total_comments > ? ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getComplexUserAnalytics", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, total_posts.toString());
-        stmt.setString(2, total_comments.toString());
-        stmt.setString(3, limit.toString());
+        stmt.setString(1, args.total_posts().toString());
+        stmt.setString(2, args.total_comments().toString());
+        stmt.setString(3, args.limit().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetComplexUserAnalyticsRow>();
             while (rs.next()) {
@@ -1052,17 +1103,24 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchUsersRow> searchUsers(String name, String email, int limit, int offset) throws java.sql.SQLException {
+    public record SearchUsersArgs(
+        String name,
+        String email,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<SearchUsersRow> searchUsers(SearchUsersArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email FROM users WHERE name ILIKE ? OR email ILIKE ? ORDER BY name ASC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("searchUsers", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name.toString());
-        stmt.setString(2, email.toString());
-        stmt.setInt(3, limit);
-        stmt.setInt(4, offset);
+        stmt.setString(1, args.name().toString());
+        stmt.setString(2, args.email().toString());
+        stmt.setInt(3, args.limit());
+        stmt.setInt(4, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<SearchUsersRow>();
             while (rs.next()) {
@@ -1076,16 +1134,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(String title, int limit, int offset) throws java.sql.SQLException {
+    public record SearchPostsByTitleArgs(
+        String title,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(SearchPostsByTitleArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, title, status, created_at FROM posts WHERE title ILIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("searchPostsByTitle", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, title.toString());
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setString(1, args.title().toString());
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<SearchPostsByTitleRow>();
             while (rs.next()) {
@@ -1196,16 +1260,14 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersByNamesRow> getUsersByNames(String name1, String name2, String name3) throws java.sql.SQLException {
+    public java.util.List<GetUsersByNamesRow> getUsersByNames(String name) throws java.sql.SQLException {
         final String sql = """
-                SELECT id, name, email FROM users WHERE name IN (?, ?, ?);
+                SELECT id, name, email FROM users WHERE name = ANY(?);
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getUsersByNames", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name1.toString());
-        stmt.setString(2, name2.toString());
-        stmt.setString(3, name3.toString());
+        stmt.setString(1, name.toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetUsersByNamesRow>();
             while (rs.next()) {
@@ -1387,17 +1449,24 @@ public class UsersQueries {
         }
     }
 
-    public Subscriptions createSubscription(int user_id, SubscriptionTier tier, LocalDateTime expires_at, boolean auto_renew) throws java.sql.SQLException {
+    public record CreateSubscriptionArgs(
+        int user_id,
+        SubscriptionTier tier,
+        LocalDateTime expires_at,
+        boolean auto_renew
+    ) {}
+
+    public Subscriptions createSubscription(CreateSubscriptionArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES (?, ?, ?, ?) RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("createSubscription", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setString(2, tier.toString());
-        stmt.setObject(3, java.sql.Timestamp.valueOf(expires_at));
-        stmt.setBoolean(4, auto_renew);
+        stmt.setInt(1, args.user_id());
+        stmt.setString(2, args.tier().toString());
+        stmt.setObject(3, java.sql.Timestamp.valueOf(args.expires_at()));
+        stmt.setBoolean(4, args.auto_renew());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Subscriptions(
@@ -1461,16 +1530,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(int changed_by, int limit, int offset) throws java.sql.SQLException {
+    public record GetAuditLogForUserArgs(
+        int changed_by,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(GetAuditLogForUserArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = ? ORDER BY changed_at DESC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getAuditLogForUser", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, changed_by);
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setInt(1, args.changed_by());
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetAuditLogForUserRow>();
             while (rs.next()) {
@@ -1600,17 +1675,24 @@ public class UsersQueries {
         }
     }
 
-    public Posts createPost(int user_id, int category_id, String title, String content) throws java.sql.SQLException {
+    public record CreatePostArgs(
+        int user_id,
+        int category_id,
+        String title,
+        String content
+    ) {}
+
+    public Posts createPost(CreatePostArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO posts (user_id, category_id, title, content) VALUES (?, ?, ?, ?) RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("createPost", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setInt(2, category_id);
-        stmt.setString(3, title.toString());
-        stmt.setString(4, content.toString());
+        stmt.setInt(1, args.user_id());
+        stmt.setInt(2, args.category_id());
+        stmt.setString(3, args.title().toString());
+        stmt.setString(4, args.content().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Posts(
@@ -1632,16 +1714,22 @@ public class UsersQueries {
         }
     }
 
-    public Comments createComment(int post_id, int user_id, String content) throws java.sql.SQLException {
+    public record CreateCommentArgs(
+        int post_id,
+        int user_id,
+        String content
+    ) {}
+
+    public Comments createComment(CreateCommentArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?) RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("createComment", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, post_id);
-        stmt.setInt(2, user_id);
-        stmt.setString(3, content.toString());
+        stmt.setInt(1, args.post_id());
+        stmt.setInt(2, args.user_id());
+        stmt.setString(3, args.content().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Comments(
@@ -1678,18 +1766,26 @@ public class UsersQueries {
         stmt.executeUpdate();
     }
 
-    public Notifications createNotification(int user_id, String type, String title, String body, java.util.Map<String, Object> metadata) throws java.sql.SQLException {
+    public record CreateNotificationArgs(
+        int user_id,
+        String type,
+        String title,
+        String body,
+        java.util.Map<String, Object> metadata
+    ) {}
+
+    public Notifications createNotification(CreateNotificationArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO notifications (user_id, type, title, body, metadata) VALUES (?, ?, ?, ?, ?) RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("createNotification", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setString(2, type.toString());
-        stmt.setString(3, title.toString());
-        stmt.setString(4, body.toString());
-        stmt.setString(5, metadata.toString());
+        stmt.setInt(1, args.user_id());
+        stmt.setString(2, args.type().toString());
+        stmt.setString(3, args.title().toString());
+        stmt.setString(4, args.body().toString());
+        stmt.setString(5, args.metadata().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Notifications(
@@ -1705,16 +1801,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<Notifications> getNotificationsByUser(int user_id, int limit, int offset) throws java.sql.SQLException {
+    public record GetNotificationsByUserArgs(
+        int user_id,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<Notifications> getNotificationsByUser(GetNotificationsByUserArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getNotificationsByUser", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setInt(1, args.user_id());
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<Notifications>();
             while (rs.next()) {
@@ -1781,16 +1883,22 @@ public class UsersQueries {
         stmt.executeUpdate();
     }
 
-    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(int user_id, String type, int limit) throws java.sql.SQLException {
+    public record GetNotificationsByTypeArgs(
+        int user_id,
+        String type,
+        int limit
+    ) {}
+
+    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(GetNotificationsByTypeArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getNotificationsByType", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setString(2, type.toString());
-        stmt.setInt(3, limit);
+        stmt.setInt(1, args.user_id());
+        stmt.setString(2, args.type().toString());
+        stmt.setInt(3, args.limit());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetNotificationsByTypeRow>();
             while (rs.next()) {
@@ -1807,16 +1915,22 @@ public class UsersQueries {
         }
     }
 
-    public Tags createTag(String name, String slug, String color) throws java.sql.SQLException {
+    public record CreateTagArgs(
+        String name,
+        String slug,
+        String color
+    ) {}
+
+    public Tags createTag(CreateTagArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO tags (name, slug, color) VALUES (?, ?, ?) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("createTag", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, name.toString());
-        stmt.setString(2, slug.toString());
-        stmt.setString(3, color.toString());
+        stmt.setString(1, args.name().toString());
+        stmt.setString(2, args.slug().toString());
+        stmt.setString(3, args.color().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Tags(
@@ -1914,16 +2028,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetPostsByTagRow> getPostsByTag(String slug, int limit, int offset) throws java.sql.SQLException {
+    public record GetPostsByTagArgs(
+        String slug,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetPostsByTagRow> getPostsByTag(GetPostsByTagArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = ? AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getPostsByTag", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setString(1, slug.toString());
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setString(1, args.slug().toString());
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetPostsByTagRow>();
             while (rs.next()) {
@@ -1963,22 +2083,34 @@ public class UsersQueries {
         }
     }
 
-    public Media uploadMedia(int user_id, int post_id, String type, String url, long size_bytes, String mime_type, int width, int height, java.util.Map<String, Object> metadata) throws java.sql.SQLException {
+    public record UploadMediaArgs(
+        int user_id,
+        int post_id,
+        String type,
+        String url,
+        long size_bytes,
+        String mime_type,
+        int width,
+        int height,
+        java.util.Map<String, Object> metadata
+    ) {}
+
+    public Media uploadMedia(UploadMediaArgs args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("uploadMedia", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setInt(2, post_id);
-        stmt.setString(3, type.toString());
-        stmt.setString(4, url.toString());
-        stmt.setLong(5, size_bytes);
-        stmt.setString(6, mime_type.toString());
-        stmt.setInt(7, width);
-        stmt.setInt(8, height);
-        stmt.setString(9, metadata.toString());
+        stmt.setInt(1, args.user_id());
+        stmt.setInt(2, args.post_id());
+        stmt.setString(3, args.type().toString());
+        stmt.setString(4, args.url().toString());
+        stmt.setLong(5, args.size_bytes());
+        stmt.setString(6, args.mime_type().toString());
+        stmt.setInt(7, args.width());
+        stmt.setInt(8, args.height());
+        stmt.setString(9, args.metadata().toString());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             if (!rs.next()) return null;
             return new Media(
@@ -2023,16 +2155,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetMediaByUserRow> getMediaByUser(int user_id, int limit, int offset) throws java.sql.SQLException {
+    public record GetMediaByUserArgs(
+        int user_id,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetMediaByUserRow> getMediaByUser(GetMediaByUserArgs args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getMediaByUser", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setInt(1, args.user_id());
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetMediaByUserRow>();
             while (rs.next()) {
@@ -2132,16 +2270,22 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUserFeedRow> getUserFeed(int user_id, int limit, int offset) throws java.sql.SQLException {
+    public record GetUserFeedArgs(
+        int user_id,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetUserFeedRow> getUserFeed(GetUserFeedArgs args) throws java.sql.SQLException {
         final String sql = """
                 WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = ? ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT ? OFFSET ?;
                 """;
         java.sql.PreparedStatement stmt = stmts.computeIfAbsent("getUserFeed", k -> {
             try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }
         });
-        stmt.setInt(1, user_id);
-        stmt.setInt(2, limit);
-        stmt.setInt(3, offset);
+        stmt.setInt(1, args.user_id());
+        stmt.setInt(2, args.limit());
+        stmt.setInt(3, args.offset());
         try (java.sql.ResultSet rs = stmt.executeQuery()) {
             var items = new java.util.ArrayList<GetUserFeedRow>();
             while (rs.next()) {

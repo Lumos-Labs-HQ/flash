@@ -7,28 +7,28 @@
   "config_checksum": "706f737467726573716c7c666c6173685f67656e7c",
   "query_table_deps": {
     "db/queries/users.sql": [
+      "comments",
+      "media",
+      "posts",
+      "audit_log",
+      "categories",
+      "notifications",
+      "post_tags",
       "user_post_stats",
       "users;",
-      "comments",
-      "notifications",
-      "posts",
-      "orders",
-      "categories",
-      "active_commenters",
       "active_users",
-      "subscriptions",
-      "media",
-      "users",
       "user_activity_summary",
-      "post_stats",
-      "audit_log",
+      "orders",
       "tags",
-      "post_tags"
+      "users",
+      "active_commenters",
+      "post_stats",
+      "subscriptions"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/users.js": "73058e0336d122b871fb385a7fd538ce8c8107e8a59dd8b915d9ff7e4fa79f29"
+    "flash_gen/users.js": "9466b1367e82b9c774d72ac3d565632e672b76c393b5be251a8fa481b7a29769"
   },
-  "last_generation": "2026-06-23T00:06:25.096950677+05:30",
+  "last_generation": "2026-06-23T03:33:39.275791487+05:30",
   "OutDir": "flash_gen"
 }

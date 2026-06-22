@@ -8,27 +8,27 @@
   "query_table_deps": {
     "db/queries/users.sql": [
       "users",
-      "user_post_stats",
+      "active_users",
       "post_stats",
       "subscriptions",
-      "audit_log",
+      "comments",
+      "notifications",
       "post_tags",
+      "user_post_stats",
+      "posts",
+      "users;",
+      "orders",
+      "audit_log",
+      "categories",
       "active_commenters",
       "user_activity_summary",
-      "orders",
-      "categories",
-      "users;",
-      "active_users",
-      "comments",
       "tags",
-      "media",
-      "posts",
-      "notifications"
+      "media"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/users.py": "b2f3f6e93a6f404ef3dcadbe54f49abbee6992058442e7f4b4fbc3f93a720724"
+    "flash_gen/users.py": "f220e501321c37a6ae356a77ef46596efd0f007bdfe7b9bcc0fe088d7a04a2fa"
   },
-  "last_generation": "2026-06-23T00:27:09.736467601+05:30",
+  "last_generation": "2026-06-23T03:33:22.489511223+05:30",
   "OutDir": "flash_gen"
 }

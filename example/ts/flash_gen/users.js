@@ -16,7 +16,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async createUserFull(name, email, age, bio, preferences, tags, role) {
+  async createUserFull(args) {
+    const { name, email, age, bio, preferences, tags, role } = args;
     let stmt = this._stmts.get('createUserFull');
     if (!stmt) {
       stmt = `INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;`;
@@ -85,7 +86,8 @@ class Queries {
     const r = await this.db.query(stmt, [limit, offset]);
   }
 
-  async upsertUser(name, email, role) {
+  async upsertUser(args) {
+    const { name, email, role } = args;
     let stmt = this._stmts.get('upsertUser');
     if (!stmt) {
       stmt = `INSERT INTO users (name, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;`;
@@ -95,7 +97,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async upsertUserWithCOALESCE(name, email, bio) {
+  async upsertUserWithCOALESCE(args) {
+    const { name, email, bio } = args;
     let stmt = this._stmts.get('upsertUserWithCOALESCE');
     if (!stmt) {
       stmt = `INSERT INTO users (name, email, bio) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;`;
@@ -133,7 +136,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async searchUsersWithCOALESCE(name, email, age, limit, offset) {
+  async searchUsersWithCOALESCE(args) {
+    const { name, email, age, limit, offset } = args;
     let stmt = this._stmts.get('searchUsersWithCOALESCE');
     if (!stmt) {
       stmt = `SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;`;
@@ -169,7 +173,8 @@ class Queries {
     const r = await this.db.query(stmt, [age_range]);
   }
 
-  async getRecentUsers(created_at, limit, offset) {
+  async getRecentUsers(args) {
+    const { created_at, limit, offset } = args;
     let stmt = this._stmts.get('getRecentUsers');
     if (!stmt) {
       stmt = `SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;`;
@@ -264,7 +269,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async updateUserShipping(shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id) {
+  async updateUserShipping(args) {
+    const { shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id } = args;
     let stmt = this._stmts.get('updateUserShipping');
     if (!stmt) {
       stmt = `UPDATE users SET shipping = ROW($1, $2, $3, $4, $5), updated_at = NOW() WHERE id = $6;`;
@@ -274,7 +280,8 @@ class Queries {
     return r.rowCount;
   }
 
-  async getComplexUserAnalytics(total_posts, total_comments, limit) {
+  async getComplexUserAnalytics(args) {
+    const { total_posts, total_comments, limit } = args;
     let stmt = this._stmts.get('getComplexUserAnalytics');
     if (!stmt) {
       stmt = `WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;`;
@@ -433,7 +440,8 @@ class Queries {
     const r = await this.db.query(stmt);
   }
 
-  async searchUsers(name, email, limit, offset) {
+  async searchUsers(args) {
+    const { name, email, limit, offset } = args;
     let stmt = this._stmts.get('searchUsers');
     if (!stmt) {
       stmt = `SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $2 ORDER BY name ASC LIMIT $3 OFFSET $4;`;
@@ -442,7 +450,8 @@ class Queries {
     const r = await this.db.query(stmt, [name, email, limit, offset]);
   }
 
-  async searchPostsByTitle(title, limit, offset) {
+  async searchPostsByTitle(args) {
+    const { title, limit, offset } = args;
     let stmt = this._stmts.get('searchPostsByTitle');
     if (!stmt) {
       stmt = `SELECT id, title, status, created_at FROM posts WHERE title ILIKE $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`;
@@ -487,13 +496,13 @@ class Queries {
     const r = await this.db.query(stmt, [id]);
   }
 
-  async getUsersByNames(name1, name2, name3) {
+  async getUsersByNames(name) {
     let stmt = this._stmts.get('getUsersByNames');
     if (!stmt) {
-      stmt = `SELECT id, name, email FROM users WHERE name IN ($1, $2, $3);`;
+      stmt = `SELECT id, name, email FROM users WHERE name = ANY($1);`;
       this._stmts.set('getUsersByNames', stmt);
     }
-    const r = await this.db.query(stmt, [name1, name2, name3]);
+    const r = await this.db.query(stmt, [name]);
   }
 
   async getUsersWhoCommented() {
@@ -569,7 +578,8 @@ class Queries {
     const r = await this.db.query(stmt, [user_id]);
   }
 
-  async createSubscription(user_id, tier, expires_at, auto_renew) {
+  async createSubscription(args) {
+    const { user_id, tier, expires_at, auto_renew } = args;
     let stmt = this._stmts.get('createSubscription');
     if (!stmt) {
       stmt = `INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES ($1, $2, $3, $4) RETURNING *;`;
@@ -597,7 +607,8 @@ class Queries {
     const r = await this.db.query(stmt, [state, limit]);
   }
 
-  async getAuditLogForUser(changed_by, limit, offset) {
+  async getAuditLogForUser(args) {
+    const { changed_by, limit, offset } = args;
     let stmt = this._stmts.get('getAuditLogForUser');
     if (!stmt) {
       stmt = `SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = $1 ORDER BY changed_at DESC LIMIT $2 OFFSET $3;`;
@@ -653,7 +664,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async createPost(user_id, category_id, title, content) {
+  async createPost(args) {
+    const { user_id, category_id, title, content } = args;
     let stmt = this._stmts.get('createPost');
     if (!stmt) {
       stmt = `INSERT INTO posts (user_id, category_id, title, content) VALUES ($1, $2, $3, $4) RETURNING *;`;
@@ -663,7 +675,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async createComment(post_id, user_id, content) {
+  async createComment(args) {
+    const { post_id, user_id, content } = args;
     let stmt = this._stmts.get('createComment');
     if (!stmt) {
       stmt = `INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;`;
@@ -693,7 +706,8 @@ class Queries {
     return r.rowCount;
   }
 
-  async createNotification(user_id, type, title, body, metadata) {
+  async createNotification(args) {
+    const { user_id, type, title, body, metadata } = args;
     let stmt = this._stmts.get('createNotification');
     if (!stmt) {
       stmt = `INSERT INTO notifications (user_id, type, title, body, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
@@ -703,7 +717,8 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async getNotificationsByUser(user_id, limit, offset) {
+  async getNotificationsByUser(args) {
+    const { user_id, limit, offset } = args;
     let stmt = this._stmts.get('getNotificationsByUser');
     if (!stmt) {
       stmt = `SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`;
@@ -753,7 +768,8 @@ class Queries {
     return r.rowCount;
   }
 
-  async getNotificationsByType(user_id, type, limit) {
+  async getNotificationsByType(args) {
+    const { user_id, type, limit } = args;
     let stmt = this._stmts.get('getNotificationsByType');
     if (!stmt) {
       stmt = `SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT $3;`;
@@ -762,7 +778,8 @@ class Queries {
     const r = await this.db.query(stmt, [user_id, type, limit]);
   }
 
-  async createTag(name, slug, color) {
+  async createTag(args) {
+    const { name, slug, color } = args;
     let stmt = this._stmts.get('createTag');
     if (!stmt) {
       stmt = `INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;`;
@@ -820,7 +837,8 @@ class Queries {
     const r = await this.db.query(stmt, [post_id]);
   }
 
-  async getPostsByTag(slug, limit, offset) {
+  async getPostsByTag(args) {
+    const { slug, limit, offset } = args;
     let stmt = this._stmts.get('getPostsByTag');
     if (!stmt) {
       stmt = `SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = $1 AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`;
@@ -838,7 +856,8 @@ class Queries {
     const r = await this.db.query(stmt, [limit]);
   }
 
-  async uploadMedia(user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) {
+  async uploadMedia(args) {
+    const { user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata } = args;
     let stmt = this._stmts.get('uploadMedia');
     if (!stmt) {
       stmt = `INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;`;
@@ -857,7 +876,8 @@ class Queries {
     const r = await this.db.query(stmt, [post_id]);
   }
 
-  async getMediaByUser(user_id, limit, offset) {
+  async getMediaByUser(args) {
+    const { user_id, limit, offset } = args;
     let stmt = this._stmts.get('getMediaByUser');
     if (!stmt) {
       stmt = `SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;`;
@@ -904,7 +924,8 @@ class Queries {
     const r = await this.db.query(stmt, [size_bytes, limit]);
   }
 
-  async getUserFeed(user_id, limit, offset) {
+  async getUserFeed(args) {
+    const { user_id, limit, offset } = args;
     let stmt = this._stmts.get('getUserFeed');
     if (!stmt) {
       stmt = `WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = $1 ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;`;

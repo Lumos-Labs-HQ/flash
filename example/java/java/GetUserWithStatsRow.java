@@ -4,7 +4,6 @@ package java;
 
 
 public record GetUserWithStatsRow(
-    String *,
     int published_posts,
     int total_comments,
     int unread_notifications,

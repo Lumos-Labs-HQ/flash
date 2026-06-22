@@ -18,8 +18,18 @@ class Queries(private val conn: Connection) {
     fun createUser(name: String, email: String): Users? =
         users.createUser(name, email)
 
-    fun createUserFull(name: String, email: String, age: Int, bio: String, preferences: String, tags: List<String>, role: UserRole): Users? =
-        users.createUserFull(name, email, age, bio, preferences, tags, role)
+data class CreateUserFullArgs(
+    val name: String,
+    val email: String,
+    val age: Int,
+    val bio: String,
+    val preferences: String,
+    val tags: List<String>,
+    val role: UserRole
+)
+
+    fun createUserFull(args: CreateUserFullArgs): Users? =
+        users.createUserFull(args)
 
     fun getUser(id: Int): Users? =
         users.getUser(id)
@@ -39,11 +49,23 @@ class Queries(private val conn: Connection) {
     fun listUsers(limit: Int, offset: Int): List<Users> =
         users.listUsers(limit, offset)
 
-    fun upsertUser(name: String, email: String, role: UserRole): Users? =
-        users.upsertUser(name, email, role)
+data class UpsertUserArgs(
+    val name: String,
+    val email: String,
+    val role: UserRole
+)
 
-    fun upsertUserWithCOALESCE(name: String, email: String, bio: String): Users? =
-        users.upsertUserWithCOALESCE(name, email, bio)
+    fun upsertUser(args: UpsertUserArgs): Users? =
+        users.upsertUser(args)
+
+data class UpsertUserWithCOALESCEArgs(
+    val name: String,
+    val email: String,
+    val bio: String
+)
+
+    fun upsertUserWithCOALESCE(args: UpsertUserWithCOALESCEArgs): Users? =
+        users.upsertUserWithCOALESCE(args)
 
     fun getUsersWithNullAddress(): List<GetUsersWithNullAddressRow> =
         users.getUsersWithNullAddress()
@@ -54,8 +76,16 @@ class Queries(private val conn: Connection) {
     fun getUserDisplayInfo(id: Int): GetUserDisplayInfoRow? =
         users.getUserDisplayInfo(id)
 
-    fun searchUsersWithCOALESCE(name: String, email: String, age: Int, limit: Int, offset: Int): List<SearchUsersWithCOALESCERow> =
-        users.searchUsersWithCOALESCE(name, email, age, limit, offset)
+data class SearchUsersWithCOALESCEArgs(
+    val name: String,
+    val email: String,
+    val age: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEArgs): List<SearchUsersWithCOALESCERow> =
+        users.searchUsersWithCOALESCE(args)
 
     fun getUsersCreatedBetween(created_at: LocalDateTime, created_at2: LocalDateTime): List<GetUsersCreatedBetweenRow> =
         users.getUsersCreatedBetween(created_at, created_at2)
@@ -66,8 +96,14 @@ class Queries(private val conn: Connection) {
     fun getUsersByGeneratedRange(age_range: Int): List<GetUsersByGeneratedRangeRow> =
         users.getUsersByGeneratedRange(age_range)
 
-    fun getRecentUsers(created_at: LocalDateTime, limit: Int, offset: Int): List<Users> =
-        users.getRecentUsers(created_at, limit, offset)
+data class GetRecentUsersArgs(
+    val created_at: LocalDateTime,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getRecentUsers(args: GetRecentUsersArgs): List<Users> =
+        users.getRecentUsers(args)
 
     fun getUserPreferences(id: Int): GetUserPreferencesRow? =
         users.getUserPreferences(id)
@@ -96,11 +132,26 @@ class Queries(private val conn: Connection) {
     fun getUserShippingAddress(id: Int): GetUserShippingAddressRow? =
         users.getUserShippingAddress(id)
 
-    fun updateUserShipping(shipping_field1: String, shipping_field2: String, shipping_field3: String, shipping_field4: String, shipping_field5: String, id: Int): Unit =
-        users.updateUserShipping(shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id)
+data class UpdateUserShippingArgs(
+    val shipping_field1: String,
+    val shipping_field2: String,
+    val shipping_field3: String,
+    val shipping_field4: String,
+    val shipping_field5: String,
+    val id: Int
+)
 
-    fun getComplexUserAnalytics(total_posts: String, total_comments: String, limit: String): List<GetComplexUserAnalyticsRow> =
-        users.getComplexUserAnalytics(total_posts, total_comments, limit)
+    fun updateUserShipping(args: UpdateUserShippingArgs): Unit =
+        users.updateUserShipping(args)
+
+data class GetComplexUserAnalyticsArgs(
+    val total_posts: String,
+    val total_comments: String,
+    val limit: String
+)
+
+    fun getComplexUserAnalytics(args: GetComplexUserAnalyticsArgs): List<GetComplexUserAnalyticsRow> =
+        users.getComplexUserAnalytics(args)
 
     fun getPostWithActiveCommenters(rn: String, post_id: String): List<GetPostWithActiveCommentersRow> =
         users.getPostWithActiveCommenters(rn, post_id)
@@ -150,11 +201,24 @@ class Queries(private val conn: Connection) {
     fun getLatestPostPerUser(): List<GetLatestPostPerUserRow> =
         users.getLatestPostPerUser()
 
-    fun searchUsers(name: String, email: String, limit: Int, offset: Int): List<SearchUsersRow> =
-        users.searchUsers(name, email, limit, offset)
+data class SearchUsersArgs(
+    val name: String,
+    val email: String,
+    val limit: Int,
+    val offset: Int
+)
 
-    fun searchPostsByTitle(title: String, limit: Int, offset: Int): List<SearchPostsByTitleRow> =
-        users.searchPostsByTitle(title, limit, offset)
+    fun searchUsers(args: SearchUsersArgs): List<SearchUsersRow> =
+        users.searchUsers(args)
+
+data class SearchPostsByTitleArgs(
+    val title: String,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun searchPostsByTitle(args: SearchPostsByTitleArgs): List<SearchPostsByTitleRow> =
+        users.searchPostsByTitle(args)
 
     fun fullTextSearchPosts(search_query: String, limit: Int): List<FullTextSearchPostsRow> =
         users.fullTextSearchPosts(search_query, limit)
@@ -168,8 +232,8 @@ class Queries(private val conn: Connection) {
     fun getUsersInIds(id: Int): List<Users> =
         users.getUsersInIds(id)
 
-    fun getUsersByNames(name1: String, name2: String, name3: String): List<GetUsersByNamesRow> =
-        users.getUsersByNames(name1, name2, name3)
+    fun getUsersByNames(name: String): List<GetUsersByNamesRow> =
+        users.getUsersByNames(name)
 
     fun getUsersWhoCommented(): List<GetUsersWhoCommentedRow> =
         users.getUsersWhoCommented()
@@ -195,8 +259,15 @@ class Queries(private val conn: Connection) {
     fun getUserSubscriptions(user_id: Int): List<GetUserSubscriptionsRow> =
         users.getUserSubscriptions(user_id)
 
-    fun createSubscription(user_id: Int, tier: SubscriptionTier, expires_at: LocalDateTime, auto_renew: Boolean): Subscriptions? =
-        users.createSubscription(user_id, tier, expires_at, auto_renew)
+data class CreateSubscriptionArgs(
+    val user_id: Int,
+    val tier: SubscriptionTier,
+    val expires_at: LocalDateTime,
+    val auto_renew: Boolean
+)
+
+    fun createSubscription(args: CreateSubscriptionArgs): Subscriptions? =
+        users.createSubscription(args)
 
     fun getOrdersByUser(user_id: Int, limit: Int): List<GetOrdersByUserRow> =
         users.getOrdersByUser(user_id, limit)
@@ -204,8 +275,14 @@ class Queries(private val conn: Connection) {
     fun getOrdersInState(state: OrderState, limit: Int): List<GetOrdersInStateRow> =
         users.getOrdersInState(state, limit)
 
-    fun getAuditLogForUser(changed_by: Int, limit: Int, offset: Int): List<GetAuditLogForUserRow> =
-        users.getAuditLogForUser(changed_by, limit, offset)
+data class GetAuditLogForUserArgs(
+    val changed_by: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getAuditLogForUser(args: GetAuditLogForUserArgs): List<GetAuditLogForUserRow> =
+        users.getAuditLogForUser(args)
 
     fun getAuditLogForTable(table_name: String, limit: Int): List<GetAuditLogForTableRow> =
         users.getAuditLogForTable(table_name, limit)
@@ -222,11 +299,24 @@ class Queries(private val conn: Connection) {
     fun createCategory(name: String): Categories? =
         users.createCategory(name)
 
-    fun createPost(user_id: Int, category_id: Int, title: String, content: String): Posts? =
-        users.createPost(user_id, category_id, title, content)
+data class CreatePostArgs(
+    val user_id: Int,
+    val category_id: Int,
+    val title: String,
+    val content: String
+)
 
-    fun createComment(post_id: Int, user_id: Int, content: String): Comments? =
-        users.createComment(post_id, user_id, content)
+    fun createPost(args: CreatePostArgs): Posts? =
+        users.createPost(args)
+
+data class CreateCommentArgs(
+    val post_id: Int,
+    val user_id: Int,
+    val content: String
+)
+
+    fun createComment(args: CreateCommentArgs): Comments? =
+        users.createComment(args)
 
     fun deleteOldUsers(created_at: LocalDateTime): Unit =
         users.deleteOldUsers(created_at)
@@ -234,11 +324,25 @@ class Queries(private val conn: Connection) {
     fun updateUserTimestamp(updated_at: LocalDateTime, id: Int): Unit =
         users.updateUserTimestamp(updated_at, id)
 
-    fun createNotification(user_id: Int, type: String, title: String, body: String, metadata: String): Notifications? =
-        users.createNotification(user_id, type, title, body, metadata)
+data class CreateNotificationArgs(
+    val user_id: Int,
+    val type: String,
+    val title: String,
+    val body: String,
+    val metadata: String
+)
 
-    fun getNotificationsByUser(user_id: Int, limit: Int, offset: Int): List<Notifications> =
-        users.getNotificationsByUser(user_id, limit, offset)
+    fun createNotification(args: CreateNotificationArgs): Notifications? =
+        users.createNotification(args)
+
+data class GetNotificationsByUserArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getNotificationsByUser(args: GetNotificationsByUserArgs): List<Notifications> =
+        users.getNotificationsByUser(args)
 
     fun getUnreadCount(user_id: Int): Int? =
         users.getUnreadCount(user_id)
@@ -252,11 +356,23 @@ class Queries(private val conn: Connection) {
     fun deleteOldNotifications(user_id: Int, created_at: LocalDateTime): Unit =
         users.deleteOldNotifications(user_id, created_at)
 
-    fun getNotificationsByType(user_id: Int, type: String, limit: Int): List<GetNotificationsByTypeRow> =
-        users.getNotificationsByType(user_id, type, limit)
+data class GetNotificationsByTypeArgs(
+    val user_id: Int,
+    val type: String,
+    val limit: Int
+)
 
-    fun createTag(name: String, slug: String, color: String): Tags? =
-        users.createTag(name, slug, color)
+    fun getNotificationsByType(args: GetNotificationsByTypeArgs): List<GetNotificationsByTypeRow> =
+        users.getNotificationsByType(args)
+
+data class CreateTagArgs(
+    val name: String,
+    val slug: String,
+    val color: String
+)
+
+    fun createTag(args: CreateTagArgs): Tags? =
+        users.createTag(args)
 
     fun getTagBySlug(slug: String): Tags? =
         users.getTagBySlug(slug)
@@ -273,20 +389,44 @@ class Queries(private val conn: Connection) {
     fun getTagsForPost(post_id: Int): List<Tags> =
         users.getTagsForPost(post_id)
 
-    fun getPostsByTag(slug: String, limit: Int, offset: Int): List<GetPostsByTagRow> =
-        users.getPostsByTag(slug, limit, offset)
+data class GetPostsByTagArgs(
+    val slug: String,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getPostsByTag(args: GetPostsByTagArgs): List<GetPostsByTagRow> =
+        users.getPostsByTag(args)
 
     fun getTopTags(limit: Int): List<GetTopTagsRow> =
         users.getTopTags(limit)
 
-    fun uploadMedia(user_id: Int, post_id: Int, type: String, url: String, size_bytes: Long, mime_type: String, width: Int, height: Int, metadata: String): Media? =
-        users.uploadMedia(user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata)
+data class UploadMediaArgs(
+    val user_id: Int,
+    val post_id: Int,
+    val type: String,
+    val url: String,
+    val size_bytes: Long,
+    val mime_type: String,
+    val width: Int,
+    val height: Int,
+    val metadata: String
+)
+
+    fun uploadMedia(args: UploadMediaArgs): Media? =
+        users.uploadMedia(args)
 
     fun getMediaByPost(post_id: Int): List<GetMediaByPostRow> =
         users.getMediaByPost(post_id)
 
-    fun getMediaByUser(user_id: Int, limit: Int, offset: Int): List<GetMediaByUserRow> =
-        users.getMediaByUser(user_id, limit, offset)
+data class GetMediaByUserArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getMediaByUser(args: GetMediaByUserArgs): List<GetMediaByUserRow> =
+        users.getMediaByUser(args)
 
     fun getMediaByType(user_id: Int, type: String): List<GetMediaByTypeRow> =
         users.getMediaByType(user_id, type)
@@ -300,8 +440,14 @@ class Queries(private val conn: Connection) {
     fun getLargeMediaFiles(size_bytes: Long, limit: Int): List<GetLargeMediaFilesRow> =
         users.getLargeMediaFiles(size_bytes, limit)
 
-    fun getUserFeed(user_id: Int, limit: Int, offset: Int): List<GetUserFeedRow> =
-        users.getUserFeed(user_id, limit, offset)
+data class GetUserFeedArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getUserFeed(args: GetUserFeedArgs): List<GetUserFeedRow> =
+        users.getUserFeed(args)
 
     fun searchPostsFullText(search_query: String, limit: Int): List<SearchPostsFullTextRow> =
         users.searchPostsFullText(search_query, limit)
