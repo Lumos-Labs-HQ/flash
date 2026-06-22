@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "query_file_checksums": {
+    "db/queries/users.sql": "0fec496bff1e53d041b080e9275485ccbdc1b8156767b4a70a0c522aa0715c52"
+  },
+  "schema_checksum": "171ee2528639fefc00afe1f6aa4bcacbb98359e6d077dab8d08aa3e2e14cd4c7",
+  "config_checksum": "706f737467726573716c7c6b6f746c696e7c",
+  "query_table_deps": {
+    "db/queries/users.sql": [
+      "users",
+      "orders",
+      "comments",
+      "tags",
+      "media",
+      "user_activity_summary",
+      "audit_log",
+      "categories",
+      "post_tags",
+      "active_commenters",
+      "users;",
+      "post_stats",
+      "subscriptions",
+      "notifications",
+      "user_post_stats",
+      "posts",
+      "active_users"
+    ]
+  },
+  "generated_file_checksums": {
+    "kotlin/Users.kt": "6d444efa42ae982329c7b73b79d2a83c0638743b8e7b2be45692b381e8ce63a9"
+  },
+  "last_generation": "2026-06-22T13:45:43.425421594+05:30",
+  "OutDir": "kotlin"
+}

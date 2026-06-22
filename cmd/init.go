@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -66,7 +67,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	projectTemplate := tmpl.NewProjectTemplate(dbType, isNodeProject(), isPythonProject())
+	projectTemplate := tmpl.NewProjectTemplateExt(dbType, isNodeProject(), isPythonProject(), isKotlinProject(), isJavaProject())
 	initializeProject(projectName, projectTemplate)
 }
 
@@ -80,6 +81,66 @@ func isPythonProject() bool {
 		if _, err := os.Stat(file); err == nil {
 			return true
 		}
+	}
+	return false
+}
+
+// isKotlinProject detects Kotlin projects by looking for Kotlin build files
+// and source files. Gradle (Kotlin DSL or Groovy) and Maven with Kotlin plugin
+// are all supported.
+func isKotlinProject() bool {
+	// Gradle Kotlin DSL
+	for _, f := range []string{"build.gradle.kts", "settings.gradle.kts"} {
+		if _, err := os.Stat(f); err == nil {
+			return true
+		}
+	}
+	// Groovy Gradle with kotlin plugin
+	if _, err := os.Stat("build.gradle"); err == nil {
+		data, _ := os.ReadFile("build.gradle")
+		if strings.Contains(string(data), "kotlin") {
+			return true
+		}
+	}
+	// Maven with Kotlin plugin
+	if _, err := os.Stat("pom.xml"); err == nil {
+		data, _ := os.ReadFile("pom.xml")
+		if strings.Contains(string(data), "kotlin") {
+			return true
+		}
+	}
+	// Any .kt source file in src/
+	if matches, _ := filepath.Glob("src/**/*.kt"); len(matches) > 0 {
+		return true
+	}
+	if matches, _ := filepath.Glob("src/*.kt"); len(matches) > 0 {
+		return true
+	}
+	return false
+}
+
+// isJavaProject detects plain Java projects (Maven, Gradle without Kotlin,
+// or bare .java source files). Kotlin is checked first so a Kotlin project
+// is never mis-identified as Java.
+func isJavaProject() bool {
+	// Already handled by isKotlinProject — skip if Kotlin
+	if isKotlinProject() {
+		return false
+	}
+	// Maven
+	if _, err := os.Stat("pom.xml"); err == nil {
+		return true
+	}
+	// Gradle (Groovy DSL without kotlin keyword)
+	if _, err := os.Stat("build.gradle"); err == nil {
+		return true
+	}
+	// Bare Java source
+	if matches, _ := filepath.Glob("src/**/*.java"); len(matches) > 0 {
+		return true
+	}
+	if matches, _ := filepath.Glob("src/*.java"); len(matches) > 0 {
+		return true
 	}
 	return false
 }

@@ -42,6 +42,8 @@ type Gen struct {
 	Go     GoGen     `toml:"go"`
 	JS     JSGen     `toml:"js"`
 	Python PythonGen `toml:"python"`
+	Kotlin KotlinGen `toml:"kotlin"`
+	Java   JavaGen   `toml:"java"`
 }
 
 type GoGen struct {
@@ -63,6 +65,20 @@ type PythonGen struct {
 	Driver  string `toml:"driver"` // database-specific driver
 }
 
+type KotlinGen struct {
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Package string `toml:"package"` // e.g. "com.example.db" — used in package declaration and imports
+	Driver  string `toml:"driver"`  // "jdbc" (default), "exposed", "r2dbc"
+}
+
+type JavaGen struct {
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Package string `toml:"package"` // e.g. "com.example.db" — used in package declaration and imports
+	Driver  string `toml:"driver"`  // "jdbc" (default), "jooq", "hibernate"
+}
+
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
 type rawPythonGen struct {
 	Enabled bool   `toml:"enabled"`
@@ -75,6 +91,8 @@ type rawGen struct {
 	Go     GoGen        `toml:"go"`
 	JS     JSGen        `toml:"js"`
 	Python rawPythonGen `toml:"python"`
+	Kotlin KotlinGen    `toml:"kotlin"`
+	Java   JavaGen      `toml:"java"`
 }
 
 type rawConfig struct {
@@ -174,6 +192,8 @@ func loadUncached() (*Config, error) {
 		cfg.Gen.Python.Enabled = raw.Gen.Python.Enabled
 		cfg.Gen.Python.Out = raw.Gen.Python.Out
 		cfg.Gen.Python.Driver = raw.Gen.Python.Driver
+		cfg.Gen.Kotlin = raw.Gen.Kotlin
+		cfg.Gen.Java = raw.Gen.Java
 		if raw.Gen.Python.Async != nil {
 			cfg.Gen.Python.Async = *raw.Gen.Python.Async
 			pythonAsyncSet = true
@@ -225,6 +245,12 @@ func loadUncached() (*Config, error) {
 	}
 	if cfg.Gen.Go.Out == "" {
 		cfg.Gen.Go.Out = "flash_gen"
+	}
+	if cfg.Gen.Kotlin.Out == "" && cfg.Gen.Kotlin.Enabled {
+		cfg.Gen.Kotlin.Out = "flash_gen"
+	}
+	if cfg.Gen.Java.Out == "" && cfg.Gen.Java.Enabled {
+		cfg.Gen.Java.Out = "flash_gen"
 	}
 	if cfg.Gen.Python.Enabled && !pythonAsyncSet {
 		cfg.Gen.Python.Async = true
