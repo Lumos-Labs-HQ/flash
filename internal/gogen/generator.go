@@ -350,7 +350,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		rowTypeName = mt
 	}
 
-	useStructParams := len(query.Params) > 3
+	useStructParams := len(query.Params) > 2
 
 	if useStructParams && len(query.Params) > 0 {
 		code.WriteString(fmt.Sprintf("type %sParams struct {\n", methodName))
@@ -959,7 +959,7 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowTypeName = mt
 	}
-	useStructParams := len(query.Params) > 3
+	useStructParams := len(query.Params) > 2
 
 	cmd := strings.ToLower(query.Cmd)
 	hasReturning := strings.Contains(strings.ToUpper(query.SQL), "RETURNING")
@@ -1171,7 +1171,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowTypeName = mt
 	}
-	useStructParams := len(query.Params) > 3
+	useStructParams := len(query.Params) > 2
 
 	if useStructParams && len(query.Params) > 0 {
 		code.WriteString(fmt.Sprintf("type %sParams struct {\n", methodName))

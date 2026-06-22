@@ -223,6 +223,10 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 }
 
 func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
+	// Rewrite col IN ($1, $2, ...) → col = ANY($1) with a single array param,
+	// renumbering all subsequent params. Only for PostgreSQL-style $N params.
+	query.SQL = rewriteINListToANY(query.SQL)
+
 	var tableName string
 	// Strip parenthesized content to avoid matching function-internal FROM (e.g. EXTRACT(EPOCH FROM ...))
 	cleaned := utils.StripParenthesizedContent(query.SQL)
@@ -1198,4 +1202,76 @@ func extractOrderedParamNums(sql string) []int {
 		}
 	}
 	return result
+}
+
+// rewriteINListToANY rewrites `col IN ($1, $2, $3)` → `col = ANY($1)` and
+// renumbers all subsequent $N params so they stay sequential.
+func rewriteINListToANY(sql string) string {
+	inRe := regexp.MustCompile(`(?i)(\w+)\s+IN\s*\(\s*(\$\d+(?:\s*,\s*\$\d+)*)\s*\)`)
+	numRe := regexp.MustCompile(`\$(\d+)`)
+
+	type inSpan struct {
+		start, end int
+		col        string
+		nums       []int // original $N numbers in this IN list
+	}
+
+	var spans []inSpan
+	for _, loc := range inRe.FindAllStringSubmatchIndex(sql, -1) {
+		paramsStr := sql[loc[4]:loc[5]]
+		var nums []int
+		for _, m := range numRe.FindAllStringSubmatch(paramsStr, -1) {
+			var n int
+			fmt.Sscanf(m[1], "%d", &n)
+			nums = append(nums, n)
+		}
+		if len(nums) < 2 {
+			continue
+		}
+		spans = append(spans, inSpan{loc[0], loc[1], sql[loc[2]:loc[3]], nums})
+	}
+	if len(spans) == 0 {
+		return sql
+	}
+
+	// Build a remapping: original $N → new $N
+	// Each IN list keeps only its first param; the rest are removed.
+	// Collect all "removed" param numbers in sorted order.
+	removed := map[int]bool{}
+	for _, s := range spans {
+		for _, n := range s.nums[1:] {
+			removed[n] = true
+		}
+	}
+
+	// For each original $N, compute its new number (subtract count of removed nums < N)
+	newNum := func(orig int) int {
+		shift := 0
+		for r := range removed {
+			if r < orig {
+				shift++
+			}
+		}
+		return orig - shift
+	}
+
+	// Replace spans in reverse order (to preserve offsets)
+	for i := len(spans) - 1; i >= 0; i-- {
+		s := spans[i]
+		replacement := fmt.Sprintf("%s = ANY($%d)", s.col, newNum(s.nums[0]))
+		sql = sql[:s.start] + replacement + sql[s.end:]
+	}
+
+	// Renumber all remaining $N params (high-to-low to avoid collisions)
+	for n := 100; n >= 1; n-- {
+		if removed[n] {
+			continue
+		}
+		nn := newNum(n)
+		if nn != n {
+			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", n), fmt.Sprintf("$%d", nn))
+		}
+	}
+
+	return sql
 }

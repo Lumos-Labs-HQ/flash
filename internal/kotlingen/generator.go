@@ -245,9 +245,30 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 
 		params := make([]string, len(q.Params))
 		args := make([]string, len(q.Params))
+		useStructParams := len(q.Params) > 2
+		var proxyArgStr string
 		for i, p := range q.Params {
 			params[i] = fmt.Sprintf("%s: %s", utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
 			args[i] = utils.ToSnakeCase(p.Name)
+		}
+
+		if useStructParams && len(q.Params) > 0 {
+			proxyName := gencommon.QueryPascal(q.Name) + "Args"
+			// Emit the data class for the proxy
+			w.WriteString(fmt.Sprintf("data class %s(\n", proxyName))
+			for i, p := range q.Params {
+				comma := ","
+				if i == len(q.Params)-1 {
+					comma = ""
+				}
+				w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
+					utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
+			}
+			w.WriteString(")\n\n")
+			params = []string{fmt.Sprintf("args: %s", proxyName)}
+			proxyArgStr = "args"
+		} else {
+			proxyArgStr = strings.Join(args, ", ")
 		}
 
 		retStmt := ""
@@ -255,7 +276,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 			retStmt = "return "
 		}
 		w.WriteString(fmt.Sprintf("    fun %s(%s): %s =\n", methodName, strings.Join(params, ", "), retType))
-		w.WriteString(fmt.Sprintf("        %s.%s(%s)\n\n", base, methodName, strings.Join(args, ", ")))
+		w.WriteString(fmt.Sprintf("        %s.%s(%s)\n\n", base, methodName, proxyArgStr))
 		_ = retStmt
 	}
 
@@ -335,7 +356,31 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	}
 
 	paramStr := strings.Join(params, ", ")
+	useStructParams := len(query.Params) > 2
+	var paramStructName string
+	if useStructParams && len(query.Params) > 0 {
+		paramStructName = gencommon.QueryPascal(query.Name) + "Args"
+		w.WriteString(fmt.Sprintf("data class %s(\n", paramStructName))
+		for i, p := range query.Params {
+			comma := ","
+			if i == len(query.Params)-1 {
+				comma = ""
+			}
+			w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
+				utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
+		}
+		w.WriteString(")\n\n")
+		paramStr = fmt.Sprintf("args: %s", paramStructName)
+	}
 	w.WriteString(fmt.Sprintf("    fun %s(%s): %s {\n", methodName, paramStr, retType))
+
+	// Unpack struct params into local variables so body functions don't need changes
+	if useStructParams {
+		for _, p := range query.Params {
+			w.WriteString(fmt.Sprintf("        val %s = args.%s\n",
+				utils.ToSnakeCase(p.Name), utils.ToSnakeCase(p.Name)))
+		}
+	}
 
 	// SQL constant
 	sql := strings.TrimSpace(query.SQL)

@@ -265,6 +265,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 
 		params := make([]string, len(q.Params))
 		args := make([]string, len(q.Params))
+		useStructParams := len(q.Params) > 2
 		for i, p := range q.Params {
 			params[i] = fmt.Sprintf("%s %s", g.sqlTypeToJava(p.Type, false), p.Name)
 			args[i] = p.Name
@@ -275,14 +276,39 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 			throwsClause = ""
 		}
 
+		// Generate params record for 3+ params in the proxy class
+		if useStructParams && len(q.Params) > 0 {
+			recordName := gencommon.QueryPascal(q.Name) + "Args"
+			w.WriteString(fmt.Sprintf("    public record %s(\n", recordName))
+			for i, p := range q.Params {
+				sep := ","
+				if i == len(q.Params)-1 {
+					sep = ""
+				}
+				w.WriteString(fmt.Sprintf("        %s %s%s\n", g.sqlTypeToJava(p.Type, false), p.Name, sep))
+			}
+			w.WriteString("    ) {}\n\n")
+		}
+
+		var paramStr string
+		var argStr string
+		if useStructParams {
+			recordName := gencommon.QueryPascal(q.Name) + "Args"
+			paramStr = recordName + " args"
+			argStr = "args"
+		} else {
+			paramStr = strings.Join(params, ", ")
+			argStr = strings.Join(args, ", ")
+		}
+
 		retStmt := ""
 		if retType != "void" {
 			retStmt = "return "
 		}
 		w.WriteString(fmt.Sprintf("    public %s %s(%s)%s {\n",
-			retType, methodName, strings.Join(params, ", "), throwsClause))
+			retType, methodName, paramStr, throwsClause))
 		w.WriteString(fmt.Sprintf("        %sthis.%s.%s(%s);\n",
-			retStmt, base, methodName, strings.Join(args, ", ")))
+			retStmt, base, methodName, argStr))
 		w.WriteString("    }\n\n")
 	}
 
@@ -345,8 +371,23 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 
 	// Params
 	params := make([]string, len(query.Params))
+	useStructParams := len(query.Params) > 2
+	paramTypeName := gencommon.QueryPascal(query.Name) + "Args"
 	for i, p := range query.Params {
 		params[i] = fmt.Sprintf("%s %s", g.sqlTypeToJava(p.Type, false), p.Name)
+	}
+
+	// Generate params record for 3+ params
+	if useStructParams && len(query.Params) > 0 {
+		w.WriteString(fmt.Sprintf("    public record %s(\n", paramTypeName))
+		for i, p := range query.Params {
+			sep := ","
+			if i == len(query.Params)-1 {
+				sep = ""
+			}
+			w.WriteString(fmt.Sprintf("        %s %s%s\n", g.sqlTypeToJava(p.Type, false), p.Name, sep))
+		}
+		w.WriteString("    ) {}\n\n")
 	}
 
 	throwsClause := " throws java.sql.SQLException"
@@ -354,7 +395,14 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 		throwsClause = ""
 	}
 
-	w.WriteString(fmt.Sprintf("    public %s %s(%s)%s {\n", retType, methodName, strings.Join(params, ", "), throwsClause))
+	var paramStr string
+	if useStructParams {
+		paramStr = paramTypeName + " args"
+	} else {
+		paramStr = strings.Join(params, ", ")
+	}
+
+	w.WriteString(fmt.Sprintf("    public %s %s(%s)%s {\n", retType, methodName, paramStr, throwsClause))
 
 	sql := strings.TrimSpace(query.SQL)
 	if isScylla || driver == "" || driver == "jdbc" || driver == "jooq" || driver == "hibernate" {
@@ -365,13 +413,13 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	w.WriteString(fmt.Sprintf("        final String sql = \"\"\"\n                %s\n                \"\"\";\n", sql))
 
 	if isScylla {
-		g.generateJavaScyllaBody(w, query, columns, cmd, rowType)
+		g.generateJavaScyllaBody(w, query, columns, cmd, rowType, useStructParams)
 	} else if driver == "jooq" {
-		g.generateJooqBody(w, query, columns, cmd, rowType)
+		g.generateJooqBody(w, query, columns, cmd, rowType, useStructParams)
 	} else if driver == "hibernate" {
-		g.generateHibernateBody(w, query, columns, cmd, rowType)
+		g.generateHibernateBody(w, query, columns, cmd, rowType, useStructParams)
 	} else {
-		g.generateJavaJDBCBody(w, query, columns, cmd, rowType)
+		g.generateJavaJDBCBody(w, query, columns, cmd, rowType, useStructParams)
 	}
 
 	w.WriteString("    }\n\n")
@@ -404,6 +452,14 @@ func javaTypedGetter(colName, sqlType string) string {
 	default:
 		return fmt.Sprintf("rs.getString(\"%s\")", colName)
 	}
+}
+
+// javaParamRef returns the parameter reference, prefixing with "args." for struct params.
+func javaParamRef(name string, useStruct bool) string {
+	if useStruct {
+		return "args." + name + "()"
+	}
+	return name
 }
 
 // javaTypedSetter returns a typed PreparedStatement setter.
@@ -486,14 +542,14 @@ func cqlInnerJavaClass(t string) string {
 	}
 }
 
-func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
+func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
 	methodName := gencommon.ToCamelCase(query.Name)
 	w.WriteString(fmt.Sprintf("        java.sql.PreparedStatement stmt = stmts.computeIfAbsent(\"%s\", k -> {\n", methodName))
 	w.WriteString("            try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }\n")
 	w.WriteString("        });\n")
 
 	for i, p := range query.Params {
-		w.WriteString("        " + javaTypedSetter(i+1, p.Name, p.Type) + "\n")
+		w.WriteString("        " + javaTypedSetter(i+1, javaParamRef(p.Name, useStructParams), p.Type) + "\n")
 	}
 
 	switch cmd {
@@ -551,16 +607,16 @@ func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query
 	}
 }
 
-func (g *Generator) generateJavaScyllaBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
-	args := make([]string, len(query.Params))
+func (g *Generator) generateJavaScyllaBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
+	paramRefs := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		args[i] = p.Name
+		paramRefs[i] = javaParamRef(p.Name, useStructParams)
 	}
 
 	execLine := "        session.execute(sql);\n"
 	rsLine := "        var rs = session.execute(sql);\n"
-	if len(args) > 0 {
-		argsStr := strings.Join(args, ", ")
+	if len(paramRefs) > 0 {
+		argsStr := strings.Join(paramRefs, ", ")
 		execLine = fmt.Sprintf("        session.execute(com.datastax.oss.driver.api.core.cql.SimpleStatement.newInstance(sql, %s));\n", argsStr)
 		rsLine = fmt.Sprintf("        var rs = session.execute(com.datastax.oss.driver.api.core.cql.SimpleStatement.newInstance(sql, %s));\n", argsStr)
 	}
@@ -612,14 +668,14 @@ func (g *Generator) generateJavaScyllaBody(w *strings.Builder, query *parser.Que
 	}
 }
 
-func (g *Generator) generateJooqBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
-	args := make([]string, len(query.Params))
+func (g *Generator) generateJooqBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
+	paramRefs := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		args[i] = p.Name
+		paramRefs[i] = javaParamRef(p.Name, useStructParams)
 	}
 	bindingsStr := ""
-	if len(args) > 0 {
-		bindingsStr = ", " + strings.Join(args, ", ")
+	if len(paramRefs) > 0 {
+		bindingsStr = ", " + strings.Join(paramRefs, ", ")
 	}
 	switch cmd {
 	case ":one":
@@ -633,10 +689,10 @@ func (g *Generator) generateJooqBody(w *strings.Builder, query *parser.Query, co
 	}
 }
 
-func (g *Generator) generateHibernateBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
+func (g *Generator) generateHibernateBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
 	w.WriteString(fmt.Sprintf("        var q = em.createNativeQuery(sql, %s.class);\n", rowType))
 	for i, p := range query.Params {
-		w.WriteString(fmt.Sprintf("        q.setParameter(%d, %s);\n", i+1, p.Name))
+		w.WriteString(fmt.Sprintf("        q.setParameter(%d, %s);\n", i+1, javaParamRef(p.Name, useStructParams)))
 	}
 	switch cmd {
 	case ":one":

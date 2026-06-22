@@ -41,6 +41,17 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		return "INTEGER"
 	}
 
+	// col = ANY($N) must be checked before name-based lookup, as the param name
+	// is the column name but the type is col.Type[] (an array), not col.Type.
+	anyArrayRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*=\s*ANY\s*\(\s*\$%d`, paramIndex))
+	if match := anyArrayRe.FindStringSubmatch(sql); len(match) > 1 {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, match[1]) {
+				return col.Type + "[]"
+			}
+		}
+	}
+
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) ||
@@ -213,6 +224,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 	if paramIndex <= len(allInsertCols) {
 		return allInsertCols[paramIndex-1]
+	}
+
+	// col = ANY($N) — param name is the column name (it's an array param)
+	anyNameRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*=\s*ANY\s*\(\s*\$%d`, paramIndex))
+	if match := anyNameRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
 	}
 
 	if strings.Contains(sql, "?") {
