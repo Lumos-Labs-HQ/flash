@@ -1,14 +1,18 @@
-* {
+*, *::before, *::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'JetBrains Mono', monospace;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
 }
 
-html, body {
+html {
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Inter', -apple-system, sans-serif;
     margin: 0;
     padding: 0;
     width: 100%;
@@ -16,20 +20,26 @@ html, body {
     background: #1a1a1a;
     color: #e0e0e0;
     overflow: hidden;
+    font-size: 16px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
+code, pre, .mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
 /* ===== Navbar — matches index page ===== */
 .left-navbar {
-    position: fixed; left: 0; top: 0; bottom: 0; width: 52px;
+    position: fixed; left: 0; top: 0; bottom: 0; width: 56px;
     background: #111; border-right: 1px solid #1e1e1e;
     display: flex; flex-direction: column; align-items: center;
-    padding: 12px 0; gap: 4px; z-index: 1000;
+    padding: 14px 0; gap: 4px; z-index: 1000;
 }
-.left-navbar-logo { width: 28px; height: 28px; border-radius: 6px; margin-bottom: 12px; }
+.left-navbar-logo { width: 28px; height: 28px; border-radius: 6px; margin-bottom: 14px; }
 .left-navbar-link {
-    width: 36px; height: 36px; border-radius: 6px;
+    width: 38px; height: 38px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     color: #666; font-size: 18px; text-decoration: none; transition: all 0.15s; position: relative;
 }
@@ -37,8 +47,8 @@ html, body {
 .left-navbar-link:hover { background: #1e1e1e; color: #ccc; }
 .left-navbar-link.active { background: #1e2a3a; color: #4a9eff; }
 .left-navbar-link .tooltip {
-    position: absolute; left: 44px; background: #1e1e1e; color: #e0e0e0;
-    font-size: 11px; padding: 4px 8px; border-radius: 4px; white-space: nowrap;
+    position: absolute; left: 46px; background: #1e1e1e; color: #e0e0e0;
+    font-size: 13px; padding: 5px 10px; border-radius: 5px; white-space: nowrap;
     opacity: 0; pointer-events: none; transition: opacity 0.15s;
     border: 1px solid #2a2a2a; z-index: 200;
 }
@@ -46,36 +56,37 @@ html, body {
 
 /* ===== Topbar ===== */
 .schema-topbar {
-    position: fixed; top: 0; left: 52px; right: 0; height: 48px;
+    position: fixed; top: 0; left: 56px; right: 0; height: 52px;
     background: #111; border-bottom: 1px solid #1e1e1e;
-    display: flex; align-items: center; padding: 0 14px;
+    display: flex; align-items: center; padding: 0 16px;
     justify-content: space-between; z-index: 100; gap: 12px;
 }
-.schema-title { font-size: 13px; font-weight: 500; color: #888; white-space: nowrap; }
+.schema-title { font-size: 14px; font-weight: 500; color: #888; white-space: nowrap; }
 .schema-topbar-center { flex: 1; display: flex; justify-content: center; }
 .schema-search {
-    padding: 5px 12px; border-radius: 5px; border: 1px solid #252525;
-    background: #171717; color: #ccc; width: 280px; font-size: 12px; outline: none;
+    padding: 8px 14px; border-radius: 6px; border: 1px solid #252525;
+    background: #171717; color: #ccc; width: 300px; font-size: 14px; outline: none;
+    font-family: 'Inter', sans-serif;
 }
-.schema-search:focus { border-color: #333; }
+.schema-search:focus { border-color: #333; box-shadow: 0 0 0 2px rgba(74,158,255,0.1); }
 .schema-search::placeholder { color: #444; }
-.schema-topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-.schema-stats { font-size: 11px; color: #555; white-space: nowrap; }
+.schema-topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.schema-stats { font-size: 13px; color: #555; white-space: nowrap; font-family: 'Inter', sans-serif; }
 
 /* ===== Topbar buttons ===== */
 .scbtn {
-    display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px;
-    border-radius: 5px; font-size: 12px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+    border-radius: 6px; font-size: 14px; cursor: pointer;
     border: 1px solid #252525; background: #171717; color: #ccc;
-    transition: all 0.1s; font-family: inherit; white-space: nowrap;
+    transition: all 0.1s; font-family: 'Inter', sans-serif; white-space: nowrap;
 }
 .scbtn:hover { background: #1e1e1e; border-color: #333; color: #e0e0e0; }
-.scbtn .iconify { font-size: 15px; }
+.scbtn .iconify { font-size: 16px; }
 
 #root {
     position: fixed;
-    top: 48px;
-    left: 52px;
+    top: 52px;
+    left: 56px;
     right: 0;
     bottom: 0;
     margin: 0;
@@ -294,20 +305,18 @@ svg text {
 
 .table-header {
     background: linear-gradient(180deg, #4b4b4b 0%, #3f3f3f 100%);
-    padding: 8px 12px;
+    padding: 10px 14px;
     border-bottom: 2px solid #5a5d5f;
     font-weight: 600;
-    font-size: 13px;
+    font-size: 14px;
     color: #fff;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     border-radius: 2px 2px 0 0;
     transition: all 0.3s ease;
     letter-spacing: 0.3px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
+    font-family: 'Inter', sans-serif;
 }
 
 .table-node-wrapper.highlighted .table-header {
@@ -326,15 +335,12 @@ svg text {
 }
 
 .table-field {
-    padding: 6px 12px;
+    padding: 8px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid #2d2d2d;
-    font-size: 12px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
+    font-size: 13px;
 }
 
 .table-field:last-child {
@@ -356,18 +362,15 @@ svg text {
 .field-name {
     color: #a9b7c6;
     font-weight: 500;
+    font-size: 13px;
     letter-spacing: 0.2px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 }
 
 .field-type {
     color: #6897bb;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.3px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
 }
 
 .pk-icon {
@@ -542,10 +545,10 @@ svg text {
 
 .edit-panel {
     position: fixed;
-    right: -450px;
-    top: 48px;
-    width: 420px;
-    height: calc(100vh - 48px);
+    right: -480px;
+    top: 52px;
+    width: 460px;
+    height: calc(100vh - 52px);
     background: #111;
     border-left: 1px solid #1e1e1e;
     transition: right 0.3s ease;
@@ -569,7 +572,7 @@ svg text {
 }
 
 .panel-title {
-    font-size: 13px;
+    font-size: 15px;
     font-weight: 500;
     color: #f0f0f0;
     display: flex;
@@ -607,11 +610,11 @@ svg text {
 }
 
 .section-title {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 600;
     color: #555;
     text-transform: uppercase;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     letter-spacing: 0.5px;
 }
 
@@ -635,7 +638,7 @@ svg text {
     font-size: 15px;
     font-weight: 500;
     color: #fff;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -644,6 +647,7 @@ svg text {
 .action-card-desc {
     font-size: 13px;
     color: #888;
+    line-height: 1.5;
 }
 
 .form-group {
@@ -654,20 +658,21 @@ svg text {
     display: block;
     margin-bottom: 8px;
     color: #aaa;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
 }
 
 .form-input,
 .form-select {
     width: 100%;
-    padding: 10px 12px;
+    padding: 10px 14px;
     background: #161616;
     border: 1px solid #252525;
-    border-radius: 5px;
+    border-radius: 6px;
     color: #e0e0e0;
     font-size: 14px;
-    font-family: 'JetBrains Mono', monospace;
+    outline: none;
+    font-family: 'Inter', sans-serif;
 }
 
 .form-input:focus,
@@ -675,12 +680,13 @@ svg text {
     outline: none;
     border-color: #2a3a50;
     background: #252525;
+    box-shadow: 0 0 0 2px rgba(74,158,255,0.1);
 }
 
 .form-checkbox {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     color: #aaa;
     font-size: 14px;
 }
@@ -738,6 +744,7 @@ svg text {
     cursor: pointer;
     transition: all 0.2s;
     flex: 1;
+    font-family: 'Inter', sans-serif;
 }
 
 .btn-primary {
@@ -956,9 +963,9 @@ svg text {
     font-size: 12px;
     color: #6897bb;
     margin-left: auto;
-    padding: 2px 8px;
+    padding: 3px 10px;
     background: #6897bb20;
-    border-radius: 4px;
+    border-radius: 5px;
 }
 
 .column-right {

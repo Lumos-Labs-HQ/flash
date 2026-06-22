@@ -17,7 +17,7 @@ import (
 var (
 	cfgFile string
 	envName string
-	Version = "2.4.21-beta-dev"
+	Version = "2.6.0-beta-dev"
 )
 
 func showBanner() {
@@ -36,7 +36,7 @@ func showBanner() {
 		"║                                                              ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓            ║",
 		"║     ▓                                                ▓       ║",
-		"║     ▓      Go • TS • JS • Python • ORM              ▓        ║",
+		"║     ▓  Go • TS • JS • Python • Kotlin • Java  • ORM  ▓       ║",
 		"║     ▓                                                ▓       ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓              ║",
 		"╚══════════════════════════════════════════════════════════════╝",
@@ -64,11 +64,15 @@ Supported Languages:
 - TypeScript (with full type definitions)
 - JavaScript (with JSDoc comments)
 - Python (with async support)
+- Kotlin (JDBC / Exposed / R2DBC)
+- Java (JDBC / jOOQ / Hibernate)
 
 Database Support:
 - PostgreSQL (with advanced features)
 - MySQL (full compatibility)
-- SQLite (embedded databases)`,
+- SQLite (embedded databases)
+- ScyllaDB / Cassandra
+- ClickHouse`,
 
 	// NO PLUGIN CHECK IN DEV MODE
 	Run: func(cmd *cobra.Command, args []string) {
@@ -107,4 +111,9 @@ func initConfig() {
 	godotenv.Load(".env.local")
 
 	config.ConfigFile = cfgFile
+
+	// If flash.toml specifies env_path, load that file too (overrides defaults above)
+	if cfg, err := config.Load(); err == nil && cfg.EnvPath != "" {
+		godotenv.Overload(cfg.EnvPath)
+	}
 }

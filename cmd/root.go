@@ -18,7 +18,7 @@ import (
 var (
 	cfgFile string
 	envName string
-	Version = "2.5.2"
+	Version = "2.6.0"
 )
 
 func showBanner() {
@@ -37,7 +37,7 @@ func showBanner() {
 		"║                                                              ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓            ║",
 		"║     ▓                                                ▓       ║",
-		"║     ▓      Go • TS • JS • Python • ORM              ▓        ║",
+		"║     ▓   Go • TS • JS • Python • Kotlin • Java        ▓       ║",
 		"║     ▓                                                ▓       ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓              ║",
 		"╚══════════════════════════════════════════════════════════════╝",
@@ -64,11 +64,15 @@ Supported Languages:
 - TypeScript (with full type definitions)
 - JavaScript (with JSDoc comments)
 - Python (with async support)
+- Kotlin (JDBC / Exposed / R2DBC)
+- Java (JDBC / jOOQ / Hibernate)
 
 Database Support:
 - PostgreSQL (with advanced features)
 - MySQL (full compatibility)
-- SQLite (embedded databases)`,
+- SQLite (embedded databases)
+- ScyllaDB / Cassandra
+- ClickHouse`,
 
 	PersistentPreRunE: checkPluginRequirement,
 
@@ -190,4 +194,9 @@ func initConfig() {
 	_ = godotenv.Load(".env.local")
 
 	config.ConfigFile = cfgFile
+
+	// If flash.toml specifies env_path, load that file too (overrides defaults above)
+	if cfg, err := config.Load(); err == nil && cfg.EnvPath != "" {
+		_ = godotenv.Overload(cfg.EnvPath)
+	}
 }

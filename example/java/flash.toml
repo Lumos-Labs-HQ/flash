@@ -2,6 +2,8 @@
 #   Go:     "pgx" (native) | "database/sql" (lib/pq)
 #   JS:     "pg" (node-postgres) | "postgres" (porsager/postgres)
 #   Python: "psycopg3" | "asyncpg"
+#   Kotlin: "jdbc" (default) | "exposed" | "r2dbc"
+#   Java:   "jdbc" (default) | "jooq" | "hibernate"
 # Add driver = "<name>" inside the [gen.*] block below.
 version = "2"
 schema_dir = "db/schema"
@@ -15,3 +17,9 @@ url_env = "DATABASE_URL"
 
 [gen.java]
 enabled = true
+out="java"
+
+
+[gen.kotlin]
+enabled = true
+out="kotlin"

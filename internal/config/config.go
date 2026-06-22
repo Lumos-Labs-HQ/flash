@@ -24,11 +24,12 @@ var (
 
 type Config struct {
 	Version        string   `toml:"version"`
-	SchemaPath     string   `toml:"schema_path"` // Deprecated: use SchemaDir instead
-	SchemaDir      string   `toml:"schema_dir"`  // New: folder containing .sql schema files
+	SchemaPath     string   `toml:"schema_path"`
+	SchemaDir      string   `toml:"schema_dir"`
 	Queries        string   `toml:"queries"`
 	MigrationsPath string   `toml:"migrations_path"`
 	ExportPath     string   `toml:"export_path"`
+	EnvPath        string   `toml:"env_path"` // custom .env file path, e.g. "config/.env"
 	Database       Database `toml:"database"`
 	Gen            Gen      `toml:"gen"`
 }
@@ -42,6 +43,8 @@ type Gen struct {
 	Go     GoGen     `toml:"go"`
 	JS     JSGen     `toml:"js"`
 	Python PythonGen `toml:"python"`
+	Kotlin KotlinGen `toml:"kotlin"`
+	Java   JavaGen   `toml:"java"`
 }
 
 type GoGen struct {
@@ -63,6 +66,20 @@ type PythonGen struct {
 	Driver  string `toml:"driver"` // database-specific driver
 }
 
+type KotlinGen struct {
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Package string `toml:"package"` // e.g. "com.example.db" — used in package declaration and imports
+	Driver  string `toml:"driver"`  // "jdbc" (default), "exposed", "r2dbc"
+}
+
+type JavaGen struct {
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Package string `toml:"package"` // e.g. "com.example.db" — used in package declaration and imports
+	Driver  string `toml:"driver"`  // "jdbc" (default), "jooq", "hibernate"
+}
+
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
 type rawPythonGen struct {
 	Enabled bool   `toml:"enabled"`
@@ -75,6 +92,8 @@ type rawGen struct {
 	Go     GoGen        `toml:"go"`
 	JS     JSGen        `toml:"js"`
 	Python rawPythonGen `toml:"python"`
+	Kotlin KotlinGen    `toml:"kotlin"`
+	Java   JavaGen      `toml:"java"`
 }
 
 type rawConfig struct {
@@ -84,6 +103,7 @@ type rawConfig struct {
 	Queries        string   `toml:"queries"`
 	MigrationsPath string   `toml:"migrations_path"`
 	ExportPath     string   `toml:"export_path"`
+	EnvPath        string   `toml:"env_path"`
 	Database       Database `toml:"database"`
 	Gen            rawGen   `toml:"gen"`
 }
@@ -168,12 +188,15 @@ func loadUncached() (*Config, error) {
 		cfg.Queries = raw.Queries
 		cfg.MigrationsPath = raw.MigrationsPath
 		cfg.ExportPath = raw.ExportPath
+		cfg.EnvPath = raw.EnvPath
 		cfg.Database = raw.Database
 		cfg.Gen.Go = raw.Gen.Go
 		cfg.Gen.JS = raw.Gen.JS
 		cfg.Gen.Python.Enabled = raw.Gen.Python.Enabled
 		cfg.Gen.Python.Out = raw.Gen.Python.Out
 		cfg.Gen.Python.Driver = raw.Gen.Python.Driver
+		cfg.Gen.Kotlin = raw.Gen.Kotlin
+		cfg.Gen.Java = raw.Gen.Java
 		if raw.Gen.Python.Async != nil {
 			cfg.Gen.Python.Async = *raw.Gen.Python.Async
 			pythonAsyncSet = true
@@ -225,6 +248,12 @@ func loadUncached() (*Config, error) {
 	}
 	if cfg.Gen.Go.Out == "" {
 		cfg.Gen.Go.Out = "flash_gen"
+	}
+	if cfg.Gen.Kotlin.Out == "" && cfg.Gen.Kotlin.Enabled {
+		cfg.Gen.Kotlin.Out = "flash_gen"
+	}
+	if cfg.Gen.Java.Out == "" && cfg.Gen.Java.Enabled {
+		cfg.Gen.Java.Out = "flash_gen"
 	}
 	if cfg.Gen.Python.Enabled && !pythonAsyncSet {
 		cfg.Gen.Python.Async = true

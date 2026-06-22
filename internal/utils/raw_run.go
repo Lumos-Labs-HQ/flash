@@ -217,8 +217,16 @@ func splitSQLStatements(content string) []string {
 	parts := strings.Split(content, ";")
 
 	for _, part := range parts {
-		statement := strings.TrimSpace(part)
-		if statement != "" && !strings.HasPrefix(statement, "--") {
+		// Strip comment lines, then check if anything remains
+		var nonCommentLines []string
+		for _, line := range strings.Split(part, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
+				nonCommentLines = append(nonCommentLines, line)
+			}
+		}
+		statement := strings.TrimSpace(strings.Join(nonCommentLines, "\n"))
+		if statement != "" {
 			statements = append(statements, statement)
 		}
 	}

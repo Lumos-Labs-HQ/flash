@@ -118,8 +118,9 @@ func TestGenerateCreateTableSQL_WithFK(t *testing.T) {
 		},
 	}
 	sql := a.GenerateCreateTableSQL(table)
-	if !strings.Contains(sql, "FOREIGN KEY") || !strings.Contains(sql, "CASCADE") {
-		t.Errorf("GenerateCreateTableSQL(FK) missing FK clause:\n%s", sql)
+	// PostgreSQL uses inline REFERENCES on the column (via FormatColumnType)
+	if !strings.Contains(sql, "REFERENCES") || !strings.Contains(sql, "CASCADE") {
+		t.Errorf("GenerateCreateTableSQL(FK) missing REFERENCES clause:\n%s", sql)
 	}
 }
 

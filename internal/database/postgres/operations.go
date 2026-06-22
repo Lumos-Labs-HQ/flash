@@ -225,35 +225,35 @@ func (p *Adapter) DropEnum(ctx context.Context, enumName string) error {
 
 func (p *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 	var lines []string
-	var foreignKeys []string
 
-	for _, column := range table.Columns {
-		if column.ForeignKeyTable != "" && column.ForeignKeyColumn != "" {
-			fk := fmt.Sprintf("  FOREIGN KEY (\"%s\") REFERENCES \"%s\"(\"%s\")",
-				column.Name, column.ForeignKeyTable, column.ForeignKeyColumn)
-			if column.OnDeleteAction != "" {
-				fk += fmt.Sprintf(" ON DELETE %s", column.OnDeleteAction)
-			}
-			foreignKeys = append(foreignKeys, fk)
+	// Count primary key columns to detect composite PK
+	var pkCols []string
+	for _, col := range table.Columns {
+		if col.IsPrimary {
+			pkCols = append(pkCols, fmt.Sprintf("\"%s\"", col.Name))
 		}
 	}
+	isCompositePK := len(pkCols) > 1
 
 	lines = append(lines, fmt.Sprintf("CREATE TABLE IF NOT EXISTS \"%s\" (", table.Name))
 
 	for i, column := range table.Columns {
 		comma := ","
-		if i == len(table.Columns)-1 && len(foreignKeys) == 0 {
+		isLast := i == len(table.Columns)-1
+		if isLast && !isCompositePK {
 			comma = ""
 		}
-		lines = append(lines, fmt.Sprintf("  \"%s\" %s%s", column.Name, p.FormatColumnType(column), comma))
+		// For composite PK tables, don't emit PRIMARY KEY inline per column
+		col := column
+		if isCompositePK {
+			col.IsPrimary = false
+		}
+		lines = append(lines, fmt.Sprintf("  \"%s\" %s%s", col.Name, p.FormatColumnType(col), comma))
 	}
 
-	for i, fk := range foreignKeys {
-		comma := ","
-		if i == len(foreignKeys)-1 {
-			comma = ""
-		}
-		lines = append(lines, fmt.Sprintf("%s%s", fk, comma))
+	// Emit composite PRIMARY KEY constraint
+	if isCompositePK {
+		lines = append(lines, fmt.Sprintf("  PRIMARY KEY (%s)", strings.Join(pkCols, ", ")))
 	}
 
 	lines = append(lines, ");")

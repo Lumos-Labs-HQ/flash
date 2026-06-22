@@ -233,6 +233,14 @@ func (s *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 	var lines []string
 	var foreignKeys []string
 
+	var pkCols []string
+	for _, col := range table.Columns {
+		if col.IsPrimary {
+			pkCols = append(pkCols, fmt.Sprintf("\"%s\"", col.Name))
+		}
+	}
+	isCompositePK := len(pkCols) > 1
+
 	for _, column := range table.Columns {
 		if column.ForeignKeyTable != "" && column.ForeignKeyColumn != "" {
 			fk := fmt.Sprintf("  FOREIGN KEY (\"%s\") REFERENCES \"%s\"(\"%s\")",
@@ -248,10 +256,23 @@ func (s *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 
 	for i, column := range table.Columns {
 		comma := ","
-		if i == len(table.Columns)-1 && len(foreignKeys) == 0 {
+		isLast := i == len(table.Columns)-1
+		if isLast && len(foreignKeys) == 0 && !isCompositePK {
 			comma = ""
 		}
-		lines = append(lines, fmt.Sprintf("  \"%s\" %s%s", column.Name, s.FormatColumnType(column), comma))
+		col := column
+		if isCompositePK {
+			col.IsPrimary = false
+		}
+		lines = append(lines, fmt.Sprintf("  \"%s\" %s%s", col.Name, s.FormatColumnType(col), comma))
+	}
+
+	if isCompositePK {
+		sep := ","
+		if len(foreignKeys) == 0 {
+			sep = ""
+		}
+		lines = append(lines, fmt.Sprintf("  PRIMARY KEY (%s)%s", strings.Join(pkCols, ", "), sep))
 	}
 
 	for i, fk := range foreignKeys {

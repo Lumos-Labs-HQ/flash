@@ -16,6 +16,8 @@ type ProjectTemplate struct {
 	DatabaseType    DatabaseType
 	IsNodeProject   bool
 	IsPythonProject bool
+	IsKotlinProject bool
+	IsJavaProject   bool
 }
 
 type dbConfig struct {
@@ -99,6 +101,16 @@ func NewProjectTemplate(dbType DatabaseType, isNodeProject bool, isPythonProject
 		DatabaseType:    dbType,
 		IsNodeProject:   isNodeProject,
 		IsPythonProject: isPythonProject,
+	}
+}
+
+func NewProjectTemplateExt(dbType DatabaseType, isNode, isPython, isKotlin, isJava bool) *ProjectTemplate {
+	return &ProjectTemplate{
+		DatabaseType:    dbType,
+		IsNodeProject:   isNode,
+		IsPythonProject: isPython,
+		IsKotlinProject: isKotlin,
+		IsJavaProject:   isJava,
 	}
 }
 
@@ -258,6 +270,16 @@ enabled = true
 out = "flash_gen"
 async = true`
 	}
+	if pt.IsKotlinProject {
+		return `[gen.kotlin]
+enabled = true
+out = "flash_gen"`
+	}
+	if pt.IsJavaProject {
+		return `[gen.java]
+enabled = true
+out = "flash_gen"`
+	}
 	return `[gen.go]
 enabled = true`
 }
@@ -269,30 +291,40 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Go:     "pgx" (native) | "database/sql" (lib/pq)
 #   JS:     "pg" (node-postgres) | "postgres" (porsager/postgres)
 #   Python: "psycopg3" | "asyncpg"
+#   Kotlin: "jdbc" (default) | "exposed" | "r2dbc"
+#   Java:   "jdbc" (default) | "jooq" | "hibernate"
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case MySQL:
 		return `# FlashORM — MySQL Drivers
 #   Go:     "database/sql" (go-sql-driver/mysql)
 #   JS:     "mysql2" | "serverless-mysql"
 #   Python: "pymysql" (sync) | "asyncmy" (async)
+#   Kotlin: "jdbc" (default) | "exposed" | "r2dbc"
+#   Java:   "jdbc" (default) | "jooq" | "hibernate"
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case SQLite:
 		return `# FlashORM — SQLite Drivers
 #   Go:     "database/sql" (mattn/go-sqlite3, modernc.org/sqlite)
 #   JS:     "better-sqlite3" | "bun:sqlite"
 #   Python: "sqlite3" (sync) | "aiosqlite" (async)
+#   Kotlin: "jdbc" (default) | "exposed"
+#   Java:   "jdbc" (default)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case ClickHouse:
 		return `# FlashORM — ClickHouse Drivers
 #   Go:     "clickhouse-go/v2"
 #   JS:     "@clickhouse/client"
 #   Python: "clickhouse-driver" (sync) | "asynch" (async)
+#   Kotlin: "jdbc" (default)
+#   Java:   "jdbc" (default) | "jooq"
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case ScyllaDB:
 		return `# FlashORM — ScyllaDB/Cassandra Drivers
-#   Go:     "apache/cassandra-gocql-driver/v2" (default) | "gocql" (github.com/gocql/gocql)
+#   Go:     "apache/cassandra-gocql-driver/v2" (default) | "gocql"
 #   JS:     "cassandra-driver"
 #   Python: "scylla-driver" (sync) | "cassandra-driver" (async)
+#   Kotlin: uses DataStax Java Driver (CqlSession) — no driver key needed
+#   Java:   uses DataStax Java Driver (CqlSession) — no driver key needed
 # Add driver = "gocql" inside the [gen.go] block to use gocql/gocql instead.`
 	default:
 		return `# FlashORM — See docs for available drivers per database.`

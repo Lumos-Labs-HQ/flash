@@ -8,7 +8,9 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/gogen"
+	"github.com/Lumos-Labs-HQ/flash/internal/javagen"
 	"github.com/Lumos-Labs-HQ/flash/internal/jsgen"
+	"github.com/Lumos-Labs-HQ/flash/internal/kotlingen"
 	"github.com/Lumos-Labs-HQ/flash/internal/pygen"
 	"github.com/spf13/cobra"
 )
@@ -22,6 +24,8 @@ Automatically detects project type and generates appropriate code:
 - Go projects: Generate Go code with custom generator
 - Node.js projects: Generate JavaScript code with type annotations
 - Python projects: Generate Python code with type hints
+- Kotlin projects: Generate Kotlin code with JDBC/Exposed/R2DBC support
+- Java projects: Generate Java code with JDBC/jOOQ/Hibernate support
 
 Configuration is read from flash.toml`,
 
@@ -32,6 +36,7 @@ Configuration is read from flash.toml`,
 		}
 
 		generated := false
+
 		if cfg.Gen.JS.Enabled {
 			fmt.Println("🔨 Generating JavaScript code...")
 			generator := jsgen.New(cfg)
@@ -43,7 +48,6 @@ Configuration is read from flash.toml`,
 			generated = true
 		}
 
-		// Generate Python
 		if cfg.Gen.Python.Enabled {
 			fmt.Println("🔨 Generating Python code...")
 			generator := pygen.New(cfg)
@@ -52,6 +56,28 @@ Configuration is read from flash.toml`,
 			}
 			fmt.Println("🎉 Python code generated successfully!")
 			fmt.Printf("   Output: %s\n", cfg.Gen.Python.Out)
+			generated = true
+		}
+
+		if cfg.Gen.Kotlin.Enabled {
+			fmt.Println("🔨 Generating Kotlin code...")
+			generator := kotlingen.New(cfg)
+			if err := generator.Generate(); err != nil {
+				return fmt.Errorf("failed to generate Kotlin code: %w", err)
+			}
+			fmt.Println("🎉 Kotlin code generated successfully!")
+			fmt.Printf("   Output: %s\n", cfg.Gen.Kotlin.Out)
+			generated = true
+		}
+
+		if cfg.Gen.Java.Enabled {
+			fmt.Println("🔨 Generating Java code...")
+			generator := javagen.New(cfg)
+			if err := generator.Generate(); err != nil {
+				return fmt.Errorf("failed to generate Java code: %w", err)
+			}
+			fmt.Println("🎉 Java code generated successfully!")
+			fmt.Printf("   Output: %s\n", cfg.Gen.Java.Out)
 			generated = true
 		}
 

@@ -29,14 +29,14 @@
 
 ---
 
-A powerful, database-agnostic ORM built in Go with multi-database support and type-safe code generation for Go, JavaScript/TypeScript, and Python.
+A powerful, database-agnostic ORM built in Go with multi-database support and type-safe code generation for **Go, JavaScript/TypeScript, Python, Kotlin, and Java**.
 
 ## ✨ Features
 
 - 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite, ScyllaDB/Cassandra, ClickHouse (full ORM)
 - 🔄 **Migration Management**: Create, apply, and track migrations with transaction safety
 - 📤 **Smart Export System**: JSON, CSV, SQLite formats
-- 🔧 **Code Generation**: Type-safe code for Go, JavaScript/TypeScript, and Python
+- 🔧 **Code Generation**: Type-safe code for Go, TypeScript/JavaScript, Python, **Kotlin**, and **Java**
 - 🌱 **Database Seeding**: Generate realistic fake data for development
 - ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 📊 **FlashORM Studio**: Visual database management for SQL, MongoDB, and Redis
@@ -68,7 +68,7 @@ go install github.com/Lumos-Labs-HQ/flash@latest
 ## 🏁 Quick Start
 
 ```bash
-# 1. Initialize project
+# 1. Initialize project (auto-detects Go/Node/Python/Kotlin/Java)
 flash init --postgresql  # or --mysql, --sqlite, --scylla, --clickhouse
 
 # 2. Set database URL
@@ -110,6 +110,86 @@ flash gen
 | MongoDB | ❌ | ✅ Visual Management |
 | Redis | ❌ | ✅ Visual Management |
 
+## 🔧 Code Generation
+
+FlashORM generates type-safe query code from your SQL files. Auto-detects project type on `flash init`.
+
+### Go
+```toml
+[gen.go]
+enabled = true
+out = "flash_gen"
+driver = "pgx"  # or "database/sql" (default)
+```
+
+### TypeScript / JavaScript
+```toml
+[gen.js]
+enabled = true
+out = "flash_gen"
+driver = "pg"  # pg | postgres | mysql2 | better-sqlite3 | bun:sqlite
+```
+
+### Python
+```toml
+[gen.python]
+enabled = true
+out = "flash_gen"
+async = true
+driver = "asyncpg"  # asyncpg | psycopg3 | pymysql | aiosqlite | sqlite3
+```
+
+### Kotlin *(new in 2.6.0)*
+```toml
+[gen.kotlin]
+enabled = true
+out = "src/main/kotlin/com/example/db/flashgen"
+package = "com.example.db.flashgen"
+driver = "jdbc"  # jdbc (default) | exposed | r2dbc
+```
+
+Generates: `Models.kt`, `UsersQueries.kt`, `Queries.kt` (unified entry point)
+
+```kotlin
+val q = Queries.newq(conn)
+val user = q.getUser(42)           // Users?
+val posts = q.getPostsByUser(42)   // List<GetPostsByUserRow>
+```
+
+### Java *(new in 2.6.0)*
+```toml
+[gen.java]
+enabled = true
+out = "src/main/java/com/example/db/flashgen"
+package = "com.example.db.flashgen"
+driver = "jdbc"  # jdbc (default) | jooq | hibernate
+```
+
+Generates: `Users.java`, `UsersQueries.java`, `Queries.java` (unified entry point)
+
+```java
+var q = Queries.newq(conn);
+Users user = q.getUser(42);                          // Users
+List<GetPostsByUserRow> posts = q.getPostsByUser(42); // List<GetPostsByUserRow>
+```
+
+## 🔧 Configuration
+
+```toml
+version = "2"
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+env_path = "config/.env"   # optional: custom .env file path
+
+[database]
+provider = "postgresql"
+url_env = "DATABASE_URL"
+
+[gen.go]
+enabled = true
+```
+
 ## 📊 FlashORM Studio
 
 ### SQL Studio (PostgreSQL, MySQL, SQLite, ScyllaDB, ClickHouse)
@@ -125,64 +205,25 @@ Features: Schema designer, data browser, relationship visualization, auto-migrat
 
 ### MongoDB Studio
 
-Visual management interface for MongoDB (no ORM features).
-
 ```bash
 flash studio "mongodb://localhost:27017/mydb"
 flash studio "mongodb+srv://user:pass@cluster.mongodb.net/mydb"
 ```
 
-Features: Collection browser, document editor, query interface, bulk operations
-
 ### Redis Studio
-
-Visual management interface for Redis (no ORM features).
 
 ```bash
 flash studio "redis://localhost:6379"
 flash studio "redis://:password@localhost:6379"
 ```
 
-Features: Key browser, CLI terminal, memory analysis, Lua scripting, Pub/Sub, ACL management
-
 ## 🌱 Database Seeding
 
 ```bash
-# Seed all tables
-flash seed
-
-# Custom count
-flash seed --count 100
-
-# Multiple tables with different counts
-flash seed users:100 posts:500 comments:1000
-
-# Truncate and reseed
-flash seed --truncate --force
-```
-
-Smart data generation based on column names (email, name, phone, etc.)
-
-## 🔧 Configuration
-
-```toml
-version = "2"
-schema_dir = "db/schema"
-queries = "db/queries/"
-migrations_path = "db/migrations"
-
-[database]
-provider = "postgresql"
-url_env = "DATABASE_URL"
-
-[gen.go]
-enabled = true
-
-[gen.js]
-enabled = true
-
-[gen.python]
-enabled = true
+flash seed                                    # seed all tables
+flash seed --count 100                        # custom count
+flash seed users:100 posts:500 comments:1000  # per-table counts
+flash seed --truncate --force                 # truncate and reseed
 ```
 
 ## 📤 Export System
@@ -196,17 +237,11 @@ flash export --sqlite  # Portable SQLite file
 ## 🛠️ Advanced Usage
 
 ```bash
-# Production deployment
-flash apply --force
-
-# Reset database (development)
-flash reset --force
-
-# Extract schema from existing database
-flash pull
-
-# Execute raw SQL
+flash apply --force        # Production deployment
+flash reset --force        # Reset database (development)
+flash pull                 # Extract schema from existing database
 flash raw "SELECT COUNT(*) FROM users;"
+flash raw db/seed.sql      # Execute SQL file (supports comment blocks)
 ```
 
 ## 📚 Documentation
@@ -215,6 +250,7 @@ flash raw "SELECT COUNT(*) FROM users;"
 - [TypeScript Usage Guide](docs/USAGE_TYPESCRIPT.md)
 - [Python Usage Guide](docs/USAGE_PYTHON.md)
 - [How It Works](docs/HOW_IT_WORKS.md)
+- [Release Notes](docs/notes/RELEASE_NOTES.md)
 - [Contributing](docs/CONTRIBUTING.md)
 
 ## 🤝 Contributing
