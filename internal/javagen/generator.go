@@ -227,7 +227,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 		columns := g.expandWildcardColumns(q)
 		cmd := strings.ToLower(q.Cmd)
 
-		rowType := utils.ToPascalCase(q.Name) + "Row"
+		rowType := queryPascal(q.Name) + "Row"
 		if mt := g.modelTypeForQuery(q, columns); mt != "" {
 			rowType = mt
 		}
@@ -291,6 +291,17 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 	return os.WriteFile(filepath.Join(g.Config.Gen.Java.Out, "Queries.java"), []byte(w.String()), 0644)
 }
 
+// queryPascal returns the query name as PascalCase, preserving existing casing.
+func queryPascal(name string) string {
+	if name == "" {
+		return name
+	}
+	if name[0] >= 'A' && name[0] <= 'Z' {
+		return name
+	}
+	return utils.ToPascalCase(name)
+}
+
 func toCamelCase(name string) string {
 	if name == "" {
 		return name
@@ -315,22 +326,9 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	provider := g.Config.Database.Provider
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 
-	rowType := utils.ToPascalCase(query.Name) + "Row"
+	rowType := queryPascal(query.Name) + "Row"
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowType = mt
-	}
-
-	// Row record if needed
-	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowType == utils.ToPascalCase(query.Name)+"Row" {
-		w.WriteString(fmt.Sprintf("    public record %s(\n", rowType))
-		for i, col := range columns {
-			sep := ","
-			if i == len(columns)-1 {
-				sep = ""
-			}
-			w.WriteString(fmt.Sprintf("        %s %s%s\n", g.sqlTypeToJava(col.Type, col.Nullable), col.Name, sep))
-		}
-		w.WriteString("    ) {}\n\n")
 	}
 
 	// Return type

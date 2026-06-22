@@ -139,6 +139,28 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 		connType = "Connection"
 	}
 
+	for _, q := range queries {
+		// Emit Row data classes at top level (before the class body)
+		columns := g.expandWildcardColumns(q)
+		cmd := strings.ToLower(q.Cmd)
+		rowType := queryPascal(q.Name) + "Row"
+		if mt := g.modelTypeForQuery(q, columns); mt != "" {
+			rowType = mt
+		}
+		if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowType == queryPascal(q.Name)+"Row" {
+			w.WriteString(fmt.Sprintf("data class %s(\n", rowType))
+			for i, col := range columns {
+				kt := g.sqlTypeToKotlin(col.Type, col.Nullable)
+				comma := ","
+				if i == len(columns)-1 {
+					comma = ""
+				}
+				w.WriteString(fmt.Sprintf("    val %s: %s%s\n", col.Name, kt, comma))
+			}
+			w.WriteString(")\n\n")
+		}
+	}
+
 	w.WriteString(fmt.Sprintf("class %sQueries(private val %s: %s) {\n",
 		utils.ToPascalCase(strings.TrimSuffix(src, ".sql")), paramName, connType))
 

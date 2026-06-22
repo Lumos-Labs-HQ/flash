@@ -206,7 +206,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 		cmd := strings.ToLower(q.Cmd)
 		methodName := toCamelCase(q.Name)
 
-		rowType := utils.ToPascalCase(q.Name) + "Row"
+		rowType := queryPascal(q.Name) + "Row"
 		if mt := g.modelTypeForQuery(q, columns); mt != "" {
 			rowType = mt
 		}
@@ -264,6 +264,18 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 	return os.WriteFile(filepath.Join(g.Config.Gen.Kotlin.Out, "Queries.kt"), []byte(w.String()), 0644)
 }
 
+// queryPascal returns the query name as PascalCase, preserving existing casing.
+// Query names from SQL annotations are already PascalCase (e.g. "GetUserWithPostCount").
+func queryPascal(name string) string {
+	if name == "" {
+		return name
+	}
+	// If it already starts uppercase, use as-is (already PascalCase)
+	if name[0] >= 'A' && name[0] <= 'Z' {
+		return name
+	}
+	return utils.ToPascalCase(name)
+}
 func toCamelCase(name string) string {
 	if name == "" {
 		return name
@@ -287,23 +299,9 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 
 	// Row type
-	rowType := utils.ToPascalCase(query.Name) + "Row"
+	rowType := queryPascal(query.Name) + "Row"
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowType = mt
-	}
-
-	// Generate row data class if needed (multi-column result not matching a table)
-	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowType == utils.ToPascalCase(query.Name)+"Row" {
-		w.WriteString(fmt.Sprintf("data class %s(\n", rowType))
-		for i, col := range columns {
-			kt := g.sqlTypeToKotlin(col.Type, col.Nullable)
-			comma := ","
-			if i == len(columns)-1 {
-				comma = ""
-			}
-			w.WriteString(fmt.Sprintf("    val %s: %s%s\n", utils.ToSnakeCase(col.Name), kt, comma))
-		}
-		w.WriteString(")\n\n")
 	}
 
 	// Build param list
