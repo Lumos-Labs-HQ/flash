@@ -36,7 +36,9 @@ export default defineConfig({
           items: [
             { text: 'Go', link: '/guides/go' },
             { text: 'TypeScript / JavaScript', link: '/guides/typescript' },
-            { text: 'Python', link: '/guides/python' }
+            { text: 'Python', link: '/guides/python' },
+            { text: 'Java', link: '/guides/java' },
+            { text: 'Kotlin', link: '/guides/kotlin' }
           ]
         }
       ],
