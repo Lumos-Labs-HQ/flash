@@ -628,6 +628,9 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
+			if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
+				continue
+			}
 			fieldName := utils.ToPascalCase(col.Name)
 			// Gocql Row types use value types not pointers (assigned via fmt.Sprint)
 			goType := g.mapSQLTypeToGo(col.Type, false)
@@ -1353,6 +1356,9 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
+			if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
+				continue
+			}
 			fieldName := utils.ToPascalCase(col.Name)
 			goType := g.mapColumnTypeToGo(col.Type, col.Nullable)
 			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))
