@@ -430,6 +430,22 @@ func ktTypedGetter(colName, sqlType string, nullable bool) string {
 // ktTypedSetter returns a typed Kotlin PreparedStatement setter.
 func ktTypedSetter(idx int, paramName, sqlType string) string {
 	sl := strings.ToLower(sqlType)
+	// Any SQL array type → createArrayOf
+	if strings.HasSuffix(sl, "[]") {
+		baseType := strings.TrimSuffix(sl, "[]")
+		pgType := "text"
+		switch {
+		case strings.Contains(baseType, "int") || strings.Contains(baseType, "serial"):
+			pgType = "integer"
+		case strings.Contains(baseType, "uuid"):
+			pgType = "uuid"
+		case strings.Contains(baseType, "bool"):
+			pgType = "boolean"
+		case strings.Contains(baseType, "float") || strings.Contains(baseType, "real") || strings.Contains(baseType, "double"):
+			pgType = "float8"
+		}
+		return fmt.Sprintf("stmt.setArray(%d, conn.createArrayOf(\"%s\", %s.toTypedArray()))", idx, pgType, paramName)
+	}
 	switch {
 	case strings.Contains(sl, "bigint") || sl == "int8" || sl == "uint64":
 		return fmt.Sprintf("stmt.setLong(%d, %s)", idx, paramName)
