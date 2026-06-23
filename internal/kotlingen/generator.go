@@ -254,17 +254,6 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 
 		if useStructParams && len(q.Params) > 0 {
 			proxyName := gencommon.QueryPascal(q.Name) + "Args"
-			// Emit the data class for the proxy
-			w.WriteString(fmt.Sprintf("data class %s(\n", proxyName))
-			for i, p := range q.Params {
-				comma := ","
-				if i == len(q.Params)-1 {
-					comma = ""
-				}
-				w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
-					utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
-			}
-			w.WriteString(")\n\n")
 			params = []string{fmt.Sprintf("args: %s", proxyName)}
 			proxyArgStr = "args"
 		} else {
@@ -360,16 +349,6 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	var paramStructName string
 	if useStructParams && len(query.Params) > 0 {
 		paramStructName = gencommon.QueryPascal(query.Name) + "Args"
-		w.WriteString(fmt.Sprintf("data class %s(\n", paramStructName))
-		for i, p := range query.Params {
-			comma := ","
-			if i == len(query.Params)-1 {
-				comma = ""
-			}
-			w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
-				utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
-		}
-		w.WriteString(")\n\n")
 		paramStr = fmt.Sprintf("args: %s", paramStructName)
 	}
 	w.WriteString(fmt.Sprintf("    fun %s(%s): %s {\n", methodName, paramStr, retType))

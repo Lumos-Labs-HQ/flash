@@ -174,6 +174,27 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 		}
 	}
 
+	// Emit Args data classes top-level (before the class body)
+	emittedArgs := make(map[string]bool)
+	for _, q := range queries {
+		if len(q.Params) > 2 {
+			argsName := gencommon.QueryPascal(q.Name) + "Args"
+			if !emittedArgs[argsName] {
+				emittedArgs[argsName] = true
+				w.WriteString(fmt.Sprintf("data class %s(\n", argsName))
+				for i, p := range q.Params {
+					comma := ","
+					if i == len(q.Params)-1 {
+						comma = ""
+					}
+					w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
+						utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
+				}
+				w.WriteString(")\n\n")
+			}
+		}
+	}
+
 	w.WriteString(fmt.Sprintf("class %sQueries(private val %s: %s) {\n",
 		utils.ToPascalCase(strings.TrimSuffix(src, ".sql")), paramName, connType))
 
