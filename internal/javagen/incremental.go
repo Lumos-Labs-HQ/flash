@@ -195,7 +195,7 @@ func (g *Generator) generateSingleJavaFile(src string, queries []*parser.Query, 
 		if len(q.Params) <= 2 {
 			continue
 		}
-		argsName := gencommon.QueryPascal(q.Name) + "Args"
+		argsName := gencommon.QueryPascal(q.Name) + "Params"
 		if emittedArgs[argsName] {
 			continue
 		}

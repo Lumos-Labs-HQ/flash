@@ -178,7 +178,7 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 	emittedArgs := make(map[string]bool)
 	for _, q := range queries {
 		if len(q.Params) > 2 {
-			argsName := gencommon.QueryPascal(q.Name) + "Args"
+			argsName := gencommon.QueryPascal(q.Name) + "Params"
 			if !emittedArgs[argsName] {
 				emittedArgs[argsName] = true
 				w.WriteString(fmt.Sprintf("data class %s(\n", argsName))

@@ -648,7 +648,7 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 		if len(query.Params) <= 2 {
 			continue
 		}
-		argsType := utils.Capitalize(query.Name) + "Args"
+		argsType := utils.Capitalize(query.Name) + "Params"
 		if seenArgs[argsType] {
 			continue
 		}
@@ -681,7 +681,7 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 		// Build param declaration
 		var paramDecl string
 		if len(query.Params) > 2 {
-			paramDecl = fmt.Sprintf("args: %s", utils.Capitalize(query.Name)+"Args")
+			paramDecl = fmt.Sprintf("args: %s", utils.Capitalize(query.Name)+"Params")
 		} else {
 			parts := make([]string, len(query.Params))
 			for i, param := range query.Params {

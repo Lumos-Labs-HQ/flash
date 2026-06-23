@@ -148,7 +148,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	var execParamNames []string
 
 	if useStructParams {
-		argsClass := gencommon.QueryPascal(query.Name) + "Args"
+		argsClass := gencommon.QueryPascal(query.Name) + "Params"
 		// Emit the TypedDict class before the method
 		w.WriteString(fmt.Sprintf("class %s(TypedDict):\n", argsClass))
 		for _, pt := range paramTypes {
@@ -883,7 +883,7 @@ func (g *Generator) generateTypingStub(queries []*parser.Query) error {
 		useStructParams := len(query.Params) > 2
 		paramStr := ""
 		if useStructParams {
-			argsClass := gencommon.QueryPascal(query.Name) + "Args"
+			argsClass := gencommon.QueryPascal(query.Name) + "Params"
 			// Emit TypedDict before the class block
 			w.WriteString(fmt.Sprintf("class %s(TypedDict):\n", argsClass))
 			for _, pt := range paramTypes {
