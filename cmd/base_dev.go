@@ -26,10 +26,11 @@ func RegisterBaseCommands() {
 	// Seed command
 	rootCmd.AddCommand(seedCmd)
 
-	// Plugin management (for consistency)
+	// Plugin management 
 	rootCmd.AddCommand(pluginsCmd)
 	rootCmd.AddCommand(addPluginCmd)
 	rootCmd.AddCommand(removePluginCmd)
-	// Note: updateCmd is not registered in dev mode — it downloads plugin binaries
-	// from GitHub releases which doesn't apply when everything is compiled in.
+
+	// Uninstall
+	rootCmd.AddCommand(uninstallCmd)
 }

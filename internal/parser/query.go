@@ -334,7 +334,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 			paramNum = orderedParamNums[i]
 		}
 		paramName := fmt.Sprintf("param%d", i+1)
-		paramType := "any"
+		var paramType string
 
 		// Infer param name from SQL regardless of table availability
 		inferredName := p.typeInferrer.InferParamName(query.SQL, paramNum)
@@ -344,6 +344,9 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 
 		if table != nil {
 			paramType = p.typeInferrer.InferParamType(query.SQL, paramNum, table, paramName)
+		} else {
+			// Even without a table, infer from well-known param name patterns
+			paramType = p.typeInferrer.InferParamTypeByName(paramName)
 		}
 
 		if count, exists := usedParamNames[paramName]; exists {
@@ -1222,7 +1225,7 @@ func rewriteINListToANY(sql string) string {
 		var nums []int
 		for _, m := range numRe.FindAllStringSubmatch(paramsStr, -1) {
 			var n int
-			fmt.Sscanf(m[1], "%d", &n)
+			_, _ = fmt.Sscanf(m[1], "%d", &n)
 			nums = append(nums, n)
 		}
 		if len(nums) < 2 {

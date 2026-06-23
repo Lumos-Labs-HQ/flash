@@ -21,6 +21,28 @@ func NewTypeInferrerWithSchema(schema *Schema) *TypeInferrer {
 	return &TypeInferrer{cache: make(map[string]string, 64), schema: schema}
 }
 
+// InferParamTypeByName infers a param type from its name alone, without a table schema.
+// Used for CTE queries where the table can't be resolved.
+func (ti *TypeInferrer) InferParamTypeByName(paramName string) string {
+	n := strings.ToLower(paramName)
+	switch n {
+	case "limit", "offset", "count", "min_count", "count_threshold", "id", "age":
+		return "INTEGER"
+	}
+	if strings.HasSuffix(n, "_count") || strings.HasSuffix(n, "_sum") ||
+		strings.HasSuffix(n, "_total") || strings.HasSuffix(n, "_num") ||
+		strings.HasSuffix(n, "_id") || strings.HasSuffix(n, "_age") {
+		return "INTEGER"
+	}
+	if strings.Contains(n, "score") || strings.Contains(n, "rating") || strings.Contains(n, "avg") {
+		return "DOUBLE PRECISION"
+	}
+	if strings.Contains(n, "is_") || strings.HasPrefix(n, "is_") || n == "active" || n == "featured" || n == "pinned" {
+		return "BOOLEAN"
+	}
+	return "TEXT"
+}
+
 func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table, paramName string) string {
 	cacheKey := fmt.Sprintf("%s:%d:%s", table.Name, paramIndex, paramName)
 
@@ -44,8 +66,14 @@ func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table,
 
 func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table *Table, paramName string) string {
 	// Well-known param names that always have fixed types
-	switch strings.ToLower(paramName) {
+	nameLower := strings.ToLower(paramName)
+	switch nameLower {
 	case "limit", "offset", "count", "min_count", "count_threshold":
+		return "INTEGER"
+	}
+	// Any param named *_count, *_sum, *_total is numeric
+	if strings.HasSuffix(nameLower, "_count") || strings.HasSuffix(nameLower, "_sum") ||
+		strings.HasSuffix(nameLower, "_total") || strings.HasSuffix(nameLower, "_num") {
 		return "INTEGER"
 	}
 
@@ -69,7 +97,7 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		}
 	}
 
-	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*`, paramIndex, paramIndex)
+	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*|\b\w+_count\b\s*[<>=!]+\s*\$%d|\b\w+_sum\b\s*[<>=!]+\s*\$%d`, paramIndex, paramIndex, paramIndex, paramIndex)
 	if matched, _ := regexp.MatchString(aggregatePattern, sql); matched {
 		return "INTEGER"
 	}
@@ -375,6 +403,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	jsonbOpRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*(?:@>|&&|\|\|)\s*\$%d`, paramIndex))
 	if match := jsonbOpRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
+	}
+
+	// col ->> $N IS NOT NULL — jsonb key existence check, name as "key"
+	jsonbKeyRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*->>\s*\$%d`, paramIndex))
+	if match := jsonbKeyRe.FindStringSubmatch(sql); len(match) > 1 {
+		return "key"
 	}
 
 	// $N = ANY(col)

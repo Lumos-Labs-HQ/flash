@@ -8,4 +8,5 @@ func RegisterBaseCommands() {
 	rootCmd.AddCommand(addPluginCmd)
 	rootCmd.AddCommand(removePluginCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(uninstallCmd)
 }

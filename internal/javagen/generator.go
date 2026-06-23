@@ -210,12 +210,20 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 	for _, q := range queries {
 		for _, p := range q.Params {
 			jt := g.sqlTypeToJava(p.Type, false)
-			if jt == "UUID" { needsUUID = true }
-			if jt == "LocalDateTime" { needsLDT = true }
+			if jt == "UUID" {
+				needsUUID = true
+			}
+			if jt == "LocalDateTime" {
+				needsLDT = true
+			}
 		}
 	}
-	if needsUUID { w.WriteString("import java.util.UUID;\n") }
-	if needsLDT  { w.WriteString("import java.time.LocalDateTime;\n") }
+	if needsUUID {
+		w.WriteString("import java.util.UUID;\n")
+	}
+	if needsLDT {
+		w.WriteString("import java.time.LocalDateTime;\n")
+	}
 	w.WriteString(connImport + "\n")
 	w.WriteString("/**\n * Unified query interface. Use {@code DB.newq(conn)} to obtain an instance.\n */\n")
 	w.WriteString("public class Queries {\n")
@@ -409,8 +417,17 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 }
 
 // javaTypedGetter returns the typed ResultSet getter for a SQL type, reading by column name.
-func javaTypedGetter(colName, sqlType string) string {
+func (g *Generator) javaTypedGetter(colName, sqlType string) string {
 	sl := strings.ToLower(sqlType)
+	// Check schema enums first
+	if g.schema != nil {
+		for _, enum := range g.schema.Enums {
+			if strings.ToLower(enum.Name) == sl {
+				javaType := utils.ToPascalCase(enum.Name)
+				return fmt.Sprintf("%s.valueOf(rs.getString(\"%s\"))", javaType, colName)
+			}
+		}
+	}
 	switch {
 	case strings.Contains(sl, "bigint") || sl == "int8" || sl == "uint64":
 		return fmt.Sprintf("rs.getLong(\"%s\")", colName)
@@ -429,7 +446,7 @@ func javaTypedGetter(colName, sqlType string) string {
 	case sl == "bytea" || strings.Contains(sl, "blob"):
 		return fmt.Sprintf("rs.getBytes(\"%s\")", colName)
 	case strings.HasSuffix(sl, "[]") || strings.HasPrefix(sl, "set<") || strings.HasPrefix(sl, "list<"):
-		return fmt.Sprintf("rs.getArray(\"%s\") != null ? java.util.Arrays.asList((Object[]) rs.getArray(\"%s\").getArray()) : null", colName, colName)
+		return fmt.Sprintf("rs.getArray(\"%s\") != null ? java.util.Arrays.asList((String[]) rs.getArray(\"%s\").getArray()) : null", colName, colName)
 	case strings.Contains(sl, "json"):
 		return fmt.Sprintf("rs.getString(\"%s\")", colName)
 	default:
@@ -554,7 +571,7 @@ func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query
 		if len(columns) == 0 {
 			w.WriteString("                return;\n")
 		} else if len(columns) == 1 {
-			w.WriteString(fmt.Sprintf("                return rs.next() ? %s : null;\n", javaTypedGetter(columns[0].Name, columns[0].Type)))
+			w.WriteString(fmt.Sprintf("                return rs.next() ? %s : null;\n", g.javaTypedGetter(columns[0].Name, columns[0].Type)))
 		} else {
 			w.WriteString("                if (!rs.next()) return null;\n")
 			w.WriteString(fmt.Sprintf("                return new %s(\n", rowType))
@@ -563,7 +580,7 @@ func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query
 				if i == len(columns)-1 {
 					sep = ""
 				}
-				w.WriteString(fmt.Sprintf("                    %s%s\n", javaTypedGetter(col.Name, col.Type), sep))
+				w.WriteString(fmt.Sprintf("                    %s%s\n", g.javaTypedGetter(col.Name, col.Type), sep))
 			}
 			w.WriteString("                );\n")
 		}
@@ -576,7 +593,7 @@ func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query
 			jt := g.sqlTypeToJava(columns[0].Type, false)
 			w.WriteString(fmt.Sprintf("            var items = new java.util.ArrayList<%s>();\n", jt))
 			w.WriteString("            try (java.sql.ResultSet rs = stmt.executeQuery()) {\n")
-			w.WriteString(fmt.Sprintf("                while (rs.next()) items.add(%s);\n", javaTypedGetter(columns[0].Name, columns[0].Type)))
+			w.WriteString(fmt.Sprintf("                while (rs.next()) items.add(%s);\n", g.javaTypedGetter(columns[0].Name, columns[0].Type)))
 			w.WriteString("            }\n")
 			w.WriteString("            return items;\n")
 		} else {
@@ -589,7 +606,7 @@ func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query
 				if i == len(columns)-1 {
 					sep = ""
 				}
-				w.WriteString(fmt.Sprintf("                        %s%s\n", javaTypedGetter(col.Name, col.Type), sep))
+				w.WriteString(fmt.Sprintf("                        %s%s\n", g.javaTypedGetter(col.Name, col.Type), sep))
 			}
 			w.WriteString("                    ));\n")
 			w.WriteString("                }\n")

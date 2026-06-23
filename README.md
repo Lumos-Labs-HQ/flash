@@ -55,6 +55,9 @@ A powerful, database-agnostic ORM built in Go with multi-database support and ty
 ## 🚀 Installation
 
 ```bash
+# Linux / macOS (curl)
+curl -fsSL https://lumos-labs-hq.github.io/flash/install.sh | bash
+
 # NPM (Node.js/TypeScript)
 npm install -g flashorm
 

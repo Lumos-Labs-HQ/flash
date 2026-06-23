@@ -192,12 +192,20 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 	for _, q := range queries {
 		for _, p := range q.Params {
 			kt := g.sqlTypeToKotlin(p.Type, false)
-			if strings.Contains(kt, "UUID") { needsUUID = true }
-			if strings.Contains(kt, "LocalDateTime") { needsLDT = true }
+			if strings.Contains(kt, "UUID") {
+				needsUUID = true
+			}
+			if strings.Contains(kt, "LocalDateTime") {
+				needsLDT = true
+			}
 		}
 	}
-	if needsUUID { w.WriteString("import java.util.UUID\n") }
-	if needsLDT  { w.WriteString("import java.time.LocalDateTime\n") }
+	if needsUUID {
+		w.WriteString("import java.util.UUID\n")
+	}
+	if needsLDT {
+		w.WriteString("import java.time.LocalDateTime\n")
+	}
 	w.WriteString(connImport + "\n")
 	w.WriteString("/**\n * Unified query interface. Use `Queries.newq(conn)` to obtain an instance.\n */\n")
 	w.WriteString("class Queries(private val " + connParam + ": " + connType + ") {\n\n")
@@ -396,8 +404,20 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 }
 
 // ktTypedGetter returns the typed Kotlin ResultSet getter by column name.
-func ktTypedGetter(colName, sqlType string, nullable bool) string {
+func (g *Generator) ktTypedGetter(colName, sqlType string, nullable bool) string {
 	sl := strings.ToLower(sqlType)
+	// Check schema enums first
+	if g.schema != nil {
+		for _, enum := range g.schema.Enums {
+			if strings.ToLower(enum.Name) == sl {
+				ktType := utils.ToPascalCase(enum.Name)
+				if nullable {
+					return fmt.Sprintf("rs.getString(\"%s\")?.let { %s.valueOf(it) }", colName, ktType)
+				}
+				return fmt.Sprintf("%s.valueOf(rs.getString(\"%s\"))", ktType, colName)
+			}
+		}
+	}
 	switch {
 	case strings.Contains(sl, "bigint") || sl == "int8" || sl == "uint64":
 		return fmt.Sprintf("rs.getLong(\"%s\")", colName)
@@ -419,7 +439,7 @@ func ktTypedGetter(colName, sqlType string, nullable bool) string {
 	case sl == "bytea" || strings.Contains(sl, "blob"):
 		return fmt.Sprintf("rs.getBytes(\"%s\")", colName)
 	case strings.HasSuffix(sl, "[]") || strings.HasPrefix(sl, "set<") || strings.HasPrefix(sl, "list<"):
-		return fmt.Sprintf("rs.getArray(\"%s\")?.array as? Array<*>", colName)
+		return fmt.Sprintf("(rs.getArray(\"%s\")?.array as? Array<*>)?.map { it.toString() }", colName)
 	case strings.Contains(sl, "json"):
 		return fmt.Sprintf("rs.getString(\"%s\")", colName)
 	default:
@@ -544,7 +564,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 		if len(columns) == 0 {
 			w.WriteString("            return\n")
 		} else if len(columns) == 1 {
-			w.WriteString(fmt.Sprintf("            return if (rs.next()) %s else null\n", ktTypedGetter(columns[0].Name, columns[0].Type, columns[0].Nullable)))
+			w.WriteString(fmt.Sprintf("            return if (rs.next()) %s else null\n", g.ktTypedGetter(columns[0].Name, columns[0].Type, columns[0].Nullable)))
 		} else {
 			w.WriteString(fmt.Sprintf("            return if (rs.next()) %s(\n", rowType))
 			for i, col := range columns {
@@ -553,7 +573,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 					comma = ""
 				}
 				nullable := col.Nullable || (isRowType && !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false)))
-				w.WriteString(fmt.Sprintf("                %s%s\n", ktTypedGetter(col.Name, col.Type, nullable), comma))
+				w.WriteString(fmt.Sprintf("                %s%s\n", g.ktTypedGetter(col.Name, col.Type, nullable), comma))
 			}
 			w.WriteString("            ) else null\n")
 		}
@@ -567,7 +587,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 		}()))
 		w.WriteString("        stmt.executeQuery().use { rs ->\n")
 		if len(columns) == 1 {
-			w.WriteString(fmt.Sprintf("            while (rs.next()) items.add(%s)\n", ktTypedGetter(columns[0].Name, columns[0].Type, columns[0].Nullable)))
+			w.WriteString(fmt.Sprintf("            while (rs.next()) items.add(%s)\n", g.ktTypedGetter(columns[0].Name, columns[0].Type, columns[0].Nullable)))
 		} else if len(columns) > 1 {
 			w.WriteString("            while (rs.next()) items.add(\n")
 			w.WriteString(fmt.Sprintf("                %s(\n", rowType))
@@ -577,7 +597,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 					comma = ""
 				}
 				nullable := col.Nullable || (isRowType && !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false)))
-				w.WriteString(fmt.Sprintf("                    %s%s\n", ktTypedGetter(col.Name, col.Type, nullable), comma))
+				w.WriteString(fmt.Sprintf("                    %s%s\n", g.ktTypedGetter(col.Name, col.Type, nullable), comma))
 			}
 			w.WriteString("                )\n            )\n")
 		}
