@@ -14,20 +14,18 @@ import (
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update installed plugins and/or flash itself to the latest version",
+	Short: "Update installed plugins and flash CLI to the latest version",
 	Long: `
-Update all installed FlashORM plugins and optionally the flash CLI itself.
+Update all installed FlashORM plugins AND the flash CLI binary to the latest release.
 
-By default this updates all installed plugins. Use --self to also replace
-the running flash binary with the latest release from GitHub.
+By default this updates everything. Use --plugins-only to skip the binary update.
 
 Examples:
-  flash update              # Update all installed plugins
-  flash update --self       # Update plugins + flash CLI binary
+  flash update              # Update plugins + flash CLI binary
   flash update --self-only  # Update only the flash CLI binary`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		selfOnly, _ := cmd.Flags().GetBool("self-only")
-		includeSelf, _ := cmd.Flags().GetBool("self")
+		skipSelf, _ := cmd.Flags().GetBool("plugins-only")
 
 		manager, err := plugin.NewManager()
 		if err != nil {
@@ -45,7 +43,7 @@ Examples:
 
 		// Show current installed plugins
 		installed := manager.ListPlugins()
-		if len(installed) == 0 && !includeSelf {
+		if len(installed) == 0 && skipSelf {
 			color.Yellow("⚠️  No plugins installed.")
 			fmt.Println()
 			color.Cyan("💡 Install the core plugin: flash add-plug core")
@@ -53,11 +51,12 @@ Examples:
 			return nil
 		}
 
-		return manager.UpdateAllPlugins(includeSelf, Version)
+		// Default: update both plugins and binary
+		return manager.UpdateAllPlugins(!skipSelf, Version)
 	},
 }
 
 func init() {
-	updateCmd.Flags().Bool("self", false, "Also update the flash CLI binary itself")
+	updateCmd.Flags().Bool("plugins-only", false, "Only update plugins, skip flash CLI binary update")
 	updateCmd.Flags().Bool("self-only", false, "Only update flash CLI binary, skip plugins")
 }
