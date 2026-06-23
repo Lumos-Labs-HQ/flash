@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 )
 
@@ -101,7 +102,7 @@ func TestGetZeroValue(t *testing.T) {
 // ── extractEnumValues ─────────────────────────────────────────────────────────
 
 func TestExtractEnumValues(t *testing.T) {
-	vals := extractEnumValues("enum('active','inactive','pending')")
+	vals := gencommon.ExtractEnumValues("enum('active','inactive','pending')")
 	if len(vals) != 3 {
 		t.Fatalf("values = %d, want 3: %v", len(vals), vals)
 	}
@@ -111,7 +112,7 @@ func TestExtractEnumValues(t *testing.T) {
 }
 
 func TestExtractEnumValues_NotEnum(t *testing.T) {
-	if vals := extractEnumValues("varchar(255)"); vals != nil {
+	if vals := gencommon.ExtractEnumValues("varchar(255)"); vals != nil {
 		t.Errorf("non-enum should return nil, got %v", vals)
 	}
 }

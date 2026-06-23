@@ -7,6 +7,474 @@ import java.time.LocalDateTime
 
 import java.sql.Connection
 
+data class GetUsersWithNullAddressRow(
+    val id: Int,
+    val name: String?,
+    val email: String?
+)
+
+data class GetUsersWithBioRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val bio: String?
+)
+
+data class GetUserDisplayInfoRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val display_address: String?,
+    val age: String?,
+    val bio: String?
+)
+
+data class SearchUsersWithCOALESCERow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val bio_text: String?
+)
+
+data class GetUsersCreatedBetweenRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val created_at: LocalDateTime?
+)
+
+data class GetUsersByAgeRangeRow(
+    val id: Int,
+    val name: String?,
+    val age: Int?,
+    val age_range: Int?
+)
+
+data class GetUsersByGeneratedRangeRow(
+    val id: Int,
+    val name: String?,
+    val age: Int?,
+    val age_range: Int?
+)
+
+data class GetUserPreferencesRow(
+    val id: Int,
+    val name: String?,
+    val preferences: String?
+)
+
+data class FindUsersByJsonKeyRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val preferences: String?
+)
+
+data class FindUsersByJsonContainsRow(
+    val id: Int,
+    val name: String?,
+    val email: String?
+)
+
+data class GetUsersWithTagRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val tags: List<String>?
+)
+
+data class GetUsersWithAnyTagRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val tags: List<String>?
+)
+
+data class GetUserShippingAddressRow(
+    val id: Int,
+    val name: String?,
+    val shipping: String?,
+    val shipping_city: String?,
+    val shipping_country: String?
+)
+
+data class GetComplexUserAnalyticsRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val role: UserRole?,
+    val isadmin: Boolean,
+    val user_created_at: LocalDateTime?,
+    val total_posts: Int?,
+    val published_posts: Int?,
+    val draft_posts: Int?,
+    val total_comments: Int?,
+    val posts_commented_on: Int?,
+    val categories_used: Int?,
+    val category_names: String?,
+    val last_post_date: LocalDateTime?,
+    val last_comment_date: LocalDateTime?,
+    val avg_post_length: Double?,
+    val activity_level: String?,
+    val engagement_score: Int?
+)
+
+data class GetPostWithActiveCommentersRow(
+    val commenter_name: String?,
+    val last_comment_at: String?
+)
+
+data class GetUserPostRankingsRow(
+    val id: Int,
+    val name: String?,
+    val post_count: Int?,
+    val post_rank: Int?,
+    val dense_post_rank: Int?,
+    val row_num: Int?
+)
+
+data class GetUserTrendingPostsRow(
+    val id: Int,
+    val title: String?,
+    val user_id: Int,
+    val view_count: Long,
+    val created_at: LocalDateTime?,
+    val prev_view_count: Int?,
+    val next_view_count: Int?,
+    val view_delta: Double?
+)
+
+data class GetPostCountByUserRow(
+    val post_count: Int?,
+    val comment_count: Int?
+)
+
+data class GetUsersWithManyPostsRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val total_posts: Int?
+)
+
+data class GetPostsWithCommentCountRow(
+    val id: Int,
+    val title: String?,
+    val created_at: LocalDateTime?,
+    val comment_count: Int?,
+    val unique_commenters: Int?,
+    val last_comment_at: LocalDateTime?
+)
+
+data class GetUsersWithActivityLevelRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val created_at: LocalDateTime?,
+    val account_age_category: String?,
+    val effective_role: String?
+)
+
+data class GetPostWithCommentsRow(
+    val post_id: Int,
+    val title: String?,
+    val content: String?,
+    val author: String?,
+    val comment_text: String?,
+    val commenter: String?
+)
+
+data class GetPostDetailsWithAllRelationsRow(
+    val id: Int,
+    val title: String?,
+    val content: String?,
+    val status: PostStatus?,
+    val created_at: LocalDateTime?,
+    val updated_at: LocalDateTime?,
+    val author_id: Int,
+    val author_name: String?,
+    val author_email: String?,
+    val author_role: UserRole?,
+    val author_is_admin: Boolean,
+    val category_id: Int,
+    val category_name: String?,
+    val comment_count: Int?,
+    val unique_commenters: Int?,
+    val all_comments: String?,
+    val commenter_names: List<String>?,
+    val last_comment_date: LocalDateTime?,
+    val content_length: Int?,
+    val hours_since_created: Double?
+)
+
+data class CountUsersRow(
+    val total_users: Int?,
+    val admin_count: Int?,
+    val regular_count: Int?
+)
+
+data class GetUserRoleCountRow(
+    val role: UserRole?,
+    val count: Int?
+)
+
+data class GetUserAgeStatsRow(
+    val first_joined: LocalDateTime?,
+    val last_joined: LocalDateTime?,
+    val total: Int?,
+    val avg_age: Double?,
+    val avg_name_length: Double?
+)
+
+data class GetPostsGroupedByStatusRow(
+    val status: PostStatus?,
+    val count: Int?,
+    val oldest: LocalDateTime?,
+    val newest: LocalDateTime?
+)
+
+data class GetDistinctCommentersRow(
+    val id: Int?,
+    val name: String?,
+    val email: String?
+)
+
+data class GetLatestPostPerUserRow(
+    val user_id: Int,
+    val post_id: Int,
+    val title: String?,
+    val status: PostStatus?,
+    val created_at: LocalDateTime?
+)
+
+data class SearchUsersRow(
+    val id: Int,
+    val name: String?,
+    val email: String?
+)
+
+data class SearchPostsByTitleRow(
+    val id: Int,
+    val title: String?,
+    val status: PostStatus?,
+    val created_at: LocalDateTime?
+)
+
+data class FullTextSearchPostsRow(
+    val id: Int,
+    val title: String?,
+    val rank: Double?
+)
+
+data class GetUserRegistrationStatsRow(
+    val year: Double?,
+    val month: Double?,
+    val signups: Int?
+)
+
+data class GetWeeklyPostStatsRow(
+    val week_start: String?,
+    val posts_created: Int?,
+    val total_views: Double?
+)
+
+data class GetUsersByNamesRow(
+    val id: Int,
+    val name: String?,
+    val email: String?
+)
+
+data class GetUsersWhoCommentedRow(
+    val id: Int,
+    val name: String?,
+    val email: String?
+)
+
+data class GetUsersWithNoPostsRow(
+    val id: Int,
+    val name: String?,
+    val email: String?
+)
+
+data class GetAllContentByUserRow(
+    val content_type: String?,
+    val content_id: String?,
+    val content_summary: String?,
+    val created_at: LocalDateTime?
+)
+
+data class GetUserSubscriptionsRow(
+    val id: Int,
+    val tier: SubscriptionTier?,
+    val started_at: LocalDateTime?,
+    val expires_at: LocalDateTime?,
+    val auto_renew: Boolean
+)
+
+data class GetOrdersByUserRow(
+    val id: UUID?,
+    val total_amount: Double,
+    val discount_pct: String?,
+    val state: OrderState?,
+    val shipping_addr: String?,
+    val placed_at: LocalDateTime?
+)
+
+data class GetOrdersInStateRow(
+    val id: UUID?,
+    val user_id: Int,
+    val user_name: String?,
+    val total_amount: Double,
+    val state: OrderState?,
+    val placed_at: LocalDateTime?
+)
+
+data class GetAuditLogForUserRow(
+    val id: Int,
+    val table_name: String?,
+    val record_id: String?,
+    val action: String?,
+    val old_data: String?,
+    val new_data: String?,
+    val changed_at: LocalDateTime?
+)
+
+data class GetAuditLogForTableRow(
+    val id: Int,
+    val table_name: String?,
+    val record_id: String?,
+    val action: String?,
+    val changed_by: Int?,
+    val changed_at: LocalDateTime?
+)
+
+data class GetDashboardStatsRow(
+    val total_users: Int?,
+    val total_posts: Int?,
+    val total_comments: Int?,
+    val published_posts: Int?,
+    val posts_this_week: Int?,
+    val signups_this_week: Int?,
+    val comments_last_24h: Int?,
+    val pending_orders: Int?
+)
+
+data class GetTopCommentersRow(
+    val id: Int,
+    val name: String?,
+    val email: String?,
+    val comment_count: Int?,
+    val rank: Int?
+)
+
+data class GetEngagementTimeSeriesRow(
+    val day: String?,
+    val count: Int?,
+    val event_type: String?
+)
+
+data class GetNotificationsByTypeRow(
+    val id: Int,
+    val type: String?,
+    val title: String?,
+    val body: String?,
+    val is_read: Boolean,
+    val created_at: LocalDateTime?
+)
+
+data class GetPostsByTagRow(
+    val id: Int,
+    val title: String?,
+    val status: PostStatus?,
+    val created_at: LocalDateTime?,
+    val author_name: String?,
+    val comment_count: Int?
+)
+
+data class GetTopTagsRow(
+    val id: Int,
+    val name: String?,
+    val slug: String?,
+    val color: String?,
+    val post_count: Int?
+)
+
+data class GetMediaByPostRow(
+    val id: UUID?,
+    val type: String?,
+    val url: String?,
+    val size_bytes: Long,
+    val mime_type: String?,
+    val width: Int?,
+    val height: Int?,
+    val created_at: LocalDateTime?
+)
+
+data class GetMediaByUserRow(
+    val id: UUID?,
+    val type: String?,
+    val url: String?,
+    val size_bytes: Long,
+    val mime_type: String?,
+    val created_at: LocalDateTime?
+)
+
+data class GetMediaByTypeRow(
+    val id: UUID?,
+    val user_id: Int,
+    val url: String?,
+    val size_bytes: Long,
+    val mime_type: String?,
+    val created_at: LocalDateTime?
+)
+
+data class GetStorageUsedByUserRow(
+    val total_bytes: Double?,
+    val total_files: Int?,
+    val image_count: Int?,
+    val video_count: Int?,
+    val document_count: Int?
+)
+
+data class GetLargeMediaFilesRow(
+    val id: UUID?,
+    val user_id: Int,
+    val type: String?,
+    val url: String?,
+    val size_bytes: Long,
+    val mime_type: String?,
+    val created_at: LocalDateTime?
+)
+
+data class GetUserFeedRow(
+    val id: Int,
+    val title: String?,
+    val excerpt: String?,
+    val status: PostStatus?,
+    val created_at: LocalDateTime?,
+    val author_id: Int,
+    val author_name: String?,
+    val avatar_hash: UUID?,
+    val comment_count: Int?,
+    val tag_count: Int?
+)
+
+data class SearchPostsFullTextRow(
+    val id: Int,
+    val title: String?,
+    val excerpt: String?,
+    val status: PostStatus?,
+    val created_at: LocalDateTime?,
+    val author_name: String?,
+    val rank: Double?
+)
+
+data class GetUserWithStatsRow(
+    val published_posts: Int?,
+    val total_comments: Int?,
+    val unread_notifications: Int?,
+    val storage_used: Double?
+)
+
 class UsersQueries(private val conn: Connection) {
     private val stmts = mutableMapOf<String, java.sql.PreparedStatement>()
 
@@ -15,8 +483,8 @@ class UsersQueries(private val conn: Connection) {
     fun createUser(name: String, email: String): Users? {
         val sql = """INSERT INTO users (name, email) VALUES (?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("createUser") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, email.toString())
+        stmt.setString(1, name)
+        stmt.setString(2, email)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Users(
                 rs.getInt("id"),
@@ -31,23 +499,40 @@ class UsersQueries(private val conn: Connection) {
                 rs.getArray("tags")?.array as? Array<*>,
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getString("role")
             ) else null
         }
     }
 
-    fun createUserFull(name: String, email: String, age: Int, bio: String, preferences: String, tags: List<String>, role: UserRole): Users? {
+data class CreateUserFullArgs(
+    val name: String,
+    val email: String,
+    val age: Int,
+    val bio: String,
+    val preferences: String,
+    val tags: List<String>,
+    val role: UserRole
+)
+
+    fun createUserFull(args: CreateUserFullArgs): Users? {
+        val name = args.name
+        val email = args.email
+        val age = args.age
+        val bio = args.bio
+        val preferences = args.preferences
+        val tags = args.tags
+        val role = args.role
         val sql = """INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("createUserFull") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, email.toString())
+        stmt.setString(1, name)
+        stmt.setString(2, email)
         stmt.setInt(3, age)
-        stmt.setString(4, bio.toString())
-        stmt.setString(5, preferences.toString())
-        stmt.setString(6, tags.toString())
-        stmt.setString(7, role.toString())
+        stmt.setString(4, bio)
+        stmt.setObject(5, preferences)
+        stmt.setString(6, tags)
+        stmt.setObject(7, role)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Users(
                 rs.getInt("id"),
@@ -62,8 +547,8 @@ class UsersQueries(private val conn: Connection) {
                 rs.getArray("tags")?.array as? Array<*>,
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getString("role")
             ) else null
         }
@@ -87,8 +572,8 @@ class UsersQueries(private val conn: Connection) {
                 rs.getArray("tags")?.array as? Array<*>,
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getString("role")
             ) else null
         }
@@ -97,7 +582,7 @@ class UsersQueries(private val conn: Connection) {
     fun getUserByEmail(email: String): Users? {
         val sql = """SELECT * FROM users WHERE email = ?;"""
         val stmt = stmts.getOrPut("getUserByEmail") { conn.prepareStatement(sql) }
-        stmt.setString(1, email.toString())
+        stmt.setString(1, email)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Users(
                 rs.getInt("id"),
@@ -112,8 +597,8 @@ class UsersQueries(private val conn: Connection) {
                 rs.getArray("tags")?.array as? Array<*>,
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getString("role")
             ) else null
         }
@@ -122,7 +607,7 @@ class UsersQueries(private val conn: Connection) {
     fun updateUserName(name: String, id: Int): Users? {
         val sql = """UPDATE users SET name = ?, updated_at = NOW() WHERE id = ? RETURNING *;"""
         val stmt = stmts.getOrPut("updateUserName") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
+        stmt.setString(1, name)
         stmt.setInt(2, id)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Users(
@@ -138,8 +623,8 @@ class UsersQueries(private val conn: Connection) {
                 rs.getArray("tags")?.array as? Array<*>,
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getString("role")
             ) else null
         }
@@ -148,7 +633,7 @@ class UsersQueries(private val conn: Connection) {
     fun updateUserRole(role: UserRole, id: Int): Unit {
         val sql = """UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("updateUserRole") { conn.prepareStatement(sql) }
-        stmt.setString(1, role.toString())
+        stmt.setObject(1, role)
         stmt.setInt(2, id)
         stmt.executeUpdate()
     }
@@ -181,8 +666,8 @@ class UsersQueries(private val conn: Connection) {
                     rs.getArray("tags")?.array as? Array<*>,
                     rs.getObject("avatar_hash", java.util.UUID::class.java),
                     rs.getString("shipping"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
-                    rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                    rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                     rs.getString("role")
                 )
             )
@@ -190,73 +675,85 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun upsertUser(name: String, email: String, role: UserRole): Users? {
-        val sql = """INSERT INTO users (name, email, role) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;"""
-        val stmt = stmts.getOrPut("upsertUser") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, email.toString())
-        stmt.setString(3, role.toString())
-        stmt.executeQuery().use { rs ->
-            return if (rs.next()) Users(
-                rs.getInt("id"),
-                rs.getString("name"),
-                rs.getString("address"),
-                rs.getBoolean("isadmin"),
-                rs.getInt("age"),
-                rs.getInt("age_range"),
-                rs.getString("bio"),
-                rs.getString("email"),
-                rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
-                rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
-                rs.getString("role")
-            ) else null
-        }
-    }
-
-    fun upsertUserWithCOALESCE(name: String, email: String, bio: String): Users? {
-        val sql = """INSERT INTO users (name, email, bio) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;"""
-        val stmt = stmts.getOrPut("upsertUserWithCOALESCE") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, email.toString())
-        stmt.setString(3, bio.toString())
-        stmt.executeQuery().use { rs ->
-            return if (rs.next()) Users(
-                rs.getInt("id"),
-                rs.getString("name"),
-                rs.getString("address"),
-                rs.getBoolean("isadmin"),
-                rs.getInt("age"),
-                rs.getInt("age_range"),
-                rs.getString("bio"),
-                rs.getString("email"),
-                rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
-                rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
-                rs.getString("role")
-            ) else null
-        }
-    }
-
-data class GetuserswithnulladdressRow(
-    val id: Int,
+data class UpsertUserArgs(
     val name: String,
-    val email: String
+    val email: String,
+    val role: UserRole
 )
 
-    fun getUsersWithNullAddress(): List<GetuserswithnulladdressRow> {
+    fun upsertUser(args: UpsertUserArgs): Users? {
+        val name = args.name
+        val email = args.email
+        val role = args.role
+        val sql = """INSERT INTO users (name, email, role) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;"""
+        val stmt = stmts.getOrPut("upsertUser") { conn.prepareStatement(sql) }
+        stmt.setString(1, name)
+        stmt.setString(2, email)
+        stmt.setObject(3, role)
+        stmt.executeQuery().use { rs ->
+            return if (rs.next()) Users(
+                rs.getInt("id"),
+                rs.getString("name"),
+                rs.getString("address"),
+                rs.getBoolean("isadmin"),
+                rs.getInt("age"),
+                rs.getInt("age_range"),
+                rs.getString("bio"),
+                rs.getString("email"),
+                rs.getString("preferences"),
+                rs.getArray("tags")?.array as? Array<*>,
+                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getString("shipping"),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
+                rs.getString("role")
+            ) else null
+        }
+    }
+
+data class UpsertUserWithCOALESCEArgs(
+    val name: String,
+    val email: String,
+    val bio: String
+)
+
+    fun upsertUserWithCOALESCE(args: UpsertUserWithCOALESCEArgs): Users? {
+        val name = args.name
+        val email = args.email
+        val bio = args.bio
+        val sql = """INSERT INTO users (name, email, bio) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;"""
+        val stmt = stmts.getOrPut("upsertUserWithCOALESCE") { conn.prepareStatement(sql) }
+        stmt.setString(1, name)
+        stmt.setString(2, email)
+        stmt.setString(3, bio)
+        stmt.executeQuery().use { rs ->
+            return if (rs.next()) Users(
+                rs.getInt("id"),
+                rs.getString("name"),
+                rs.getString("address"),
+                rs.getBoolean("isadmin"),
+                rs.getInt("age"),
+                rs.getInt("age_range"),
+                rs.getString("bio"),
+                rs.getString("email"),
+                rs.getString("preferences"),
+                rs.getArray("tags")?.array as? Array<*>,
+                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getString("shipping"),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
+                rs.getString("role")
+            ) else null
+        }
+    }
+
+    fun getUsersWithNullAddress(): List<GetUsersWithNullAddressRow> {
         val sql = """SELECT id, name, email FROM users WHERE address IS NULL;"""
         val stmt = stmts.getOrPut("getUsersWithNullAddress") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserswithnulladdressRow>()
+        val items = mutableListOf<GetUsersWithNullAddressRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithnulladdressRow(
+                GetUsersWithNullAddressRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -266,20 +763,13 @@ data class GetuserswithnulladdressRow(
         return items
     }
 
-data class GetuserswithbioRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val bio: String
-)
-
-    fun getUsersWithBio(): List<GetuserswithbioRow> {
+    fun getUsersWithBio(): List<GetUsersWithBioRow> {
         val sql = """SELECT id, name, email, COALESCE(bio, '') AS bio FROM users WHERE bio IS NOT NULL;"""
         val stmt = stmts.getOrPut("getUsersWithBio") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserswithbioRow>()
+        val items = mutableListOf<GetUsersWithBioRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithbioRow(
+                GetUsersWithBioRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -290,21 +780,12 @@ data class GetuserswithbioRow(
         return items
     }
 
-data class GetuserdisplayinfoRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val display_address: String,
-    val age: String,
-    val bio: String
-)
-
-    fun getUserDisplayInfo(id: Int): GetuserdisplayinfoRow? {
+    fun getUserDisplayInfo(id: Int): GetUserDisplayInfoRow? {
         val sql = """SELECT id, name, email, COALESCE(address, 'No address provided') AS display_address, COALESCE(age, 0) AS age, COALESCE(bio, '') AS bio FROM users WHERE id = ?;"""
         val stmt = stmts.getOrPut("getUserDisplayInfo") { conn.prepareStatement(sql) }
         stmt.setInt(1, id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetuserdisplayinfoRow(
+            return if (rs.next()) GetUserDisplayInfoRow(
                 rs.getInt("id"),
                 rs.getString("name"),
                 rs.getString("email"),
@@ -315,25 +796,31 @@ data class GetuserdisplayinfoRow(
         }
     }
 
-data class SearchuserswithcoalesceRow(
-    val id: Int,
+data class SearchUsersWithCOALESCEArgs(
     val name: String,
     val email: String,
-    val bio_text: String
+    val age: Int,
+    val limit: Int,
+    val offset: Int
 )
 
-    fun searchUsersWithCOALESCE(name: String, email: String, age: Int, limit: Int, offset: Int): List<SearchuserswithcoalesceRow> {
+    fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEArgs): List<SearchUsersWithCOALESCERow> {
+        val name = args.name
+        val email = args.email
+        val age = args.age
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE ? OR ? IS NULL) AND (email ILIKE ? OR ? IS NULL) AND COALESCE(age, 0) >= ? ORDER BY name LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("searchUsersWithCOALESCE") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, email.toString())
+        stmt.setString(1, name)
+        stmt.setString(2, email)
         stmt.setInt(3, age)
         stmt.setInt(4, limit)
         stmt.setInt(5, offset)
-        val items = mutableListOf<SearchuserswithcoalesceRow>()
+        val items = mutableListOf<SearchUsersWithCOALESCERow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                SearchuserswithcoalesceRow(
+                SearchUsersWithCOALESCERow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -344,22 +831,15 @@ data class SearchuserswithcoalesceRow(
         return items
     }
 
-data class GetuserscreatedbetweenRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val created_at: LocalDateTime
-)
-
-    fun getUsersCreatedBetween(created_at: LocalDateTime, created_at2: LocalDateTime): List<GetuserscreatedbetweenRow> {
+    fun getUsersCreatedBetween(created_at: LocalDateTime, created_at2: LocalDateTime): List<GetUsersCreatedBetweenRow> {
         val sql = """SELECT id, name, email, created_at FROM users WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC;"""
         val stmt = stmts.getOrPut("getUsersCreatedBetween") { conn.prepareStatement(sql) }
         stmt.setObject(1, java.sql.Timestamp.valueOf(created_at))
         stmt.setObject(2, java.sql.Timestamp.valueOf(created_at2))
-        val items = mutableListOf<GetuserscreatedbetweenRow>()
+        val items = mutableListOf<GetUsersCreatedBetweenRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserscreatedbetweenRow(
+                GetUsersCreatedBetweenRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -370,22 +850,15 @@ data class GetuserscreatedbetweenRow(
         return items
     }
 
-data class GetusersbyagerangeRow(
-    val id: Int,
-    val name: String,
-    val age: Int?,
-    val age_range: Int?
-)
-
-    fun getUsersByAgeRange(age: Int, age2: Int): List<GetusersbyagerangeRow> {
+    fun getUsersByAgeRange(age: Int, age2: Int): List<GetUsersByAgeRangeRow> {
         val sql = """SELECT id, name, age, age_range FROM users WHERE age >= ? AND age <= ? ORDER BY age;"""
         val stmt = stmts.getOrPut("getUsersByAgeRange") { conn.prepareStatement(sql) }
         stmt.setInt(1, age)
         stmt.setInt(2, age2)
-        val items = mutableListOf<GetusersbyagerangeRow>()
+        val items = mutableListOf<GetUsersByAgeRangeRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetusersbyagerangeRow(
+                GetUsersByAgeRangeRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getInt("age"),
@@ -396,21 +869,14 @@ data class GetusersbyagerangeRow(
         return items
     }
 
-data class GetusersbygeneratedrangeRow(
-    val id: Int,
-    val name: String,
-    val age: Int?,
-    val age_range: Int?
-)
-
-    fun getUsersByGeneratedRange(age_range: Int): List<GetusersbygeneratedrangeRow> {
+    fun getUsersByGeneratedRange(age_range: Int): List<GetUsersByGeneratedRangeRow> {
         val sql = """SELECT id, name, age, age_range FROM users WHERE age_range @> ?::integer;"""
         val stmt = stmts.getOrPut("getUsersByGeneratedRange") { conn.prepareStatement(sql) }
         stmt.setInt(1, age_range)
-        val items = mutableListOf<GetusersbygeneratedrangeRow>()
+        val items = mutableListOf<GetUsersByGeneratedRangeRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetusersbygeneratedrangeRow(
+                GetUsersByGeneratedRangeRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getInt("age"),
@@ -421,7 +887,16 @@ data class GetusersbygeneratedrangeRow(
         return items
     }
 
-    fun getRecentUsers(created_at: LocalDateTime, limit: Int, offset: Int): List<Users> {
+data class GetRecentUsersArgs(
+    val created_at: LocalDateTime,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getRecentUsers(args: GetRecentUsersArgs): List<Users> {
+        val created_at = args.created_at
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT * FROM users WHERE created_at > ? LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getRecentUsers") { conn.prepareStatement(sql) }
         stmt.setObject(1, java.sql.Timestamp.valueOf(created_at))
@@ -443,8 +918,8 @@ data class GetusersbygeneratedrangeRow(
                     rs.getArray("tags")?.array as? Array<*>,
                     rs.getObject("avatar_hash", java.util.UUID::class.java),
                     rs.getString("shipping"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
-                    rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                    rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                     rs.getString("role")
                 )
             )
@@ -452,18 +927,12 @@ data class GetusersbygeneratedrangeRow(
         return items
     }
 
-data class GetuserpreferencesRow(
-    val id: Int,
-    val name: String,
-    val preferences: String?
-)
-
-    fun getUserPreferences(id: Int): GetuserpreferencesRow? {
+    fun getUserPreferences(id: Int): GetUserPreferencesRow? {
         val sql = """SELECT id, name, preferences FROM users WHERE id = ?;"""
         val stmt = stmts.getOrPut("getUserPreferences") { conn.prepareStatement(sql) }
         stmt.setInt(1, id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetuserpreferencesRow(
+            return if (rs.next()) GetUserPreferencesRow(
                 rs.getInt("id"),
                 rs.getString("name"),
                 rs.getString("preferences")
@@ -474,26 +943,19 @@ data class GetuserpreferencesRow(
     fun updateUserPreferences(preferences: String, id: Int): Unit {
         val sql = """UPDATE users SET preferences = preferences || ?, updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("updateUserPreferences") { conn.prepareStatement(sql) }
-        stmt.setString(1, preferences.toString())
+        stmt.setObject(1, preferences)
         stmt.setInt(2, id)
         stmt.executeUpdate()
     }
 
-data class FindusersbyjsonkeyRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val preferences: String?
-)
-
-    fun findUsersByJsonKey(preferences: String): List<FindusersbyjsonkeyRow> {
+    fun findUsersByJsonKey(preferences: String): List<FindUsersByJsonKeyRow> {
         val sql = """SELECT id, name, email, preferences FROM users WHERE preferences->>'theme' = ?;"""
         val stmt = stmts.getOrPut("findUsersByJsonKey") { conn.prepareStatement(sql) }
-        stmt.setString(1, preferences.toString())
-        val items = mutableListOf<FindusersbyjsonkeyRow>()
+        stmt.setObject(1, preferences)
+        val items = mutableListOf<FindUsersByJsonKeyRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                FindusersbyjsonkeyRow(
+                FindUsersByJsonKeyRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -504,20 +966,14 @@ data class FindusersbyjsonkeyRow(
         return items
     }
 
-data class FindusersbyjsoncontainsRow(
-    val id: Int,
-    val name: String,
-    val email: String
-)
-
-    fun findUsersByJsonContains(preferences: String): List<FindusersbyjsoncontainsRow> {
+    fun findUsersByJsonContains(preferences: String): List<FindUsersByJsonContainsRow> {
         val sql = """SELECT id, name, email FROM users WHERE preferences @> ?::jsonb;"""
         val stmt = stmts.getOrPut("findUsersByJsonContains") { conn.prepareStatement(sql) }
-        stmt.setString(1, preferences.toString())
-        val items = mutableListOf<FindusersbyjsoncontainsRow>()
+        stmt.setObject(1, preferences)
+        val items = mutableListOf<FindUsersByJsonContainsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                FindusersbyjsoncontainsRow(
+                FindUsersByJsonContainsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -527,21 +983,14 @@ data class FindusersbyjsoncontainsRow(
         return items
     }
 
-data class GetuserswithtagRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val tags: List<String>?
-)
-
-    fun getUsersWithTag(tags: List<String>): List<GetuserswithtagRow> {
+    fun getUsersWithTag(tags: List<String>): List<GetUsersWithTagRow> {
         val sql = """SELECT id, name, email, tags FROM users WHERE ? = ANY(tags);"""
         val stmt = stmts.getOrPut("getUsersWithTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags.toString())
-        val items = mutableListOf<GetuserswithtagRow>()
+        stmt.setString(1, tags)
+        val items = mutableListOf<GetUsersWithTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithtagRow(
+                GetUsersWithTagRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -552,21 +1001,14 @@ data class GetuserswithtagRow(
         return items
     }
 
-data class GetuserswithanytagRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val tags: List<String>?
-)
-
-    fun getUsersWithAnyTag(tags: List<String>): List<GetuserswithanytagRow> {
+    fun getUsersWithAnyTag(tags: List<String>): List<GetUsersWithAnyTagRow> {
         val sql = """SELECT id, name, email, tags FROM users WHERE tags && ?::text[];"""
         val stmt = stmts.getOrPut("getUsersWithAnyTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags.toString())
-        val items = mutableListOf<GetuserswithanytagRow>()
+        stmt.setString(1, tags)
+        val items = mutableListOf<GetUsersWithAnyTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithanytagRow(
+                GetUsersWithAnyTagRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -580,7 +1022,7 @@ data class GetuserswithanytagRow(
     fun addUserTag(tags: List<String>, id: Int): Unit {
         val sql = """UPDATE users SET tags = array_append(tags, ?), updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("addUserTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags.toString())
+        stmt.setString(1, tags)
         stmt.setInt(2, id)
         stmt.executeUpdate()
     }
@@ -588,25 +1030,17 @@ data class GetuserswithanytagRow(
     fun removeUserTag(tags: List<String>, id: Int): Unit {
         val sql = """UPDATE users SET tags = array_remove(tags, ?), updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("removeUserTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags.toString())
+        stmt.setString(1, tags)
         stmt.setInt(2, id)
         stmt.executeUpdate()
     }
 
-data class GetusershippingaddressRow(
-    val id: Int,
-    val name: String,
-    val shipping: String?,
-    val shipping_city: String,
-    val shipping_country: String
-)
-
-    fun getUserShippingAddress(id: Int): GetusershippingaddressRow? {
+    fun getUserShippingAddress(id: Int): GetUserShippingAddressRow? {
         val sql = """SELECT id, name, shipping, (shipping).city AS shipping_city, (shipping).country AS shipping_country FROM users WHERE id = ?;"""
         val stmt = stmts.getOrPut("getUserShippingAddress") { conn.prepareStatement(sql) }
         stmt.setInt(1, id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetusershippingaddressRow(
+            return if (rs.next()) GetUserShippingAddressRow(
                 rs.getInt("id"),
                 rs.getString("name"),
                 rs.getString("shipping"),
@@ -616,49 +1050,52 @@ data class GetusershippingaddressRow(
         }
     }
 
-    fun updateUserShipping(shipping_field1: String, shipping_field2: String, shipping_field3: String, shipping_field4: String, shipping_field5: String, id: Int): Unit {
+data class UpdateUserShippingArgs(
+    val shipping_field1: String,
+    val shipping_field2: String,
+    val shipping_field3: String,
+    val shipping_field4: String,
+    val shipping_field5: String,
+    val id: Int
+)
+
+    fun updateUserShipping(args: UpdateUserShippingArgs): Unit {
+        val shipping_field1 = args.shipping_field1
+        val shipping_field2 = args.shipping_field2
+        val shipping_field3 = args.shipping_field3
+        val shipping_field4 = args.shipping_field4
+        val shipping_field5 = args.shipping_field5
+        val id = args.id
         val sql = """UPDATE users SET shipping = ROW(?, ?, ?, ?, ?), updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("updateUserShipping") { conn.prepareStatement(sql) }
-        stmt.setString(1, shipping_field1.toString())
-        stmt.setString(2, shipping_field2.toString())
-        stmt.setString(3, shipping_field3.toString())
-        stmt.setString(4, shipping_field4.toString())
-        stmt.setString(5, shipping_field5.toString())
+        stmt.setString(1, shipping_field1)
+        stmt.setString(2, shipping_field2)
+        stmt.setString(3, shipping_field3)
+        stmt.setString(4, shipping_field4)
+        stmt.setString(5, shipping_field5)
         stmt.setInt(6, id)
         stmt.executeUpdate()
     }
 
-data class GetcomplexuseranalyticsRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val role: UserRole,
-    val isadmin: Boolean,
-    val user_created_at: LocalDateTime,
-    val total_posts: Int,
-    val published_posts: Int,
-    val draft_posts: Int,
-    val total_comments: Int,
-    val posts_commented_on: Int,
-    val categories_used: Int,
-    val category_names: String,
-    val last_post_date: LocalDateTime?,
-    val last_comment_date: LocalDateTime?,
-    val avg_post_length: Double,
-    val activity_level: String,
-    val engagement_score: Int
+data class GetComplexUserAnalyticsArgs(
+    val total_posts: String,
+    val total_comments: String,
+    val limit: String
 )
 
-    fun getComplexUserAnalytics(total_posts: String, total_comments: String, limit: String): List<GetcomplexuseranalyticsRow> {
+    fun getComplexUserAnalytics(args: GetComplexUserAnalyticsArgs): List<GetComplexUserAnalyticsRow> {
+        val total_posts = args.total_posts
+        val total_comments = args.total_comments
+        val limit = args.limit
         val sql = """WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > ? OR ucs.total_comments > ? ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT ?;"""
         val stmt = stmts.getOrPut("getComplexUserAnalytics") { conn.prepareStatement(sql) }
-        stmt.setString(1, total_posts.toString())
-        stmt.setString(2, total_comments.toString())
-        stmt.setString(3, limit.toString())
-        val items = mutableListOf<GetcomplexuseranalyticsRow>()
+        stmt.setObject(1, total_posts)
+        stmt.setObject(2, total_comments)
+        stmt.setObject(3, limit)
+        val items = mutableListOf<GetComplexUserAnalyticsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetcomplexuseranalyticsRow(
+                GetComplexUserAnalyticsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -683,20 +1120,15 @@ data class GetcomplexuseranalyticsRow(
         return items
     }
 
-data class GetpostwithactivecommentersRow(
-    val commenter_name: String,
-    val last_comment_at: String?
-)
-
-    fun getPostWithActiveCommenters(rn: String, post_id: String): List<GetpostwithactivecommentersRow> {
+    fun getPostWithActiveCommenters(rn: String, post_id: String): List<GetPostWithActiveCommentersRow> {
         val sql = """WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= ? AND ac.post_id = ? ORDER BY ac.created_at DESC;"""
         val stmt = stmts.getOrPut("getPostWithActiveCommenters") { conn.prepareStatement(sql) }
-        stmt.setString(1, rn.toString())
-        stmt.setString(2, post_id.toString())
-        val items = mutableListOf<GetpostwithactivecommentersRow>()
+        stmt.setObject(1, rn)
+        stmt.setObject(2, post_id)
+        val items = mutableListOf<GetPostWithActiveCommentersRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetpostwithactivecommentersRow(
+                GetPostWithActiveCommentersRow(
                     rs.getString("commenter_name"),
                     rs.getString("last_comment_at")
                 )
@@ -705,23 +1137,14 @@ data class GetpostwithactivecommentersRow(
         return items
     }
 
-data class GetuserpostrankingsRow(
-    val id: Int,
-    val name: String,
-    val post_count: Int,
-    val post_rank: Int,
-    val dense_post_rank: Int,
-    val row_num: Int
-)
-
-    fun getUserPostRankings(limit: Int): List<GetuserpostrankingsRow> {
+    fun getUserPostRankings(limit: Int): List<GetUserPostRankingsRow> {
         val sql = """SELECT u.id, u.name, COUNT(p.id) AS post_count, RANK() OVER (ORDER BY COUNT(p.id) DESC) AS post_rank, DENSE_RANK() OVER (ORDER BY COUNT(p.id) DESC) AS dense_post_rank, ROW_NUMBER() OVER (ORDER BY COUNT(p.id) DESC, u.name ASC) AS row_num FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name ORDER BY post_count DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getUserPostRankings") { conn.prepareStatement(sql) }
         stmt.setInt(1, limit)
-        val items = mutableListOf<GetuserpostrankingsRow>()
+        val items = mutableListOf<GetUserPostRankingsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserpostrankingsRow(
+                GetUserPostRankingsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getInt("post_count"),
@@ -734,26 +1157,15 @@ data class GetuserpostrankingsRow(
         return items
     }
 
-data class GetusertrendingpostsRow(
-    val id: Int,
-    val title: String,
-    val user_id: Int,
-    val view_count: Long,
-    val created_at: LocalDateTime,
-    val prev_view_count: Int,
-    val next_view_count: Int,
-    val view_delta: Double?
-)
-
-    fun getUserTrendingPosts(user_id: Int, limit: Int): List<GetusertrendingpostsRow> {
+    fun getUserTrendingPosts(user_id: Int, limit: Int): List<GetUserTrendingPostsRow> {
         val sql = """SELECT p.id, p.title, p.user_id, p.view_count, p.created_at, LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS prev_view_count, LEAD(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS next_view_count, p.view_count - LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS view_delta FROM posts p WHERE p.user_id = ? ORDER BY p.created_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getUserTrendingPosts") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, limit)
-        val items = mutableListOf<GetusertrendingpostsRow>()
+        val items = mutableListOf<GetUserTrendingPostsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetusertrendingpostsRow(
+                GetUserTrendingPostsRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getInt("user_id"),
@@ -768,38 +1180,26 @@ data class GetusertrendingpostsRow(
         return items
     }
 
-data class GetpostcountbyuserRow(
-    val post_count: Int,
-    val comment_count: Int
-)
-
-    fun getPostCountByUser(user_id: String): GetpostcountbyuserRow? {
+    fun getPostCountByUser(user_id: String): GetPostCountByUserRow? {
         val sql = """SELECT (SELECT COUNT(*) FROM posts WHERE user_id = ?) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = ?) AS comment_count;"""
         val stmt = stmts.getOrPut("getPostCountByUser") { conn.prepareStatement(sql) }
-        stmt.setString(1, user_id.toString())
+        stmt.setObject(1, user_id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetpostcountbyuserRow(
+            return if (rs.next()) GetPostCountByUserRow(
                 rs.getInt("post_count"),
                 rs.getInt("comment_count")
             ) else null
         }
     }
 
-data class GetuserswithmanypostsRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val total_posts: Int
-)
-
-    fun getUsersWithManyPosts(min_count: Int): List<GetuserswithmanypostsRow> {
+    fun getUsersWithManyPosts(min_count: Int): List<GetUsersWithManyPostsRow> {
         val sql = """SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > ? ORDER BY total_posts DESC;"""
         val stmt = stmts.getOrPut("getUsersWithManyPosts") { conn.prepareStatement(sql) }
         stmt.setInt(1, min_count)
-        val items = mutableListOf<GetuserswithmanypostsRow>()
+        val items = mutableListOf<GetUsersWithManyPostsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithmanypostsRow(
+                GetUsersWithManyPostsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -810,24 +1210,15 @@ data class GetuserswithmanypostsRow(
         return items
     }
 
-data class GetpostswithcommentcountRow(
-    val id: Int,
-    val title: String,
-    val created_at: LocalDateTime,
-    val comment_count: Int,
-    val unique_commenters: Int,
-    val last_comment_at: LocalDateTime?
-)
-
-    fun getPostsWithCommentCount(limit: Int, offset: Int): List<GetpostswithcommentcountRow> {
+    fun getPostsWithCommentCount(limit: Int, offset: Int): List<GetPostsWithCommentCountRow> {
         val sql = """SELECT p.id, p.title, p.created_at, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count, (SELECT COUNT(DISTINCT c2.user_id) FROM comments c2 WHERE c2.post_id = p.id) AS unique_commenters, (SELECT MAX(c3.created_at) FROM comments c3 WHERE c3.post_id = p.id) AS last_comment_at FROM posts p WHERE p.status = 'published' ORDER BY comment_count DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getPostsWithCommentCount") { conn.prepareStatement(sql) }
         stmt.setInt(1, limit)
         stmt.setInt(2, offset)
-        val items = mutableListOf<GetpostswithcommentcountRow>()
+        val items = mutableListOf<GetPostsWithCommentCountRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetpostswithcommentcountRow(
+                GetPostsWithCommentCountRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getTimestamp("created_at")?.toLocalDateTime(),
@@ -840,22 +1231,13 @@ data class GetpostswithcommentcountRow(
         return items
     }
 
-data class GetuserswithactivitylevelRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val created_at: LocalDateTime,
-    val account_age_category: String,
-    val effective_role: String
-)
-
-    fun getUsersWithActivityLevel(): List<GetuserswithactivitylevelRow> {
+    fun getUsersWithActivityLevel(): List<GetUsersWithActivityLevelRow> {
         val sql = """SELECT id, name, email, created_at, CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 'new' WHEN created_at >= NOW() - INTERVAL '30 days' THEN 'recent' WHEN created_at >= NOW() - INTERVAL '1 year' THEN 'established' ELSE 'veteran' END AS account_age_category, CASE WHEN isadmin THEN 'administrator' ELSE role::TEXT END AS effective_role FROM users ORDER BY created_at DESC;"""
         val stmt = stmts.getOrPut("getUsersWithActivityLevel") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserswithactivitylevelRow>()
+        val items = mutableListOf<GetUsersWithActivityLevelRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithactivitylevelRow(
+                GetUsersWithActivityLevelRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -868,23 +1250,14 @@ data class GetuserswithactivitylevelRow(
         return items
     }
 
-data class GetpostwithcommentsRow(
-    val post_id: Int,
-    val title: String,
-    val content: String,
-    val author: String,
-    val comment_text: String,
-    val commenter: String
-)
-
-    fun getPostWithComments(id: Int): List<GetpostwithcommentsRow> {
+    fun getPostWithComments(id: Int): List<GetPostWithCommentsRow> {
         val sql = """SELECT p.id AS post_id, p.title, p.content, u.name AS author, c.content AS comment_text, cu.name AS commenter FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = ?;"""
         val stmt = stmts.getOrPut("getPostWithComments") { conn.prepareStatement(sql) }
         stmt.setInt(1, id)
-        val items = mutableListOf<GetpostwithcommentsRow>()
+        val items = mutableListOf<GetPostWithCommentsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetpostwithcommentsRow(
+                GetPostWithCommentsRow(
                     rs.getInt("post_id"),
                     rs.getString("title"),
                     rs.getString("content"),
@@ -897,35 +1270,12 @@ data class GetpostwithcommentsRow(
         return items
     }
 
-data class GetpostdetailswithallrelationsRow(
-    val id: Int,
-    val title: String,
-    val content: String,
-    val status: PostStatus,
-    val created_at: LocalDateTime,
-    val updated_at: LocalDateTime,
-    val author_id: Int,
-    val author_name: String,
-    val author_email: String,
-    val author_role: UserRole,
-    val author_is_admin: Boolean,
-    val category_id: Int,
-    val category_name: String,
-    val comment_count: Int,
-    val unique_commenters: Int,
-    val all_comments: String?,
-    val commenter_names: List<String>?,
-    val last_comment_date: LocalDateTime?,
-    val content_length: Int?,
-    val hours_since_created: Double?
-)
-
-    fun getPostDetailsWithAllRelations(id: Int): GetpostdetailswithallrelationsRow? {
+    fun getPostDetailsWithAllRelations(id: Int): GetPostDetailsWithAllRelationsRow? {
         val sql = """SELECT p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id AS author_id, u.name AS author_name, u.email AS author_email, u.role AS author_role, u.isadmin AS author_is_admin, cat.id AS category_id, cat.name AS category_name, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT c.user_id) AS unique_commenters, STRING_AGG(DISTINCT c.content, ' | ' ORDER BY c.content) AS all_comments, ARRAY_AGG(DISTINCT cu.name ORDER BY cu.name) AS commenter_names, MAX(c.created_at) AS last_comment_date, LENGTH(p.content) AS content_length, EXTRACT(EPOCH FROM (NOW() - p.created_at)) / 3600 AS hours_since_created FROM posts p INNER JOIN users u ON p.user_id = u.id INNER JOIN categories cat ON p.category_id = cat.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN users cu ON c.user_id = cu.id WHERE p.id = ? GROUP BY p.id, p.title, p.content, p.status, p.created_at, p.updated_at, u.id, u.name, u.email, u.role, u.isadmin, cat.id, cat.name;"""
         val stmt = stmts.getOrPut("getPostDetailsWithAllRelations") { conn.prepareStatement(sql) }
         stmt.setInt(1, id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetpostdetailswithallrelationsRow(
+            return if (rs.next()) GetPostDetailsWithAllRelationsRow(
                 rs.getInt("id"),
                 rs.getString("title"),
                 rs.getString("content"),
@@ -953,23 +1303,17 @@ data class GetpostdetailswithallrelationsRow(
     fun countUsersByRole(role: UserRole): Int? {
         val sql = """SELECT COUNT(*) FROM users WHERE role = ?;"""
         val stmt = stmts.getOrPut("countUsersByRole") { conn.prepareStatement(sql) }
-        stmt.setString(1, role.toString())
+        stmt.setObject(1, role)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) rs.getInt("COUNT(*)") else null
         }
     }
 
-data class CountusersRow(
-    val total_users: Int,
-    val admin_count: Int,
-    val regular_count: Int
-)
-
-    fun countUsers(): CountusersRow? {
+    fun countUsers(): CountUsersRow? {
         val sql = """SELECT COUNT(*) AS total_users, COUNT(CASE WHEN isadmin = TRUE THEN 1 END) AS admin_count, COUNT(CASE WHEN isadmin = FALSE THEN 1 END) AS regular_count FROM users;"""
         val stmt = stmts.getOrPut("countUsers") { conn.prepareStatement(sql) }
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) CountusersRow(
+            return if (rs.next()) CountUsersRow(
                 rs.getInt("total_users"),
                 rs.getInt("admin_count"),
                 rs.getInt("regular_count")
@@ -977,18 +1321,13 @@ data class CountusersRow(
         }
     }
 
-data class GetuserrolecountRow(
-    val role: UserRole,
-    val count: Int
-)
-
-    fun getUserRoleCount(): List<GetuserrolecountRow> {
+    fun getUserRoleCount(): List<GetUserRoleCountRow> {
         val sql = """SELECT role, COUNT(*) AS count FROM users GROUP BY role ORDER BY count DESC;"""
         val stmt = stmts.getOrPut("getUserRoleCount") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserrolecountRow>()
+        val items = mutableListOf<GetUserRoleCountRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserrolecountRow(
+                GetUserRoleCountRow(
                     rs.getString("role"),
                     rs.getInt("count")
                 )
@@ -997,19 +1336,11 @@ data class GetuserrolecountRow(
         return items
     }
 
-data class GetuseragestatsRow(
-    val first_joined: LocalDateTime?,
-    val last_joined: LocalDateTime?,
-    val total: Int,
-    val avg_age: Double?,
-    val avg_name_length: Double?
-)
-
-    fun getUserAgeStats(): GetuseragestatsRow? {
+    fun getUserAgeStats(): GetUserAgeStatsRow? {
         val sql = """SELECT MIN(created_at) AS first_joined, MAX(created_at) AS last_joined, COUNT(*) AS total, AVG(COALESCE(age, 0))::NUMERIC(10,2) AS avg_age, AVG(LENGTH(COALESCE(name, '')))::NUMERIC(10,2) AS avg_name_length FROM users;"""
         val stmt = stmts.getOrPut("getUserAgeStats") { conn.prepareStatement(sql) }
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetuseragestatsRow(
+            return if (rs.next()) GetUserAgeStatsRow(
                 rs.getTimestamp("first_joined")?.toLocalDateTime(),
                 rs.getTimestamp("last_joined")?.toLocalDateTime(),
                 rs.getInt("total"),
@@ -1019,21 +1350,14 @@ data class GetuseragestatsRow(
         }
     }
 
-data class GetpostsgroupedbystatusRow(
-    val status: PostStatus,
-    val count: Int,
-    val oldest: LocalDateTime?,
-    val newest: LocalDateTime?
-)
-
-    fun getPostsGroupedByStatus(count_threshold: Int): List<GetpostsgroupedbystatusRow> {
+    fun getPostsGroupedByStatus(count_threshold: Int): List<GetPostsGroupedByStatusRow> {
         val sql = """SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM posts GROUP BY status HAVING COUNT(*) > ? ORDER BY count DESC;"""
         val stmt = stmts.getOrPut("getPostsGroupedByStatus") { conn.prepareStatement(sql) }
         stmt.setInt(1, count_threshold)
-        val items = mutableListOf<GetpostsgroupedbystatusRow>()
+        val items = mutableListOf<GetPostsGroupedByStatusRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetpostsgroupedbystatusRow(
+                GetPostsGroupedByStatusRow(
                     rs.getString("status"),
                     rs.getInt("count"),
                     rs.getTimestamp("oldest")?.toLocalDateTime(),
@@ -1044,19 +1368,13 @@ data class GetpostsgroupedbystatusRow(
         return items
     }
 
-data class GetdistinctcommentersRow(
-    val id: Int,
-    val name: String,
-    val email: String
-)
-
-    fun getDistinctCommenters(): List<GetdistinctcommentersRow> {
+    fun getDistinctCommenters(): List<GetDistinctCommentersRow> {
         val sql = """SELECT DISTINCT u.id, u.name, u.email FROM users u JOIN comments c ON u.id = c.user_id ORDER BY u.name;"""
         val stmt = stmts.getOrPut("getDistinctCommenters") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetdistinctcommentersRow>()
+        val items = mutableListOf<GetDistinctCommentersRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetdistinctcommentersRow(
+                GetDistinctCommentersRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -1066,21 +1384,13 @@ data class GetdistinctcommentersRow(
         return items
     }
 
-data class GetlatestpostperuserRow(
-    val user_id: Int,
-    val post_id: Int,
-    val title: String,
-    val status: PostStatus,
-    val created_at: LocalDateTime
-)
-
-    fun getLatestPostPerUser(): List<GetlatestpostperuserRow> {
+    fun getLatestPostPerUser(): List<GetLatestPostPerUserRow> {
         val sql = """SELECT DISTINCT ON (user_id) user_id, id AS post_id, title, status, created_at FROM posts ORDER BY user_id, created_at DESC;"""
         val stmt = stmts.getOrPut("getLatestPostPerUser") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetlatestpostperuserRow>()
+        val items = mutableListOf<GetLatestPostPerUserRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetlatestpostperuserRow(
+                GetLatestPostPerUserRow(
                     rs.getInt("user_id"),
                     rs.getInt("post_id"),
                     rs.getString("title"),
@@ -1092,23 +1402,28 @@ data class GetlatestpostperuserRow(
         return items
     }
 
-data class SearchusersRow(
-    val id: Int,
+data class SearchUsersArgs(
     val name: String,
-    val email: String
+    val email: String,
+    val limit: Int,
+    val offset: Int
 )
 
-    fun searchUsers(name: String, email: String, limit: Int, offset: Int): List<SearchusersRow> {
+    fun searchUsers(args: SearchUsersArgs): List<SearchUsersRow> {
+        val name = args.name
+        val email = args.email
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT id, name, email FROM users WHERE name ILIKE ? OR email ILIKE ? ORDER BY name ASC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("searchUsers") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, email.toString())
+        stmt.setString(1, name)
+        stmt.setString(2, email)
         stmt.setInt(3, limit)
         stmt.setInt(4, offset)
-        val items = mutableListOf<SearchusersRow>()
+        val items = mutableListOf<SearchUsersRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                SearchusersRow(
+                SearchUsersRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -1118,23 +1433,25 @@ data class SearchusersRow(
         return items
     }
 
-data class SearchpostsbytitleRow(
-    val id: Int,
+data class SearchPostsByTitleArgs(
     val title: String,
-    val status: PostStatus,
-    val created_at: LocalDateTime
+    val limit: Int,
+    val offset: Int
 )
 
-    fun searchPostsByTitle(title: String, limit: Int, offset: Int): List<SearchpostsbytitleRow> {
+    fun searchPostsByTitle(args: SearchPostsByTitleArgs): List<SearchPostsByTitleRow> {
+        val title = args.title
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT id, title, status, created_at FROM posts WHERE title ILIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("searchPostsByTitle") { conn.prepareStatement(sql) }
-        stmt.setString(1, title.toString())
+        stmt.setString(1, title)
         stmt.setInt(2, limit)
         stmt.setInt(3, offset)
-        val items = mutableListOf<SearchpostsbytitleRow>()
+        val items = mutableListOf<SearchPostsByTitleRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                SearchpostsbytitleRow(
+                SearchPostsByTitleRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("status"),
@@ -1145,21 +1462,15 @@ data class SearchpostsbytitleRow(
         return items
     }
 
-data class FulltextsearchpostsRow(
-    val id: Int,
-    val title: String,
-    val rank: Double?
-)
-
-    fun fullTextSearchPosts(search_query: String, limit: Int): List<FulltextsearchpostsRow> {
+    fun fullTextSearchPosts(search_query: String, limit: Int): List<FullTextSearchPostsRow> {
         val sql = """SELECT id, title, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', ?)) AS rank FROM posts WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', ?) ORDER BY rank DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("fullTextSearchPosts") { conn.prepareStatement(sql) }
-        stmt.setString(1, search_query.toString())
+        stmt.setString(1, search_query)
         stmt.setInt(2, limit)
-        val items = mutableListOf<FulltextsearchpostsRow>()
+        val items = mutableListOf<FullTextSearchPostsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                FulltextsearchpostsRow(
+                FullTextSearchPostsRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getDouble("rank")
@@ -1169,19 +1480,13 @@ data class FulltextsearchpostsRow(
         return items
     }
 
-data class GetuserregistrationstatsRow(
-    val year: Double?,
-    val month: Double?,
-    val signups: Int
-)
-
-    fun getUserRegistrationStats(): List<GetuserregistrationstatsRow> {
+    fun getUserRegistrationStats(): List<GetUserRegistrationStatsRow> {
         val sql = """SELECT EXTRACT(YEAR FROM created_at)::INT AS year, EXTRACT(MONTH FROM created_at)::INT AS month, COUNT(*) AS signups FROM users GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at) ORDER BY year DESC, month DESC;"""
         val stmt = stmts.getOrPut("getUserRegistrationStats") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserregistrationstatsRow>()
+        val items = mutableListOf<GetUserRegistrationStatsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserregistrationstatsRow(
+                GetUserRegistrationStatsRow(
                     rs.getDouble("year"),
                     rs.getDouble("month"),
                     rs.getInt("signups")
@@ -1191,20 +1496,14 @@ data class GetuserregistrationstatsRow(
         return items
     }
 
-data class GetweeklypoststatsRow(
-    val week_start: String,
-    val posts_created: Int,
-    val total_views: Double?
-)
-
-    fun getWeeklyPostStats(created_at: LocalDateTime): List<GetweeklypoststatsRow> {
+    fun getWeeklyPostStats(created_at: LocalDateTime): List<GetWeeklyPostStatsRow> {
         val sql = """SELECT DATE_TRUNC('week', created_at) AS week_start, COUNT(*) AS posts_created, SUM(view_count) AS total_views FROM posts WHERE created_at >= ? GROUP BY DATE_TRUNC('week', created_at) ORDER BY week_start DESC;"""
         val stmt = stmts.getOrPut("getWeeklyPostStats") { conn.prepareStatement(sql) }
         stmt.setObject(1, java.sql.Timestamp.valueOf(created_at))
-        val items = mutableListOf<GetweeklypoststatsRow>()
+        val items = mutableListOf<GetWeeklyPostStatsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetweeklypoststatsRow(
+                GetWeeklyPostStatsRow(
                     rs.getString("week_start"),
                     rs.getInt("posts_created"),
                     rs.getDouble("total_views")
@@ -1234,8 +1533,8 @@ data class GetweeklypoststatsRow(
                     rs.getArray("tags")?.array as? Array<*>,
                     rs.getObject("avatar_hash", java.util.UUID::class.java),
                     rs.getString("shipping"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
-                    rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                    rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                     rs.getString("role")
                 )
             )
@@ -1243,22 +1542,14 @@ data class GetweeklypoststatsRow(
         return items
     }
 
-data class GetusersbynamesRow(
-    val id: Int,
-    val name: String,
-    val email: String
-)
-
-    fun getUsersByNames(name1: String, name2: String, name3: String): List<GetusersbynamesRow> {
-        val sql = """SELECT id, name, email FROM users WHERE name IN (?, ?, ?);"""
+    fun getUsersByNames(name: String): List<GetUsersByNamesRow> {
+        val sql = """SELECT id, name, email FROM users WHERE name = ANY(?);"""
         val stmt = stmts.getOrPut("getUsersByNames") { conn.prepareStatement(sql) }
-        stmt.setString(1, name1.toString())
-        stmt.setString(2, name2.toString())
-        stmt.setString(3, name3.toString())
-        val items = mutableListOf<GetusersbynamesRow>()
+        stmt.setString(1, name)
+        val items = mutableListOf<GetUsersByNamesRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetusersbynamesRow(
+                GetUsersByNamesRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -1268,19 +1559,13 @@ data class GetusersbynamesRow(
         return items
     }
 
-data class GetuserswhocommentedRow(
-    val id: Int,
-    val name: String,
-    val email: String
-)
-
-    fun getUsersWhoCommented(): List<GetuserswhocommentedRow> {
+    fun getUsersWhoCommented(): List<GetUsersWhoCommentedRow> {
         val sql = """SELECT id, name, email FROM users u WHERE EXISTS (SELECT 1 FROM comments c WHERE c.user_id = u.id) ORDER BY u.name;"""
         val stmt = stmts.getOrPut("getUsersWhoCommented") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserswhocommentedRow>()
+        val items = mutableListOf<GetUsersWhoCommentedRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswhocommentedRow(
+                GetUsersWhoCommentedRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -1290,19 +1575,13 @@ data class GetuserswhocommentedRow(
         return items
     }
 
-data class GetuserswithnopostsRow(
-    val id: Int,
-    val name: String,
-    val email: String
-)
-
-    fun getUsersWithNoPosts(): List<GetuserswithnopostsRow> {
+    fun getUsersWithNoPosts(): List<GetUsersWithNoPostsRow> {
         val sql = """SELECT id, name, email FROM users u WHERE NOT EXISTS (SELECT 1 FROM posts p WHERE p.user_id = u.id) ORDER BY u.created_at DESC;"""
         val stmt = stmts.getOrPut("getUsersWithNoPosts") { conn.prepareStatement(sql) }
-        val items = mutableListOf<GetuserswithnopostsRow>()
+        val items = mutableListOf<GetUsersWithNoPostsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserswithnopostsRow(
+                GetUsersWithNoPostsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email")
@@ -1312,22 +1591,15 @@ data class GetuserswithnopostsRow(
         return items
     }
 
-data class GetallcontentbyuserRow(
-    val content_type: String,
-    val content_id: String,
-    val content_summary: String,
-    val created_at: LocalDateTime
-)
-
-    fun getAllContentByUser(user_id: Int, limit: Int): List<GetallcontentbyuserRow> {
+    fun getAllContentByUser(user_id: Int, limit: Int): List<GetAllContentByUserRow> {
         val sql = """SELECT 'post' AS content_type, id::TEXT AS content_id, title AS content_summary, created_at FROM posts WHERE user_id = ? UNION ALL SELECT 'comment' AS content_type, id::TEXT AS content_id, LEFT(content, 100) AS content_summary, created_at FROM comments WHERE user_id = ? ORDER BY created_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getAllContentByUser") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, limit)
-        val items = mutableListOf<GetallcontentbyuserRow>()
+        val items = mutableListOf<GetAllContentByUserRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetallcontentbyuserRow(
+                GetAllContentByUserRow(
                     rs.getString("content_type"),
                     rs.getString("content_id"),
                     rs.getString("content_summary"),
@@ -1360,8 +1632,8 @@ data class GetallcontentbyuserRow(
     fun getUserActivitySummary(post_count: String, comment_count: String): List<UserActivitySummary> {
         val sql = """SELECT * FROM user_activity_summary WHERE post_count > ? OR comment_count > ? ORDER BY post_count DESC;"""
         val stmt = stmts.getOrPut("getUserActivitySummary") { conn.prepareStatement(sql) }
-        stmt.setString(1, post_count.toString())
-        stmt.setString(2, comment_count.toString())
+        stmt.setString(1, post_count)
+        stmt.setString(2, comment_count)
         val items = mutableListOf<UserActivitySummary>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1404,22 +1676,14 @@ data class GetallcontentbyuserRow(
         return items
     }
 
-data class GetusersubscriptionsRow(
-    val id: Int,
-    val tier: SubscriptionTier,
-    val started_at: LocalDateTime,
-    val expires_at: LocalDateTime?,
-    val auto_renew: Boolean
-)
-
-    fun getUserSubscriptions(user_id: Int): List<GetusersubscriptionsRow> {
+    fun getUserSubscriptions(user_id: Int): List<GetUserSubscriptionsRow> {
         val sql = """SELECT s.id, s.tier, s.started_at, s.expires_at, s.auto_renew FROM subscriptions s WHERE s.user_id = ? ORDER BY s.started_at DESC;"""
         val stmt = stmts.getOrPut("getUserSubscriptions") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
-        val items = mutableListOf<GetusersubscriptionsRow>()
+        val items = mutableListOf<GetUserSubscriptionsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetusersubscriptionsRow(
+                GetUserSubscriptionsRow(
                     rs.getInt("id"),
                     rs.getString("tier"),
                     rs.getTimestamp("started_at")?.toLocalDateTime(),
@@ -1431,11 +1695,22 @@ data class GetusersubscriptionsRow(
         return items
     }
 
-    fun createSubscription(user_id: Int, tier: SubscriptionTier, expires_at: LocalDateTime, auto_renew: Boolean): Subscriptions? {
+data class CreateSubscriptionArgs(
+    val user_id: Int,
+    val tier: SubscriptionTier,
+    val expires_at: LocalDateTime,
+    val auto_renew: Boolean
+)
+
+    fun createSubscription(args: CreateSubscriptionArgs): Subscriptions? {
+        val user_id = args.user_id
+        val tier = args.tier
+        val expires_at = args.expires_at
+        val auto_renew = args.auto_renew
         val sql = """INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES (?, ?, ?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("createSubscription") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
-        stmt.setString(2, tier.toString())
+        stmt.setObject(2, tier)
         stmt.setObject(3, java.sql.Timestamp.valueOf(expires_at))
         stmt.setBoolean(4, auto_renew)
         stmt.executeQuery().use { rs ->
@@ -1443,31 +1718,22 @@ data class GetusersubscriptionsRow(
                 rs.getInt("id"),
                 rs.getInt("user_id"),
                 rs.getString("tier"),
-                rs.getTimestamp("started_at")?.toLocalDateTime(),
+                rs.getTimestamp("started_at")!!.toLocalDateTime(),
                 rs.getTimestamp("expires_at")?.toLocalDateTime(),
                 rs.getBoolean("auto_renew")
             ) else null
         }
     }
 
-data class GetordersbyuserRow(
-    val id: UUID,
-    val total_amount: Double,
-    val discount_pct: String?,
-    val state: OrderState,
-    val shipping_addr: String,
-    val placed_at: LocalDateTime
-)
-
-    fun getOrdersByUser(user_id: Int, limit: Int): List<GetordersbyuserRow> {
+    fun getOrdersByUser(user_id: Int, limit: Int): List<GetOrdersByUserRow> {
         val sql = """SELECT id, total_amount, discount_pct, state, shipping_addr, placed_at FROM orders WHERE user_id = ? ORDER BY placed_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getOrdersByUser") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, limit)
-        val items = mutableListOf<GetordersbyuserRow>()
+        val items = mutableListOf<GetOrdersByUserRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetordersbyuserRow(
+                GetOrdersByUserRow(
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getDouble("total_amount"),
                     rs.getString("discount_pct"),
@@ -1480,24 +1746,15 @@ data class GetordersbyuserRow(
         return items
     }
 
-data class GetordersinstateRow(
-    val id: UUID,
-    val user_id: Int,
-    val user_name: String,
-    val total_amount: Double,
-    val state: OrderState,
-    val placed_at: LocalDateTime
-)
-
-    fun getOrdersInState(state: OrderState, limit: Int): List<GetordersinstateRow> {
+    fun getOrdersInState(state: OrderState, limit: Int): List<GetOrdersInStateRow> {
         val sql = """SELECT o.id, o.user_id, u.name AS user_name, o.total_amount, o.state, o.placed_at FROM orders o JOIN users u ON o.user_id = u.id WHERE o.state = ? ORDER BY o.placed_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getOrdersInState") { conn.prepareStatement(sql) }
-        stmt.setString(1, state.toString())
+        stmt.setObject(1, state)
         stmt.setInt(2, limit)
-        val items = mutableListOf<GetordersinstateRow>()
+        val items = mutableListOf<GetOrdersInStateRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetordersinstateRow(
+                GetOrdersInStateRow(
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getInt("user_id"),
                     rs.getString("user_name"),
@@ -1510,26 +1767,25 @@ data class GetordersinstateRow(
         return items
     }
 
-data class GetauditlogforuserRow(
-    val id: Int,
-    val table_name: String,
-    val record_id: String,
-    val action: String,
-    val old_data: String?,
-    val new_data: String?,
-    val changed_at: LocalDateTime
+data class GetAuditLogForUserArgs(
+    val changed_by: Int,
+    val limit: Int,
+    val offset: Int
 )
 
-    fun getAuditLogForUser(changed_by: Int, limit: Int, offset: Int): List<GetauditlogforuserRow> {
+    fun getAuditLogForUser(args: GetAuditLogForUserArgs): List<GetAuditLogForUserRow> {
+        val changed_by = args.changed_by
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = ? ORDER BY changed_at DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getAuditLogForUser") { conn.prepareStatement(sql) }
         stmt.setInt(1, changed_by)
         stmt.setInt(2, limit)
         stmt.setInt(3, offset)
-        val items = mutableListOf<GetauditlogforuserRow>()
+        val items = mutableListOf<GetAuditLogForUserRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetauditlogforuserRow(
+                GetAuditLogForUserRow(
                     rs.getInt("id"),
                     rs.getString("table_name"),
                     rs.getString("record_id"),
@@ -1543,24 +1799,15 @@ data class GetauditlogforuserRow(
         return items
     }
 
-data class GetauditlogfortableRow(
-    val id: Int,
-    val table_name: String,
-    val record_id: String,
-    val action: String,
-    val changed_by: Int?,
-    val changed_at: LocalDateTime
-)
-
-    fun getAuditLogForTable(table_name: String, limit: Int): List<GetauditlogfortableRow> {
+    fun getAuditLogForTable(table_name: String, limit: Int): List<GetAuditLogForTableRow> {
         val sql = """SELECT id, table_name, record_id, action, changed_by, changed_at FROM audit_log WHERE table_name = ? ORDER BY changed_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getAuditLogForTable") { conn.prepareStatement(sql) }
-        stmt.setString(1, table_name.toString())
+        stmt.setString(1, table_name)
         stmt.setInt(2, limit)
-        val items = mutableListOf<GetauditlogfortableRow>()
+        val items = mutableListOf<GetAuditLogForTableRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetauditlogfortableRow(
+                GetAuditLogForTableRow(
                     rs.getInt("id"),
                     rs.getString("table_name"),
                     rs.getString("record_id"),
@@ -1573,22 +1820,11 @@ data class GetauditlogfortableRow(
         return items
     }
 
-data class GetdashboardstatsRow(
-    val total_users: Int,
-    val total_posts: Int,
-    val total_comments: Int,
-    val published_posts: Int,
-    val posts_this_week: Int,
-    val signups_this_week: Int,
-    val comments_last_24h: Int,
-    val pending_orders: Int
-)
-
-    fun getDashboardStats(): GetdashboardstatsRow? {
+    fun getDashboardStats(): GetDashboardStatsRow? {
         val sql = """SELECT (SELECT COUNT(*) FROM users) AS total_users, (SELECT COUNT(*) FROM posts) AS total_posts, (SELECT COUNT(*) FROM comments) AS total_comments, (SELECT COUNT(*) FROM posts WHERE status = 'published') AS published_posts, (SELECT COUNT(*) FROM posts WHERE created_at >= NOW() - INTERVAL '7 days') AS posts_this_week, (SELECT COUNT(*) FROM users WHERE created_at >= NOW() - INTERVAL '7 days') AS signups_this_week, (SELECT COUNT(*) FROM comments WHERE created_at >= NOW() - INTERVAL '24 hours') AS comments_last_24h, (SELECT COUNT(*) FROM orders WHERE state = 'pending') AS pending_orders;"""
         val stmt = stmts.getOrPut("getDashboardStats") { conn.prepareStatement(sql) }
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetdashboardstatsRow(
+            return if (rs.next()) GetDashboardStatsRow(
                 rs.getInt("total_users"),
                 rs.getInt("total_posts"),
                 rs.getInt("total_comments"),
@@ -1601,22 +1837,14 @@ data class GetdashboardstatsRow(
         }
     }
 
-data class GettopcommentersRow(
-    val id: Int,
-    val name: String,
-    val email: String,
-    val comment_count: Int,
-    val rank: Int
-)
-
-    fun getTopCommenters(limit: Int): List<GettopcommentersRow> {
+    fun getTopCommenters(limit: Int): List<GetTopCommentersRow> {
         val sql = """SELECT u.id, u.name, u.email, COUNT(c.id) AS comment_count, RANK() OVER (ORDER BY COUNT(c.id) DESC) AS rank FROM users u JOIN comments c ON u.id = c.user_id GROUP BY u.id, u.name, u.email ORDER BY comment_count DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getTopCommenters") { conn.prepareStatement(sql) }
         stmt.setInt(1, limit)
-        val items = mutableListOf<GettopcommentersRow>()
+        val items = mutableListOf<GetTopCommentersRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GettopcommentersRow(
+                GetTopCommentersRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
@@ -1628,20 +1856,14 @@ data class GettopcommentersRow(
         return items
     }
 
-data class GetengagementtimeseriesRow(
-    val day: String,
-    val count: Int,
-    val event_type: String
-)
-
-    fun getEngagementTimeSeries(created_at: LocalDateTime): List<GetengagementtimeseriesRow> {
+    fun getEngagementTimeSeries(created_at: LocalDateTime): List<GetEngagementTimeSeriesRow> {
         val sql = """SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= ? GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= ? GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;"""
         val stmt = stmts.getOrPut("getEngagementTimeSeries") { conn.prepareStatement(sql) }
         stmt.setObject(1, java.sql.Timestamp.valueOf(created_at))
-        val items = mutableListOf<GetengagementtimeseriesRow>()
+        val items = mutableListOf<GetEngagementTimeSeriesRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetengagementtimeseriesRow(
+                GetEngagementTimeSeriesRow(
                     rs.getString("day"),
                     rs.getInt("count"),
                     rs.getString("event_type")
@@ -1654,7 +1876,7 @@ data class GetengagementtimeseriesRow(
     fun createCategory(name: String): Categories? {
         val sql = """INSERT INTO categories (name) VALUES (?) RETURNING *;"""
         val stmt = stmts.getOrPut("createCategory") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
+        stmt.setString(1, name)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Categories(
                 rs.getInt("id"),
@@ -1662,18 +1884,29 @@ data class GetengagementtimeseriesRow(
                 rs.getString("slug"),
                 rs.getString("color"),
                 rs.getString("metadata"),
-                rs.getTimestamp("created_at")?.toLocalDateTime()
+                rs.getTimestamp("created_at")!!.toLocalDateTime()
             ) else null
         }
     }
 
-    fun createPost(user_id: Int, category_id: Int, title: String, content: String): Posts? {
+data class CreatePostArgs(
+    val user_id: Int,
+    val category_id: Int,
+    val title: String,
+    val content: String
+)
+
+    fun createPost(args: CreatePostArgs): Posts? {
+        val user_id = args.user_id
+        val category_id = args.category_id
+        val title = args.title
+        val content = args.content
         val sql = """INSERT INTO posts (user_id, category_id, title, content) VALUES (?, ?, ?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("createPost") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, category_id)
-        stmt.setString(3, title.toString())
-        stmt.setString(4, content.toString())
+        stmt.setString(3, title)
+        stmt.setString(4, content)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Posts(
                 rs.getInt("id"),
@@ -1687,19 +1920,28 @@ data class GetengagementtimeseriesRow(
                 rs.getLong("view_count"),
                 rs.getBoolean("is_featured"),
                 rs.getTimestamp("published_at")?.toLocalDateTime(),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getString("status")
             ) else null
         }
     }
 
-    fun createComment(post_id: Int, user_id: Int, content: String): Comments? {
+data class CreateCommentArgs(
+    val post_id: Int,
+    val user_id: Int,
+    val content: String
+)
+
+    fun createComment(args: CreateCommentArgs): Comments? {
+        val post_id = args.post_id
+        val user_id = args.user_id
+        val content = args.content
         val sql = """INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("createComment") { conn.prepareStatement(sql) }
         stmt.setInt(1, post_id)
         stmt.setInt(2, user_id)
-        stmt.setString(3, content.toString())
+        stmt.setString(3, content)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Comments(
                 rs.getInt("id"),
@@ -1707,7 +1949,7 @@ data class GetengagementtimeseriesRow(
                 rs.getInt("user_id"),
                 rs.getInt("parent_id"),
                 rs.getString("content"),
-                rs.getTimestamp("created_at")?.toLocalDateTime()
+                rs.getTimestamp("created_at")!!.toLocalDateTime()
             ) else null
         }
     }
@@ -1727,14 +1969,27 @@ data class GetengagementtimeseriesRow(
         stmt.executeUpdate()
     }
 
-    fun createNotification(user_id: Int, type: String, title: String, body: String, metadata: String): Notifications? {
+data class CreateNotificationArgs(
+    val user_id: Int,
+    val type: String,
+    val title: String,
+    val body: String,
+    val metadata: String
+)
+
+    fun createNotification(args: CreateNotificationArgs): Notifications? {
+        val user_id = args.user_id
+        val type = args.type
+        val title = args.title
+        val body = args.body
+        val metadata = args.metadata
         val sql = """INSERT INTO notifications (user_id, type, title, body, metadata) VALUES (?, ?, ?, ?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("createNotification") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
-        stmt.setString(2, type.toString())
-        stmt.setString(3, title.toString())
-        stmt.setString(4, body.toString())
-        stmt.setString(5, metadata.toString())
+        stmt.setString(2, type)
+        stmt.setString(3, title)
+        stmt.setString(4, body)
+        stmt.setObject(5, metadata)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Notifications(
                 rs.getInt("id"),
@@ -1744,12 +1999,21 @@ data class GetengagementtimeseriesRow(
                 rs.getString("body"),
                 rs.getBoolean("is_read"),
                 rs.getString("metadata"),
-                rs.getTimestamp("created_at")?.toLocalDateTime()
+                rs.getTimestamp("created_at")!!.toLocalDateTime()
             ) else null
         }
     }
 
-    fun getNotificationsByUser(user_id: Int, limit: Int, offset: Int): List<Notifications> {
+data class GetNotificationsByUserArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+    fun getNotificationsByUser(args: GetNotificationsByUserArgs): List<Notifications> {
+        val user_id = args.user_id
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getNotificationsByUser") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
@@ -1766,7 +2030,7 @@ data class GetengagementtimeseriesRow(
                     rs.getString("body"),
                     rs.getBoolean("is_read"),
                     rs.getString("metadata"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1805,25 +2069,25 @@ data class GetengagementtimeseriesRow(
         stmt.executeUpdate()
     }
 
-data class GetnotificationsbytypeRow(
-    val id: Int,
+data class GetNotificationsByTypeArgs(
+    val user_id: Int,
     val type: String,
-    val title: String,
-    val body: String,
-    val is_read: Boolean,
-    val created_at: LocalDateTime
+    val limit: Int
 )
 
-    fun getNotificationsByType(user_id: Int, type: String, limit: Int): List<GetnotificationsbytypeRow> {
+    fun getNotificationsByType(args: GetNotificationsByTypeArgs): List<GetNotificationsByTypeRow> {
+        val user_id = args.user_id
+        val type = args.type
+        val limit = args.limit
         val sql = """SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getNotificationsByType") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
-        stmt.setString(2, type.toString())
+        stmt.setString(2, type)
         stmt.setInt(3, limit)
-        val items = mutableListOf<GetnotificationsbytypeRow>()
+        val items = mutableListOf<GetNotificationsByTypeRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetnotificationsbytypeRow(
+                GetNotificationsByTypeRow(
                     rs.getInt("id"),
                     rs.getString("type"),
                     rs.getString("title"),
@@ -1836,12 +2100,21 @@ data class GetnotificationsbytypeRow(
         return items
     }
 
-    fun createTag(name: String, slug: String, color: String): Tags? {
+data class CreateTagArgs(
+    val name: String,
+    val slug: String,
+    val color: String
+)
+
+    fun createTag(args: CreateTagArgs): Tags? {
+        val name = args.name
+        val slug = args.slug
+        val color = args.color
         val sql = """INSERT INTO tags (name, slug, color) VALUES (?, ?, ?) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;"""
         val stmt = stmts.getOrPut("createTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, name.toString())
-        stmt.setString(2, slug.toString())
-        stmt.setString(3, color.toString())
+        stmt.setString(1, name)
+        stmt.setString(2, slug)
+        stmt.setString(3, color)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Tags(
                 rs.getInt("id"),
@@ -1855,7 +2128,7 @@ data class GetnotificationsbytypeRow(
     fun getTagBySlug(slug: String): Tags? {
         val sql = """SELECT * FROM tags WHERE slug = ?;"""
         val stmt = stmts.getOrPut("getTagBySlug") { conn.prepareStatement(sql) }
-        stmt.setString(1, slug.toString())
+        stmt.setString(1, slug)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Tags(
                 rs.getInt("id"),
@@ -1917,25 +2190,25 @@ data class GetnotificationsbytypeRow(
         return items
     }
 
-data class GetpostsbytagRow(
-    val id: Int,
-    val title: String,
-    val status: PostStatus,
-    val created_at: LocalDateTime,
-    val author_name: String,
-    val comment_count: Int
+data class GetPostsByTagArgs(
+    val slug: String,
+    val limit: Int,
+    val offset: Int
 )
 
-    fun getPostsByTag(slug: String, limit: Int, offset: Int): List<GetpostsbytagRow> {
+    fun getPostsByTag(args: GetPostsByTagArgs): List<GetPostsByTagRow> {
+        val slug = args.slug
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = ? AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getPostsByTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, slug.toString())
+        stmt.setString(1, slug)
         stmt.setInt(2, limit)
         stmt.setInt(3, offset)
-        val items = mutableListOf<GetpostsbytagRow>()
+        val items = mutableListOf<GetPostsByTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetpostsbytagRow(
+                GetPostsByTagRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("status"),
@@ -1948,22 +2221,14 @@ data class GetpostsbytagRow(
         return items
     }
 
-data class GettoptagsRow(
-    val id: Int,
-    val name: String,
-    val slug: String,
-    val color: String?,
-    val post_count: Int
-)
-
-    fun getTopTags(limit: Int): List<GettoptagsRow> {
+    fun getTopTags(limit: Int): List<GetTopTagsRow> {
         val sql = """SELECT t.id, t.name, t.slug, t.color, COUNT(pt.post_id) AS post_count FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON pt.post_id = p.id WHERE p.status = 'published' GROUP BY t.id, t.name, t.slug, t.color ORDER BY post_count DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getTopTags") { conn.prepareStatement(sql) }
         stmt.setInt(1, limit)
-        val items = mutableListOf<GettoptagsRow>()
+        val items = mutableListOf<GetTopTagsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GettoptagsRow(
+                GetTopTagsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("slug"),
@@ -1975,18 +2240,39 @@ data class GettoptagsRow(
         return items
     }
 
-    fun uploadMedia(user_id: Int, post_id: Int, type: String, url: String, size_bytes: Long, mime_type: String, width: Int, height: Int, metadata: String): Media? {
+data class UploadMediaArgs(
+    val user_id: Int,
+    val post_id: Int,
+    val type: String,
+    val url: String,
+    val size_bytes: Long,
+    val mime_type: String,
+    val width: Int,
+    val height: Int,
+    val metadata: String
+)
+
+    fun uploadMedia(args: UploadMediaArgs): Media? {
+        val user_id = args.user_id
+        val post_id = args.post_id
+        val type = args.type
+        val url = args.url
+        val size_bytes = args.size_bytes
+        val mime_type = args.mime_type
+        val width = args.width
+        val height = args.height
+        val metadata = args.metadata
         val sql = """INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;"""
         val stmt = stmts.getOrPut("uploadMedia") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, post_id)
-        stmt.setString(3, type.toString())
-        stmt.setString(4, url.toString())
+        stmt.setString(3, type)
+        stmt.setString(4, url)
         stmt.setLong(5, size_bytes)
-        stmt.setString(6, mime_type.toString())
+        stmt.setString(6, mime_type)
         stmt.setInt(7, width)
         stmt.setInt(8, height)
-        stmt.setString(9, metadata.toString())
+        stmt.setObject(9, metadata)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Media(
                 rs.getObject("id", java.util.UUID::class.java),
@@ -1999,30 +2285,19 @@ data class GettoptagsRow(
                 rs.getInt("width"),
                 rs.getInt("height"),
                 rs.getString("metadata"),
-                rs.getTimestamp("created_at")?.toLocalDateTime()
+                rs.getTimestamp("created_at")!!.toLocalDateTime()
             ) else null
         }
     }
 
-data class GetmediabypostRow(
-    val id: UUID,
-    val type: String,
-    val url: String,
-    val size_bytes: Long,
-    val mime_type: String,
-    val width: Int?,
-    val height: Int?,
-    val created_at: LocalDateTime
-)
-
-    fun getMediaByPost(post_id: Int): List<GetmediabypostRow> {
+    fun getMediaByPost(post_id: Int): List<GetMediaByPostRow> {
         val sql = """SELECT id, type, url, size_bytes, mime_type, width, height, created_at FROM media WHERE post_id = ? ORDER BY created_at DESC;"""
         val stmt = stmts.getOrPut("getMediaByPost") { conn.prepareStatement(sql) }
         stmt.setInt(1, post_id)
-        val items = mutableListOf<GetmediabypostRow>()
+        val items = mutableListOf<GetMediaByPostRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetmediabypostRow(
+                GetMediaByPostRow(
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getString("type"),
                     rs.getString("url"),
@@ -2037,25 +2312,25 @@ data class GetmediabypostRow(
         return items
     }
 
-data class GetmediabyuserRow(
-    val id: UUID,
-    val type: String,
-    val url: String,
-    val size_bytes: Long,
-    val mime_type: String,
-    val created_at: LocalDateTime
+data class GetMediaByUserArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
 )
 
-    fun getMediaByUser(user_id: Int, limit: Int, offset: Int): List<GetmediabyuserRow> {
+    fun getMediaByUser(args: GetMediaByUserArgs): List<GetMediaByUserRow> {
+        val user_id = args.user_id
+        val limit = args.limit
+        val offset = args.offset
         val sql = """SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getMediaByUser") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, limit)
         stmt.setInt(3, offset)
-        val items = mutableListOf<GetmediabyuserRow>()
+        val items = mutableListOf<GetMediaByUserRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetmediabyuserRow(
+                GetMediaByUserRow(
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getString("type"),
                     rs.getString("url"),
@@ -2068,24 +2343,15 @@ data class GetmediabyuserRow(
         return items
     }
 
-data class GetmediabytypeRow(
-    val id: UUID,
-    val user_id: Int,
-    val url: String,
-    val size_bytes: Long,
-    val mime_type: String,
-    val created_at: LocalDateTime
-)
-
-    fun getMediaByType(user_id: Int, type: String): List<GetmediabytypeRow> {
+    fun getMediaByType(user_id: Int, type: String): List<GetMediaByTypeRow> {
         val sql = """SELECT id, user_id, url, size_bytes, mime_type, created_at FROM media WHERE user_id = ? AND type = ? ORDER BY created_at DESC;"""
         val stmt = stmts.getOrPut("getMediaByType") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
-        stmt.setString(2, type.toString())
-        val items = mutableListOf<GetmediabytypeRow>()
+        stmt.setString(2, type)
+        val items = mutableListOf<GetMediaByTypeRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetmediabytypeRow(
+                GetMediaByTypeRow(
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getInt("user_id"),
                     rs.getString("url"),
@@ -2106,20 +2372,12 @@ data class GetmediabytypeRow(
         stmt.executeUpdate()
     }
 
-data class GetstorageusedbyuserRow(
-    val total_bytes: Double?,
-    val total_files: Int,
-    val image_count: Int,
-    val video_count: Int,
-    val document_count: Int
-)
-
-    fun getStorageUsedByUser(user_id: Int): GetstorageusedbyuserRow? {
+    fun getStorageUsedByUser(user_id: Int): GetStorageUsedByUserRow? {
         val sql = """SELECT SUM(size_bytes) AS total_bytes, COUNT(*) AS total_files, COUNT(*) FILTER (WHERE type = 'image') AS image_count, COUNT(*) FILTER (WHERE type = 'video') AS video_count, COUNT(*) FILTER (WHERE type = 'document') AS document_count FROM media WHERE user_id = ?;"""
         val stmt = stmts.getOrPut("getStorageUsedByUser") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetstorageusedbyuserRow(
+            return if (rs.next()) GetStorageUsedByUserRow(
                 rs.getDouble("total_bytes"),
                 rs.getInt("total_files"),
                 rs.getInt("image_count"),
@@ -2129,25 +2387,15 @@ data class GetstorageusedbyuserRow(
         }
     }
 
-data class GetlargemediafilesRow(
-    val id: UUID,
-    val user_id: Int,
-    val type: String,
-    val url: String,
-    val size_bytes: Long,
-    val mime_type: String,
-    val created_at: LocalDateTime
-)
-
-    fun getLargeMediaFiles(size_bytes: Long, limit: Int): List<GetlargemediafilesRow> {
+    fun getLargeMediaFiles(size_bytes: Long, limit: Int): List<GetLargeMediaFilesRow> {
         val sql = """SELECT id, user_id, type, url, size_bytes, mime_type, created_at FROM media WHERE size_bytes > ? ORDER BY size_bytes DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("getLargeMediaFiles") { conn.prepareStatement(sql) }
         stmt.setLong(1, size_bytes)
         stmt.setInt(2, limit)
-        val items = mutableListOf<GetlargemediafilesRow>()
+        val items = mutableListOf<GetLargeMediaFilesRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetlargemediafilesRow(
+                GetLargeMediaFilesRow(
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getInt("user_id"),
                     rs.getString("type"),
@@ -2161,29 +2409,25 @@ data class GetlargemediafilesRow(
         return items
     }
 
-data class GetuserfeedRow(
-    val id: Int,
-    val title: String,
-    val excerpt: String?,
-    val status: PostStatus,
-    val created_at: LocalDateTime,
-    val author_id: Int,
-    val author_name: String,
-    val avatar_hash: UUID?,
-    val comment_count: Int,
-    val tag_count: Int
+data class GetUserFeedArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
 )
 
-    fun getUserFeed(user_id: Int, limit: Int, offset: Int): List<GetuserfeedRow> {
+    fun getUserFeed(args: GetUserFeedArgs): List<GetUserFeedRow> {
+        val user_id = args.user_id
+        val limit = args.limit
+        val offset = args.offset
         val sql = """WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = ? ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("getUserFeed") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
         stmt.setInt(2, limit)
         stmt.setInt(3, offset)
-        val items = mutableListOf<GetuserfeedRow>()
+        val items = mutableListOf<GetUserFeedRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                GetuserfeedRow(
+                GetUserFeedRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("excerpt"),
@@ -2200,25 +2444,15 @@ data class GetuserfeedRow(
         return items
     }
 
-data class SearchpostsfulltextRow(
-    val id: Int,
-    val title: String,
-    val excerpt: String?,
-    val status: PostStatus,
-    val created_at: LocalDateTime,
-    val author_name: String,
-    val rank: Double?
-)
-
-    fun searchPostsFullText(search_query: String, limit: Int): List<SearchpostsfulltextRow> {
+    fun searchPostsFullText(search_query: String, limit: Int): List<SearchPostsFullTextRow> {
         val sql = """SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.name AS author_name, ts_rank(to_tsvector('english', p.title || ' ' || p.content), plainto_tsquery('english', ?)) AS rank FROM posts p JOIN users u ON p.user_id = u.id WHERE to_tsvector('english', p.title || ' ' || p.content) @@ plainto_tsquery('english', ?) AND p.status = 'published' ORDER BY rank DESC, p.created_at DESC LIMIT ?;"""
         val stmt = stmts.getOrPut("searchPostsFullText") { conn.prepareStatement(sql) }
-        stmt.setString(1, search_query.toString())
+        stmt.setString(1, search_query)
         stmt.setInt(2, limit)
-        val items = mutableListOf<SearchpostsfulltextRow>()
+        val items = mutableListOf<SearchPostsFullTextRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
-                SearchpostsfulltextRow(
+                SearchPostsFullTextRow(
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("excerpt"),
@@ -2240,20 +2474,12 @@ data class SearchpostsfulltextRow(
         stmt.executeUpdate()
     }
 
-data class GetuserwithstatsRow(
-    val *: String,
-    val published_posts: Int,
-    val total_comments: Int,
-    val unread_notifications: Int,
-    val storage_used: Double?
-)
-
-    fun getUserWithStats(id: Int): GetuserwithstatsRow? {
+    fun getUserWithStats(id: Int): GetUserWithStatsRow? {
         val sql = """SELECT u.*, (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') AS published_posts, (SELECT COUNT(*) FROM comments WHERE user_id = u.id) AS total_comments, (SELECT COUNT(*) FROM notifications WHERE user_id = u.id AND is_read = FALSE) AS unread_notifications, (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used FROM users u WHERE u.id = ?;"""
         val stmt = stmts.getOrPut("getUserWithStats") { conn.prepareStatement(sql) }
         stmt.setInt(1, id)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) GetuserwithstatsRow(
+            return if (rs.next()) GetUserWithStatsRow(
                 rs.getString("*"),
                 rs.getInt("published_posts"),
                 rs.getInt("total_comments"),

@@ -18,11 +18,11 @@ type Generator struct {
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
 	cache        *gencommon.GenerationCache
+	expander     *gencommon.SchemaExpander
 }
 
 func New(cfg *config.Config) *Generator {
-	cache := gencommon.NewGenerationCache()
-	cache.OutDir = cfg.Gen.Java.Out
+	cache := gencommon.NewGenerationCacheWithDir(cfg.Gen.Java.Out)
 	return &Generator{
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
@@ -41,6 +41,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
+	g.expander = gencommon.NewSchemaExpander(schema)
 
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
 	configHash := fmt.Sprintf("%x", []byte(fmt.Sprintf("%s|%s|%s", g.Config.Database.Provider, g.Config.Gen.Java.Out, g.Config.Gen.Java.Driver)))
@@ -118,6 +119,9 @@ func (g *Generator) generateModels() error {
 		if err := os.WriteFile(filepath.Join(g.Config.Gen.Java.Out, name+".java"), []byte(w.String()), 0644); err != nil {
 			return err
 		}
+		if genHash, err := gencommon.ComputeFileChecksum(filepath.Join(g.Config.Gen.Java.Out, name+".java")); err == nil {
+			g.cache.UpdateGeneratedFileChecksum(filepath.Join(g.Config.Gen.Java.Out, name+".java"), genHash)
+		}
 	}
 
 	// One file per record
@@ -148,6 +152,9 @@ func (g *Generator) generateModels() error {
 		w.WriteString(") {}\n")
 		if err := os.WriteFile(filepath.Join(g.Config.Gen.Java.Out, name+".java"), []byte(w.String()), 0644); err != nil {
 			return err
+		}
+		if genHash, err := gencommon.ComputeFileChecksum(filepath.Join(g.Config.Gen.Java.Out, name+".java")); err == nil {
+			g.cache.UpdateGeneratedFileChecksum(filepath.Join(g.Config.Gen.Java.Out, name+".java"), genHash)
 		}
 	}
 
@@ -218,7 +225,13 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 	w.WriteString(fmt.Sprintf("        return new Queries(%s);\n", connParam))
 	w.WriteString("    }\n\n")
 	// Delegate all query methods
+	seenMethods := make(map[string]bool)
 	for _, q := range queries {
+		methodName := gencommon.ToCamelCase(q.Name)
+		if seenMethods[methodName] {
+			continue
+		}
+		seenMethods[methodName] = true
 		src := q.SourceFile
 		if src == "" {
 			src = "queries"
@@ -227,7 +240,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 		columns := g.expandWildcardColumns(q)
 		cmd := strings.ToLower(q.Cmd)
 
-		rowType := queryPascal(q.Name) + "Row"
+		rowType := gencommon.QueryPascal(q.Name) + "Row"
 		if mt := g.modelTypeForQuery(q, columns); mt != "" {
 			rowType = mt
 		}
@@ -258,14 +271,26 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 
 		params := make([]string, len(q.Params))
 		args := make([]string, len(q.Params))
+		useStructParams := len(q.Params) > 2
 		for i, p := range q.Params {
 			params[i] = fmt.Sprintf("%s %s", g.sqlTypeToJava(p.Type, false), p.Name)
 			args[i] = p.Name
 		}
-		methodName := toCamelCase(q.Name)
+		methodName = gencommon.ToCamelCase(q.Name)
 		throwsClause := " throws java.sql.SQLException"
 		if isScylla {
 			throwsClause = ""
+		}
+
+		// Generate params record for 3+ params in the proxy class
+		var paramStr, argStr string
+		if useStructParams && len(q.Params) > 0 {
+			recordName := gencommon.QueryPascal(q.Name) + "Args"
+			paramStr = recordName + " args"
+			argStr = "args"
+		} else {
+			paramStr = strings.Join(params, ", ")
+			argStr = strings.Join(args, ", ")
 		}
 
 		retStmt := ""
@@ -273,60 +298,33 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 			retStmt = "return "
 		}
 		w.WriteString(fmt.Sprintf("    public %s %s(%s)%s {\n",
-			retType, methodName, strings.Join(params, ", "), throwsClause))
+			retType, methodName, paramStr, throwsClause))
 		w.WriteString(fmt.Sprintf("        %sthis.%s.%s(%s);\n",
-			retStmt, base, methodName, strings.Join(args, ", ")))
+			retStmt, base, methodName, argStr))
 		w.WriteString("    }\n\n")
 	}
 
-	if !isScylla && driver != "jooq" && driver != "hibernate" {
-		w.WriteString("    public void close() throws java.sql.SQLException {\n")
-		for _, base := range files {
-			w.WriteString(fmt.Sprintf("        this.%s.close();\n", base))
-		}
-		w.WriteString("    }\n")
-	}
 	w.WriteString("}\n")
 
-	return os.WriteFile(filepath.Join(g.Config.Gen.Java.Out, "Queries.java"), []byte(w.String()), 0644)
-}
-
-// queryPascal returns the query name as PascalCase, preserving existing casing.
-func queryPascal(name string) string {
-	if name == "" {
-		return name
+	queriesPath := filepath.Join(g.Config.Gen.Java.Out, "Queries.java")
+	if err := os.WriteFile(queriesPath, []byte(w.String()), 0644); err != nil {
+		return err
 	}
-	if name[0] >= 'A' && name[0] <= 'Z' {
-		return name
+	if genHash, err := gencommon.ComputeFileChecksum(queriesPath); err == nil {
+		g.cache.UpdateGeneratedFileChecksum(queriesPath, genHash)
 	}
-	return utils.ToPascalCase(name)
-}
-
-func toCamelCase(name string) string {
-	if name == "" {
-		return name
-	}
-	// If already PascalCase (starts uppercase), just lowercase the first letter
-	if name[0] >= 'A' && name[0] <= 'Z' {
-		return strings.ToLower(name[:1]) + name[1:]
-	}
-	// snake_case → camelCase via ToPascalCase then lowercase first
-	pascal := utils.ToPascalCase(name)
-	if pascal == "" {
-		return pascal
-	}
-	return strings.ToLower(pascal[:1]) + pascal[1:]
+	return nil
 }
 
 func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query) {
-	methodName := toCamelCase(query.Name)
+	methodName := gencommon.ToCamelCase(query.Name)
 	columns := g.expandWildcardColumns(query)
 	cmd := strings.ToLower(query.Cmd)
 	driver := g.Config.Gen.Java.Driver
 	provider := g.Config.Database.Provider
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 
-	rowType := queryPascal(query.Name) + "Row"
+	rowType := gencommon.QueryPascal(query.Name) + "Row"
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowType = mt
 	}
@@ -358,6 +356,8 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 
 	// Params
 	params := make([]string, len(query.Params))
+	useStructParams := len(query.Params) > 2
+	paramTypeName := gencommon.QueryPascal(query.Name) + "Args"
 	for i, p := range query.Params {
 		params[i] = fmt.Sprintf("%s %s", g.sqlTypeToJava(p.Type, false), p.Name)
 	}
@@ -367,7 +367,14 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 		throwsClause = ""
 	}
 
-	w.WriteString(fmt.Sprintf("    public %s %s(%s)%s {\n", retType, methodName, strings.Join(params, ", "), throwsClause))
+	var paramStr string
+	if useStructParams {
+		paramStr = paramTypeName + " args"
+	} else {
+		paramStr = strings.Join(params, ", ")
+	}
+
+	w.WriteString(fmt.Sprintf("    public %s %s(%s)%s {\n", retType, methodName, paramStr, throwsClause))
 
 	sql := strings.TrimSpace(query.SQL)
 	if isScylla || driver == "" || driver == "jdbc" || driver == "jooq" || driver == "hibernate" {
@@ -378,13 +385,13 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	w.WriteString(fmt.Sprintf("        final String sql = \"\"\"\n                %s\n                \"\"\";\n", sql))
 
 	if isScylla {
-		g.generateJavaScyllaBody(w, query, columns, cmd, rowType)
+		g.generateJavaScyllaBody(w, query, columns, cmd, rowType, useStructParams)
 	} else if driver == "jooq" {
-		g.generateJooqBody(w, query, columns, cmd, rowType)
+		g.generateJooqBody(w, query, columns, cmd, rowType, useStructParams)
 	} else if driver == "hibernate" {
-		g.generateHibernateBody(w, query, columns, cmd, rowType)
+		g.generateHibernateBody(w, query, columns, cmd, rowType, useStructParams)
 	} else {
-		g.generateJavaJDBCBody(w, query, columns, cmd, rowType)
+		g.generateJavaJDBCBody(w, query, columns, cmd, rowType, useStructParams)
 	}
 
 	w.WriteString("    }\n\n")
@@ -419,6 +426,14 @@ func javaTypedGetter(colName, sqlType string) string {
 	}
 }
 
+// javaParamRef returns the parameter reference, prefixing with "args." for struct params.
+func javaParamRef(name string, useStruct bool) string {
+	if useStruct {
+		return "args." + name + "()"
+	}
+	return name
+}
+
 // javaTypedSetter returns a typed PreparedStatement setter.
 func javaTypedSetter(idx int, paramName, sqlType string) string {
 	sl := strings.ToLower(sqlType)
@@ -439,37 +454,12 @@ func javaTypedSetter(idx int, paramName, sqlType string) string {
 		return fmt.Sprintf("stmt.setBytes(%d, %s);", idx, paramName)
 	case strings.Contains(sl, "timestamp") || strings.Contains(sl, "date") || strings.Contains(sl, "time"):
 		return fmt.Sprintf("stmt.setObject(%d, java.sql.Timestamp.valueOf(%s));", idx, paramName)
+	case strings.Contains(sl, "text") || strings.Contains(sl, "varchar") || strings.Contains(sl, "char") || sl == "string":
+		return fmt.Sprintf("stmt.setString(%d, %s);", idx, paramName)
 	default:
-		// enums, json, arrays, text — toString covers enum.name()
-		return fmt.Sprintf("stmt.setString(%d, %s.toString());", idx, paramName)
+		// enums, json, arrays — use setObject
+		return fmt.Sprintf("stmt.setObject(%d, %s);", idx, paramName)
 	}
-}
-
-// parseCQLInner extracts the inner type(s) from CQL collection wrappers.
-// "set<uuid>" → "uuid", "list<text>" → "text", "map<text,int>" → "text","int"
-func parseCQLInner(sl string) (string, string) {
-	for _, prefix := range []string{"set<", "list<", "frozen<"} {
-		if strings.HasPrefix(sl, prefix) && strings.HasSuffix(sl, ">") {
-			return strings.TrimSpace(sl[len(prefix) : len(sl)-1]), ""
-		}
-	}
-	if strings.HasPrefix(sl, "map<") && strings.HasSuffix(sl, ">") {
-		inner := sl[4 : len(sl)-1]
-		depth := 0
-		for i, ch := range inner {
-			switch ch {
-			case '<':
-				depth++
-			case '>':
-				depth--
-			case ',':
-				if depth == 0 {
-					return strings.TrimSpace(inner[:i]), strings.TrimSpace(inner[i+1:])
-				}
-			}
-		}
-	}
-	return "text", ""
 }
 
 // cqlJavaGetter returns the DataStax Java typed getter by column name.
@@ -491,13 +481,13 @@ func cqlJavaGetter(colName, sqlType string) string {
 	case strings.Contains(sl, "timestamp") || strings.Contains(sl, "date") || strings.Contains(sl, "time"):
 		return fmt.Sprintf("row.getInstant(\"%s\")", colName)
 	case strings.HasPrefix(sl, "set<"):
-		inner, _ := parseCQLInner(sl)
+		inner, _ := gencommon.ParseCQLInner(sl)
 		return fmt.Sprintf("row.getSet(\"%s\", %s.class)", colName, cqlInnerJavaClass(inner))
 	case strings.HasPrefix(sl, "list<"):
-		inner, _ := parseCQLInner(sl)
+		inner, _ := gencommon.ParseCQLInner(sl)
 		return fmt.Sprintf("row.getList(\"%s\", %s.class)", colName, cqlInnerJavaClass(inner))
 	case strings.HasPrefix(sl, "map<"):
-		k, v := parseCQLInner(sl)
+		k, v := gencommon.ParseCQLInner(sl)
 		return fmt.Sprintf("row.getMap(\"%s\", %s.class, %s.class)", colName, cqlInnerJavaClass(k), cqlInnerJavaClass(v))
 	default:
 		return fmt.Sprintf("row.getString(\"%s\")", colName)
@@ -526,49 +516,21 @@ func cqlInnerJavaClass(t string) string {
 	}
 }
 
-func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
-	methodName := toCamelCase(query.Name)
-	w.WriteString(fmt.Sprintf("        java.sql.PreparedStatement stmt = stmts.computeIfAbsent(\"%s\", k -> {\n", methodName))
-	w.WriteString("            try { return conn.prepareStatement(sql); } catch (java.sql.SQLException e) { throw new RuntimeException(e); }\n")
-	w.WriteString("        });\n")
-
+func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
+	w.WriteString("        try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {\n")
 	for i, p := range query.Params {
-		w.WriteString("        " + javaTypedSetter(i+1, p.Name, p.Type) + "\n")
+		w.WriteString("            " + javaTypedSetter(i+1, javaParamRef(p.Name, useStructParams), p.Type) + "\n")
 	}
-
 	switch cmd {
 	case ":one":
-		w.WriteString("        try (java.sql.ResultSet rs = stmt.executeQuery()) {\n")
+		w.WriteString("            try (java.sql.ResultSet rs = stmt.executeQuery()) {\n")
 		if len(columns) == 0 {
-			w.WriteString("            return;\n")
+			w.WriteString("                return;\n")
 		} else if len(columns) == 1 {
-			w.WriteString(fmt.Sprintf("            return rs.next() ? %s : null;\n", javaTypedGetter(columns[0].Name, columns[0].Type)))
+			w.WriteString(fmt.Sprintf("                return rs.next() ? %s : null;\n", javaTypedGetter(columns[0].Name, columns[0].Type)))
 		} else {
-			w.WriteString("            if (!rs.next()) return null;\n")
-			w.WriteString(fmt.Sprintf("            return new %s(\n", rowType))
-			for i, col := range columns {
-				sep := ","
-				if i == len(columns)-1 {
-					sep = ""
-				}
-				w.WriteString(fmt.Sprintf("                %s%s\n", javaTypedGetter(col.Name, col.Type), sep))
-			}
-			w.WriteString("            );\n")
-		}
-		w.WriteString("        }\n")
-	case ":many":
-		w.WriteString("        try (java.sql.ResultSet rs = stmt.executeQuery()) {\n")
-		if len(columns) == 0 {
-			w.WriteString("            return java.util.Collections.emptyList();\n")
-		} else if len(columns) == 1 {
-			jt := g.sqlTypeToJava(columns[0].Type, false)
-			w.WriteString(fmt.Sprintf("            var items = new java.util.ArrayList<%s>();\n", jt))
-			w.WriteString(fmt.Sprintf("            while (rs.next()) items.add(%s);\n", javaTypedGetter(columns[0].Name, columns[0].Type)))
-			w.WriteString("            return items;\n")
-		} else {
-			w.WriteString(fmt.Sprintf("            var items = new java.util.ArrayList<%s>();\n", rowType))
-			w.WriteString("            while (rs.next()) {\n")
-			w.WriteString(fmt.Sprintf("                items.add(new %s(\n", rowType))
+			w.WriteString("                if (!rs.next()) return null;\n")
+			w.WriteString(fmt.Sprintf("                return new %s(\n", rowType))
 			for i, col := range columns {
 				sep := ","
 				if i == len(columns)-1 {
@@ -576,31 +538,58 @@ func (g *Generator) generateJavaJDBCBody(w *strings.Builder, query *parser.Query
 				}
 				w.WriteString(fmt.Sprintf("                    %s%s\n", javaTypedGetter(col.Name, col.Type), sep))
 			}
-			w.WriteString("                ));\n")
+			w.WriteString("                );\n")
+		}
+		w.WriteString("            }\n")
+	case ":many":
+		if len(columns) == 0 {
+			w.WriteString("            stmt.executeUpdate();\n")
+			w.WriteString("            return java.util.Collections.emptyList();\n")
+		} else if len(columns) == 1 {
+			jt := g.sqlTypeToJava(columns[0].Type, false)
+			w.WriteString(fmt.Sprintf("            var items = new java.util.ArrayList<%s>();\n", jt))
+			w.WriteString("            try (java.sql.ResultSet rs = stmt.executeQuery()) {\n")
+			w.WriteString(fmt.Sprintf("                while (rs.next()) items.add(%s);\n", javaTypedGetter(columns[0].Name, columns[0].Type)))
+			w.WriteString("            }\n")
+			w.WriteString("            return items;\n")
+		} else {
+			w.WriteString(fmt.Sprintf("            var items = new java.util.ArrayList<%s>();\n", rowType))
+			w.WriteString("            try (java.sql.ResultSet rs = stmt.executeQuery()) {\n")
+			w.WriteString("                while (rs.next()) {\n")
+			w.WriteString(fmt.Sprintf("                    items.add(new %s(\n", rowType))
+			for i, col := range columns {
+				sep := ","
+				if i == len(columns)-1 {
+					sep = ""
+				}
+				w.WriteString(fmt.Sprintf("                        %s%s\n", javaTypedGetter(col.Name, col.Type), sep))
+			}
+			w.WriteString("                    ));\n")
+			w.WriteString("                }\n")
 			w.WriteString("            }\n")
 			w.WriteString("            return items;\n")
 		}
-		w.WriteString("        }\n")
 	case ":execresult":
-		w.WriteString("        stmt.executeUpdate();\n")
-		w.WriteString("        try (var gk = stmt.getGeneratedKeys()) {\n")
-		w.WriteString("            return gk.next() ? gk.getLong(1) : 0L;\n")
-		w.WriteString("        }\n")
+		w.WriteString("            stmt.executeUpdate();\n")
+		w.WriteString("            try (var gk = stmt.getGeneratedKeys()) {\n")
+		w.WriteString("                return gk.next() ? gk.getLong(1) : 0L;\n")
+		w.WriteString("            }\n")
 	default:
-		w.WriteString("        stmt.executeUpdate();\n")
+		w.WriteString("            stmt.executeUpdate();\n")
 	}
+	w.WriteString("        }\n")
 }
 
-func (g *Generator) generateJavaScyllaBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
-	args := make([]string, len(query.Params))
+func (g *Generator) generateJavaScyllaBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
+	paramRefs := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		args[i] = p.Name
+		paramRefs[i] = javaParamRef(p.Name, useStructParams)
 	}
 
 	execLine := "        session.execute(sql);\n"
 	rsLine := "        var rs = session.execute(sql);\n"
-	if len(args) > 0 {
-		argsStr := strings.Join(args, ", ")
+	if len(paramRefs) > 0 {
+		argsStr := strings.Join(paramRefs, ", ")
 		execLine = fmt.Sprintf("        session.execute(com.datastax.oss.driver.api.core.cql.SimpleStatement.newInstance(sql, %s));\n", argsStr)
 		rsLine = fmt.Sprintf("        var rs = session.execute(com.datastax.oss.driver.api.core.cql.SimpleStatement.newInstance(sql, %s));\n", argsStr)
 	}
@@ -652,14 +641,14 @@ func (g *Generator) generateJavaScyllaBody(w *strings.Builder, query *parser.Que
 	}
 }
 
-func (g *Generator) generateJooqBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
-	args := make([]string, len(query.Params))
+func (g *Generator) generateJooqBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
+	paramRefs := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		args[i] = p.Name
+		paramRefs[i] = javaParamRef(p.Name, useStructParams)
 	}
 	bindingsStr := ""
-	if len(args) > 0 {
-		bindingsStr = ", " + strings.Join(args, ", ")
+	if len(paramRefs) > 0 {
+		bindingsStr = ", " + strings.Join(paramRefs, ", ")
 	}
 	switch cmd {
 	case ":one":
@@ -673,16 +662,16 @@ func (g *Generator) generateJooqBody(w *strings.Builder, query *parser.Query, co
 	}
 }
 
-func (g *Generator) generateHibernateBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
+func (g *Generator) generateHibernateBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string, useStructParams bool) {
 	w.WriteString(fmt.Sprintf("        var q = em.createNativeQuery(sql, %s.class);\n", rowType))
 	for i, p := range query.Params {
-		w.WriteString(fmt.Sprintf("        q.setParameter(%d, %s);\n", i+1, p.Name))
+		w.WriteString(fmt.Sprintf("        q.setParameter(%d, %s);\n", i+1, javaParamRef(p.Name, useStructParams)))
 	}
 	switch cmd {
 	case ":one":
 		w.WriteString(fmt.Sprintf("        return (%s) q.getSingleResult();\n", rowType))
 	case ":many":
-		w.WriteString(fmt.Sprintf("        return q.getResultList();\n"))
+		w.WriteString("        return q.getResultList();\n")
 	case ":execresult":
 		w.WriteString("        return q.executeUpdate();\n")
 	default:
@@ -769,13 +758,13 @@ func (g *Generator) sqlTypeToJava(sqlType string, nullable bool) string {
 		inner := g.sqlTypeToJava(strings.TrimSuffix(sqlLower, "[]"), false)
 		jt = fmt.Sprintf("java.util.List<%s>", inner)
 	case strings.HasPrefix(sqlLower, "set<"):
-		inner, _ := parseCQLInner(sqlLower)
+		inner, _ := gencommon.ParseCQLInner(sqlLower)
 		return fmt.Sprintf("java.util.Set<%s>", cqlInnerJavaClass(inner))
 	case strings.HasPrefix(sqlLower, "list<"):
-		inner, _ := parseCQLInner(sqlLower)
+		inner, _ := gencommon.ParseCQLInner(sqlLower)
 		return fmt.Sprintf("java.util.List<%s>", cqlInnerJavaClass(inner))
 	case strings.HasPrefix(sqlLower, "map<"):
-		k, v := parseCQLInner(sqlLower)
+		k, v := gencommon.ParseCQLInner(sqlLower)
 		return fmt.Sprintf("java.util.Map<%s, %s>", cqlInnerJavaClass(k), cqlInnerJavaClass(v))
 	case strings.Contains(sqlLower, "json"):
 		jt = "String" // raw JSON
@@ -786,50 +775,15 @@ func (g *Generator) sqlTypeToJava(sqlType string, nullable bool) string {
 }
 
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
-	if len(query.Columns) > 1 {
-		return query.Columns
+	if g.expander == nil {
+		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
-		return query.Columns
-	}
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" || g.schema == nil {
-		return query.Columns
-	}
-	for _, t := range g.schema.Tables {
-		if strings.EqualFold(t.Name, tableName) {
-			expanded := make([]*parser.QueryColumn, 0, len(t.Columns))
-			for _, col := range t.Columns {
-				expanded = append(expanded, &parser.QueryColumn{Name: col.Name, Type: col.Type, Table: t.Name, Nullable: col.Nullable})
-			}
-			return expanded
-		}
-	}
-	return query.Columns
+	return g.expander.ExpandWildcardColumns(query)
 }
 
 func (g *Generator) modelTypeForQuery(query *parser.Query, columns []*parser.QueryColumn) string {
-	if len(columns) == 0 || g.schema == nil {
-		return ""
+	if g.expander == nil {
+		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" {
-		return ""
-	}
-	for _, t := range g.schema.Tables {
-		if !strings.EqualFold(t.Name, tableName) || len(t.Columns) != len(columns) {
-			continue
-		}
-		match := true
-		for i, col := range columns {
-			if !strings.EqualFold(col.Name, t.Columns[i].Name) {
-				match = false
-				break
-			}
-		}
-		if match {
-			return utils.ToPascalCase(tableName)
-		}
-	}
-	return ""
+	return g.expander.ModelTypeForQuery(query, columns)
 }

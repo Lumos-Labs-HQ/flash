@@ -22,8 +22,18 @@ public class Queries {
         return this.users.createUser(name, email);
     }
 
-    public Users createUserFull(String name, String email, int age, String bio, java.util.Map<String, Object> preferences, java.util.List<String> tags, UserRole role) throws java.sql.SQLException {
-        return this.users.createUserFull(name, email, age, bio, preferences, tags, role);
+    public record CreateUserFullArgs(
+        String name,
+        String email,
+        int age,
+        String bio,
+        java.util.Map<String, Object> preferences,
+        java.util.List<String> tags,
+        UserRole role
+    ) {}
+
+    public Users createUserFull(CreateUserFullArgs args) throws java.sql.SQLException {
+        return this.users.createUserFull(args);
     }
 
     public Users getUser(int id) throws java.sql.SQLException {
@@ -50,47 +60,73 @@ public class Queries {
         return this.users.listUsers(limit, offset);
     }
 
-    public Users upsertUser(String name, String email, UserRole role) throws java.sql.SQLException {
-        return this.users.upsertUser(name, email, role);
+    public record UpsertUserArgs(
+        String name,
+        String email,
+        UserRole role
+    ) {}
+
+    public Users upsertUser(UpsertUserArgs args) throws java.sql.SQLException {
+        return this.users.upsertUser(args);
     }
 
-    public Users upsertUserWithCOALESCE(String name, String email, String bio) throws java.sql.SQLException {
-        return this.users.upsertUserWithCOALESCE(name, email, bio);
+    public record UpsertUserWithCOALESCEArgs(
+        String name,
+        String email,
+        String bio
+    ) {}
+
+    public Users upsertUserWithCOALESCE(UpsertUserWithCOALESCEArgs args) throws java.sql.SQLException {
+        return this.users.upsertUserWithCOALESCE(args);
     }
 
-    public java.util.List<GetuserswithnulladdressRow> getUsersWithNullAddress() throws java.sql.SQLException {
+    public java.util.List<GetUsersWithNullAddressRow> getUsersWithNullAddress() throws java.sql.SQLException {
         return this.users.getUsersWithNullAddress();
     }
 
-    public java.util.List<GetuserswithbioRow> getUsersWithBio() throws java.sql.SQLException {
+    public java.util.List<GetUsersWithBioRow> getUsersWithBio() throws java.sql.SQLException {
         return this.users.getUsersWithBio();
     }
 
-    public GetuserdisplayinfoRow getUserDisplayInfo(int id) throws java.sql.SQLException {
+    public GetUserDisplayInfoRow getUserDisplayInfo(int id) throws java.sql.SQLException {
         return this.users.getUserDisplayInfo(id);
     }
 
-    public java.util.List<SearchuserswithcoalesceRow> searchUsersWithCOALESCE(String name, String email, int age, int limit, int offset) throws java.sql.SQLException {
-        return this.users.searchUsersWithCOALESCE(name, email, age, limit, offset);
+    public record SearchUsersWithCOALESCEArgs(
+        String name,
+        String email,
+        int age,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(SearchUsersWithCOALESCEArgs args) throws java.sql.SQLException {
+        return this.users.searchUsersWithCOALESCE(args);
     }
 
-    public java.util.List<GetuserscreatedbetweenRow> getUsersCreatedBetween(LocalDateTime created_at, LocalDateTime created_at2) throws java.sql.SQLException {
+    public java.util.List<GetUsersCreatedBetweenRow> getUsersCreatedBetween(LocalDateTime created_at, LocalDateTime created_at2) throws java.sql.SQLException {
         return this.users.getUsersCreatedBetween(created_at, created_at2);
     }
 
-    public java.util.List<GetusersbyagerangeRow> getUsersByAgeRange(int age, int age2) throws java.sql.SQLException {
+    public java.util.List<GetUsersByAgeRangeRow> getUsersByAgeRange(int age, int age2) throws java.sql.SQLException {
         return this.users.getUsersByAgeRange(age, age2);
     }
 
-    public java.util.List<GetusersbygeneratedrangeRow> getUsersByGeneratedRange(int age_range) throws java.sql.SQLException {
+    public java.util.List<GetUsersByGeneratedRangeRow> getUsersByGeneratedRange(int age_range) throws java.sql.SQLException {
         return this.users.getUsersByGeneratedRange(age_range);
     }
 
-    public java.util.List<Users> getRecentUsers(LocalDateTime created_at, int limit, int offset) throws java.sql.SQLException {
-        return this.users.getRecentUsers(created_at, limit, offset);
+    public record GetRecentUsersArgs(
+        LocalDateTime created_at,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<Users> getRecentUsers(GetRecentUsersArgs args) throws java.sql.SQLException {
+        return this.users.getRecentUsers(args);
     }
 
-    public GetuserpreferencesRow getUserPreferences(int id) throws java.sql.SQLException {
+    public GetUserPreferencesRow getUserPreferences(int id) throws java.sql.SQLException {
         return this.users.getUserPreferences(id);
     }
 
@@ -98,19 +134,19 @@ public class Queries {
         this.users.updateUserPreferences(preferences, id);
     }
 
-    public java.util.List<FindusersbyjsonkeyRow> findUsersByJsonKey(java.util.Map<String, Object> preferences) throws java.sql.SQLException {
+    public java.util.List<FindUsersByJsonKeyRow> findUsersByJsonKey(java.util.Map<String, Object> preferences) throws java.sql.SQLException {
         return this.users.findUsersByJsonKey(preferences);
     }
 
-    public java.util.List<FindusersbyjsoncontainsRow> findUsersByJsonContains(java.util.Map<String, Object> preferences) throws java.sql.SQLException {
+    public java.util.List<FindUsersByJsonContainsRow> findUsersByJsonContains(java.util.Map<String, Object> preferences) throws java.sql.SQLException {
         return this.users.findUsersByJsonContains(preferences);
     }
 
-    public java.util.List<GetuserswithtagRow> getUsersWithTag(java.util.List<String> tags) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithTagRow> getUsersWithTag(java.util.List<String> tags) throws java.sql.SQLException {
         return this.users.getUsersWithTag(tags);
     }
 
-    public java.util.List<GetuserswithanytagRow> getUsersWithAnyTag(java.util.List<String> tags) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithAnyTagRow> getUsersWithAnyTag(java.util.List<String> tags) throws java.sql.SQLException {
         return this.users.getUsersWithAnyTag(tags);
     }
 
@@ -122,51 +158,66 @@ public class Queries {
         this.users.removeUserTag(tags, id);
     }
 
-    public GetusershippingaddressRow getUserShippingAddress(int id) throws java.sql.SQLException {
+    public GetUserShippingAddressRow getUserShippingAddress(int id) throws java.sql.SQLException {
         return this.users.getUserShippingAddress(id);
     }
 
-    public void updateUserShipping(String shipping_field1, String shipping_field2, String shipping_field3, String shipping_field4, String shipping_field5, int id) throws java.sql.SQLException {
-        this.users.updateUserShipping(shipping_field1, shipping_field2, shipping_field3, shipping_field4, shipping_field5, id);
+    public record UpdateUserShippingArgs(
+        String shipping_field1,
+        String shipping_field2,
+        String shipping_field3,
+        String shipping_field4,
+        String shipping_field5,
+        int id
+    ) {}
+
+    public void updateUserShipping(UpdateUserShippingArgs args) throws java.sql.SQLException {
+        this.users.updateUserShipping(args);
     }
 
-    public java.util.List<GetcomplexuseranalyticsRow> getComplexUserAnalytics(String total_posts, String total_comments, String limit) throws java.sql.SQLException {
-        return this.users.getComplexUserAnalytics(total_posts, total_comments, limit);
+    public record GetComplexUserAnalyticsArgs(
+        String total_posts,
+        String total_comments,
+        String limit
+    ) {}
+
+    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(GetComplexUserAnalyticsArgs args) throws java.sql.SQLException {
+        return this.users.getComplexUserAnalytics(args);
     }
 
-    public java.util.List<GetpostwithactivecommentersRow> getPostWithActiveCommenters(String rn, String post_id) throws java.sql.SQLException {
+    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, String post_id) throws java.sql.SQLException {
         return this.users.getPostWithActiveCommenters(rn, post_id);
     }
 
-    public java.util.List<GetuserpostrankingsRow> getUserPostRankings(int limit) throws java.sql.SQLException {
+    public java.util.List<GetUserPostRankingsRow> getUserPostRankings(int limit) throws java.sql.SQLException {
         return this.users.getUserPostRankings(limit);
     }
 
-    public java.util.List<GetusertrendingpostsRow> getUserTrendingPosts(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetUserTrendingPostsRow> getUserTrendingPosts(int user_id, int limit) throws java.sql.SQLException {
         return this.users.getUserTrendingPosts(user_id, limit);
     }
 
-    public GetpostcountbyuserRow getPostCountByUser(String user_id) throws java.sql.SQLException {
+    public GetPostCountByUserRow getPostCountByUser(String user_id) throws java.sql.SQLException {
         return this.users.getPostCountByUser(user_id);
     }
 
-    public java.util.List<GetuserswithmanypostsRow> getUsersWithManyPosts(int min_count) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int min_count) throws java.sql.SQLException {
         return this.users.getUsersWithManyPosts(min_count);
     }
 
-    public java.util.List<GetpostswithcommentcountRow> getPostsWithCommentCount(int limit, int offset) throws java.sql.SQLException {
+    public java.util.List<GetPostsWithCommentCountRow> getPostsWithCommentCount(int limit, int offset) throws java.sql.SQLException {
         return this.users.getPostsWithCommentCount(limit, offset);
     }
 
-    public java.util.List<GetuserswithactivitylevelRow> getUsersWithActivityLevel() throws java.sql.SQLException {
+    public java.util.List<GetUsersWithActivityLevelRow> getUsersWithActivityLevel() throws java.sql.SQLException {
         return this.users.getUsersWithActivityLevel();
     }
 
-    public java.util.List<GetpostwithcommentsRow> getPostWithComments(int id) throws java.sql.SQLException {
+    public java.util.List<GetPostWithCommentsRow> getPostWithComments(int id) throws java.sql.SQLException {
         return this.users.getPostWithComments(id);
     }
 
-    public GetpostdetailswithallrelationsRow getPostDetailsWithAllRelations(int id) throws java.sql.SQLException {
+    public GetPostDetailsWithAllRelationsRow getPostDetailsWithAllRelations(int id) throws java.sql.SQLException {
         return this.users.getPostDetailsWithAllRelations(id);
     }
 
@@ -174,47 +225,60 @@ public class Queries {
         return this.users.countUsersByRole(role);
     }
 
-    public CountusersRow countUsers() throws java.sql.SQLException {
+    public CountUsersRow countUsers() throws java.sql.SQLException {
         return this.users.countUsers();
     }
 
-    public java.util.List<GetuserrolecountRow> getUserRoleCount() throws java.sql.SQLException {
+    public java.util.List<GetUserRoleCountRow> getUserRoleCount() throws java.sql.SQLException {
         return this.users.getUserRoleCount();
     }
 
-    public GetuseragestatsRow getUserAgeStats() throws java.sql.SQLException {
+    public GetUserAgeStatsRow getUserAgeStats() throws java.sql.SQLException {
         return this.users.getUserAgeStats();
     }
 
-    public java.util.List<GetpostsgroupedbystatusRow> getPostsGroupedByStatus(int count_threshold) throws java.sql.SQLException {
+    public java.util.List<GetPostsGroupedByStatusRow> getPostsGroupedByStatus(int count_threshold) throws java.sql.SQLException {
         return this.users.getPostsGroupedByStatus(count_threshold);
     }
 
-    public java.util.List<GetdistinctcommentersRow> getDistinctCommenters() throws java.sql.SQLException {
+    public java.util.List<GetDistinctCommentersRow> getDistinctCommenters() throws java.sql.SQLException {
         return this.users.getDistinctCommenters();
     }
 
-    public java.util.List<GetlatestpostperuserRow> getLatestPostPerUser() throws java.sql.SQLException {
+    public java.util.List<GetLatestPostPerUserRow> getLatestPostPerUser() throws java.sql.SQLException {
         return this.users.getLatestPostPerUser();
     }
 
-    public java.util.List<SearchusersRow> searchUsers(String name, String email, int limit, int offset) throws java.sql.SQLException {
-        return this.users.searchUsers(name, email, limit, offset);
+    public record SearchUsersArgs(
+        String name,
+        String email,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<SearchUsersRow> searchUsers(SearchUsersArgs args) throws java.sql.SQLException {
+        return this.users.searchUsers(args);
     }
 
-    public java.util.List<SearchpostsbytitleRow> searchPostsByTitle(String title, int limit, int offset) throws java.sql.SQLException {
-        return this.users.searchPostsByTitle(title, limit, offset);
+    public record SearchPostsByTitleArgs(
+        String title,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(SearchPostsByTitleArgs args) throws java.sql.SQLException {
+        return this.users.searchPostsByTitle(args);
     }
 
-    public java.util.List<FulltextsearchpostsRow> fullTextSearchPosts(String search_query, int limit) throws java.sql.SQLException {
+    public java.util.List<FullTextSearchPostsRow> fullTextSearchPosts(String search_query, int limit) throws java.sql.SQLException {
         return this.users.fullTextSearchPosts(search_query, limit);
     }
 
-    public java.util.List<GetuserregistrationstatsRow> getUserRegistrationStats() throws java.sql.SQLException {
+    public java.util.List<GetUserRegistrationStatsRow> getUserRegistrationStats() throws java.sql.SQLException {
         return this.users.getUserRegistrationStats();
     }
 
-    public java.util.List<GetweeklypoststatsRow> getWeeklyPostStats(LocalDateTime created_at) throws java.sql.SQLException {
+    public java.util.List<GetWeeklyPostStatsRow> getWeeklyPostStats(LocalDateTime created_at) throws java.sql.SQLException {
         return this.users.getWeeklyPostStats(created_at);
     }
 
@@ -222,19 +286,19 @@ public class Queries {
         return this.users.getUsersInIds(id);
     }
 
-    public java.util.List<GetusersbynamesRow> getUsersByNames(String name1, String name2, String name3) throws java.sql.SQLException {
-        return this.users.getUsersByNames(name1, name2, name3);
+    public java.util.List<GetUsersByNamesRow> getUsersByNames(String name) throws java.sql.SQLException {
+        return this.users.getUsersByNames(name);
     }
 
-    public java.util.List<GetuserswhocommentedRow> getUsersWhoCommented() throws java.sql.SQLException {
+    public java.util.List<GetUsersWhoCommentedRow> getUsersWhoCommented() throws java.sql.SQLException {
         return this.users.getUsersWhoCommented();
     }
 
-    public java.util.List<GetuserswithnopostsRow> getUsersWithNoPosts() throws java.sql.SQLException {
+    public java.util.List<GetUsersWithNoPostsRow> getUsersWithNoPosts() throws java.sql.SQLException {
         return this.users.getUsersWithNoPosts();
     }
 
-    public java.util.List<GetallcontentbyuserRow> getAllContentByUser(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetAllContentByUserRow> getAllContentByUser(int user_id, int limit) throws java.sql.SQLException {
         return this.users.getAllContentByUser(user_id, limit);
     }
 
@@ -254,39 +318,52 @@ public class Queries {
         return this.users.getPostStats(limit);
     }
 
-    public java.util.List<GetusersubscriptionsRow> getUserSubscriptions(int user_id) throws java.sql.SQLException {
+    public java.util.List<GetUserSubscriptionsRow> getUserSubscriptions(int user_id) throws java.sql.SQLException {
         return this.users.getUserSubscriptions(user_id);
     }
 
-    public Subscriptions createSubscription(int user_id, SubscriptionTier tier, LocalDateTime expires_at, boolean auto_renew) throws java.sql.SQLException {
-        return this.users.createSubscription(user_id, tier, expires_at, auto_renew);
+    public record CreateSubscriptionArgs(
+        int user_id,
+        SubscriptionTier tier,
+        LocalDateTime expires_at,
+        boolean auto_renew
+    ) {}
+
+    public Subscriptions createSubscription(CreateSubscriptionArgs args) throws java.sql.SQLException {
+        return this.users.createSubscription(args);
     }
 
-    public java.util.List<GetordersbyuserRow> getOrdersByUser(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetOrdersByUserRow> getOrdersByUser(int user_id, int limit) throws java.sql.SQLException {
         return this.users.getOrdersByUser(user_id, limit);
     }
 
-    public java.util.List<GetordersinstateRow> getOrdersInState(OrderState state, int limit) throws java.sql.SQLException {
+    public java.util.List<GetOrdersInStateRow> getOrdersInState(OrderState state, int limit) throws java.sql.SQLException {
         return this.users.getOrdersInState(state, limit);
     }
 
-    public java.util.List<GetauditlogforuserRow> getAuditLogForUser(int changed_by, int limit, int offset) throws java.sql.SQLException {
-        return this.users.getAuditLogForUser(changed_by, limit, offset);
+    public record GetAuditLogForUserArgs(
+        int changed_by,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(GetAuditLogForUserArgs args) throws java.sql.SQLException {
+        return this.users.getAuditLogForUser(args);
     }
 
-    public java.util.List<GetauditlogfortableRow> getAuditLogForTable(String table_name, int limit) throws java.sql.SQLException {
+    public java.util.List<GetAuditLogForTableRow> getAuditLogForTable(String table_name, int limit) throws java.sql.SQLException {
         return this.users.getAuditLogForTable(table_name, limit);
     }
 
-    public GetdashboardstatsRow getDashboardStats() throws java.sql.SQLException {
+    public GetDashboardStatsRow getDashboardStats() throws java.sql.SQLException {
         return this.users.getDashboardStats();
     }
 
-    public java.util.List<GettopcommentersRow> getTopCommenters(int limit) throws java.sql.SQLException {
+    public java.util.List<GetTopCommentersRow> getTopCommenters(int limit) throws java.sql.SQLException {
         return this.users.getTopCommenters(limit);
     }
 
-    public java.util.List<GetengagementtimeseriesRow> getEngagementTimeSeries(LocalDateTime created_at) throws java.sql.SQLException {
+    public java.util.List<GetEngagementTimeSeriesRow> getEngagementTimeSeries(LocalDateTime created_at) throws java.sql.SQLException {
         return this.users.getEngagementTimeSeries(created_at);
     }
 
@@ -294,12 +371,25 @@ public class Queries {
         return this.users.createCategory(name);
     }
 
-    public Posts createPost(int user_id, int category_id, String title, String content) throws java.sql.SQLException {
-        return this.users.createPost(user_id, category_id, title, content);
+    public record CreatePostArgs(
+        int user_id,
+        int category_id,
+        String title,
+        String content
+    ) {}
+
+    public Posts createPost(CreatePostArgs args) throws java.sql.SQLException {
+        return this.users.createPost(args);
     }
 
-    public Comments createComment(int post_id, int user_id, String content) throws java.sql.SQLException {
-        return this.users.createComment(post_id, user_id, content);
+    public record CreateCommentArgs(
+        int post_id,
+        int user_id,
+        String content
+    ) {}
+
+    public Comments createComment(CreateCommentArgs args) throws java.sql.SQLException {
+        return this.users.createComment(args);
     }
 
     public void deleteOldUsers(LocalDateTime created_at) throws java.sql.SQLException {
@@ -310,12 +400,26 @@ public class Queries {
         this.users.updateUserTimestamp(updated_at, id);
     }
 
-    public Notifications createNotification(int user_id, String type, String title, String body, java.util.Map<String, Object> metadata) throws java.sql.SQLException {
-        return this.users.createNotification(user_id, type, title, body, metadata);
+    public record CreateNotificationArgs(
+        int user_id,
+        String type,
+        String title,
+        String body,
+        java.util.Map<String, Object> metadata
+    ) {}
+
+    public Notifications createNotification(CreateNotificationArgs args) throws java.sql.SQLException {
+        return this.users.createNotification(args);
     }
 
-    public java.util.List<Notifications> getNotificationsByUser(int user_id, int limit, int offset) throws java.sql.SQLException {
-        return this.users.getNotificationsByUser(user_id, limit, offset);
+    public record GetNotificationsByUserArgs(
+        int user_id,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<Notifications> getNotificationsByUser(GetNotificationsByUserArgs args) throws java.sql.SQLException {
+        return this.users.getNotificationsByUser(args);
     }
 
     public Integer getUnreadCount(int user_id) throws java.sql.SQLException {
@@ -334,12 +438,24 @@ public class Queries {
         this.users.deleteOldNotifications(user_id, created_at);
     }
 
-    public java.util.List<GetnotificationsbytypeRow> getNotificationsByType(int user_id, String type, int limit) throws java.sql.SQLException {
-        return this.users.getNotificationsByType(user_id, type, limit);
+    public record GetNotificationsByTypeArgs(
+        int user_id,
+        String type,
+        int limit
+    ) {}
+
+    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(GetNotificationsByTypeArgs args) throws java.sql.SQLException {
+        return this.users.getNotificationsByType(args);
     }
 
-    public Tags createTag(String name, String slug, String color) throws java.sql.SQLException {
-        return this.users.createTag(name, slug, color);
+    public record CreateTagArgs(
+        String name,
+        String slug,
+        String color
+    ) {}
+
+    public Tags createTag(CreateTagArgs args) throws java.sql.SQLException {
+        return this.users.createTag(args);
     }
 
     public Tags getTagBySlug(String slug) throws java.sql.SQLException {
@@ -362,27 +478,51 @@ public class Queries {
         return this.users.getTagsForPost(post_id);
     }
 
-    public java.util.List<GetpostsbytagRow> getPostsByTag(String slug, int limit, int offset) throws java.sql.SQLException {
-        return this.users.getPostsByTag(slug, limit, offset);
+    public record GetPostsByTagArgs(
+        String slug,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetPostsByTagRow> getPostsByTag(GetPostsByTagArgs args) throws java.sql.SQLException {
+        return this.users.getPostsByTag(args);
     }
 
-    public java.util.List<GettoptagsRow> getTopTags(int limit) throws java.sql.SQLException {
+    public java.util.List<GetTopTagsRow> getTopTags(int limit) throws java.sql.SQLException {
         return this.users.getTopTags(limit);
     }
 
-    public Media uploadMedia(int user_id, int post_id, String type, String url, long size_bytes, String mime_type, int width, int height, java.util.Map<String, Object> metadata) throws java.sql.SQLException {
-        return this.users.uploadMedia(user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata);
+    public record UploadMediaArgs(
+        int user_id,
+        int post_id,
+        String type,
+        String url,
+        long size_bytes,
+        String mime_type,
+        int width,
+        int height,
+        java.util.Map<String, Object> metadata
+    ) {}
+
+    public Media uploadMedia(UploadMediaArgs args) throws java.sql.SQLException {
+        return this.users.uploadMedia(args);
     }
 
-    public java.util.List<GetmediabypostRow> getMediaByPost(int post_id) throws java.sql.SQLException {
+    public java.util.List<GetMediaByPostRow> getMediaByPost(int post_id) throws java.sql.SQLException {
         return this.users.getMediaByPost(post_id);
     }
 
-    public java.util.List<GetmediabyuserRow> getMediaByUser(int user_id, int limit, int offset) throws java.sql.SQLException {
-        return this.users.getMediaByUser(user_id, limit, offset);
+    public record GetMediaByUserArgs(
+        int user_id,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetMediaByUserRow> getMediaByUser(GetMediaByUserArgs args) throws java.sql.SQLException {
+        return this.users.getMediaByUser(args);
     }
 
-    public java.util.List<GetmediabytypeRow> getMediaByType(int user_id, String type) throws java.sql.SQLException {
+    public java.util.List<GetMediaByTypeRow> getMediaByType(int user_id, String type) throws java.sql.SQLException {
         return this.users.getMediaByType(user_id, type);
     }
 
@@ -390,19 +530,25 @@ public class Queries {
         this.users.deleteMedia(id, user_id);
     }
 
-    public GetstorageusedbyuserRow getStorageUsedByUser(int user_id) throws java.sql.SQLException {
+    public GetStorageUsedByUserRow getStorageUsedByUser(int user_id) throws java.sql.SQLException {
         return this.users.getStorageUsedByUser(user_id);
     }
 
-    public java.util.List<GetlargemediafilesRow> getLargeMediaFiles(long size_bytes, int limit) throws java.sql.SQLException {
+    public java.util.List<GetLargeMediaFilesRow> getLargeMediaFiles(long size_bytes, int limit) throws java.sql.SQLException {
         return this.users.getLargeMediaFiles(size_bytes, limit);
     }
 
-    public java.util.List<GetuserfeedRow> getUserFeed(int user_id, int limit, int offset) throws java.sql.SQLException {
-        return this.users.getUserFeed(user_id, limit, offset);
+    public record GetUserFeedArgs(
+        int user_id,
+        int limit,
+        int offset
+    ) {}
+
+    public java.util.List<GetUserFeedRow> getUserFeed(GetUserFeedArgs args) throws java.sql.SQLException {
+        return this.users.getUserFeed(args);
     }
 
-    public java.util.List<SearchpostsfulltextRow> searchPostsFullText(String search_query, int limit) throws java.sql.SQLException {
+    public java.util.List<SearchPostsFullTextRow> searchPostsFullText(String search_query, int limit) throws java.sql.SQLException {
         return this.users.searchPostsFullText(search_query, limit);
     }
 
@@ -410,7 +556,7 @@ public class Queries {
         this.users.bulkMarkNotificationsRead(user_id, id);
     }
 
-    public GetuserwithstatsRow getUserWithStats(int id) throws java.sql.SQLException {
+    public GetUserWithStatsRow getUserWithStats(int id) throws java.sql.SQLException {
         return this.users.getUserWithStats(id);
     }
 

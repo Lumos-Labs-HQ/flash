@@ -18,11 +18,11 @@ type Generator struct {
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
 	cache        *gencommon.GenerationCache
+	expander     *gencommon.SchemaExpander
 }
 
 func New(cfg *config.Config) *Generator {
-	cache := gencommon.NewGenerationCache()
-	cache.OutDir = cfg.Gen.Kotlin.Out
+	cache := gencommon.NewGenerationCacheWithDir(cfg.Gen.Kotlin.Out)
 	return &Generator{
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
@@ -41,6 +41,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
+	g.expander = gencommon.NewSchemaExpander(schema)
 
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
 	configHash := fmt.Sprintf("%x", []byte(fmt.Sprintf("%s|%s|%s", g.Config.Database.Provider, g.Config.Gen.Kotlin.Out, g.Config.Gen.Kotlin.Driver)))
@@ -132,7 +133,14 @@ func (g *Generator) generateModels() error {
 		w.WriteString(")\n\n")
 	}
 
-	return os.WriteFile(filepath.Join(g.Config.Gen.Kotlin.Out, "Models.kt"), []byte(w.String()), 0644)
+	modelsPath := filepath.Join(g.Config.Gen.Kotlin.Out, "Models.kt")
+	if err := os.WriteFile(modelsPath, []byte(w.String()), 0644); err != nil {
+		return err
+	}
+	if genHash, err := gencommon.ComputeFileChecksum(modelsPath); err == nil {
+		g.cache.UpdateGeneratedFileChecksum(modelsPath, genHash)
+	}
+	return nil
 }
 
 func (g *Generator) generateDB(queries []*parser.Query) error {
@@ -204,9 +212,9 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 		base := strings.TrimSuffix(src, ".sql")
 		columns := g.expandWildcardColumns(q)
 		cmd := strings.ToLower(q.Cmd)
-		methodName := toCamelCase(q.Name)
+		methodName := gencommon.ToCamelCase(q.Name)
 
-		rowType := queryPascal(q.Name) + "Row"
+		rowType := gencommon.QueryPascal(q.Name) + "Row"
 		if mt := g.modelTypeForQuery(q, columns); mt != "" {
 			rowType = mt
 		}
@@ -237,9 +245,19 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 
 		params := make([]string, len(q.Params))
 		args := make([]string, len(q.Params))
+		useStructParams := len(q.Params) > 2
+		var proxyArgStr string
 		for i, p := range q.Params {
 			params[i] = fmt.Sprintf("%s: %s", utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
 			args[i] = utils.ToSnakeCase(p.Name)
+		}
+
+		if useStructParams && len(q.Params) > 0 {
+			proxyName := gencommon.QueryPascal(q.Name) + "Args"
+			params = []string{fmt.Sprintf("args: %s", proxyName)}
+			proxyArgStr = "args"
+		} else {
+			proxyArgStr = strings.Join(args, ", ")
 		}
 
 		retStmt := ""
@@ -247,7 +265,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 			retStmt = "return "
 		}
 		w.WriteString(fmt.Sprintf("    fun %s(%s): %s =\n", methodName, strings.Join(params, ", "), retType))
-		w.WriteString(fmt.Sprintf("        %s.%s(%s)\n\n", base, methodName, strings.Join(args, ", ")))
+		w.WriteString(fmt.Sprintf("        %s.%s(%s)\n\n", base, methodName, proxyArgStr))
 		_ = retStmt
 	}
 
@@ -261,21 +279,16 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 	}
 	w.WriteString("}\n")
 
-	return os.WriteFile(filepath.Join(g.Config.Gen.Kotlin.Out, "Queries.kt"), []byte(w.String()), 0644)
+	queriesPath := filepath.Join(g.Config.Gen.Kotlin.Out, "Queries.kt")
+	if err := os.WriteFile(queriesPath, []byte(w.String()), 0644); err != nil {
+		return err
+	}
+	if genHash, err := gencommon.ComputeFileChecksum(queriesPath); err == nil {
+		g.cache.UpdateGeneratedFileChecksum(queriesPath, genHash)
+	}
+	return nil
 }
 
-// queryPascal returns the query name as PascalCase, preserving existing casing.
-// Query names from SQL annotations are already PascalCase (e.g. "GetUserWithPostCount").
-func queryPascal(name string) string {
-	if name == "" {
-		return name
-	}
-	// If it already starts uppercase, use as-is (already PascalCase)
-	if name[0] >= 'A' && name[0] <= 'Z' {
-		return name
-	}
-	return utils.ToPascalCase(name)
-}
 // isPrimitiveKtType returns true for Kotlin types that can never be null from JDBC
 // (Int, Long, Double, Float, Boolean — returned as primitives by typed getters).
 func isPrimitiveKtType(kt string) bool {
@@ -286,22 +299,8 @@ func isPrimitiveKtType(kt string) bool {
 	return false
 }
 
-func toCamelCase(name string) string {
-	if name == "" {
-		return name
-	}
-	if name[0] >= 'A' && name[0] <= 'Z' {
-		return strings.ToLower(name[:1]) + name[1:]
-	}
-	pascal := utils.ToPascalCase(name)
-	if pascal == "" {
-		return pascal
-	}
-	return strings.ToLower(pascal[:1]) + pascal[1:]
-}
-
 func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query) {
-	methodName := toCamelCase(query.Name)
+	methodName := gencommon.ToCamelCase(query.Name)
 	columns := g.expandWildcardColumns(query)
 	cmd := strings.ToLower(query.Cmd)
 	driver := g.Config.Gen.Kotlin.Driver
@@ -309,7 +308,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 
 	// Row type
-	rowType := queryPascal(query.Name) + "Row"
+	rowType := gencommon.QueryPascal(query.Name) + "Row"
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowType = mt
 	}
@@ -346,7 +345,21 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	}
 
 	paramStr := strings.Join(params, ", ")
+	useStructParams := len(query.Params) > 2
+	var paramStructName string
+	if useStructParams && len(query.Params) > 0 {
+		paramStructName = gencommon.QueryPascal(query.Name) + "Args"
+		paramStr = fmt.Sprintf("args: %s", paramStructName)
+	}
 	w.WriteString(fmt.Sprintf("    fun %s(%s): %s {\n", methodName, paramStr, retType))
+
+	// Unpack struct params into local variables so body functions don't need changes
+	if useStructParams {
+		for _, p := range query.Params {
+			w.WriteString(fmt.Sprintf("        val %s = args.%s\n",
+				utils.ToSnakeCase(p.Name), utils.ToSnakeCase(p.Name)))
+		}
+	}
 
 	// SQL constant
 	sql := strings.TrimSpace(query.SQL)
@@ -450,43 +463,17 @@ func cqlKtGetter(colName, sqlType string) string {
 	case strings.Contains(sl, "timestamp") || strings.Contains(sl, "date") || strings.Contains(sl, "time"):
 		return fmt.Sprintf("row.getInstant(\"%s\")", colName)
 	case strings.HasPrefix(sl, "set<"):
-		inner, _ := parseCQLInner(sl)
+		inner, _ := gencommon.ParseCQLInner(sl)
 		return fmt.Sprintf("row.getSet(\"%s\", %s::class.java)", colName, cqlInnerKtClass(inner))
 	case strings.HasPrefix(sl, "list<"):
-		inner, _ := parseCQLInner(sl)
+		inner, _ := gencommon.ParseCQLInner(sl)
 		return fmt.Sprintf("row.getList(\"%s\", %s::class.java)", colName, cqlInnerKtClass(inner))
 	case strings.HasPrefix(sl, "map<"):
-		k, v := parseCQLInner(sl)
+		k, v := gencommon.ParseCQLInner(sl)
 		return fmt.Sprintf("row.getMap(\"%s\", %s::class.java, %s::class.java)", colName, cqlInnerKtClass(k), cqlInnerKtClass(v))
 	default:
 		return fmt.Sprintf("row.getString(\"%s\")", colName)
 	}
-}
-
-// parseCQLInner extracts inner type(s) from CQL collection wrappers.
-func parseCQLInner(sl string) (string, string) {
-	for _, prefix := range []string{"set<", "list<", "frozen<"} {
-		if strings.HasPrefix(sl, prefix) && strings.HasSuffix(sl, ">") {
-			return strings.TrimSpace(sl[len(prefix) : len(sl)-1]), ""
-		}
-	}
-	if strings.HasPrefix(sl, "map<") && strings.HasSuffix(sl, ">") {
-		inner := sl[4 : len(sl)-1]
-		depth := 0
-		for i, ch := range inner {
-			switch ch {
-			case '<':
-				depth++
-			case '>':
-				depth--
-			case ',':
-				if depth == 0 {
-					return strings.TrimSpace(inner[:i]), strings.TrimSpace(inner[i+1:])
-				}
-			}
-		}
-	}
-	return "text", ""
 }
 
 // cqlInnerKtClass maps a CQL element type to its Kotlin class reference.
@@ -512,7 +499,7 @@ func cqlInnerKtClass(t string) string {
 }
 
 func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
-	methodName := toCamelCase(query.Name)
+	methodName := gencommon.ToCamelCase(query.Name)
 	key := fmt.Sprintf("\"%s\"", methodName)
 
 	w.WriteString(fmt.Sprintf("        val stmt = stmts.getOrPut(%s) { conn.prepareStatement(sql) }\n", key))
@@ -521,7 +508,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 		w.WriteString(fmt.Sprintf("        %s\n", ktTypedSetter(i+1, utils.ToSnakeCase(p.Name), p.Type)))
 	}
 
-	isRowType := rowType == queryPascal(query.Name)+"Row" // JOIN/aggregate result, not a model
+	isRowType := rowType == gencommon.QueryPascal(query.Name)+"Row" // JOIN/aggregate result, not a model
 
 	switch cmd {
 
@@ -723,13 +710,13 @@ func (g *Generator) sqlTypeToKotlin(sqlType string, nullable bool) string {
 	switch {
 	// CQL collections — must be before contains("int") / contains("map")
 	case strings.HasPrefix(sqlLower, "set<"):
-		inner, _ := parseCQLInner(sqlLower)
+		inner, _ := gencommon.ParseCQLInner(sqlLower)
 		return nullable_(fmt.Sprintf("Set<%s>", cqlInnerKtType(inner)), nullable)
 	case strings.HasPrefix(sqlLower, "list<"):
-		inner, _ := parseCQLInner(sqlLower)
+		inner, _ := gencommon.ParseCQLInner(sqlLower)
 		return nullable_(fmt.Sprintf("List<%s>", cqlInnerKtType(inner)), nullable)
 	case strings.HasPrefix(sqlLower, "map<"):
-		k, v := parseCQLInner(sqlLower)
+		k, v := gencommon.ParseCQLInner(sqlLower)
 		return nullable_(fmt.Sprintf("Map<%s, %s>", cqlInnerKtType(k), cqlInnerKtType(v)), nullable)
 	case strings.HasPrefix(sqlLower, "frozen<"), strings.HasPrefix(sqlLower, "tuple<"):
 		kt = "String"
@@ -778,52 +765,17 @@ func (g *Generator) sqlTypeToKotlin(sqlType string, nullable bool) string {
 }
 
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
-	if len(query.Columns) > 1 {
-		return query.Columns
+	if g.expander == nil {
+		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
-		return query.Columns
-	}
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" || g.schema == nil {
-		return query.Columns
-	}
-	for _, t := range g.schema.Tables {
-		if strings.EqualFold(t.Name, tableName) {
-			expanded := make([]*parser.QueryColumn, 0, len(t.Columns))
-			for _, col := range t.Columns {
-				expanded = append(expanded, &parser.QueryColumn{Name: col.Name, Type: col.Type, Table: t.Name, Nullable: col.Nullable})
-			}
-			return expanded
-		}
-	}
-	return query.Columns
+	return g.expander.ExpandWildcardColumns(query)
 }
 
 func (g *Generator) modelTypeForQuery(query *parser.Query, columns []*parser.QueryColumn) string {
-	if len(columns) == 0 || g.schema == nil {
-		return ""
+	if g.expander == nil {
+		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" {
-		return ""
-	}
-	for _, t := range g.schema.Tables {
-		if !strings.EqualFold(t.Name, tableName) || len(t.Columns) != len(columns) {
-			continue
-		}
-		match := true
-		for i, col := range columns {
-			if !strings.EqualFold(col.Name, t.Columns[i].Name) {
-				match = false
-				break
-			}
-		}
-		if match {
-			return utils.ToPascalCase(tableName)
-		}
-	}
-	return ""
+	return g.expander.ModelTypeForQuery(query, columns)
 }
 
 // toKotlinPackage returns the package name: config value takes priority over dir name.

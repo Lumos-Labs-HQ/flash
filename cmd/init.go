@@ -68,6 +68,19 @@ func runInit(cmd *cobra.Command, args []string) {
 	}
 
 	projectTemplate := tmpl.NewProjectTemplateExt(dbType, isNodeProject(), isPythonProject(), isKotlinProject(), isJavaProject())
+
+	// Auto-detect Java/Kotlin package from build files
+	if projectTemplate.IsJavaProject {
+		if pkg := tmpl.DetectJavaPackage("."); pkg != "" {
+			projectTemplate.JavaPackage = pkg
+		}
+	}
+	if projectTemplate.IsKotlinProject {
+		if pkg := tmpl.DetectKotlinPackage("."); pkg != "" {
+			projectTemplate.KotlinPackage = pkg
+		}
+	}
+
 	initializeProject(projectName, projectTemplate)
 }
 

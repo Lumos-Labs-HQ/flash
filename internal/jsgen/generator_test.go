@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 )
 
@@ -112,14 +113,14 @@ func TestConvertSQL_SQLite_QuestionMark(t *testing.T) {
 // ── extractEnumValuesFromType ─────────────────────────────────────────────────
 
 func TestExtractEnumValuesFromType(t *testing.T) {
-	vals := extractEnumValuesFromType("enum('active','inactive')")
+	vals := gencommon.ExtractEnumValues("enum('active','inactive')")
 	if len(vals) != 2 || vals[0] != "active" || vals[1] != "inactive" {
 		t.Errorf("values = %v", vals)
 	}
 }
 
 func TestExtractEnumValuesFromType_NotEnum(t *testing.T) {
-	if vals := extractEnumValuesFromType("varchar(255)"); vals != nil {
+	if vals := gencommon.ExtractEnumValues("varchar(255)"); vals != nil {
 		t.Errorf("non-enum should return nil, got %v", vals)
 	}
 }

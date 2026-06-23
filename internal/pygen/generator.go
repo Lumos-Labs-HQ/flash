@@ -18,6 +18,7 @@ type Generator struct {
 	schemaParser *parser.SchemaParser
 	queryParser  *parser.QueryParser
 	cache        *gencommon.GenerationCache
+	expander     *gencommon.SchemaExpander
 }
 
 func New(cfg *config.Config) *Generator {
@@ -25,7 +26,7 @@ func New(cfg *config.Config) *Generator {
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
-		cache:        gencommon.NewGenerationCache(),
+		cache:        gencommon.NewGenerationCacheWithDir(cfg.Gen.Python.Out),
 	}
 }
 
@@ -39,6 +40,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
+	g.expander = gencommon.NewSchemaExpander(schema)
 
 	// Compute checksums for incremental generation
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
@@ -100,10 +102,7 @@ func (g *Generator) generateModels(schema *parser.Schema) error {
 	for _, table := range schema.Tables {
 		for _, col := range table.Columns {
 			if strings.Contains(strings.ToLower(col.Type), "uuid") {
-				isScyllaDB := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
-				if !isScyllaDB {
-					needsUUID = true
-				}
+				needsUUID = true
 			}
 		}
 	}
@@ -144,10 +143,29 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 
 	returnType := g.getReturnType(query)
 
-	// Build parameter string - avoid trailing comma when no params
-	paramStr := ""
-	if len(paramTypes) > 0 {
-		paramStr = ", " + strings.Join(paramTypes, ", ")
+	useStructParams := len(query.Params) > 2
+	var paramStr string
+	var execParamNames []string
+
+	if useStructParams {
+		argsClass := gencommon.QueryPascal(query.Name) + "Args"
+		// Emit the TypedDict class before the method
+		w.WriteString(fmt.Sprintf("class %s(TypedDict):\n", argsClass))
+		for _, pt := range paramTypes {
+			w.WriteString(fmt.Sprintf("    %s\n", pt))
+		}
+		w.WriteString("\n")
+		paramStr = fmt.Sprintf(", args: %s", argsClass)
+		// execution bodies use args["param"]
+		execParamNames = make([]string, len(paramNames))
+		for i, n := range paramNames {
+			execParamNames[i] = fmt.Sprintf("args[\"%s\"]", n)
+		}
+	} else {
+		if len(paramTypes) > 0 {
+			paramStr = ", " + strings.Join(paramTypes, ", ")
+		}
+		execParamNames = paramNames
 	}
 
 	// Generate async or sync method based on config
@@ -169,24 +187,24 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	driver := g.Config.Gen.Python.Driver
 	switch provider {
 	case "scylla", "scylladb", "cassandra":
-		g.generateScyllaExecution(w, paramNames, query)
+		g.generateScyllaExecution(w, execParamNames, query)
 	case "sqlite", "sqlite3":
 		if driver == "sqlite3" {
-			g.generateSQLite3Execution(w, paramNames, query)
+			g.generateSQLite3Execution(w, execParamNames, query)
 		} else {
-			g.generateSQLiteExecution(w, paramNames, query)
+			g.generateSQLiteExecution(w, execParamNames, query)
 		}
 	case "mysql":
 		if driver == "pymysql" {
-			g.generatePyMySQLExecution(w, paramNames, query)
+			g.generatePyMySQLExecution(w, execParamNames, query)
 		} else {
-			g.generateMySQLExecution(w, paramNames, query)
+			g.generateMySQLExecution(w, execParamNames, query)
 		}
 	default:
 		if driver == "psycopg3" {
-			g.generatePsycopg3Execution(w, paramNames, query)
+			g.generatePsycopg3Execution(w, execParamNames, query)
 		} else {
-			g.generatePostgreSQLExecution(w, paramNames, query)
+			g.generatePostgreSQLExecution(w, execParamNames, query)
 		}
 	}
 
@@ -239,7 +257,7 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 				// Direct column access - fastest path
 				w.WriteString(fmt.Sprintf("        return result[0]['%s'] if result else None\n", query.Columns[0].Name))
 			} else if needsResultClass {
-				className := utils.ToPascalCase(query.Name) + "Row"
+				className := gencommon.QueryPascal(query.Name) + "Row"
 				// asyncpg Records support key access directly - use _make_fast
 				w.WriteString(fmt.Sprintf("        return %s._make_fast(result[0]) if result else None\n", className))
 			} else {
@@ -251,7 +269,7 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 				// Direct column access in list comprehension
 				w.WriteString(fmt.Sprintf("        return [row['%s'] for row in result]\n", query.Columns[0].Name))
 			} else if needsResultClass {
-				className := utils.ToPascalCase(query.Name) + "Row"
+				className := gencommon.QueryPascal(query.Name) + "Row"
 				w.WriteString(fmt.Sprintf("        return [%s._make_fast(row) for row in result]\n", className))
 			} else {
 				// Return Records directly (asyncpg Records are dict-like)
@@ -271,7 +289,7 @@ func (g *Generator) generatePostgreSQLExecution(w *strings.Builder, paramNames [
 }
 
 func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
-	returnType := utils.ToPascalCase(query.Name) + "Row"
+	returnType := gencommon.QueryPascal(query.Name) + "Row"
 	isSingleColumn := len(query.Columns) == 1
 	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
 	needsResultClass := g.needsResultClass(query)
@@ -361,7 +379,7 @@ func (g *Generator) generateMySQLExecution(w *strings.Builder, paramNames []stri
 }
 
 func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []string, query *parser.Query) {
-	returnType := utils.ToPascalCase(query.Name) + "Row"
+	returnType := gencommon.QueryPascal(query.Name) + "Row"
 	isSingleColumn := len(query.Columns) == 1
 	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
 	needsResultClass := g.needsResultClass(query)
@@ -485,7 +503,7 @@ func (g *Generator) generateScyllaExecution(w *strings.Builder, paramNames []str
 }
 
 func (g *Generator) generatePsycopg3Execution(w *strings.Builder, paramNames []string, query *parser.Query) {
-	returnType := utils.ToPascalCase(query.Name) + "Row"
+	returnType := gencommon.QueryPascal(query.Name) + "Row"
 	isSingleColumn := len(query.Columns) == 1
 	isSingleNonWildcard := isSingleColumn && query.Columns[0].Name != "*"
 	needsResultClass := g.needsResultClass(query)
@@ -649,7 +667,7 @@ func (g *Generator) generateInit() error {
 	var w strings.Builder
 	w.Grow(256) // Pre-allocate small buffer
 	w.WriteString("# Code generated by FlashORM. DO NOT EDIT.\n\n")
-	w.WriteString("from .database import new\n")
+	w.WriteString("from .database import newq\n")
 	w.WriteString("from .models import *\n")
 
 	path := filepath.Join(g.Config.Gen.Python.Out, "__init__.py")
@@ -731,6 +749,9 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		pyType = "float"
 	case strings.Contains(sqlTypeLower, "bool"):
 		pyType = "bool"
+	// CQL timeuuid must be checked before "time" — strings.Contains("timeuuid", "time") is true
+	case sqlTypeLower == "timeuuid":
+		pyType = "UUID"
 	case strings.Contains(sqlTypeLower, "timestamp"), strings.Contains(sqlTypeLower, "date"):
 		pyType = "datetime"
 	case strings.Contains(sqlTypeLower, "time") && !strings.Contains(sqlTypeLower, "timestamp"):
@@ -740,12 +761,7 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 	case strings.Contains(sqlTypeLower, "json"):
 		pyType = "dict"
 	case strings.Contains(sqlTypeLower, "uuid"):
-		isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
-		if isScylla {
-			pyType = "str"
-		} else {
-			pyType = "UUID"
-		}
+		pyType = "UUID"
 	// ClickHouse-specific types
 	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64",
 		sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64":
@@ -761,14 +777,7 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
 		elemType := g.sqlTypeToPython(inner, false)
 		pyType = "List[" + elemType + "]"
-	// ScyllaDB/Cassandra CQL types
-	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid":
-		isScylla := g.Config.Database.Provider == "scylla" || g.Config.Database.Provider == "scylladb" || g.Config.Database.Provider == "cassandra"
-		if isScylla {
-			pyType = "str" // gocql returns UUID as string representation
-		} else {
-			pyType = "UUID" // stdlib uuid.UUID for PostgreSQL/MySQL
-		}
+	// ScyllaDB/Cassandra CQL types (non-uuid, checked after uuid above)
 	case sqlTypeLower == "inet":
 		pyType = "str"
 	case sqlTypeLower == "varint", sqlTypeLower == "counter", sqlTypeLower == "duration":
@@ -793,9 +802,26 @@ func (g *Generator) generateTypingStub(queries []*parser.Query) error {
 
 	w.WriteString("# Type stub for IDE autocomplete\n")
 	w.WriteString("# Code generated by FlashORM. DO NOT EDIT.\n\n")
-	w.WriteString("from typing import Any, Optional, List, Literal\n")
+	w.WriteString("from typing import Any, Optional, List, Literal, TypedDict\n")
 	w.WriteString("from datetime import datetime, timedelta\n")
 	w.WriteString("from decimal import Decimal\n")
+
+	// Add UUID import if any query uses UUID type
+	needsUUID := false
+	for _, query := range queries {
+		for _, col := range query.Columns {
+			if strings.Contains(strings.ToLower(col.Type), "uuid") {
+				needsUUID = true
+				break
+			}
+		}
+		if needsUUID {
+			break
+		}
+	}
+	if needsUUID {
+		w.WriteString("from uuid import UUID\n")
+	}
 
 	// Import all result classes from all query files
 	queryGroups := make(map[string][]*parser.Query)
@@ -816,7 +842,7 @@ func (g *Generator) generateTypingStub(queries []*parser.Query) error {
 		for _, query := range fileQueries {
 			if g.needsResultClass(query) {
 				// Match the actual generated class name format
-				className := utils.ToPascalCase(query.Name) + "Row"
+				className := gencommon.QueryPascal(query.Name) + "Row"
 				resultClasses = append(resultClasses, className)
 				allResultClasses[className] = true
 			}
@@ -853,9 +879,19 @@ func (g *Generator) generateTypingStub(queries []*parser.Query) error {
 		// Get return type
 		returnType := g.getReturnType(query)
 
-		// Build parameter string - avoid trailing comma when no params
+		// Build parameter string
+		useStructParams := len(query.Params) > 2
 		paramStr := ""
-		if len(paramTypes) > 0 {
+		if useStructParams {
+			argsClass := gencommon.QueryPascal(query.Name) + "Args"
+			// Emit TypedDict before the class block
+			w.WriteString(fmt.Sprintf("class %s(TypedDict):\n", argsClass))
+			for _, pt := range paramTypes {
+				w.WriteString(fmt.Sprintf("    %s\n", pt))
+			}
+			w.WriteString("\n")
+			paramStr = fmt.Sprintf(", args: %s", argsClass)
+		} else if len(paramTypes) > 0 {
 			paramStr = ", " + strings.Join(paramTypes, ", ")
 		}
 
@@ -870,7 +906,7 @@ func (g *Generator) generateTypingStub(queries []*parser.Query) error {
 	}
 
 	// Add new() function signature
-	w.WriteString("\ndef new(db: Any) -> Queries: ...\n")
+	w.WriteString("\ndef newq(db: Any) -> Queries: ...\n")
 
 	path := filepath.Join(g.Config.Gen.Python.Out, "database.pyi")
 	return os.WriteFile(path, []byte(w.String()), 0644)
@@ -889,16 +925,27 @@ func (g *Generator) needsResultClass(query *parser.Query) bool {
 }
 
 func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query) {
-	className := utils.ToPascalCase(query.Name) + "Row"
+	className := gencommon.QueryPascal(query.Name) + "Row"
 
 	columns := g.expandWildcardColumns(query)
 	if len(columns) == 0 {
 		return
 	}
 
+	// Filter out wildcard columns (e.g. u.* in SELECT u.*, published_posts FROM ...)
+	realCols := make([]*parser.QueryColumn, 0, len(columns))
+	for _, col := range columns {
+		if col.Name != "*" && !strings.HasPrefix(col.Name, "/*") {
+			realCols = append(realCols, col)
+		}
+	}
+	if len(realCols) == 0 {
+		return
+	}
+
 	w.WriteString("@dataclass\n")
 	w.WriteString(fmt.Sprintf("class %s:\n", className))
-	for _, col := range columns {
+	for _, col := range realCols {
 		pyType := g.sqlTypeToPython(col.Type, col.Nullable)
 		w.WriteString(fmt.Sprintf("    %s: %s\n", utils.ToSnakeCase(col.Name), pyType))
 	}
@@ -908,9 +955,9 @@ func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query)
 	w.WriteString("    @classmethod\n")
 	w.WriteString("    def _make_fast(cls, record):\n")
 	w.WriteString("        return cls(\n")
-	for i, col := range columns {
+	for i, col := range realCols {
 		colName := utils.ToSnakeCase(col.Name)
-		if i < len(columns)-1 {
+		if i < len(realCols)-1 {
 			w.WriteString(fmt.Sprintf("            record['%s'],\n", colName))
 		} else {
 			w.WriteString(fmt.Sprintf("            record['%s']\n", colName))
@@ -921,42 +968,10 @@ func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query)
 }
 
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
-	if len(query.Columns) > 1 {
-		return query.Columns
+	if g.expander == nil {
+		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-
-	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
-		return query.Columns
-	}
-
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" {
-		return query.Columns
-	}
-
-	var table *parser.Table
-	for _, t := range g.schema.Tables {
-		if strings.EqualFold(t.Name, tableName) {
-			table = t
-			break
-		}
-	}
-
-	if table == nil {
-		return query.Columns
-	}
-
-	expanded := make([]*parser.QueryColumn, 0, len(table.Columns))
-	for _, col := range table.Columns {
-		expanded = append(expanded, &parser.QueryColumn{
-			Name:     col.Name,
-			Type:     col.Type,
-			Table:    table.Name,
-			Nullable: col.Nullable,
-		})
-	}
-
-	return expanded
+	return g.expander.ExpandWildcardColumns(query)
 }
 
 func (g *Generator) getReturnType(query *parser.Query) string {
@@ -973,7 +988,7 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 
 	if g.needsResultClass(query) {
 		// Match the actual generated class name format: ToPascalCase(query.Name) + "Row"
-		className := utils.ToPascalCase(query.Name) + "Row"
+		className := gencommon.QueryPascal(query.Name) + "Row"
 		if query.Cmd == ":one" {
 			return fmt.Sprintf("Optional[%s]", className)
 		}

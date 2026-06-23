@@ -940,7 +940,7 @@ func (s *Service) ExecuteSQL(query string) (*common.TableData, error) {
 		if len(ksName) == 0 {
 			return nil, fmt.Errorf("USE requires a keyspace name")
 		}
-		ks := strings.Trim(ksName[0], `"'` + "`")
+		ks := strings.Trim(ksName[0], `"'`+"`")
 		provider := ""
 		if s.cfg != nil {
 			provider = s.cfg.Database.Provider

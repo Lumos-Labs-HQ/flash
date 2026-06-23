@@ -5,7 +5,7 @@ description: How Flash ORM generates type-safe code
 
 # Code Generation
 
-Flash ORM automatically generates type-safe code for Go, TypeScript/JavaScript, and Python from your SQL queries and schema definitions.
+Flash ORM automatically generates type-safe code for Go, TypeScript/JavaScript, Python, Java, and Kotlin from your SQL queries and schema definitions.
 
 ## Table of Contents
 
@@ -14,6 +14,8 @@ Flash ORM automatically generates type-safe code for Go, TypeScript/JavaScript, 
 - [Go Code Generation](#go-code-generation)
 - [TypeScript Code Generation](#typescript-code-generation)
 - [Python Code Generation](#python-code-generation)
+- [Java Code Generation](#java-code-generation)
+- [Kotlin Code Generation](#kotlin-code-generation)
 - [Query Parsing](#query-parsing)
 - [Type Mapping](#type-mapping)
 - [Customization](#customization)
@@ -33,6 +35,8 @@ graph TD
     F --> G[Go Code]
     F --> H[TypeScript Code]
     F --> I[Python Code]
+    F --> J[Java Code]
+    F --> K[Kotlin Code]
 ```
 
 ### Input Sources
@@ -72,6 +76,8 @@ flash_gen/
 | Go | `db.go`, `models.go`, `users.go`, `posts.go` | Database interface, types, and queries |
 | TypeScript | `index.js`, `index.d.ts`, `database.js`, `users.js` | Runtime code and type definitions |
 | Python | `__init__.py`, `database.py`, `users.py`, `posts.py` | Async database interface and queries |
+| Java | `Queries.java`, `Users.java`, `UsersQueries.java`, `UserRole.java` | Per-type files with records and enums |
+| Kotlin | `Queries.kt`, `Models.kt`, `Users.kt` | Data classes and query implementations |
 
 ## Go Code Generation
 
@@ -662,6 +668,83 @@ describe('User Queries', () => {
   });
 });
 ```
+
+## Java Code Generation
+
+Java generation produces type-safe code using Java 16+ records with full JDBC, jOOQ, and Hibernate driver support.
+
+### Driver Support
+
+| Driver | Package | Connection Type |
+|--------|---------|---------|
+| `jdbc` (default) | `java.sql` | `java.sql.Connection` |
+| `jooq` | `org.jooq` | `DSLContext` |
+| `hibernate` | `jakarta.persistence` | `EntityManager` |
+
+### Configuration
+
+```toml
+[gen.java]
+enabled = true
+out = "src/main/java/com/myapp/db"
+package = "com.myapp.db"
+driver = "jdbc"
+```
+
+### Generated Files
+
+| File | Description |
+|------|-------------|
+| `{Table}.java` | Per-table record (public record) |
+| `{Enum}.java` | Per-enum enum class |
+| `{QueryFile}Queries.java` | Per-query-file method implementations |
+| `Queries.java` | Unified query interface with `newq()` |
+
+### Key Features
+
+- **Records**: Uses `public record` for immutable data types
+- **PreparedStatement caching**: Caches statements per method name
+- **jOOQ/Hibernate support**: Alternative drivers for existing projects
+- **ScyllaDB/Cassandra**: DataStax `CqlSession` driver for CQL
+- **Package auto-detection**: Reads `pom.xml` or `build.gradle` for package name
+
+## Kotlin Code Generation
+
+Kotlin generation produces idiomatic Kotlin with `data class`, `enum class`, and JDBC/Exposed/R2DBC driver support.
+
+### Driver Support
+
+| Driver | Package | Connection Type |
+|--------|---------|---------|
+| `jdbc` (default) | `java.sql` | `java.sql.Connection` |
+| `exposed` | `org.jetbrains.exposed` | `Database` |
+| `r2dbc` | `io.r2dbc.spi` | `Connection` |
+
+### Configuration
+
+```toml
+[gen.kotlin]
+enabled = true
+out = "src/main/kotlin/com/myapp/db"
+package = "com.myapp.db"
+driver = "jdbc"
+```
+
+### Generated Files
+
+| File | Description |
+|------|-------------|
+| `Models.kt` | All models as `data class` + `enum class` in one file |
+| `{QueryFile}.kt` | Per-query-file query implementations |
+| `Queries.kt` | Unified query interface with `newq()` factory |
+
+### Key Features
+
+- **Data classes**: Uses `data class` with nullable `Type?` fields
+- **Null safety**: All fields nullable for database null handling
+- **Exposed/R2DBC**: Alternative drivers for Exposed ORM or reactive pipelines
+- **ScyllaDB/Cassandra**: DataStax `CqlSession` driver for CQL
+- **Package auto-detection**: Reads `build.gradle.kts`, `build.gradle`, or `pom.xml`
 
 ### Version Control
 

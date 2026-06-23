@@ -126,7 +126,10 @@ func (p *SchemaParser) Parse() (*Schema, error) {
 			}
 			dup := false
 			for _, t := range schema.Tables {
-				if strings.EqualFold(t.Name, v.Name) { dup = true; break }
+				if strings.EqualFold(t.Name, v.Name) {
+					dup = true
+					break
+				}
 			}
 			if !dup {
 				schema.Tables = append(schema.Tables, v)

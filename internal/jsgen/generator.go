@@ -25,7 +25,7 @@ func New(cfg *config.Config) *Generator {
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
 		queryParser:  parser.NewQueryParser(cfg),
-		cache:        gencommon.NewGenerationCache(),
+		cache:        gencommon.NewGenerationCacheWithDir(cfg.Gen.JS.Out),
 	}
 }
 
@@ -40,12 +40,17 @@ func (g *Generator) Generate() error {
 	}
 	g.schema = schema
 
+	// Compute checksums for incremental generation
+	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
+	configHash := fmt.Sprintf("%x", []byte(fmt.Sprintf("%s|%s|%s", g.Config.Database.Provider, g.Config.Gen.JS.Out, g.Config.Gen.JS.Driver)))
+	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+
 	queries, err := g.queryParser.Parse(schema)
 	if err != nil {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	if err := g.generateQueriesIncremental(queries, false); err != nil {
+	if err := g.generateQueriesIncremental(queries, fullRegen); err != nil {
 		return err
 	}
 
@@ -56,6 +61,12 @@ func (g *Generator) Generate() error {
 	if err := g.generateTypeScriptDeclarations(schema, queries); err != nil {
 		return err
 	}
+
+	// Save cache for incremental generation
+	g.cache.UpdateSchemaChecksum(schemaHash)
+	g.cache.UpdateConfigChecksum(configHash)
+	g.cache.MarkGeneration()
+	_ = g.cache.Save()
 
 	return nil
 }
@@ -84,10 +95,23 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 		isAsync = false
 	}
 
-	if isAsync {
-		w.WriteString(fmt.Sprintf("  async %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
+	useStructParams := len(paramNames) > 2
+	var fullParams string
+	if useStructParams {
+		fullParams = "args"
 	} else {
-		w.WriteString(fmt.Sprintf("  %s(%s) {\n", methodName, strings.Join(paramNames, ", ")))
+		fullParams = strings.Join(paramNames, ", ")
+	}
+
+	if isAsync {
+		w.WriteString(fmt.Sprintf("  async %s(%s) {\n", methodName, fullParams))
+	} else {
+		w.WriteString(fmt.Sprintf("  %s(%s) {\n", methodName, fullParams))
+	}
+
+	// Destructure args object when using struct params
+	if useStructParams {
+		w.WriteString(fmt.Sprintf("    const { %s } = args;\n", strings.Join(paramNames, ", ")))
 	}
 
 	// postgres driver (porsager/postgres) uses tagged template literals
@@ -239,13 +263,25 @@ func (g *Generator) generateMySQL2Execution(w *strings.Builder, paramNames []str
 	if hasColumns {
 		if cmd == ":one" {
 			if isSingleColumn && len(columns) > 0 {
-				w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows[0] ? Object.values(rows[0])[0] : null;\n" }; return fmt.Sprintf("    return rows[0] ? rows[0].%s : null;\n", n) }())
+				w.WriteString(func() string {
+					n := columns[0].Name
+					if strings.Contains(n, "(") || n == "*" {
+						return "    return rows[0] ? Object.values(rows[0])[0] : null;\n"
+					}
+					return fmt.Sprintf("    return rows[0] ? rows[0].%s : null;\n", n)
+				}())
 			} else {
 				w.WriteString("    return rows[0] || null;\n")
 			}
 		} else {
 			if isSingleColumn && len(columns) > 0 {
-				w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows.map(row => Object.values(row)[0]);\n" }; return fmt.Sprintf("    return rows.map(row => row.%s);\n", n) }())
+				w.WriteString(func() string {
+					n := columns[0].Name
+					if strings.Contains(n, "(") || n == "*" {
+						return "    return rows.map(row => Object.values(row)[0]);\n"
+					}
+					return fmt.Sprintf("    return rows.map(row => row.%s);\n", n)
+				}())
 			} else {
 				w.WriteString("    return rows;\n")
 			}
@@ -315,14 +351,26 @@ func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []str
 			if len(paramNames) > 0 {
 				if isSingleColumn && len(columns) > 0 {
 					w.WriteString("    const rows = prepared.all(" + strings.Join(paramNames, ", ") + ");\n")
-					w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows.map(row => Object.values(row)[0]);\n" }; return fmt.Sprintf("    return rows.map(row => row.%s);\n", n) }())
+					w.WriteString(func() string {
+						n := columns[0].Name
+						if strings.Contains(n, "(") || n == "*" {
+							return "    return rows.map(row => Object.values(row)[0]);\n"
+						}
+						return fmt.Sprintf("    return rows.map(row => row.%s);\n", n)
+					}())
 				} else {
 					w.WriteString("    return prepared.all(" + strings.Join(paramNames, ", ") + ");\n")
 				}
 			} else {
 				if isSingleColumn && len(columns) > 0 {
 					w.WriteString("    const rows = prepared.all();\n")
-					w.WriteString(func() string { n := columns[0].Name; if strings.Contains(n, "(") || n == "*" { return "    return rows.map(row => Object.values(row)[0]);\n" }; return fmt.Sprintf("    return rows.map(row => row.%s);\n", n) }())
+					w.WriteString(func() string {
+						n := columns[0].Name
+						if strings.Contains(n, "(") || n == "*" {
+							return "    return rows.map(row => Object.values(row)[0]);\n"
+						}
+						return fmt.Sprintf("    return rows.map(row => row.%s);\n", n)
+					}())
 				} else {
 					w.WriteString("    return prepared.all();\n")
 				}
@@ -361,6 +409,14 @@ func (g *Generator) getReturnType(query *parser.Query) string {
 						}
 					}
 				}
+			}
+		}
+
+		// Fallback: map the SQL type directly (handles COUNT(*), expressions, etc.)
+		colType := query.Columns[0].Type
+		if colType != "" {
+			if jsType := g.mapSQLTypeToJS(colType); jsType != "string" {
+				return jsType
 			}
 		}
 		return "any"
@@ -461,7 +517,7 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	sqlTypeLower := strings.ToLower(sqlType)
 
 	if strings.HasPrefix(sqlTypeLower, "enum(") {
-		values := extractEnumValuesFromType(sqlType)
+		values := gencommon.ExtractEnumValues(sqlType)
 		if len(values) > 0 {
 			quotedValues := make([]string, len(values))
 			for i, v := range values {
@@ -498,6 +554,9 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 		return "boolean"
 	case strings.Contains(sqlTypeLower, "json"):
 		return "Object"
+	// CQL timeuuid/time must be checked BEFORE generic "time" — "timeuuid" contains "time"
+	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid":
+		return "string"
 	case strings.Contains(sqlTypeLower, "timestamp"), strings.Contains(sqlTypeLower, "date"), strings.Contains(sqlTypeLower, "time"):
 		return "Date"
 	case sqlTypeLower == "interval":
@@ -517,8 +576,8 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	case strings.HasPrefix(sqlTypeLower, "array("):
 		inner := sqlTypeLower[6 : len(sqlTypeLower)-1]
 		return g.mapSQLTypeToJS(inner) + "[]"
-	// ScyllaDB/Cassandra CQL types
-	case sqlTypeLower == "uuid", sqlTypeLower == "timeuuid", sqlTypeLower == "inet":
+	// ScyllaDB/Cassandra CQL types (non-uuid)
+	case sqlTypeLower == "inet":
 		return "string"
 	case sqlTypeLower == "varint", sqlTypeLower == "counter", sqlTypeLower == "duration":
 		return "number"
@@ -529,29 +588,6 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 	default:
 		return "string"
 	}
-}
-
-// extractEnumValuesFromType extracts values from inline ENUM type
-func extractEnumValuesFromType(columnType string) []string {
-	columnType = strings.ToLower(columnType)
-	if !strings.HasPrefix(columnType, "enum(") {
-		return nil
-	}
-
-	values := strings.TrimPrefix(columnType, "enum(")
-	values = strings.TrimSuffix(values, ")")
-
-	var result []string
-	parts := strings.Split(values, ",")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		part = strings.Trim(part, "'\"")
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-
-	return result
 }
 
 func (g *Generator) convertSQL(sql string) string {
@@ -569,11 +605,11 @@ func (g *Generator) convertSQL(sql string) string {
 
 func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, queries []*parser.Query) error {
 	var w strings.Builder
-	// Pre-allocate: header + ~200 bytes per table + ~300 bytes per query
 	estimatedSize := 200 + (len(schema.Tables) * 200) + (len(queries) * 300)
 	w.Grow(estimatedSize)
 	w.WriteString("// Code generated by FlashORM. DO NOT EDIT.\n\n")
 
+	// Table interfaces
 	for _, table := range schema.Tables {
 		structName := utils.Capitalize(table.Name)
 		w.WriteString(fmt.Sprintf("export interface %s {\n", structName))
@@ -587,74 +623,94 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 		w.WriteString("}\n\n")
 	}
 
+	// Result interfaces for multi-column queries
 	complexQueries := make(map[string]*parser.Query)
 	for _, query := range queries {
 		if len(query.Columns) > 1 && query.Cmd != ":exec" {
 			complexQueries[query.Name] = query
 		}
 	}
-
 	for queryName, query := range complexQueries {
 		interfaceName := utils.Capitalize(queryName) + "Result"
 		w.WriteString(fmt.Sprintf("export interface %s {\n", interfaceName))
-
 		for _, col := range query.Columns {
-			// Skip bare wildcard — unresolvable SELECT *
 			if col.Name == "*" {
 				continue
 			}
-			colType := g.inferColumnTypeFromSchema(col)
-			w.WriteString(fmt.Sprintf("  %s: %s;\n", col.Name, colType))
+			w.WriteString(fmt.Sprintf("  %s: %s;\n", col.Name, g.inferColumnTypeFromSchema(col)))
 		}
 		w.WriteString("}\n\n")
 	}
 
-	w.WriteString("export class Queries {\n")
-	w.WriteString("  constructor(db: any);\n\n")
-
-	seenMethods := make(map[string]bool)
+	// Args interfaces for queries with >2 params
+	seenArgs := make(map[string]bool)
 	for _, query := range queries {
-		methodName := utils.Uncapitalize(query.Name)
-
-		if seenMethods[methodName] {
+		if len(query.Params) <= 2 {
 			continue
 		}
-		seenMethods[methodName] = true
-
-		params := make([]string, len(query.Params))
+		argsType := utils.Capitalize(query.Name) + "Args"
+		if seenArgs[argsType] {
+			continue
+		}
+		seenArgs[argsType] = true
+		w.WriteString(fmt.Sprintf("export interface %s {\n", argsType))
 		for i, param := range query.Params {
 			paramName := param.Name
 			if paramName == "" {
 				paramName = fmt.Sprintf("p%d", i+1)
 			}
-			// Map SQL type to TypeScript type
-			tsType := g.mapSQLTypeToJS(param.Type)
-			params[i] = fmt.Sprintf("%s: %s", paramName, tsType)
+			w.WriteString(fmt.Sprintf("  %s: %s;\n", paramName, g.mapSQLTypeToJS(param.Type)))
+		}
+		w.WriteString("}\n\n")
+	}
+
+	// Queries class
+	w.WriteString("export class Queries {\n")
+	w.WriteString("  constructor(db: any);\n\n")
+
+	isAsyncJS := g.Config.Gen.JS.Driver != "better-sqlite3" && g.Config.Gen.JS.Driver != "bun:sqlite"
+
+	seenMethods := make(map[string]bool)
+	for _, query := range queries {
+		methodName := utils.Uncapitalize(query.Name)
+		if seenMethods[methodName] {
+			continue
+		}
+		seenMethods[methodName] = true
+
+		// Build param declaration
+		var paramDecl string
+		if len(query.Params) > 2 {
+			paramDecl = fmt.Sprintf("args: %s", utils.Capitalize(query.Name)+"Args")
+		} else {
+			parts := make([]string, len(query.Params))
+			for i, param := range query.Params {
+				paramName := param.Name
+				if paramName == "" {
+					paramName = fmt.Sprintf("p%d", i+1)
+				}
+				parts[i] = fmt.Sprintf("%s: %s", paramName, g.mapSQLTypeToJS(param.Type))
+			}
+			paramDecl = strings.Join(parts, ", ")
 		}
 
+		// Build return type
 		returnType := g.getReturnType(query)
-
 		if len(query.Columns) > 1 && query.Cmd != ":exec" {
 			returnType = utils.Capitalize(query.Name) + "Result"
 		}
-
-		isAsyncJS := true
-		if g.Config.Gen.JS.Driver == "better-sqlite3" || g.Config.Gen.JS.Driver == "bun:sqlite" {
-			isAsyncJS = false
-		}
-
 		switch query.Cmd {
 		case ":one":
 			if isAsyncJS {
 				returnType = fmt.Sprintf("Promise<%s | null>", returnType)
 			} else {
-				returnType = fmt.Sprintf("%s | null", returnType)
+				returnType = returnType + " | null"
 			}
 		case ":many":
 			if isAsyncJS {
 				returnType = fmt.Sprintf("Promise<%s[]>", returnType)
 			} else {
-				returnType = fmt.Sprintf("%s[]", returnType)
+				returnType = returnType + "[]"
 			}
 		default:
 			if isAsyncJS {
@@ -664,7 +720,7 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 			}
 		}
 
-		w.WriteString(fmt.Sprintf("  %s(%s): %s;\n", methodName, strings.Join(params, ", "), returnType))
+		w.WriteString(fmt.Sprintf("  %s(%s): %s;\n", methodName, paramDecl, returnType))
 	}
 
 	w.WriteString("}\n\n")

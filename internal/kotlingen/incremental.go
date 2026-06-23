@@ -95,6 +95,15 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 				needsLocalDateTime = true
 			}
 		}
+		for _, param := range q.Params {
+			kt := g.sqlTypeToKotlin(param.Type, false)
+			if strings.Contains(kt, "UUID") {
+				needsUUID = true
+			}
+			if strings.Contains(kt, "LocalDateTime") {
+				needsLocalDateTime = true
+			}
+		}
 	}
 	if needsUUID {
 		w.WriteString("import java.util.UUID\n")
@@ -110,32 +119,27 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 	provider := g.Config.Database.Provider
 	isScylla := provider == "scylla" || provider == "scylladb" || provider == "cassandra"
 
-	var connType string
 	switch {
 	case isScylla:
-		connType = "com.datastax.oss.driver.api.core.CqlSession"
 		w.WriteString("import com.datastax.oss.driver.api.core.CqlSession\n\n")
 	case driver == "r2dbc":
-		connType = "io.r2dbc.spi.Connection"
 		w.WriteString("import io.r2dbc.spi.Connection\n\n")
 	case driver == "exposed":
-		connType = "org.jetbrains.exposed.sql.Database"
 		w.WriteString("import org.jetbrains.exposed.sql.Database\n\n")
 	default:
-		connType = "java.sql.Connection"
 		w.WriteString("import java.sql.Connection\n\n")
 	}
 
 	paramName := "conn"
-	if isScylla {
+	var connType string
+	switch {
+	case isScylla:
 		paramName = "session"
 		connType = "CqlSession"
-	} else if driver == "exposed" {
+	case driver == "exposed":
 		paramName = "db"
 		connType = "Database"
-	} else if driver == "r2dbc" {
-		connType = "Connection"
-	} else {
+	default:
 		connType = "Connection"
 	}
 
@@ -143,24 +147,51 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 		// Emit Row data classes at top level (before the class body)
 		columns := g.expandWildcardColumns(q)
 		cmd := strings.ToLower(q.Cmd)
-		rowType := queryPascal(q.Name) + "Row"
+		rowType := gencommon.QueryPascal(q.Name) + "Row"
 		if mt := g.modelTypeForQuery(q, columns); mt != "" {
 			rowType = mt
 		}
-		if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowType == queryPascal(q.Name)+"Row" {
+		if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowType == gencommon.QueryPascal(q.Name)+"Row" {
 			w.WriteString(fmt.Sprintf("data class %s(\n", rowType))
-			for i, col := range columns {
+			ktCols := make([]*parser.QueryColumn, 0, len(columns))
+			for _, col := range columns {
+				if col.Name != "*" {
+					ktCols = append(ktCols, col)
+				}
+			}
+			for i, col := range ktCols {
 				// For JOIN/aggregate result rows, use nullable for non-primitive types
 				// because LEFT JOIN columns and computed columns can be null in JDBC
 				nullable := col.Nullable || col.IsComputed || !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false))
 				kt := g.sqlTypeToKotlin(col.Type, nullable)
 				comma := ","
-				if i == len(columns)-1 {
+				if i == len(ktCols)-1 {
 					comma = ""
 				}
 				w.WriteString(fmt.Sprintf("    val %s: %s%s\n", col.Name, kt, comma))
 			}
 			w.WriteString(")\n\n")
+		}
+	}
+
+	// Emit Args data classes top-level (before the class body)
+	emittedArgs := make(map[string]bool)
+	for _, q := range queries {
+		if len(q.Params) > 2 {
+			argsName := gencommon.QueryPascal(q.Name) + "Args"
+			if !emittedArgs[argsName] {
+				emittedArgs[argsName] = true
+				w.WriteString(fmt.Sprintf("data class %s(\n", argsName))
+				for i, p := range q.Params {
+					comma := ","
+					if i == len(q.Params)-1 {
+						comma = ""
+					}
+					w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
+						utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
+				}
+				w.WriteString(")\n\n")
+			}
 		}
 	}
 

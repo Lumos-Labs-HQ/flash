@@ -20,11 +20,11 @@ type Generator struct {
 	queryParser  *parser.QueryParser
 	cache        *gencommon.GenerationCache
 	enumTypeMap  map[string]string // MySQL inline ENUM type -> generated enum name
+	expander     *gencommon.SchemaExpander
 }
 
 func New(cfg *config.Config) *Generator {
-	cache := gencommon.NewGenerationCache()
-	cache.OutDir = cfg.Gen.Go.Out
+	cache := gencommon.NewGenerationCacheWithDir(cfg.Gen.Go.Out)
 	return &Generator{
 		Config:       cfg,
 		schemaParser: parser.NewSchemaParser(cfg),
@@ -44,6 +44,7 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse schema: %w", err)
 	}
 	g.schema = schema
+	g.expander = gencommon.NewSchemaExpander(schema)
 	g.enumTypeMap = g.extractInlineEnums()
 
 	// Compute current checksums for incremental generation
@@ -317,84 +318,10 @@ func (g *Generator) generateDB() error {
 }
 
 func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
-	hasReturning := strings.Contains(strings.ToUpper(query.SQL), "RETURNING")
-
-	// No columns and no RETURNING clause - nothing to expand
-	if len(query.Columns) == 0 && !hasReturning {
-		return query.Columns
+	if g.expander == nil {
+		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-
-	// Single non-wildcard column - no expansion needed
-	if len(query.Columns) == 1 && query.Columns[0].Name != "*" {
-		return query.Columns
-	}
-
-	// Multiple columns - check if any is a wildcard
-	if len(query.Columns) > 1 {
-		hasWildcard := false
-		for _, col := range query.Columns {
-			if col.Name == "*" {
-				hasWildcard = true
-				break
-			}
-		}
-		if !hasWildcard {
-			return query.Columns
-		}
-	}
-
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" {
-		return query.Columns
-	}
-
-	var table *parser.Table
-	for _, t := range g.schema.Tables {
-		if strings.EqualFold(t.Name, tableName) {
-			table = t
-			break
-		}
-	}
-
-	if table == nil {
-		return query.Columns
-	}
-
-	// If the table only has a wildcard column (SELECT * view with unresolved source),
-	// try to find the source table from the view's stored SQL.
-	cols := table.Columns
-	if len(cols) == 1 && cols[0].Name == "*" {
-		// The view column's Type holds the raw view SQL — extract the FROM table
-		sourceSQL := cols[0].Type
-		sourceTable := utils.ExtractTableName(sourceSQL)
-		if sourceTable != "" {
-			for _, t := range g.schema.Tables {
-				if strings.EqualFold(t.Name, sourceTable) && !(len(t.Columns) == 1 && t.Columns[0].Name == "*") {
-					cols = t.Columns
-					break
-				}
-			}
-		}
-		// Still unresolved — return empty so the method generates with no columns
-		if len(cols) == 1 && cols[0].Name == "*" {
-			return []*parser.QueryColumn{}
-		}
-	}
-
-	expanded := make([]*parser.QueryColumn, 0, len(cols))
-	for _, col := range cols {
-		if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
-			continue
-		}
-		expanded = append(expanded, &parser.QueryColumn{
-			Name:     col.Name,
-			Type:     col.Type,
-			Table:    table.Name,
-			Nullable: col.Nullable,
-		})
-	}
-
-	return expanded
+	return g.expander.ExpandWildcardColumns(query)
 }
 
 func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Query) error {
@@ -412,45 +339,7 @@ func (g *Generator) generateQueryMethod(code *strings.Builder, query *parser.Que
 // modelTypeForQuery returns the model struct name if the query columns exactly match
 // a table in the schema — enabling reuse of the model type instead of a duplicate *Row struct.
 func (g *Generator) modelTypeForQuery(query *parser.Query, columns []*parser.QueryColumn) string {
-	if len(columns) == 0 || g.schema == nil {
-		return ""
-	}
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" {
-		return ""
-	}
-	// Strip keyspace prefix for lookup
-	if idx := strings.LastIndex(tableName, "."); idx >= 0 {
-		tableName = tableName[idx+1:]
-	}
-	var table *parser.Table
-	for _, t := range g.schema.Tables {
-		name := t.Name
-		if idx := strings.LastIndex(name, "."); idx >= 0 {
-			name = name[idx+1:]
-		}
-		if strings.EqualFold(name, tableName) {
-			table = t
-			break
-		}
-	}
-	if table == nil || len(table.Columns) == 0 {
-		return ""
-	}
-	// Skip views (marker columns)
-	if len(table.Columns) == 1 && (table.Columns[0].Name == "*" || strings.HasPrefix(table.Columns[0].Name, "/*")) {
-		return ""
-	}
-	if len(columns) != len(table.Columns) {
-		return ""
-	}
-	for i, col := range columns {
-		tblCol := table.Columns[i]
-		if !strings.EqualFold(col.Name, tblCol.Name) {
-			return ""
-		}
-	}
-	return utils.ToPascalCase(tableName)
+	return g.expander.ModelTypeForQuery(query, columns)
 }
 
 func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.Query) error {
@@ -461,7 +350,7 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 		rowTypeName = mt
 	}
 
-	useStructParams := len(query.Params) > 3
+	useStructParams := len(query.Params) > 2
 
 	if useStructParams && len(query.Params) > 0 {
 		code.WriteString(fmt.Sprintf("type %sParams struct {\n", methodName))
@@ -739,6 +628,9 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
+			if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
+				continue
+			}
 			fieldName := utils.ToPascalCase(col.Name)
 			// Gocql Row types use value types not pointers (assigned via fmt.Sprint)
 			goType := g.mapSQLTypeToGo(col.Type, false)
@@ -807,7 +699,7 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 	// ScyllaDB/Cassandra collection types — must be before generic string/int checks
 	case strings.HasPrefix(sqlTypeLower, "set<"), strings.HasPrefix(sqlTypeLower, "list<"):
 		// Extract element type and map to []GoType
-		inner := extractCollectionInner(sqlTypeLower)
+		inner := gencommon.ExtractCollectionInner(sqlTypeLower)
 		elemGo := g.mapSQLTypeToGo(inner, false)
 		if nullable && isScylla {
 			return "*[]" + elemGo
@@ -815,7 +707,7 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		return "[]" + elemGo
 	case strings.HasPrefix(sqlTypeLower, "map<"):
 		// map<key,value> → map[KeyType]ValueType
-		k, v := extractMapTypes(sqlTypeLower)
+		k, v := gencommon.ExtractMapTypes(sqlTypeLower)
 		kGo := g.mapSQLTypeToGo(k, false)
 		vGo := g.mapSQLTypeToGo(v, false)
 		if nullable && isScylla {
@@ -824,7 +716,7 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		return fmt.Sprintf("map[%s]%s", kGo, vGo)
 	case strings.HasPrefix(sqlTypeLower, "frozen<"):
 		// frozen<type> — unwrap and check for UDT
-		inner := extractCollectionInner(sqlTypeLower)
+		inner := gencommon.ExtractCollectionInner(sqlTypeLower)
 		if isScylla && g.schema != nil {
 			for _, udt := range g.schema.UDTs {
 				bareName := udt.Name
@@ -958,7 +850,7 @@ func (g *Generator) mapParamTypeToGo(paramType string) string {
 	if isScylla {
 		lower := strings.ToLower(paramType)
 		if strings.HasPrefix(lower, "set<") || strings.HasPrefix(lower, "list<") {
-			inner := extractCollectionInner(lower)
+			inner := gencommon.ExtractCollectionInner(lower)
 			elemGo := g.mapSQLTypeToGo(inner, false)
 			return "[]" + elemGo
 		}
@@ -1036,7 +928,7 @@ func (g *Generator) extractInlineEnums() map[string]string {
 		for _, col := range table.Columns {
 			colTypeLower := strings.ToLower(col.Type)
 			if strings.HasPrefix(colTypeLower, "enum(") {
-				values := extractEnumValues(col.Type)
+				values := gencommon.ExtractEnumValues(col.Type)
 				if len(values) > 0 {
 					enumName := fmt.Sprintf("%s_%s", table.Name, col.Name)
 
@@ -1054,86 +946,10 @@ func (g *Generator) extractInlineEnums() map[string]string {
 	return enumTypeMap
 }
 
-// extractEnumValues extracts values from inline ENUM type
-func extractEnumValues(columnType string) []string {
-	columnType = strings.ToLower(columnType)
-	if !strings.HasPrefix(columnType, "enum(") {
-		return nil
-	}
-
-	values := strings.TrimPrefix(columnType, "enum(")
-	values = strings.TrimSuffix(values, ")")
-
-	var result []string
-	parts := strings.Split(values, ",")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		part = strings.Trim(part, "'\"")
-		if part != "" {
-			result = append(result, part)
-		}
-	}
-
-	return result
-}
-
-// extractCQLInner extracts the inner type from a CQL collection wrapper like frozen<X> or list<X>.
-func extractCQLInner(typ, wrapper string) (string, bool) {
-	prefix := wrapper + "<"
-	if strings.HasPrefix(typ, prefix) && strings.HasSuffix(typ, ">") {
-		inner := typ[len(prefix) : len(typ)-1]
-		return strings.TrimSpace(inner), true
-	}
-	return "", false
-}
-
-// extractCollectionInner extracts the element type from set<T>, list<T>, or frozen<T>.
-func extractCollectionInner(typ string) string {
-	for _, wrapper := range []string{"set", "list", "frozen"} {
-		if inner, ok := extractCQLInner(typ, wrapper); ok {
-			return inner
-		}
-	}
-	return "text"
-}
-
-// extractMapTypes extracts key and value types from map<K,V>.
-func extractMapTypes(typ string) (string, string) {
-	k, v, ok := extractCQLMap(typ)
-	if !ok {
-		return "string", "string"
-	}
-	return k, v
-}
-
 // resolveWildcardViewColumns returns nil for SELECT * views — the struct will be empty
 // but won't generate an invalid `* *string` field.
 func (g *Generator) resolveWildcardViewColumns(viewName string) []*parser.Column {
 	return nil
-}
-
-// extractCQLMap extracts key and value types from a CQL map<key,value>.
-func extractCQLMap(typ string) (string, string, bool) {
-	if !strings.HasPrefix(typ, "map<") || !strings.HasSuffix(typ, ">") {
-		return "", "", false
-	}
-	inner := typ[4 : len(typ)-1]
-	angle := 0
-	for i, ch := range inner {
-		switch ch {
-		case '<':
-			angle++
-		case '>':
-			angle--
-		case ',':
-			if angle == 0 {
-				key := strings.TrimSpace(inner[:i])
-				val := strings.TrimSpace(inner[i+1:])
-				return key, val, true
-			}
-		}
-	}
-	return "", "", false
 }
 
 func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parser.Query) error {
@@ -1143,7 +959,7 @@ func (g *Generator) generateGocqlQueryMethod(code *strings.Builder, query *parse
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowTypeName = mt
 	}
-	useStructParams := len(query.Params) > 3
+	useStructParams := len(query.Params) > 2
 
 	cmd := strings.ToLower(query.Cmd)
 	hasReturning := strings.Contains(strings.ToUpper(query.SQL), "RETURNING")
@@ -1355,7 +1171,7 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 	if mt := g.modelTypeForQuery(query, columns); mt != "" {
 		rowTypeName = mt
 	}
-	useStructParams := len(query.Params) > 3
+	useStructParams := len(query.Params) > 2
 
 	if useStructParams && len(query.Params) > 0 {
 		code.WriteString(fmt.Sprintf("type %sParams struct {\n", methodName))
@@ -1540,6 +1356,9 @@ func (g *Generator) generatePGXQueryMethod(code *strings.Builder, query *parser.
 	if (cmd == ":one" || cmd == ":many") && len(columns) > 1 && rowTypeName == methodName+"Row" {
 		code.WriteString(fmt.Sprintf("type %sRow struct {\n", methodName))
 		for _, col := range columns {
+			if col.Name == "*" || strings.HasPrefix(col.Name, "/*") {
+				continue
+			}
 			fieldName := utils.ToPascalCase(col.Name)
 			goType := g.mapColumnTypeToGo(col.Type, col.Nullable)
 			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))

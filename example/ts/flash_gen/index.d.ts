@@ -158,23 +158,56 @@ export interface PostStats {
   last_comment_at: string | null;
 }
 
-export interface GetPostWithActiveCommentersResult {
-  commenter_name: string;
-  last_comment_at: string | null;
+export interface GetMediaByUserResult {
+  id: string;
+  type: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  created_at: Date;
 }
 
-export interface GetUserAgeStatsResult {
-  first_joined: Date | null;
-  last_joined: Date | null;
-  total: number;
-  avg_age: number | null;
-  avg_name_length: number | null;
+export interface GetUserWithStatsResult {
+  published_posts: number;
+  total_comments: number;
+  unread_notifications: number;
+  storage_used: number | null;
 }
 
-export interface GetUsersWithNoPostsResult {
+export interface GetUsersWithNullAddressResult {
   id: number;
   name: string;
   email: string;
+}
+
+export interface GetUserPreferencesResult {
+  id: number;
+  name: string;
+  preferences: Object | null;
+}
+
+export interface GetPostWithCommentsResult {
+  post_id: number;
+  title: string;
+  content: string;
+  author: string;
+  comment_text: string;
+  commenter: string;
+}
+
+export interface GetUserRoleCountResult {
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+  count: number;
+}
+
+export interface GetAuditLogForUserResult {
+  id: number;
+  table_name: string;
+  record_id: string;
+  action: string;
+  old_data: Object | null;
+  new_data: Object | null;
+  changed_at: Date;
 }
 
 export interface GetUserFeedResult {
@@ -190,25 +223,115 @@ export interface GetUserFeedResult {
   tag_count: number;
 }
 
-export interface GetDashboardStatsResult {
-  total_users: number;
-  total_posts: number;
-  total_comments: number;
-  published_posts: number;
-  posts_this_week: number;
-  signups_this_week: number;
-  comments_last_24h: number;
-  pending_orders: number;
+export interface GetUsersByGeneratedRangeResult {
+  id: number;
+  name: string;
+  age: number | null;
+  age_range: number | null;
 }
 
-export interface GetLargeMediaFilesResult {
+export interface GetDistinctCommentersResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetMediaByTypeResult {
   id: string;
   user_id: number;
-  type: string;
   url: string;
   size_bytes: number;
   mime_type: string;
   created_at: Date;
+}
+
+export interface GetStorageUsedByUserResult {
+  total_bytes: number | null;
+  total_files: number;
+  image_count: number;
+  video_count: number;
+  document_count: number;
+}
+
+export interface GetUserPostRankingsResult {
+  id: number;
+  name: string;
+  post_count: number;
+  post_rank: number;
+  dense_post_rank: number;
+  row_num: number;
+}
+
+export interface GetUsersWithActivityLevelResult {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date;
+  account_age_category: string;
+  effective_role: string;
+}
+
+export interface GetUserAgeStatsResult {
+  first_joined: Date | null;
+  last_joined: Date | null;
+  total: number;
+  avg_age: number | null;
+  avg_name_length: number | null;
+}
+
+export interface GetAllContentByUserResult {
+  content_type: string;
+  content_id: string;
+  content_summary: string;
+  created_at: Date;
+}
+
+export interface SearchPostsByTitleResult {
+  id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+}
+
+export interface GetUserRegistrationStatsResult {
+  year: number | null;
+  month: number | null;
+  signups: number;
+}
+
+export interface GetUserSubscriptionsResult {
+  id: number;
+  tier: 'free' | 'pro' | 'enterprise';
+  started_at: Date;
+  expires_at: Date | null;
+  auto_renew: boolean;
+}
+
+export interface GetUserShippingAddressResult {
+  id: number;
+  name: string;
+  shipping: string | null;
+  shipping_city: string;
+  shipping_country: string;
+}
+
+export interface CountUsersResult {
+  total_users: number;
+  admin_count: number;
+  regular_count: number;
+}
+
+export interface GetUsersWithNoPostsResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetTagsForPostResult {
+  id: number;
+  name: string;
+  slug: string;
+  color: string | null;
 }
 
 export interface SearchPostsFullTextResult {
@@ -219,6 +342,77 @@ export interface SearchPostsFullTextResult {
   created_at: Date;
   author_name: string;
   rank: number | null;
+}
+
+export interface GetUsersByNamesResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetPostWithActiveCommentersResult {
+  commenter_name: string;
+  last_comment_at: string | null;
+}
+
+export interface GetPostCountByUserResult {
+  post_count: number;
+  comment_count: number;
+}
+
+export interface GetOrdersByUserResult {
+  id: string;
+  total_amount: number;
+  discount_pct: string | null;
+  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  shipping_addr: string;
+  placed_at: Date;
+}
+
+export interface GetOrdersInStateResult {
+  id: string;
+  user_id: number;
+  user_name: string;
+  total_amount: number;
+  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  placed_at: Date;
+}
+
+export interface GetMediaByPostResult {
+  id: string;
+  type: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  created_at: Date;
+}
+
+export interface GetPostsByTagResult {
+  id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+  author_name: string;
+  comment_count: number;
+}
+
+export interface GetTopTagsResult {
+  id: number;
+  name: string;
+  slug: string;
+  color: string | null;
+  post_count: number;
+}
+
+export interface GetUserDisplayInfoResult {
+  id: number;
+  name: string;
+  email: string;
+  display_address: string;
+  age: string;
+  bio: string;
 }
 
 export interface GetComplexUserAnalyticsResult {
@@ -240,344 +434,6 @@ export interface GetComplexUserAnalyticsResult {
   avg_post_length: number;
   activity_level: string;
   engagement_score: number;
-}
-
-export interface SearchUsersResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetWeeklyPostStatsResult {
-  week_start: string;
-  posts_created: number;
-  total_views: number | null;
-}
-
-export interface CountUsersResult {
-  total_users: number;
-  admin_count: number;
-  regular_count: number;
-}
-
-export interface GetPostsGroupedByStatusResult {
-  status: 'draft' | 'published' | 'archived';
-  count: number;
-  oldest: Date | null;
-  newest: Date | null;
-}
-
-export interface GetOrdersInStateResult {
-  id: string;
-  user_id: number;
-  user_name: string;
-  total_amount: number;
-  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
-  placed_at: Date;
-}
-
-export interface GetUsersWithNullAddressResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetUserTrendingPostsResult {
-  id: number;
-  title: string;
-  user_id: number;
-  view_count: number;
-  created_at: Date;
-  prev_view_count: number;
-  next_view_count: number;
-  view_delta: number | null;
-}
-
-export interface GetPostsWithCommentCountResult {
-  id: number;
-  title: string;
-  created_at: Date;
-  comment_count: number;
-  unique_commenters: number;
-  last_comment_at: Date | null;
-}
-
-export interface GetUserRegistrationStatsResult {
-  year: number | null;
-  month: number | null;
-  signups: number;
-}
-
-export interface FindUsersByJsonContainsResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetLatestPostPerUserResult {
-  user_id: number;
-  post_id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-}
-
-export interface GetUserSubscriptionsResult {
-  id: number;
-  tier: 'free' | 'pro' | 'enterprise';
-  started_at: Date;
-  expires_at: Date | null;
-  auto_renew: boolean;
-}
-
-export interface GetMediaByPostResult {
-  id: string;
-  type: string;
-  url: string;
-  size_bytes: number;
-  mime_type: string;
-  width: number | null;
-  height: number | null;
-  created_at: Date;
-}
-
-export interface GetUsersWithBioResult {
-  id: number;
-  name: string;
-  email: string;
-  bio: string;
-}
-
-export interface SearchUsersWithCOALESCEResult {
-  id: number;
-  name: string;
-  email: string;
-  bio_text: string;
-}
-
-export interface GetOrdersByUserResult {
-  id: string;
-  total_amount: number;
-  discount_pct: string | null;
-  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
-  shipping_addr: string;
-  placed_at: Date;
-}
-
-export interface GetUserWithStatsResult {
-  published_posts: number;
-  total_comments: number;
-  unread_notifications: number;
-  storage_used: number | null;
-}
-
-export interface GetAllContentByUserResult {
-  content_type: string;
-  content_id: string;
-  content_summary: string;
-  created_at: Date;
-}
-
-export interface GetDistinctCommentersResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetUsersByAgeRangeResult {
-  id: number;
-  name: string;
-  age: number | null;
-  age_range: number | null;
-}
-
-export interface GetUsersByGeneratedRangeResult {
-  id: number;
-  name: string;
-  age: number | null;
-  age_range: number | null;
-}
-
-export interface GetUserPreferencesResult {
-  id: number;
-  name: string;
-  preferences: Object | null;
-}
-
-export interface GetUsersWhoCommentedResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetPostCountByUserResult {
-  post_count: number;
-  comment_count: number;
-}
-
-export interface GetNotificationsByTypeResult {
-  id: number;
-  type: string;
-  title: string;
-  body: string;
-  is_read: boolean;
-  created_at: Date;
-}
-
-export interface GetTopTagsResult {
-  id: number;
-  name: string;
-  slug: string;
-  color: string | null;
-  post_count: number;
-}
-
-export interface GetUsersCreatedBetweenResult {
-  id: number;
-  name: string;
-  email: string;
-  created_at: Date;
-}
-
-export interface GetTagsForPostResult {
-  id: number;
-  name: string;
-  slug: string;
-  color: string | null;
-}
-
-export interface GetStorageUsedByUserResult {
-  total_bytes: number | null;
-  total_files: number;
-  image_count: number;
-  video_count: number;
-  document_count: number;
-}
-
-export interface GetUsersWithTagResult {
-  id: number;
-  name: string;
-  email: string;
-  tags: string[] | null;
-}
-
-export interface GetUsersWithManyPostsResult {
-  id: number;
-  name: string;
-  email: string;
-  total_posts: number;
-}
-
-export interface GetUsersByNamesResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetTopCommentersResult {
-  id: number;
-  name: string;
-  email: string;
-  comment_count: number;
-  rank: number;
-}
-
-export interface GetUsersWithAnyTagResult {
-  id: number;
-  name: string;
-  email: string;
-  tags: string[] | null;
-}
-
-export interface GetAuditLogForUserResult {
-  id: number;
-  table_name: string;
-  record_id: string;
-  action: string;
-  old_data: Object | null;
-  new_data: Object | null;
-  changed_at: Date;
-}
-
-export interface GetAuditLogForTableResult {
-  id: number;
-  table_name: string;
-  record_id: string;
-  action: string;
-  changed_by: number | null;
-  changed_at: Date;
-}
-
-export interface GetPostsByTagResult {
-  id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-  author_name: string;
-  comment_count: number;
-}
-
-export interface GetUserDisplayInfoResult {
-  id: number;
-  name: string;
-  email: string;
-  display_address: string;
-  age: string;
-  bio: string;
-}
-
-export interface FindUsersByJsonKeyResult {
-  id: number;
-  name: string;
-  email: string;
-  preferences: Object | null;
-}
-
-export interface GetUserShippingAddressResult {
-  id: number;
-  name: string;
-  shipping: string | null;
-  shipping_city: string;
-  shipping_country: string;
-}
-
-export interface GetUserRoleCountResult {
-  role: 'admin' | 'moderator' | 'user' | 'guest';
-  count: number;
-}
-
-export interface SearchPostsByTitleResult {
-  id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-}
-
-export interface GetMediaByTypeResult {
-  id: string;
-  user_id: number;
-  url: string;
-  size_bytes: number;
-  mime_type: string;
-  created_at: Date;
-}
-
-export interface GetUserPostRankingsResult {
-  id: number;
-  name: string;
-  post_count: number;
-  post_rank: number;
-  dense_post_rank: number;
-  row_num: number;
-}
-
-export interface GetMediaByUserResult {
-  id: string;
-  type: string;
-  url: string;
-  size_bytes: number;
-  mime_type: string;
-  created_at: Date;
 }
 
 export interface GetPostDetailsWithAllRelationsResult {
@@ -603,28 +459,133 @@ export interface GetPostDetailsWithAllRelationsResult {
   hours_since_created: number | null;
 }
 
+export interface GetUsersWhoCommentedResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface GetEngagementTimeSeriesResult {
   day: string;
   count: number;
   event_type: string;
 }
 
-export interface GetUsersWithActivityLevelResult {
+export interface SearchUsersWithCOALESCEResult {
+  id: number;
+  name: string;
+  email: string;
+  bio_text: string;
+}
+
+export interface GetUsersWithTagResult {
+  id: number;
+  name: string;
+  email: string;
+  tags: string[] | null;
+}
+
+export interface GetAuditLogForTableResult {
+  id: number;
+  table_name: string;
+  record_id: string;
+  action: string;
+  changed_by: number | null;
+  changed_at: Date;
+}
+
+export interface GetDashboardStatsResult {
+  total_users: number;
+  total_posts: number;
+  total_comments: number;
+  published_posts: number;
+  posts_this_week: number;
+  signups_this_week: number;
+  comments_last_24h: number;
+  pending_orders: number;
+}
+
+export interface GetUsersWithBioResult {
+  id: number;
+  name: string;
+  email: string;
+  bio: string;
+}
+
+export interface GetUsersByAgeRangeResult {
+  id: number;
+  name: string;
+  age: number | null;
+  age_range: number | null;
+}
+
+export interface FindUsersByJsonKeyResult {
+  id: number;
+  name: string;
+  email: string;
+  preferences: Object | null;
+}
+
+export interface FindUsersByJsonContainsResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetPostsWithCommentCountResult {
+  id: number;
+  title: string;
+  created_at: Date;
+  comment_count: number;
+  unique_commenters: number;
+  last_comment_at: Date | null;
+}
+
+export interface SearchUsersResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetWeeklyPostStatsResult {
+  week_start: string;
+  posts_created: number;
+  total_views: number | null;
+}
+
+export interface GetLargeMediaFilesResult {
+  id: string;
+  user_id: number;
+  type: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  created_at: Date;
+}
+
+export interface GetUsersCreatedBetweenResult {
   id: number;
   name: string;
   email: string;
   created_at: Date;
-  account_age_category: string;
-  effective_role: string;
 }
 
-export interface GetPostWithCommentsResult {
-  post_id: number;
+export interface GetUsersWithAnyTagResult {
+  id: number;
+  name: string;
+  email: string;
+  tags: string[] | null;
+}
+
+export interface GetUserTrendingPostsResult {
+  id: number;
   title: string;
-  content: string;
-  author: string;
-  comment_text: string;
-  commenter: string;
+  user_id: number;
+  view_count: number;
+  created_at: Date;
+  prev_view_count: number;
+  next_view_count: number;
+  view_delta: number | null;
 }
 
 export interface FullTextSearchPostsResult {
@@ -633,27 +594,212 @@ export interface FullTextSearchPostsResult {
   rank: number | null;
 }
 
+export interface GetNotificationsByTypeResult {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: Date;
+}
+
+export interface GetPostsGroupedByStatusResult {
+  status: 'draft' | 'published' | 'archived';
+  count: number;
+  oldest: Date | null;
+  newest: Date | null;
+}
+
+export interface GetUsersWithManyPostsResult {
+  id: number;
+  name: string;
+  email: string;
+  total_posts: number;
+}
+
+export interface GetLatestPostPerUserResult {
+  user_id: number;
+  post_id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+}
+
+export interface GetTopCommentersResult {
+  id: number;
+  name: string;
+  email: string;
+  comment_count: number;
+  rank: number;
+}
+
+export interface CreateUserFullArgs {
+  name: string;
+  email: string;
+  age: number;
+  bio: string;
+  preferences: Object;
+  tags: string[];
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+}
+
+export interface UpsertUserArgs {
+  name: string;
+  email: string;
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+}
+
+export interface UpsertUserWithCOALESCEArgs {
+  name: string;
+  email: string;
+  bio: string;
+}
+
+export interface SearchUsersWithCOALESCEArgs {
+  name: string;
+  email: string;
+  age: number;
+  limit: number;
+  offset: number;
+}
+
+export interface GetRecentUsersArgs {
+  created_at: Date;
+  limit: number;
+  offset: number;
+}
+
+export interface UpdateUserShippingArgs {
+  shipping_field1: string;
+  shipping_field2: string;
+  shipping_field3: string;
+  shipping_field4: string;
+  shipping_field5: string;
+  id: number;
+}
+
+export interface GetComplexUserAnalyticsArgs {
+  total_posts: string;
+  total_comments: string;
+  limit: string;
+}
+
+export interface SearchUsersArgs {
+  name: string;
+  email: string;
+  limit: number;
+  offset: number;
+}
+
+export interface SearchPostsByTitleArgs {
+  title: string;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateSubscriptionArgs {
+  user_id: number;
+  tier: 'free' | 'pro' | 'enterprise';
+  expires_at: Date;
+  auto_renew: boolean;
+}
+
+export interface GetAuditLogForUserArgs {
+  changed_by: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreatePostArgs {
+  user_id: number;
+  category_id: number;
+  title: string;
+  content: string;
+}
+
+export interface CreateCommentArgs {
+  post_id: number;
+  user_id: number;
+  content: string;
+}
+
+export interface CreateNotificationArgs {
+  user_id: number;
+  type: string;
+  title: string;
+  body: string;
+  metadata: Object;
+}
+
+export interface GetNotificationsByUserArgs {
+  user_id: number;
+  limit: number;
+  offset: number;
+}
+
+export interface GetNotificationsByTypeArgs {
+  user_id: number;
+  type: string;
+  limit: number;
+}
+
+export interface CreateTagArgs {
+  name: string;
+  slug: string;
+  color: string;
+}
+
+export interface GetPostsByTagArgs {
+  slug: string;
+  limit: number;
+  offset: number;
+}
+
+export interface UploadMediaArgs {
+  user_id: number;
+  post_id: number;
+  type: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  width: number;
+  height: number;
+  metadata: Object;
+}
+
+export interface GetMediaByUserArgs {
+  user_id: number;
+  limit: number;
+  offset: number;
+}
+
+export interface GetUserFeedArgs {
+  user_id: number;
+  limit: number;
+  offset: number;
+}
+
 export class Queries {
   constructor(db: any);
 
   createUser(name: string, email: string): Promise<Users | null>;
-  createUserFull(name: string, email: string, age: number, bio: string, preferences: Object, tags: string[], role: 'admin' | 'moderator' | 'user' | 'guest'): Promise<Users | null>;
+  createUserFull(args: CreateUserFullArgs): Promise<Users | null>;
   getUser(id: number): Promise<Users | null>;
   getUserByEmail(email: string): Promise<Users | null>;
   updateUserName(name: string, id: number): Promise<Users | null>;
   updateUserRole(role: 'admin' | 'moderator' | 'user' | 'guest', id: number): Promise<number>;
   deleteUser(id: number): Promise<number>;
   listUsers(limit: number, offset: number): Promise<Users[]>;
-  upsertUser(name: string, email: string, role: 'admin' | 'moderator' | 'user' | 'guest'): Promise<Users | null>;
-  upsertUserWithCOALESCE(name: string, email: string, bio: string): Promise<Users | null>;
+  upsertUser(args: UpsertUserArgs): Promise<Users | null>;
+  upsertUserWithCOALESCE(args: UpsertUserWithCOALESCEArgs): Promise<Users | null>;
   getUsersWithNullAddress(): Promise<GetUsersWithNullAddressResult[]>;
   getUsersWithBio(): Promise<GetUsersWithBioResult[]>;
   getUserDisplayInfo(id: number): Promise<GetUserDisplayInfoResult | null>;
-  searchUsersWithCOALESCE(name: string, email: string, age: number, limit: number, offset: number): Promise<SearchUsersWithCOALESCEResult[]>;
+  searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEArgs): Promise<SearchUsersWithCOALESCEResult[]>;
   getUsersCreatedBetween(created_at: Date, created_at2: Date): Promise<GetUsersCreatedBetweenResult[]>;
   getUsersByAgeRange(age: number, age2: number): Promise<GetUsersByAgeRangeResult[]>;
   getUsersByGeneratedRange(age_range: number): Promise<GetUsersByGeneratedRangeResult[]>;
-  getRecentUsers(created_at: Date, limit: number, offset: number): Promise<Users[]>;
+  getRecentUsers(args: GetRecentUsersArgs): Promise<Users[]>;
   getUserPreferences(id: number): Promise<GetUserPreferencesResult | null>;
   updateUserPreferences(preferences: Object, id: number): Promise<number>;
   findUsersByJsonKey(preferences: Object): Promise<FindUsersByJsonKeyResult[]>;
@@ -663,8 +809,8 @@ export class Queries {
   addUserTag(tags: string[], id: number): Promise<number>;
   removeUserTag(tags: string[], id: number): Promise<number>;
   getUserShippingAddress(id: number): Promise<GetUserShippingAddressResult | null>;
-  updateUserShipping(shipping_field1: string, shipping_field2: string, shipping_field3: string, shipping_field4: string, shipping_field5: string, id: number): Promise<number>;
-  getComplexUserAnalytics(total_posts: string, total_comments: string, limit: string): Promise<GetComplexUserAnalyticsResult[]>;
+  updateUserShipping(args: UpdateUserShippingArgs): Promise<number>;
+  getComplexUserAnalytics(args: GetComplexUserAnalyticsArgs): Promise<GetComplexUserAnalyticsResult[]>;
   getPostWithActiveCommenters(rn: string, post_id: string): Promise<GetPostWithActiveCommentersResult[]>;
   getUserPostRankings(limit: number): Promise<GetUserPostRankingsResult[]>;
   getUserTrendingPosts(user_id: number, limit: number): Promise<GetUserTrendingPostsResult[]>;
@@ -674,20 +820,20 @@ export class Queries {
   getUsersWithActivityLevel(): Promise<GetUsersWithActivityLevelResult[]>;
   getPostWithComments(id: number): Promise<GetPostWithCommentsResult[]>;
   getPostDetailsWithAllRelations(id: number): Promise<GetPostDetailsWithAllRelationsResult | null>;
-  countUsersByRole(role: 'admin' | 'moderator' | 'user' | 'guest'): Promise<any | null>;
+  countUsersByRole(role: 'admin' | 'moderator' | 'user' | 'guest'): Promise<number | null>;
   countUsers(): Promise<CountUsersResult | null>;
   getUserRoleCount(): Promise<GetUserRoleCountResult[]>;
   getUserAgeStats(): Promise<GetUserAgeStatsResult | null>;
   getPostsGroupedByStatus(count_threshold: number): Promise<GetPostsGroupedByStatusResult[]>;
   getDistinctCommenters(): Promise<GetDistinctCommentersResult[]>;
   getLatestPostPerUser(): Promise<GetLatestPostPerUserResult[]>;
-  searchUsers(name: string, email: string, limit: number, offset: number): Promise<SearchUsersResult[]>;
-  searchPostsByTitle(title: string, limit: number, offset: number): Promise<SearchPostsByTitleResult[]>;
+  searchUsers(args: SearchUsersArgs): Promise<SearchUsersResult[]>;
+  searchPostsByTitle(args: SearchPostsByTitleArgs): Promise<SearchPostsByTitleResult[]>;
   fullTextSearchPosts(search_query: string, limit: number): Promise<FullTextSearchPostsResult[]>;
   getUserRegistrationStats(): Promise<GetUserRegistrationStatsResult[]>;
   getWeeklyPostStats(created_at: Date): Promise<GetWeeklyPostStatsResult[]>;
   getUsersInIds(id: number): Promise<Users[]>;
-  getUsersByNames(name1: string, name2: string, name3: string): Promise<GetUsersByNamesResult[]>;
+  getUsersByNames(name: string): Promise<GetUsersByNamesResult[]>;
   getUsersWhoCommented(): Promise<GetUsersWhoCommentedResult[]>;
   getUsersWithNoPosts(): Promise<GetUsersWithNoPostsResult[]>;
   getAllContentByUser(user_id: number, limit: number): Promise<GetAllContentByUserResult[]>;
@@ -696,44 +842,44 @@ export class Queries {
   refreshPostStats(): Promise<number>;
   getPostStats(limit: number): Promise<PostStats[]>;
   getUserSubscriptions(user_id: number): Promise<GetUserSubscriptionsResult[]>;
-  createSubscription(user_id: number, tier: 'free' | 'pro' | 'enterprise', expires_at: Date, auto_renew: boolean): Promise<Subscriptions | null>;
+  createSubscription(args: CreateSubscriptionArgs): Promise<Subscriptions | null>;
   getOrdersByUser(user_id: number, limit: number): Promise<GetOrdersByUserResult[]>;
   getOrdersInState(state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded', limit: number): Promise<GetOrdersInStateResult[]>;
-  getAuditLogForUser(changed_by: number, limit: number, offset: number): Promise<GetAuditLogForUserResult[]>;
+  getAuditLogForUser(args: GetAuditLogForUserArgs): Promise<GetAuditLogForUserResult[]>;
   getAuditLogForTable(table_name: string, limit: number): Promise<GetAuditLogForTableResult[]>;
   getDashboardStats(): Promise<GetDashboardStatsResult | null>;
   getTopCommenters(limit: number): Promise<GetTopCommentersResult[]>;
   getEngagementTimeSeries(created_at: Date): Promise<GetEngagementTimeSeriesResult[]>;
   createCategory(name: string): Promise<Categories | null>;
-  createPost(user_id: number, category_id: number, title: string, content: string): Promise<Posts | null>;
-  createComment(post_id: number, user_id: number, content: string): Promise<Comments | null>;
+  createPost(args: CreatePostArgs): Promise<Posts | null>;
+  createComment(args: CreateCommentArgs): Promise<Comments | null>;
   deleteOldUsers(created_at: Date): Promise<number>;
   updateUserTimestamp(updated_at: Date, id: number): Promise<number>;
-  createNotification(user_id: number, type: string, title: string, body: string, metadata: Object): Promise<Notifications | null>;
-  getNotificationsByUser(user_id: number, limit: number, offset: number): Promise<Notifications[]>;
+  createNotification(args: CreateNotificationArgs): Promise<Notifications | null>;
+  getNotificationsByUser(args: GetNotificationsByUserArgs): Promise<Notifications[]>;
   getUnreadCount(user_id: number): Promise<number | null>;
   markNotificationRead(id: number, user_id: number): Promise<number>;
   markAllNotificationsRead(user_id: number): Promise<number>;
   deleteOldNotifications(user_id: number, created_at: Date): Promise<number>;
-  getNotificationsByType(user_id: number, type: string, limit: number): Promise<GetNotificationsByTypeResult[]>;
-  createTag(name: string, slug: string, color: string): Promise<Tags | null>;
+  getNotificationsByType(args: GetNotificationsByTypeArgs): Promise<GetNotificationsByTypeResult[]>;
+  createTag(args: CreateTagArgs): Promise<Tags | null>;
   getTagBySlug(slug: string): Promise<Tags | null>;
   getAllTags(): Promise<Tags[]>;
   addTagToPost(post_id: number, tag_id: number): Promise<number>;
   removeTagFromPost(post_id: number, tag_id: number): Promise<number>;
   getTagsForPost(post_id: number): Promise<GetTagsForPostResult[]>;
-  getPostsByTag(slug: string, limit: number, offset: number): Promise<GetPostsByTagResult[]>;
+  getPostsByTag(args: GetPostsByTagArgs): Promise<GetPostsByTagResult[]>;
   getTopTags(limit: number): Promise<GetTopTagsResult[]>;
-  uploadMedia(user_id: number, post_id: number, type: string, url: string, size_bytes: number, mime_type: string, width: number, height: number, metadata: Object): Promise<Media | null>;
+  uploadMedia(args: UploadMediaArgs): Promise<Media | null>;
   getMediaByPost(post_id: number): Promise<GetMediaByPostResult[]>;
-  getMediaByUser(user_id: number, limit: number, offset: number): Promise<GetMediaByUserResult[]>;
+  getMediaByUser(args: GetMediaByUserArgs): Promise<GetMediaByUserResult[]>;
   getMediaByType(user_id: number, type: string): Promise<GetMediaByTypeResult[]>;
   deleteMedia(id: string, user_id: number): Promise<number>;
   getStorageUsedByUser(user_id: number): Promise<GetStorageUsedByUserResult | null>;
   getLargeMediaFiles(size_bytes: number, limit: number): Promise<GetLargeMediaFilesResult[]>;
-  getUserFeed(user_id: number, limit: number, offset: number): Promise<GetUserFeedResult[]>;
+  getUserFeed(args: GetUserFeedArgs): Promise<GetUserFeedResult[]>;
   searchPostsFullText(search_query: string, limit: number): Promise<SearchPostsFullTextResult[]>;
-  bulkMarkNotificationsRead(user_id: number, id: number): Promise<number>;
+  bulkMarkNotificationsRead(user_id: number, id: number[]): Promise<number>;
   getUserWithStats(id: number): Promise<GetUserWithStatsResult | null>;
 }
 
