@@ -475,6 +475,152 @@ data class GetUserWithStatsRow(
     val storage_used: Double?
 )
 
+data class CreateUserFullArgs(
+    val name: String,
+    val email: String,
+    val age: Int,
+    val bio: String,
+    val preferences: String,
+    val tags: List<String>,
+    val role: UserRole
+)
+
+data class UpsertUserArgs(
+    val name: String,
+    val email: String,
+    val role: UserRole
+)
+
+data class UpsertUserWithCOALESCEArgs(
+    val name: String,
+    val email: String,
+    val bio: String
+)
+
+data class SearchUsersWithCOALESCEArgs(
+    val name: String,
+    val email: String,
+    val age: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+data class GetRecentUsersArgs(
+    val created_at: LocalDateTime,
+    val limit: Int,
+    val offset: Int
+)
+
+data class UpdateUserShippingArgs(
+    val shipping_field1: String,
+    val shipping_field2: String,
+    val shipping_field3: String,
+    val shipping_field4: String,
+    val shipping_field5: String,
+    val id: Int
+)
+
+data class GetComplexUserAnalyticsArgs(
+    val total_posts: String,
+    val total_comments: String,
+    val limit: String
+)
+
+data class SearchUsersArgs(
+    val name: String,
+    val email: String,
+    val limit: Int,
+    val offset: Int
+)
+
+data class SearchPostsByTitleArgs(
+    val title: String,
+    val limit: Int,
+    val offset: Int
+)
+
+data class CreateSubscriptionArgs(
+    val user_id: Int,
+    val tier: SubscriptionTier,
+    val expires_at: LocalDateTime,
+    val auto_renew: Boolean
+)
+
+data class GetAuditLogForUserArgs(
+    val changed_by: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+data class CreatePostArgs(
+    val user_id: Int,
+    val category_id: Int,
+    val title: String,
+    val content: String
+)
+
+data class CreateCommentArgs(
+    val post_id: Int,
+    val user_id: Int,
+    val content: String
+)
+
+data class CreateNotificationArgs(
+    val user_id: Int,
+    val type: String,
+    val title: String,
+    val body: String,
+    val metadata: String
+)
+
+data class GetNotificationsByUserArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+data class GetNotificationsByTypeArgs(
+    val user_id: Int,
+    val type: String,
+    val limit: Int
+)
+
+data class CreateTagArgs(
+    val name: String,
+    val slug: String,
+    val color: String
+)
+
+data class GetPostsByTagArgs(
+    val slug: String,
+    val limit: Int,
+    val offset: Int
+)
+
+data class UploadMediaArgs(
+    val user_id: Int,
+    val post_id: Int,
+    val type: String,
+    val url: String,
+    val size_bytes: Long,
+    val mime_type: String,
+    val width: Int,
+    val height: Int,
+    val metadata: String
+)
+
+data class GetMediaByUserArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
+data class GetUserFeedArgs(
+    val user_id: Int,
+    val limit: Int,
+    val offset: Int
+)
+
 class UsersQueries(private val conn: Connection) {
     private val stmts = mutableMapOf<String, java.sql.PreparedStatement>()
 
@@ -505,16 +651,6 @@ class UsersQueries(private val conn: Connection) {
             ) else null
         }
     }
-
-data class CreateUserFullArgs(
-    val name: String,
-    val email: String,
-    val age: Int,
-    val bio: String,
-    val preferences: String,
-    val tags: List<String>,
-    val role: UserRole
-)
 
     fun createUserFull(args: CreateUserFullArgs): Users? {
         val name = args.name
@@ -675,12 +811,6 @@ data class CreateUserFullArgs(
         return items
     }
 
-data class UpsertUserArgs(
-    val name: String,
-    val email: String,
-    val role: UserRole
-)
-
     fun upsertUser(args: UpsertUserArgs): Users? {
         val name = args.name
         val email = args.email
@@ -710,12 +840,6 @@ data class UpsertUserArgs(
             ) else null
         }
     }
-
-data class UpsertUserWithCOALESCEArgs(
-    val name: String,
-    val email: String,
-    val bio: String
-)
 
     fun upsertUserWithCOALESCE(args: UpsertUserWithCOALESCEArgs): Users? {
         val name = args.name
@@ -795,14 +919,6 @@ data class UpsertUserWithCOALESCEArgs(
             ) else null
         }
     }
-
-data class SearchUsersWithCOALESCEArgs(
-    val name: String,
-    val email: String,
-    val age: Int,
-    val limit: Int,
-    val offset: Int
-)
 
     fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEArgs): List<SearchUsersWithCOALESCERow> {
         val name = args.name
@@ -886,12 +1002,6 @@ data class SearchUsersWithCOALESCEArgs(
         }
         return items
     }
-
-data class GetRecentUsersArgs(
-    val created_at: LocalDateTime,
-    val limit: Int,
-    val offset: Int
-)
 
     fun getRecentUsers(args: GetRecentUsersArgs): List<Users> {
         val created_at = args.created_at
@@ -1050,15 +1160,6 @@ data class GetRecentUsersArgs(
         }
     }
 
-data class UpdateUserShippingArgs(
-    val shipping_field1: String,
-    val shipping_field2: String,
-    val shipping_field3: String,
-    val shipping_field4: String,
-    val shipping_field5: String,
-    val id: Int
-)
-
     fun updateUserShipping(args: UpdateUserShippingArgs): Unit {
         val shipping_field1 = args.shipping_field1
         val shipping_field2 = args.shipping_field2
@@ -1076,12 +1177,6 @@ data class UpdateUserShippingArgs(
         stmt.setInt(6, id)
         stmt.executeUpdate()
     }
-
-data class GetComplexUserAnalyticsArgs(
-    val total_posts: String,
-    val total_comments: String,
-    val limit: String
-)
 
     fun getComplexUserAnalytics(args: GetComplexUserAnalyticsArgs): List<GetComplexUserAnalyticsRow> {
         val total_posts = args.total_posts
@@ -1402,13 +1497,6 @@ data class GetComplexUserAnalyticsArgs(
         return items
     }
 
-data class SearchUsersArgs(
-    val name: String,
-    val email: String,
-    val limit: Int,
-    val offset: Int
-)
-
     fun searchUsers(args: SearchUsersArgs): List<SearchUsersRow> {
         val name = args.name
         val email = args.email
@@ -1432,12 +1520,6 @@ data class SearchUsersArgs(
         }
         return items
     }
-
-data class SearchPostsByTitleArgs(
-    val title: String,
-    val limit: Int,
-    val offset: Int
-)
 
     fun searchPostsByTitle(args: SearchPostsByTitleArgs): List<SearchPostsByTitleRow> {
         val title = args.title
@@ -1695,13 +1777,6 @@ data class SearchPostsByTitleArgs(
         return items
     }
 
-data class CreateSubscriptionArgs(
-    val user_id: Int,
-    val tier: SubscriptionTier,
-    val expires_at: LocalDateTime,
-    val auto_renew: Boolean
-)
-
     fun createSubscription(args: CreateSubscriptionArgs): Subscriptions? {
         val user_id = args.user_id
         val tier = args.tier
@@ -1766,12 +1841,6 @@ data class CreateSubscriptionArgs(
         }
         return items
     }
-
-data class GetAuditLogForUserArgs(
-    val changed_by: Int,
-    val limit: Int,
-    val offset: Int
-)
 
     fun getAuditLogForUser(args: GetAuditLogForUserArgs): List<GetAuditLogForUserRow> {
         val changed_by = args.changed_by
@@ -1889,13 +1958,6 @@ data class GetAuditLogForUserArgs(
         }
     }
 
-data class CreatePostArgs(
-    val user_id: Int,
-    val category_id: Int,
-    val title: String,
-    val content: String
-)
-
     fun createPost(args: CreatePostArgs): Posts? {
         val user_id = args.user_id
         val category_id = args.category_id
@@ -1926,12 +1988,6 @@ data class CreatePostArgs(
             ) else null
         }
     }
-
-data class CreateCommentArgs(
-    val post_id: Int,
-    val user_id: Int,
-    val content: String
-)
 
     fun createComment(args: CreateCommentArgs): Comments? {
         val post_id = args.post_id
@@ -1969,14 +2025,6 @@ data class CreateCommentArgs(
         stmt.executeUpdate()
     }
 
-data class CreateNotificationArgs(
-    val user_id: Int,
-    val type: String,
-    val title: String,
-    val body: String,
-    val metadata: String
-)
-
     fun createNotification(args: CreateNotificationArgs): Notifications? {
         val user_id = args.user_id
         val type = args.type
@@ -2003,12 +2051,6 @@ data class CreateNotificationArgs(
             ) else null
         }
     }
-
-data class GetNotificationsByUserArgs(
-    val user_id: Int,
-    val limit: Int,
-    val offset: Int
-)
 
     fun getNotificationsByUser(args: GetNotificationsByUserArgs): List<Notifications> {
         val user_id = args.user_id
@@ -2069,12 +2111,6 @@ data class GetNotificationsByUserArgs(
         stmt.executeUpdate()
     }
 
-data class GetNotificationsByTypeArgs(
-    val user_id: Int,
-    val type: String,
-    val limit: Int
-)
-
     fun getNotificationsByType(args: GetNotificationsByTypeArgs): List<GetNotificationsByTypeRow> {
         val user_id = args.user_id
         val type = args.type
@@ -2099,12 +2135,6 @@ data class GetNotificationsByTypeArgs(
         }
         return items
     }
-
-data class CreateTagArgs(
-    val name: String,
-    val slug: String,
-    val color: String
-)
 
     fun createTag(args: CreateTagArgs): Tags? {
         val name = args.name
@@ -2190,12 +2220,6 @@ data class CreateTagArgs(
         return items
     }
 
-data class GetPostsByTagArgs(
-    val slug: String,
-    val limit: Int,
-    val offset: Int
-)
-
     fun getPostsByTag(args: GetPostsByTagArgs): List<GetPostsByTagRow> {
         val slug = args.slug
         val limit = args.limit
@@ -2239,18 +2263,6 @@ data class GetPostsByTagArgs(
         }
         return items
     }
-
-data class UploadMediaArgs(
-    val user_id: Int,
-    val post_id: Int,
-    val type: String,
-    val url: String,
-    val size_bytes: Long,
-    val mime_type: String,
-    val width: Int,
-    val height: Int,
-    val metadata: String
-)
 
     fun uploadMedia(args: UploadMediaArgs): Media? {
         val user_id = args.user_id
@@ -2311,12 +2323,6 @@ data class UploadMediaArgs(
         }
         return items
     }
-
-data class GetMediaByUserArgs(
-    val user_id: Int,
-    val limit: Int,
-    val offset: Int
-)
 
     fun getMediaByUser(args: GetMediaByUserArgs): List<GetMediaByUserRow> {
         val user_id = args.user_id
@@ -2408,12 +2414,6 @@ data class GetMediaByUserArgs(
         }
         return items
     }
-
-data class GetUserFeedArgs(
-    val user_id: Int,
-    val limit: Int,
-    val offset: Int
-)
 
     fun getUserFeed(args: GetUserFeedArgs): List<GetUserFeedRow> {
         val user_id = args.user_id

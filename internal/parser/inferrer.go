@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type TypeInferrer struct {
+	mu     sync.RWMutex
 	cache  map[string]string
 	schema *Schema
 }
@@ -21,14 +23,20 @@ func NewTypeInferrerWithSchema(schema *Schema) *TypeInferrer {
 
 func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table, paramName string) string {
 	cacheKey := fmt.Sprintf("%s:%d:%s", table.Name, paramIndex, paramName)
-	if cached, ok := ti.cache[cacheKey]; ok {
+
+	ti.mu.RLock()
+	cached, ok := ti.cache[cacheKey]
+	ti.mu.RUnlock()
+	if ok {
 		return cached
 	}
 
 	result := ti.inferParamTypeInternal(sql, paramIndex, table, paramName)
 
 	if result != "" {
+		ti.mu.Lock()
 		ti.cache[cacheKey] = result
+		ti.mu.Unlock()
 	}
 
 	return result
