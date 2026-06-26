@@ -3,7 +3,7 @@
 package java;
 
 
-public record CreatePostArgs(
+public record CreatePostParams(
     int user_id,
     int category_id,
     String title,

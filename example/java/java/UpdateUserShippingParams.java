@@ -3,7 +3,7 @@
 package java;
 
 
-public record UpdateUserShippingArgs(
+public record UpdateUserShippingParams(
     String shipping_field1,
     String shipping_field2,
     String shipping_field3,

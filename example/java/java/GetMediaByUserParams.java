@@ -3,7 +3,7 @@
 package java;
 
 
-public record GetNotificationsByUserArgs(
+public record GetMediaByUserParams(
     int user_id,
     int limit,
     int offset

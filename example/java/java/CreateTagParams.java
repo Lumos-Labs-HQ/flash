@@ -3,8 +3,8 @@
 package java;
 
 
-public record UpsertUserArgs(
+public record CreateTagParams(
     String name,
-    String email,
-    UserRole role
+    String slug,
+    String color
 ) {}

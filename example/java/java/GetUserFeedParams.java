@@ -3,8 +3,8 @@
 package java;
 
 
-public record GetNotificationsByTypeArgs(
+public record GetUserFeedParams(
     int user_id,
-    String type,
-    int limit
+    int limit,
+    int offset
 ) {}

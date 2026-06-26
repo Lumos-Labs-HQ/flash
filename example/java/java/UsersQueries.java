@@ -29,18 +29,18 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
     }
 
-    public Users createUserFull(CreateUserFullArgs args) throws java.sql.SQLException {
+    public Users createUserFull(CreateUserFullParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *;
                 """;
@@ -50,7 +50,7 @@ public class UsersQueries {
             stmt.setInt(3, args.age());
             stmt.setString(4, args.bio());
             stmt.setObject(5, args.preferences());
-            stmt.setString(6, args.tags());
+            stmt.setArray(6, conn.createArrayOf("text", args.tags().toArray()));
             stmt.setObject(7, args.role());
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
@@ -64,12 +64,12 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
@@ -93,12 +93,12 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
@@ -122,12 +122,12 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
@@ -152,12 +152,12 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
@@ -204,12 +204,12 @@ public class UsersQueries {
                         rs.getString("bio"),
                         rs.getString("email"),
                         rs.getString("preferences"),
-                        rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                        rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                         rs.getObject("avatar_hash", java.util.UUID.class),
                         rs.getString("shipping"),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                        rs.getString("role")
+                        UserRole.valueOf(rs.getString("role"))
                     ));
                 }
             }
@@ -217,7 +217,7 @@ public class UsersQueries {
         }
     }
 
-    public Users upsertUser(UpsertUserArgs args) throws java.sql.SQLException {
+    public Users upsertUser(UpsertUserParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO users (name, email, role) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;
                 """;
@@ -237,18 +237,18 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
     }
 
-    public Users upsertUserWithCOALESCE(UpsertUserWithCOALESCEArgs args) throws java.sql.SQLException {
+    public Users upsertUserWithCOALESCE(UpsertUserWithCOALESCEParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO users (name, email, bio) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;
                 """;
@@ -268,12 +268,12 @@ public class UsersQueries {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getObject("avatar_hash", java.util.UUID.class),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 );
             }
         }
@@ -338,7 +338,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(SearchUsersWithCOALESCEArgs args) throws java.sql.SQLException {
+    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(SearchUsersWithCOALESCEParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE ? OR ? IS NULL) AND (email ILIKE ? OR ? IS NULL) AND COALESCE(age, 0) >= ? ORDER BY name LIMIT ? OFFSET ?;
                 """;
@@ -428,7 +428,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<Users> getRecentUsers(GetRecentUsersArgs args) throws java.sql.SQLException {
+    public java.util.List<Users> getRecentUsers(GetRecentUsersParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM users WHERE created_at > ? LIMIT ? OFFSET ?;
                 """;
@@ -449,12 +449,12 @@ public class UsersQueries {
                         rs.getString("bio"),
                         rs.getString("email"),
                         rs.getString("preferences"),
-                        rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                        rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                         rs.getObject("avatar_hash", java.util.UUID.class),
                         rs.getString("shipping"),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                        rs.getString("role")
+                        UserRole.valueOf(rs.getString("role"))
                     ));
                 }
             }
@@ -536,7 +536,7 @@ public class UsersQueries {
                 SELECT id, name, email, tags FROM users WHERE ? = ANY(tags);
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, tags);
+            stmt.setArray(1, conn.createArrayOf("text", tags.toArray()));
             var items = new java.util.ArrayList<GetUsersWithTagRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -544,7 +544,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("email"),
-                        rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null
+                        rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null
                     ));
                 }
             }
@@ -557,7 +557,7 @@ public class UsersQueries {
                 SELECT id, name, email, tags FROM users WHERE tags && ?::text[];
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, tags);
+            stmt.setArray(1, conn.createArrayOf("text", tags.toArray()));
             var items = new java.util.ArrayList<GetUsersWithAnyTagRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -565,7 +565,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("email"),
-                        rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null
+                        rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null
                     ));
                 }
             }
@@ -578,7 +578,7 @@ public class UsersQueries {
                 UPDATE users SET tags = array_append(tags, ?), updated_at = NOW() WHERE id = ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, tags);
+            stmt.setArray(1, conn.createArrayOf("text", tags.toArray()));
             stmt.setInt(2, id);
             stmt.executeUpdate();
         }
@@ -589,7 +589,7 @@ public class UsersQueries {
                 UPDATE users SET tags = array_remove(tags, ?), updated_at = NOW() WHERE id = ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, tags);
+            stmt.setArray(1, conn.createArrayOf("text", tags.toArray()));
             stmt.setInt(2, id);
             stmt.executeUpdate();
         }
@@ -614,7 +614,7 @@ public class UsersQueries {
         }
     }
 
-    public void updateUserShipping(UpdateUserShippingArgs args) throws java.sql.SQLException {
+    public void updateUserShipping(UpdateUserShippingParams args) throws java.sql.SQLException {
         final String sql = """
                 UPDATE users SET shipping = ROW(?, ?, ?, ?, ?), updated_at = NOW() WHERE id = ?;
                 """;
@@ -629,14 +629,14 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(GetComplexUserAnalyticsArgs args) throws java.sql.SQLException {
+    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(GetComplexUserAnalyticsParams args) throws java.sql.SQLException {
         final String sql = """
                 WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > ? OR ucs.total_comments > ? ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, args.total_posts());
-            stmt.setObject(2, args.total_comments());
-            stmt.setObject(3, args.limit());
+            stmt.setString(1, args.total_posts());
+            stmt.setString(2, args.total_comments());
+            stmt.setInt(3, args.limit());
             var items = new java.util.ArrayList<GetComplexUserAnalyticsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -644,7 +644,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("email"),
-                        rs.getString("role"),
+                        UserRole.valueOf(rs.getString("role")),
                         rs.getBoolean("isadmin"),
                         rs.getTimestamp("user_created_at") != null ? rs.getTimestamp("user_created_at").toLocalDateTime() : null,
                         rs.getInt("total_posts"),
@@ -666,13 +666,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, String post_id) throws java.sql.SQLException {
+    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, int post_id) throws java.sql.SQLException {
         final String sql = """
                 WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= ? AND ac.post_id = ? ORDER BY ac.created_at DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, rn);
-            stmt.setObject(2, post_id);
+            stmt.setString(1, rn);
+            stmt.setInt(2, post_id);
             var items = new java.util.ArrayList<GetPostWithActiveCommentersRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -735,12 +735,12 @@ public class UsersQueries {
         }
     }
 
-    public GetPostCountByUserRow getPostCountByUser(String user_id) throws java.sql.SQLException {
+    public GetPostCountByUserRow getPostCountByUser(int user_id) throws java.sql.SQLException {
         final String sql = """
                 SELECT (SELECT COUNT(*) FROM posts WHERE user_id = ?) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = ?) AS comment_count;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, user_id);
+            stmt.setInt(1, user_id);
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new GetPostCountByUserRow(
@@ -853,20 +853,20 @@ public class UsersQueries {
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("content"),
-                    rs.getString("status"),
+                    PostStatus.valueOf(rs.getString("status")),
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
                     rs.getInt("author_id"),
                     rs.getString("author_name"),
                     rs.getString("author_email"),
-                    rs.getString("author_role"),
+                    UserRole.valueOf(rs.getString("author_role")),
                     rs.getBoolean("author_is_admin"),
                     rs.getInt("category_id"),
                     rs.getString("category_name"),
                     rs.getInt("comment_count"),
                     rs.getInt("unique_commenters"),
                     rs.getString("all_comments"),
-                    rs.getArray("commenter_names") != null ? java.util.Arrays.asList((Object[]) rs.getArray("commenter_names").getArray()) : null,
+                    rs.getArray("commenter_names") != null ? java.util.Arrays.asList((String[]) rs.getArray("commenter_names").getArray()) : null,
                     rs.getTimestamp("last_comment_date") != null ? rs.getTimestamp("last_comment_date").toLocalDateTime() : null,
                     rs.getInt("content_length"),
                     rs.getDouble("hours_since_created")
@@ -912,7 +912,7 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     items.add(new GetUserRoleCountRow(
-                        rs.getString("role"),
+                        UserRole.valueOf(rs.getString("role")),
                         rs.getInt("count")
                     ));
                 }
@@ -949,7 +949,7 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     items.add(new GetPostsGroupedByStatusRow(
-                        rs.getString("status"),
+                        PostStatus.valueOf(rs.getString("status")),
                         rs.getInt("count"),
                         rs.getTimestamp("oldest") != null ? rs.getTimestamp("oldest").toLocalDateTime() : null,
                         rs.getTimestamp("newest") != null ? rs.getTimestamp("newest").toLocalDateTime() : null
@@ -991,7 +991,7 @@ public class UsersQueries {
                         rs.getInt("user_id"),
                         rs.getInt("post_id"),
                         rs.getString("title"),
-                        rs.getString("status"),
+                        PostStatus.valueOf(rs.getString("status")),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null
                     ));
                 }
@@ -1000,7 +1000,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchUsersRow> searchUsers(SearchUsersArgs args) throws java.sql.SQLException {
+    public java.util.List<SearchUsersRow> searchUsers(SearchUsersParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email FROM users WHERE name ILIKE ? OR email ILIKE ? ORDER BY name ASC LIMIT ? OFFSET ?;
                 """;
@@ -1023,7 +1023,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(SearchPostsByTitleArgs args) throws java.sql.SQLException {
+    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(SearchPostsByTitleParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, title, status, created_at FROM posts WHERE title ILIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
@@ -1037,7 +1037,7 @@ public class UsersQueries {
                     items.add(new SearchPostsByTitleRow(
                         rs.getInt("id"),
                         rs.getString("title"),
-                        rs.getString("status"),
+                        PostStatus.valueOf(rs.getString("status")),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null
                     ));
                 }
@@ -1125,12 +1125,12 @@ public class UsersQueries {
                         rs.getString("bio"),
                         rs.getString("email"),
                         rs.getString("preferences"),
-                        rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                        rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                         rs.getObject("avatar_hash", java.util.UUID.class),
                         rs.getString("shipping"),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                        rs.getString("role")
+                        UserRole.valueOf(rs.getString("role"))
                     ));
                 }
             }
@@ -1240,13 +1240,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<UserActivitySummary> getUserActivitySummary(String post_count, String comment_count) throws java.sql.SQLException {
+    public java.util.List<UserActivitySummary> getUserActivitySummary(int post_count, int comment_count) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM user_activity_summary WHERE post_count > ? OR comment_count > ? ORDER BY post_count DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, post_count);
-            stmt.setString(2, comment_count);
+            stmt.setInt(1, post_count);
+            stmt.setInt(2, comment_count);
             var items = new java.util.ArrayList<UserActivitySummary>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1307,7 +1307,7 @@ public class UsersQueries {
                 while (rs.next()) {
                     items.add(new GetUserSubscriptionsRow(
                         rs.getInt("id"),
-                        rs.getString("tier"),
+                        SubscriptionTier.valueOf(rs.getString("tier")),
                         rs.getTimestamp("started_at") != null ? rs.getTimestamp("started_at").toLocalDateTime() : null,
                         rs.getTimestamp("expires_at") != null ? rs.getTimestamp("expires_at").toLocalDateTime() : null,
                         rs.getBoolean("auto_renew")
@@ -1318,7 +1318,7 @@ public class UsersQueries {
         }
     }
 
-    public Subscriptions createSubscription(CreateSubscriptionArgs args) throws java.sql.SQLException {
+    public Subscriptions createSubscription(CreateSubscriptionParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES (?, ?, ?, ?) RETURNING *;
                 """;
@@ -1332,7 +1332,7 @@ public class UsersQueries {
                 return new Subscriptions(
                     rs.getInt("id"),
                     rs.getInt("user_id"),
-                    rs.getString("tier"),
+                    SubscriptionTier.valueOf(rs.getString("tier")),
                     rs.getTimestamp("started_at") != null ? rs.getTimestamp("started_at").toLocalDateTime() : null,
                     rs.getTimestamp("expires_at") != null ? rs.getTimestamp("expires_at").toLocalDateTime() : null,
                     rs.getBoolean("auto_renew")
@@ -1355,7 +1355,7 @@ public class UsersQueries {
                         rs.getObject("id", java.util.UUID.class),
                         rs.getDouble("total_amount"),
                         rs.getString("discount_pct"),
-                        rs.getString("state"),
+                        OrderState.valueOf(rs.getString("state")),
                         rs.getString("shipping_addr"),
                         rs.getTimestamp("placed_at") != null ? rs.getTimestamp("placed_at").toLocalDateTime() : null
                     ));
@@ -1380,7 +1380,7 @@ public class UsersQueries {
                         rs.getInt("user_id"),
                         rs.getString("user_name"),
                         rs.getDouble("total_amount"),
-                        rs.getString("state"),
+                        OrderState.valueOf(rs.getString("state")),
                         rs.getTimestamp("placed_at") != null ? rs.getTimestamp("placed_at").toLocalDateTime() : null
                     ));
                 }
@@ -1389,7 +1389,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(GetAuditLogForUserArgs args) throws java.sql.SQLException {
+    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(GetAuditLogForUserParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = ? ORDER BY changed_at DESC LIMIT ? OFFSET ?;
                 """;
@@ -1522,7 +1522,7 @@ public class UsersQueries {
         }
     }
 
-    public Posts createPost(CreatePostArgs args) throws java.sql.SQLException {
+    public Posts createPost(CreatePostParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO posts (user_id, category_id, title, content) VALUES (?, ?, ?, ?) RETURNING *;
                 """;
@@ -1540,20 +1540,20 @@ public class UsersQueries {
                     rs.getString("title"),
                     rs.getString("content"),
                     rs.getString("excerpt"),
-                    rs.getArray("tags") != null ? java.util.Arrays.asList((Object[]) rs.getArray("tags").getArray()) : null,
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
                     rs.getString("metadata"),
                     rs.getLong("view_count"),
                     rs.getBoolean("is_featured"),
                     rs.getTimestamp("published_at") != null ? rs.getTimestamp("published_at").toLocalDateTime() : null,
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
-                    rs.getString("status")
+                    PostStatus.valueOf(rs.getString("status"))
                 );
             }
         }
     }
 
-    public Comments createComment(CreateCommentArgs args) throws java.sql.SQLException {
+    public Comments createComment(CreateCommentParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?) RETURNING *;
                 """;
@@ -1596,7 +1596,7 @@ public class UsersQueries {
         }
     }
 
-    public Notifications createNotification(CreateNotificationArgs args) throws java.sql.SQLException {
+    public Notifications createNotification(CreateNotificationParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO notifications (user_id, type, title, body, metadata) VALUES (?, ?, ?, ?, ?) RETURNING *;
                 """;
@@ -1622,7 +1622,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<Notifications> getNotificationsByUser(GetNotificationsByUserArgs args) throws java.sql.SQLException {
+    public java.util.List<Notifications> getNotificationsByUser(GetNotificationsByUserParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
@@ -1693,7 +1693,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(GetNotificationsByTypeArgs args) throws java.sql.SQLException {
+    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(GetNotificationsByTypeParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT ?;
                 """;
@@ -1718,7 +1718,7 @@ public class UsersQueries {
         }
     }
 
-    public Tags createTag(CreateTagArgs args) throws java.sql.SQLException {
+    public Tags createTag(CreateTagParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO tags (name, slug, color) VALUES (?, ?, ?) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;
                 """;
@@ -1819,7 +1819,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetPostsByTagRow> getPostsByTag(GetPostsByTagArgs args) throws java.sql.SQLException {
+    public java.util.List<GetPostsByTagRow> getPostsByTag(GetPostsByTagParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = ? AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT ? OFFSET ?;
                 """;
@@ -1833,7 +1833,7 @@ public class UsersQueries {
                     items.add(new GetPostsByTagRow(
                         rs.getInt("id"),
                         rs.getString("title"),
-                        rs.getString("status"),
+                        PostStatus.valueOf(rs.getString("status")),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getString("author_name"),
                         rs.getInt("comment_count")
@@ -1866,7 +1866,7 @@ public class UsersQueries {
         }
     }
 
-    public Media uploadMedia(UploadMediaArgs args) throws java.sql.SQLException {
+    public Media uploadMedia(UploadMediaParams args) throws java.sql.SQLException {
         final String sql = """
                 INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
                 """;
@@ -1924,7 +1924,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetMediaByUserRow> getMediaByUser(GetMediaByUserArgs args) throws java.sql.SQLException {
+    public java.util.List<GetMediaByUserRow> getMediaByUser(GetMediaByUserParams args) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
@@ -2028,7 +2028,7 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUserFeedRow> getUserFeed(GetUserFeedArgs args) throws java.sql.SQLException {
+    public java.util.List<GetUserFeedRow> getUserFeed(GetUserFeedParams args) throws java.sql.SQLException {
         final String sql = """
                 WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = ? ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT ? OFFSET ?;
                 """;
@@ -2043,7 +2043,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("title"),
                         rs.getString("excerpt"),
-                        rs.getString("status"),
+                        PostStatus.valueOf(rs.getString("status")),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getInt("author_id"),
                         rs.getString("author_name"),
@@ -2071,7 +2071,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("title"),
                         rs.getString("excerpt"),
-                        rs.getString("status"),
+                        PostStatus.valueOf(rs.getString("status")),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getString("author_name"),
                         rs.getDouble("rank")
@@ -2088,7 +2088,7 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, user_id);
-            stmt.setInt(2, id);
+            stmt.setArray(2, conn.createArrayOf("integer", id.toArray()));
             stmt.executeUpdate();
         }
     }

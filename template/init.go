@@ -1,6 +1,9 @@
 package template
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type DatabaseType string
 
@@ -277,20 +280,22 @@ async = true`
 		if pkg == "" {
 			pkg = projectDirName(".")
 		}
+		outPath := "src/main/kotlin/" + strings.ReplaceAll(pkg, ".", "/") + "/flashgen"
 		return fmt.Sprintf(`[gen.kotlin]
 enabled = true
-out = "flash_gen"
-package = "%s"`, pkg)
+out = "%s"
+package = "%s.flashgen"`, outPath, pkg)
 	}
 	if pt.IsJavaProject {
 		pkg := pt.JavaPackage
 		if pkg == "" {
 			pkg = projectDirName(".")
 		}
+		outPath := "src/main/java/" + strings.ReplaceAll(pkg, ".", "/") + "/flashgen"
 		return fmt.Sprintf(`[gen.java]
 enabled = true
-out = "flash_gen"
-package = "%s"`, pkg)
+out = "%s"
+package = "%s.flashgen"`, outPath, pkg)
 	}
 	return `[gen.go]
 enabled = true`

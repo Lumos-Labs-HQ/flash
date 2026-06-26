@@ -4,7 +4,7 @@ package java;
 
 import java.time.LocalDateTime;
 
-public record GetRecentUsersArgs(
+public record GetRecentUsersParams(
     LocalDateTime created_at,
     int limit,
     int offset

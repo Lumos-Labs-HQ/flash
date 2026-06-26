@@ -3,8 +3,8 @@
 package java;
 
 
-public record GetUserFeedArgs(
-    int user_id,
+public record GetAuditLogForUserParams(
+    int changed_by,
     int limit,
     int offset
 ) {}

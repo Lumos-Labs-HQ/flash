@@ -155,8 +155,11 @@ func TestGetFlashORMConfig_JavaPackageInToml(t *testing.T) {
 	}
 
 	cfg := pt.GetFlashORMConfig()
-	if !strings.Contains(cfg, `package = "com.mycorp.data-layer"`) {
+	if !strings.Contains(cfg, `package = "com.mycorp.data-layer.flashgen"`) {
 		t.Errorf("generated config missing package field:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, `out = "src/main/java/com/mycorp/data-layer/flashgen"`) {
+		t.Errorf("generated config missing out path:\n%s", cfg)
 	}
 }
 
@@ -174,7 +177,10 @@ func TestGetFlashORMConfig_KotlinPackageInToml(t *testing.T) {
 	}
 
 	cfg := pt.GetFlashORMConfig()
-	if !strings.Contains(cfg, `package = "com.kotlin.app"`) {
+	if !strings.Contains(cfg, `package = "com.kotlin.app.flashgen"`) {
 		t.Errorf("generated config missing package field:\n%s", cfg)
+	}
+	if !strings.Contains(cfg, `out = "src/main/kotlin/com/kotlin/app/flashgen"`) {
+		t.Errorf("generated config missing out path:\n%s", cfg)
 	}
 }

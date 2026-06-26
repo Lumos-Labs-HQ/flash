@@ -2,6 +2,8 @@
 
 package java;
 
+import java.util.UUID;
+import java.time.LocalDateTime;
 import java.sql.Connection;
 
 /**
@@ -22,7 +24,7 @@ public class Queries {
         return this.users.createUser(name, email);
     }
 
-    public Users createUserFull(CreateUserFullArgs args) throws java.sql.SQLException {
+    public Users createUserFull(CreateUserFullParams args) throws java.sql.SQLException {
         return this.users.createUserFull(args);
     }
 
@@ -50,11 +52,11 @@ public class Queries {
         return this.users.listUsers(limit, offset);
     }
 
-    public Users upsertUser(UpsertUserArgs args) throws java.sql.SQLException {
+    public Users upsertUser(UpsertUserParams args) throws java.sql.SQLException {
         return this.users.upsertUser(args);
     }
 
-    public Users upsertUserWithCOALESCE(UpsertUserWithCOALESCEArgs args) throws java.sql.SQLException {
+    public Users upsertUserWithCOALESCE(UpsertUserWithCOALESCEParams args) throws java.sql.SQLException {
         return this.users.upsertUserWithCOALESCE(args);
     }
 
@@ -70,7 +72,7 @@ public class Queries {
         return this.users.getUserDisplayInfo(id);
     }
 
-    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(SearchUsersWithCOALESCEArgs args) throws java.sql.SQLException {
+    public java.util.List<SearchUsersWithCOALESCERow> searchUsersWithCOALESCE(SearchUsersWithCOALESCEParams args) throws java.sql.SQLException {
         return this.users.searchUsersWithCOALESCE(args);
     }
 
@@ -86,7 +88,7 @@ public class Queries {
         return this.users.getUsersByGeneratedRange(age_range);
     }
 
-    public java.util.List<Users> getRecentUsers(GetRecentUsersArgs args) throws java.sql.SQLException {
+    public java.util.List<Users> getRecentUsers(GetRecentUsersParams args) throws java.sql.SQLException {
         return this.users.getRecentUsers(args);
     }
 
@@ -126,15 +128,15 @@ public class Queries {
         return this.users.getUserShippingAddress(id);
     }
 
-    public void updateUserShipping(UpdateUserShippingArgs args) throws java.sql.SQLException {
+    public void updateUserShipping(UpdateUserShippingParams args) throws java.sql.SQLException {
         this.users.updateUserShipping(args);
     }
 
-    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(GetComplexUserAnalyticsArgs args) throws java.sql.SQLException {
+    public java.util.List<GetComplexUserAnalyticsRow> getComplexUserAnalytics(GetComplexUserAnalyticsParams args) throws java.sql.SQLException {
         return this.users.getComplexUserAnalytics(args);
     }
 
-    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, String post_id) throws java.sql.SQLException {
+    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, int post_id) throws java.sql.SQLException {
         return this.users.getPostWithActiveCommenters(rn, post_id);
     }
 
@@ -146,7 +148,7 @@ public class Queries {
         return this.users.getUserTrendingPosts(user_id, limit);
     }
 
-    public GetPostCountByUserRow getPostCountByUser(String user_id) throws java.sql.SQLException {
+    public GetPostCountByUserRow getPostCountByUser(int user_id) throws java.sql.SQLException {
         return this.users.getPostCountByUser(user_id);
     }
 
@@ -198,11 +200,11 @@ public class Queries {
         return this.users.getLatestPostPerUser();
     }
 
-    public java.util.List<SearchUsersRow> searchUsers(SearchUsersArgs args) throws java.sql.SQLException {
+    public java.util.List<SearchUsersRow> searchUsers(SearchUsersParams args) throws java.sql.SQLException {
         return this.users.searchUsers(args);
     }
 
-    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(SearchPostsByTitleArgs args) throws java.sql.SQLException {
+    public java.util.List<SearchPostsByTitleRow> searchPostsByTitle(SearchPostsByTitleParams args) throws java.sql.SQLException {
         return this.users.searchPostsByTitle(args);
     }
 
@@ -242,7 +244,7 @@ public class Queries {
         return this.users.getActiveUsers(limit);
     }
 
-    public java.util.List<UserActivitySummary> getUserActivitySummary(String post_count, String comment_count) throws java.sql.SQLException {
+    public java.util.List<UserActivitySummary> getUserActivitySummary(int post_count, int comment_count) throws java.sql.SQLException {
         return this.users.getUserActivitySummary(post_count, comment_count);
     }
 
@@ -258,7 +260,7 @@ public class Queries {
         return this.users.getUserSubscriptions(user_id);
     }
 
-    public Subscriptions createSubscription(CreateSubscriptionArgs args) throws java.sql.SQLException {
+    public Subscriptions createSubscription(CreateSubscriptionParams args) throws java.sql.SQLException {
         return this.users.createSubscription(args);
     }
 
@@ -270,7 +272,7 @@ public class Queries {
         return this.users.getOrdersInState(state, limit);
     }
 
-    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(GetAuditLogForUserArgs args) throws java.sql.SQLException {
+    public java.util.List<GetAuditLogForUserRow> getAuditLogForUser(GetAuditLogForUserParams args) throws java.sql.SQLException {
         return this.users.getAuditLogForUser(args);
     }
 
@@ -294,11 +296,11 @@ public class Queries {
         return this.users.createCategory(name);
     }
 
-    public Posts createPost(CreatePostArgs args) throws java.sql.SQLException {
+    public Posts createPost(CreatePostParams args) throws java.sql.SQLException {
         return this.users.createPost(args);
     }
 
-    public Comments createComment(CreateCommentArgs args) throws java.sql.SQLException {
+    public Comments createComment(CreateCommentParams args) throws java.sql.SQLException {
         return this.users.createComment(args);
     }
 
@@ -310,11 +312,11 @@ public class Queries {
         this.users.updateUserTimestamp(updated_at, id);
     }
 
-    public Notifications createNotification(CreateNotificationArgs args) throws java.sql.SQLException {
+    public Notifications createNotification(CreateNotificationParams args) throws java.sql.SQLException {
         return this.users.createNotification(args);
     }
 
-    public java.util.List<Notifications> getNotificationsByUser(GetNotificationsByUserArgs args) throws java.sql.SQLException {
+    public java.util.List<Notifications> getNotificationsByUser(GetNotificationsByUserParams args) throws java.sql.SQLException {
         return this.users.getNotificationsByUser(args);
     }
 
@@ -334,11 +336,11 @@ public class Queries {
         this.users.deleteOldNotifications(user_id, created_at);
     }
 
-    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(GetNotificationsByTypeArgs args) throws java.sql.SQLException {
+    public java.util.List<GetNotificationsByTypeRow> getNotificationsByType(GetNotificationsByTypeParams args) throws java.sql.SQLException {
         return this.users.getNotificationsByType(args);
     }
 
-    public Tags createTag(CreateTagArgs args) throws java.sql.SQLException {
+    public Tags createTag(CreateTagParams args) throws java.sql.SQLException {
         return this.users.createTag(args);
     }
 
@@ -362,7 +364,7 @@ public class Queries {
         return this.users.getTagsForPost(post_id);
     }
 
-    public java.util.List<GetPostsByTagRow> getPostsByTag(GetPostsByTagArgs args) throws java.sql.SQLException {
+    public java.util.List<GetPostsByTagRow> getPostsByTag(GetPostsByTagParams args) throws java.sql.SQLException {
         return this.users.getPostsByTag(args);
     }
 
@@ -370,7 +372,7 @@ public class Queries {
         return this.users.getTopTags(limit);
     }
 
-    public Media uploadMedia(UploadMediaArgs args) throws java.sql.SQLException {
+    public Media uploadMedia(UploadMediaParams args) throws java.sql.SQLException {
         return this.users.uploadMedia(args);
     }
 
@@ -378,7 +380,7 @@ public class Queries {
         return this.users.getMediaByPost(post_id);
     }
 
-    public java.util.List<GetMediaByUserRow> getMediaByUser(GetMediaByUserArgs args) throws java.sql.SQLException {
+    public java.util.List<GetMediaByUserRow> getMediaByUser(GetMediaByUserParams args) throws java.sql.SQLException {
         return this.users.getMediaByUser(args);
     }
 
@@ -398,7 +400,7 @@ public class Queries {
         return this.users.getLargeMediaFiles(size_bytes, limit);
     }
 
-    public java.util.List<GetUserFeedRow> getUserFeed(GetUserFeedArgs args) throws java.sql.SQLException {
+    public java.util.List<GetUserFeedRow> getUserFeed(GetUserFeedParams args) throws java.sql.SQLException {
         return this.users.getUserFeed(args);
     }
 

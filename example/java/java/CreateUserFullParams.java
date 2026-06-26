@@ -3,7 +3,7 @@
 package java;
 
 
-public record CreateUserFullArgs(
+public record CreateUserFullParams(
     String name,
     String email,
     int age,

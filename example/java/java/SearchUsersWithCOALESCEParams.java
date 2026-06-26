@@ -3,8 +3,10 @@
 package java;
 
 
-public record SearchPostsByTitleArgs(
-    String title,
+public record SearchUsersWithCOALESCEParams(
+    String name,
+    String email,
+    int age,
     int limit,
     int offset
 ) {}

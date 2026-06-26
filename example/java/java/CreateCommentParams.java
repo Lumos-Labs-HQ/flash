@@ -3,7 +3,7 @@
 package java;
 
 
-public record CreateCommentArgs(
+public record CreateCommentParams(
     int post_id,
     int user_id,
     String content

@@ -3,7 +3,7 @@
 package java;
 
 
-public record UpsertUserWithCOALESCEArgs(
+public record UpsertUserWithCOALESCEParams(
     String name,
     String email,
     String bio

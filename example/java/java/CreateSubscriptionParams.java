@@ -4,7 +4,7 @@ package java;
 
 import java.time.LocalDateTime;
 
-public record CreateSubscriptionArgs(
+public record CreateSubscriptionParams(
     int user_id,
     SubscriptionTier tier,
     LocalDateTime expires_at,

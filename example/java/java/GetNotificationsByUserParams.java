@@ -3,9 +3,8 @@
 package java;
 
 
-public record SearchUsersArgs(
-    String name,
-    String email,
+public record GetNotificationsByUserParams(
+    int user_id,
     int limit,
     int offset
 ) {}

@@ -475,7 +475,7 @@ data class GetUserWithStatsRow(
     val storage_used: Double?
 )
 
-data class CreateUserFullArgs(
+data class CreateUserFullParams(
     val name: String,
     val email: String,
     val age: Int,
@@ -485,19 +485,19 @@ data class CreateUserFullArgs(
     val role: UserRole
 )
 
-data class UpsertUserArgs(
+data class UpsertUserParams(
     val name: String,
     val email: String,
     val role: UserRole
 )
 
-data class UpsertUserWithCOALESCEArgs(
+data class UpsertUserWithCOALESCEParams(
     val name: String,
     val email: String,
     val bio: String
 )
 
-data class SearchUsersWithCOALESCEArgs(
+data class SearchUsersWithCOALESCEParams(
     val name: String,
     val email: String,
     val age: Int,
@@ -505,13 +505,13 @@ data class SearchUsersWithCOALESCEArgs(
     val offset: Int
 )
 
-data class GetRecentUsersArgs(
+data class GetRecentUsersParams(
     val created_at: LocalDateTime,
     val limit: Int,
     val offset: Int
 )
 
-data class UpdateUserShippingArgs(
+data class UpdateUserShippingParams(
     val shipping_field1: String,
     val shipping_field2: String,
     val shipping_field3: String,
@@ -520,52 +520,52 @@ data class UpdateUserShippingArgs(
     val id: Int
 )
 
-data class GetComplexUserAnalyticsArgs(
+data class GetComplexUserAnalyticsParams(
     val total_posts: String,
     val total_comments: String,
-    val limit: String
+    val limit: Int
 )
 
-data class SearchUsersArgs(
+data class SearchUsersParams(
     val name: String,
     val email: String,
     val limit: Int,
     val offset: Int
 )
 
-data class SearchPostsByTitleArgs(
+data class SearchPostsByTitleParams(
     val title: String,
     val limit: Int,
     val offset: Int
 )
 
-data class CreateSubscriptionArgs(
+data class CreateSubscriptionParams(
     val user_id: Int,
     val tier: SubscriptionTier,
     val expires_at: LocalDateTime,
     val auto_renew: Boolean
 )
 
-data class GetAuditLogForUserArgs(
+data class GetAuditLogForUserParams(
     val changed_by: Int,
     val limit: Int,
     val offset: Int
 )
 
-data class CreatePostArgs(
+data class CreatePostParams(
     val user_id: Int,
     val category_id: Int,
     val title: String,
     val content: String
 )
 
-data class CreateCommentArgs(
+data class CreateCommentParams(
     val post_id: Int,
     val user_id: Int,
     val content: String
 )
 
-data class CreateNotificationArgs(
+data class CreateNotificationParams(
     val user_id: Int,
     val type: String,
     val title: String,
@@ -573,31 +573,31 @@ data class CreateNotificationArgs(
     val metadata: String
 )
 
-data class GetNotificationsByUserArgs(
+data class GetNotificationsByUserParams(
     val user_id: Int,
     val limit: Int,
     val offset: Int
 )
 
-data class GetNotificationsByTypeArgs(
+data class GetNotificationsByTypeParams(
     val user_id: Int,
     val type: String,
     val limit: Int
 )
 
-data class CreateTagArgs(
+data class CreateTagParams(
     val name: String,
     val slug: String,
     val color: String
 )
 
-data class GetPostsByTagArgs(
+data class GetPostsByTagParams(
     val slug: String,
     val limit: Int,
     val offset: Int
 )
 
-data class UploadMediaArgs(
+data class UploadMediaParams(
     val user_id: Int,
     val post_id: Int,
     val type: String,
@@ -609,13 +609,13 @@ data class UploadMediaArgs(
     val metadata: String
 )
 
-data class GetMediaByUserArgs(
+data class GetMediaByUserParams(
     val user_id: Int,
     val limit: Int,
     val offset: Int
 )
 
-data class GetUserFeedArgs(
+data class GetUserFeedParams(
     val user_id: Int,
     val limit: Int,
     val offset: Int
@@ -642,17 +642,17 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
 
-    fun createUserFull(args: CreateUserFullArgs): Users? {
+    fun createUserFull(args: CreateUserFullParams): Users? {
         val name = args.name
         val email = args.email
         val age = args.age
@@ -667,7 +667,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.setInt(3, age)
         stmt.setString(4, bio)
         stmt.setObject(5, preferences)
-        stmt.setString(6, tags)
+        stmt.setArray(6, conn.createArrayOf("text", tags.toTypedArray()))
         stmt.setObject(7, role)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Users(
@@ -680,12 +680,12 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
@@ -705,12 +705,12 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
@@ -730,12 +730,12 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
@@ -756,12 +756,12 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
@@ -799,19 +799,19 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags")?.array as? Array<*>,
+                    (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                     rs.getObject("avatar_hash", java.util.UUID::class.java),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 )
             )
         }
         return items
     }
 
-    fun upsertUser(args: UpsertUserArgs): Users? {
+    fun upsertUser(args: UpsertUserParams): Users? {
         val name = args.name
         val email = args.email
         val role = args.role
@@ -831,17 +831,17 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
 
-    fun upsertUserWithCOALESCE(args: UpsertUserWithCOALESCEArgs): Users? {
+    fun upsertUserWithCOALESCE(args: UpsertUserWithCOALESCEParams): Users? {
         val name = args.name
         val email = args.email
         val bio = args.bio
@@ -861,12 +861,12 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("bio"),
                 rs.getString("email"),
                 rs.getString("preferences"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getObject("avatar_hash", java.util.UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("role")
+                UserRole.valueOf(rs.getString("role"))
             ) else null
         }
     }
@@ -920,7 +920,7 @@ class UsersQueries(private val conn: Connection) {
         }
     }
 
-    fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEArgs): List<SearchUsersWithCOALESCERow> {
+    fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEParams): List<SearchUsersWithCOALESCERow> {
         val name = args.name
         val email = args.email
         val age = args.age
@@ -1003,7 +1003,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getRecentUsers(args: GetRecentUsersArgs): List<Users> {
+    fun getRecentUsers(args: GetRecentUsersParams): List<Users> {
         val created_at = args.created_at
         val limit = args.limit
         val offset = args.offset
@@ -1025,12 +1025,12 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags")?.array as? Array<*>,
+                    (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                     rs.getObject("avatar_hash", java.util.UUID::class.java),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 )
             )
         }
@@ -1096,7 +1096,7 @@ class UsersQueries(private val conn: Connection) {
     fun getUsersWithTag(tags: List<String>): List<GetUsersWithTagRow> {
         val sql = """SELECT id, name, email, tags FROM users WHERE ? = ANY(tags);"""
         val stmt = stmts.getOrPut("getUsersWithTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags)
+        stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
         val items = mutableListOf<GetUsersWithTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1104,7 +1104,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getArray("tags")?.array as? Array<*>
+                    (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() }
                 )
             )
         }
@@ -1114,7 +1114,7 @@ class UsersQueries(private val conn: Connection) {
     fun getUsersWithAnyTag(tags: List<String>): List<GetUsersWithAnyTagRow> {
         val sql = """SELECT id, name, email, tags FROM users WHERE tags && ?::text[];"""
         val stmt = stmts.getOrPut("getUsersWithAnyTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags)
+        stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
         val items = mutableListOf<GetUsersWithAnyTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1122,7 +1122,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getArray("tags")?.array as? Array<*>
+                    (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() }
                 )
             )
         }
@@ -1132,7 +1132,7 @@ class UsersQueries(private val conn: Connection) {
     fun addUserTag(tags: List<String>, id: Int): Unit {
         val sql = """UPDATE users SET tags = array_append(tags, ?), updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("addUserTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags)
+        stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
         stmt.setInt(2, id)
         stmt.executeUpdate()
     }
@@ -1140,7 +1140,7 @@ class UsersQueries(private val conn: Connection) {
     fun removeUserTag(tags: List<String>, id: Int): Unit {
         val sql = """UPDATE users SET tags = array_remove(tags, ?), updated_at = NOW() WHERE id = ?;"""
         val stmt = stmts.getOrPut("removeUserTag") { conn.prepareStatement(sql) }
-        stmt.setString(1, tags)
+        stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
         stmt.setInt(2, id)
         stmt.executeUpdate()
     }
@@ -1160,7 +1160,7 @@ class UsersQueries(private val conn: Connection) {
         }
     }
 
-    fun updateUserShipping(args: UpdateUserShippingArgs): Unit {
+    fun updateUserShipping(args: UpdateUserShippingParams): Unit {
         val shipping_field1 = args.shipping_field1
         val shipping_field2 = args.shipping_field2
         val shipping_field3 = args.shipping_field3
@@ -1178,15 +1178,15 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeUpdate()
     }
 
-    fun getComplexUserAnalytics(args: GetComplexUserAnalyticsArgs): List<GetComplexUserAnalyticsRow> {
+    fun getComplexUserAnalytics(args: GetComplexUserAnalyticsParams): List<GetComplexUserAnalyticsRow> {
         val total_posts = args.total_posts
         val total_comments = args.total_comments
         val limit = args.limit
         val sql = """WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > ? OR ucs.total_comments > ? ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT ?;"""
         val stmt = stmts.getOrPut("getComplexUserAnalytics") { conn.prepareStatement(sql) }
-        stmt.setObject(1, total_posts)
-        stmt.setObject(2, total_comments)
-        stmt.setObject(3, limit)
+        stmt.setString(1, total_posts)
+        stmt.setString(2, total_comments)
+        stmt.setInt(3, limit)
         val items = mutableListOf<GetComplexUserAnalyticsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1194,7 +1194,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getString("role"),
+                    rs.getString("role")?.let { UserRole.valueOf(it) },
                     rs.getBoolean("isadmin"),
                     rs.getTimestamp("user_created_at")?.toLocalDateTime(),
                     rs.getInt("total_posts"),
@@ -1215,11 +1215,11 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getPostWithActiveCommenters(rn: String, post_id: String): List<GetPostWithActiveCommentersRow> {
+    fun getPostWithActiveCommenters(rn: String, post_id: Int): List<GetPostWithActiveCommentersRow> {
         val sql = """WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= ? AND ac.post_id = ? ORDER BY ac.created_at DESC;"""
         val stmt = stmts.getOrPut("getPostWithActiveCommenters") { conn.prepareStatement(sql) }
-        stmt.setObject(1, rn)
-        stmt.setObject(2, post_id)
+        stmt.setString(1, rn)
+        stmt.setInt(2, post_id)
         val items = mutableListOf<GetPostWithActiveCommentersRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1275,10 +1275,10 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getPostCountByUser(user_id: String): GetPostCountByUserRow? {
+    fun getPostCountByUser(user_id: Int): GetPostCountByUserRow? {
         val sql = """SELECT (SELECT COUNT(*) FROM posts WHERE user_id = ?) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = ?) AS comment_count;"""
         val stmt = stmts.getOrPut("getPostCountByUser") { conn.prepareStatement(sql) }
-        stmt.setObject(1, user_id)
+        stmt.setInt(1, user_id)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) GetPostCountByUserRow(
                 rs.getInt("post_count"),
@@ -1374,20 +1374,20 @@ class UsersQueries(private val conn: Connection) {
                 rs.getInt("id"),
                 rs.getString("title"),
                 rs.getString("content"),
-                rs.getString("status"),
+                rs.getString("status")?.let { PostStatus.valueOf(it) },
                 rs.getTimestamp("created_at")?.toLocalDateTime(),
                 rs.getTimestamp("updated_at")?.toLocalDateTime(),
                 rs.getInt("author_id"),
                 rs.getString("author_name"),
                 rs.getString("author_email"),
-                rs.getString("author_role"),
+                rs.getString("author_role")?.let { UserRole.valueOf(it) },
                 rs.getBoolean("author_is_admin"),
                 rs.getInt("category_id"),
                 rs.getString("category_name"),
                 rs.getInt("comment_count"),
                 rs.getInt("unique_commenters"),
                 rs.getString("all_comments"),
-                rs.getArray("commenter_names")?.array as? Array<*>,
+                (rs.getArray("commenter_names")?.array as? Array<*>)?.map { it.toString() },
                 rs.getTimestamp("last_comment_date")?.toLocalDateTime(),
                 rs.getInt("content_length"),
                 rs.getDouble("hours_since_created")
@@ -1423,7 +1423,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetUserRoleCountRow(
-                    rs.getString("role"),
+                    rs.getString("role")?.let { UserRole.valueOf(it) },
                     rs.getInt("count")
                 )
             )
@@ -1453,7 +1453,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetPostsGroupedByStatusRow(
-                    rs.getString("status"),
+                    rs.getString("status")?.let { PostStatus.valueOf(it) },
                     rs.getInt("count"),
                     rs.getTimestamp("oldest")?.toLocalDateTime(),
                     rs.getTimestamp("newest")?.toLocalDateTime()
@@ -1489,7 +1489,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("user_id"),
                     rs.getInt("post_id"),
                     rs.getString("title"),
-                    rs.getString("status"),
+                    rs.getString("status")?.let { PostStatus.valueOf(it) },
                     rs.getTimestamp("created_at")?.toLocalDateTime()
                 )
             )
@@ -1497,7 +1497,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun searchUsers(args: SearchUsersArgs): List<SearchUsersRow> {
+    fun searchUsers(args: SearchUsersParams): List<SearchUsersRow> {
         val name = args.name
         val email = args.email
         val limit = args.limit
@@ -1521,7 +1521,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun searchPostsByTitle(args: SearchPostsByTitleArgs): List<SearchPostsByTitleRow> {
+    fun searchPostsByTitle(args: SearchPostsByTitleParams): List<SearchPostsByTitleRow> {
         val title = args.title
         val limit = args.limit
         val offset = args.offset
@@ -1536,7 +1536,7 @@ class UsersQueries(private val conn: Connection) {
                 SearchPostsByTitleRow(
                     rs.getInt("id"),
                     rs.getString("title"),
-                    rs.getString("status"),
+                    rs.getString("status")?.let { PostStatus.valueOf(it) },
                     rs.getTimestamp("created_at")?.toLocalDateTime()
                 )
             )
@@ -1612,12 +1612,12 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("bio"),
                     rs.getString("email"),
                     rs.getString("preferences"),
-                    rs.getArray("tags")?.array as? Array<*>,
+                    (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                     rs.getObject("avatar_hash", java.util.UUID::class.java),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                    rs.getString("role")
+                    UserRole.valueOf(rs.getString("role"))
                 )
             )
         }
@@ -1711,11 +1711,11 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUserActivitySummary(post_count: String, comment_count: String): List<UserActivitySummary> {
+    fun getUserActivitySummary(post_count: Int, comment_count: Int): List<UserActivitySummary> {
         val sql = """SELECT * FROM user_activity_summary WHERE post_count > ? OR comment_count > ? ORDER BY post_count DESC;"""
         val stmt = stmts.getOrPut("getUserActivitySummary") { conn.prepareStatement(sql) }
-        stmt.setString(1, post_count)
-        stmt.setString(2, comment_count)
+        stmt.setInt(1, post_count)
+        stmt.setInt(2, comment_count)
         val items = mutableListOf<UserActivitySummary>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1767,7 +1767,7 @@ class UsersQueries(private val conn: Connection) {
             while (rs.next()) items.add(
                 GetUserSubscriptionsRow(
                     rs.getInt("id"),
-                    rs.getString("tier"),
+                    rs.getString("tier")?.let { SubscriptionTier.valueOf(it) },
                     rs.getTimestamp("started_at")?.toLocalDateTime(),
                     rs.getTimestamp("expires_at")?.toLocalDateTime(),
                     rs.getBoolean("auto_renew")
@@ -1777,7 +1777,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun createSubscription(args: CreateSubscriptionArgs): Subscriptions? {
+    fun createSubscription(args: CreateSubscriptionParams): Subscriptions? {
         val user_id = args.user_id
         val tier = args.tier
         val expires_at = args.expires_at
@@ -1792,7 +1792,7 @@ class UsersQueries(private val conn: Connection) {
             return if (rs.next()) Subscriptions(
                 rs.getInt("id"),
                 rs.getInt("user_id"),
-                rs.getString("tier"),
+                SubscriptionTier.valueOf(rs.getString("tier")),
                 rs.getTimestamp("started_at")!!.toLocalDateTime(),
                 rs.getTimestamp("expires_at")?.toLocalDateTime(),
                 rs.getBoolean("auto_renew")
@@ -1812,7 +1812,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getObject("id", java.util.UUID::class.java),
                     rs.getDouble("total_amount"),
                     rs.getString("discount_pct"),
-                    rs.getString("state"),
+                    rs.getString("state")?.let { OrderState.valueOf(it) },
                     rs.getString("shipping_addr"),
                     rs.getTimestamp("placed_at")?.toLocalDateTime()
                 )
@@ -1834,7 +1834,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("user_id"),
                     rs.getString("user_name"),
                     rs.getDouble("total_amount"),
-                    rs.getString("state"),
+                    rs.getString("state")?.let { OrderState.valueOf(it) },
                     rs.getTimestamp("placed_at")?.toLocalDateTime()
                 )
             )
@@ -1842,7 +1842,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getAuditLogForUser(args: GetAuditLogForUserArgs): List<GetAuditLogForUserRow> {
+    fun getAuditLogForUser(args: GetAuditLogForUserParams): List<GetAuditLogForUserRow> {
         val changed_by = args.changed_by
         val limit = args.limit
         val offset = args.offset
@@ -1958,7 +1958,7 @@ class UsersQueries(private val conn: Connection) {
         }
     }
 
-    fun createPost(args: CreatePostArgs): Posts? {
+    fun createPost(args: CreatePostParams): Posts? {
         val user_id = args.user_id
         val category_id = args.category_id
         val title = args.title
@@ -1977,19 +1977,19 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("title"),
                 rs.getString("content"),
                 rs.getString("excerpt"),
-                rs.getArray("tags")?.array as? Array<*>,
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
                 rs.getString("metadata"),
                 rs.getLong("view_count"),
                 rs.getBoolean("is_featured"),
                 rs.getTimestamp("published_at")?.toLocalDateTime(),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
-                rs.getString("status")
+                PostStatus.valueOf(rs.getString("status"))
             ) else null
         }
     }
 
-    fun createComment(args: CreateCommentArgs): Comments? {
+    fun createComment(args: CreateCommentParams): Comments? {
         val post_id = args.post_id
         val user_id = args.user_id
         val content = args.content
@@ -2025,7 +2025,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeUpdate()
     }
 
-    fun createNotification(args: CreateNotificationArgs): Notifications? {
+    fun createNotification(args: CreateNotificationParams): Notifications? {
         val user_id = args.user_id
         val type = args.type
         val title = args.title
@@ -2052,7 +2052,7 @@ class UsersQueries(private val conn: Connection) {
         }
     }
 
-    fun getNotificationsByUser(args: GetNotificationsByUserArgs): List<Notifications> {
+    fun getNotificationsByUser(args: GetNotificationsByUserParams): List<Notifications> {
         val user_id = args.user_id
         val limit = args.limit
         val offset = args.offset
@@ -2111,7 +2111,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeUpdate()
     }
 
-    fun getNotificationsByType(args: GetNotificationsByTypeArgs): List<GetNotificationsByTypeRow> {
+    fun getNotificationsByType(args: GetNotificationsByTypeParams): List<GetNotificationsByTypeRow> {
         val user_id = args.user_id
         val type = args.type
         val limit = args.limit
@@ -2136,7 +2136,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun createTag(args: CreateTagArgs): Tags? {
+    fun createTag(args: CreateTagParams): Tags? {
         val name = args.name
         val slug = args.slug
         val color = args.color
@@ -2220,7 +2220,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getPostsByTag(args: GetPostsByTagArgs): List<GetPostsByTagRow> {
+    fun getPostsByTag(args: GetPostsByTagParams): List<GetPostsByTagRow> {
         val slug = args.slug
         val limit = args.limit
         val offset = args.offset
@@ -2235,7 +2235,7 @@ class UsersQueries(private val conn: Connection) {
                 GetPostsByTagRow(
                     rs.getInt("id"),
                     rs.getString("title"),
-                    rs.getString("status"),
+                    rs.getString("status")?.let { PostStatus.valueOf(it) },
                     rs.getTimestamp("created_at")?.toLocalDateTime(),
                     rs.getString("author_name"),
                     rs.getInt("comment_count")
@@ -2264,7 +2264,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun uploadMedia(args: UploadMediaArgs): Media? {
+    fun uploadMedia(args: UploadMediaParams): Media? {
         val user_id = args.user_id
         val post_id = args.post_id
         val type = args.type
@@ -2324,7 +2324,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getMediaByUser(args: GetMediaByUserArgs): List<GetMediaByUserRow> {
+    fun getMediaByUser(args: GetMediaByUserParams): List<GetMediaByUserRow> {
         val user_id = args.user_id
         val limit = args.limit
         val offset = args.offset
@@ -2415,7 +2415,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUserFeed(args: GetUserFeedArgs): List<GetUserFeedRow> {
+    fun getUserFeed(args: GetUserFeedParams): List<GetUserFeedRow> {
         val user_id = args.user_id
         val limit = args.limit
         val offset = args.offset
@@ -2431,7 +2431,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("excerpt"),
-                    rs.getString("status"),
+                    rs.getString("status")?.let { PostStatus.valueOf(it) },
                     rs.getTimestamp("created_at")?.toLocalDateTime(),
                     rs.getInt("author_id"),
                     rs.getString("author_name"),
@@ -2456,7 +2456,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("excerpt"),
-                    rs.getString("status"),
+                    rs.getString("status")?.let { PostStatus.valueOf(it) },
                     rs.getTimestamp("created_at")?.toLocalDateTime(),
                     rs.getString("author_name"),
                     rs.getDouble("rank")
@@ -2470,7 +2470,7 @@ class UsersQueries(private val conn: Connection) {
         val sql = """UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND id = ANY(?::bigint[]);"""
         val stmt = stmts.getOrPut("bulkMarkNotificationsRead") { conn.prepareStatement(sql) }
         stmt.setInt(1, user_id)
-        stmt.setInt(2, id)
+        stmt.setArray(2, conn.createArrayOf("integer", id.toTypedArray()))
         stmt.executeUpdate()
     }
 

@@ -3,10 +3,8 @@
 package java;
 
 
-public record SearchUsersWithCOALESCEArgs(
+public record UpsertUserParams(
     String name,
     String email,
-    int age,
-    int limit,
-    int offset
+    UserRole role
 ) {}

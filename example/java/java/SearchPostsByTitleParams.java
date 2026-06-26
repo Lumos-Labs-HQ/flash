@@ -3,8 +3,8 @@
 package java;
 
 
-public record GetPostsByTagArgs(
-    String slug,
+public record SearchPostsByTitleParams(
+    String title,
     int limit,
     int offset
 ) {}

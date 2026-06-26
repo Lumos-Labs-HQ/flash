@@ -3,8 +3,8 @@
 package java;
 
 
-public record GetComplexUserAnalyticsArgs(
+public record GetComplexUserAnalyticsParams(
     String total_posts,
     String total_comments,
-    String limit
+    int limit
 ) {}

@@ -3,8 +3,8 @@
 package java;
 
 
-public record GetMediaByUserArgs(
-    int user_id,
+public record GetPostsByTagParams(
+    String slug,
     int limit,
     int offset
 ) {}

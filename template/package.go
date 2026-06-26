@@ -12,11 +12,11 @@ import (
 func DetectJavaPackage(dir string) string {
 	// Maven: groupId + artifactId
 	if pkg := fromPomXML(filepath.Join(dir, "pom.xml")); pkg != "" {
-		return pkg
+		return strings.ToLower(pkg)
 	}
 	// Gradle: group property
 	if pkg := fromGradle(filepath.Join(dir, "build.gradle")); pkg != "" {
-		return pkg
+		return strings.ToLower(pkg)
 	}
 	return ""
 }
@@ -25,15 +25,15 @@ func DetectJavaPackage(dir string) string {
 func DetectKotlinPackage(dir string) string {
 	// Gradle Kotlin DSL
 	if pkg := fromGradleKts(filepath.Join(dir, "build.gradle.kts")); pkg != "" {
-		return pkg
+		return strings.ToLower(pkg)
 	}
 	// Groovy Gradle
 	if pkg := fromGradle(filepath.Join(dir, "build.gradle")); pkg != "" {
-		return pkg
+		return strings.ToLower(pkg)
 	}
 	// Maven with Kotlin
 	if pkg := fromPomXML(filepath.Join(dir, "pom.xml")); pkg != "" {
-		return pkg
+		return strings.ToLower(pkg)
 	}
 	return ""
 }
@@ -48,6 +48,10 @@ func fromPomXML(path string) string {
 		return ""
 	}
 	content := string(data)
+
+	// Strip <parent>...</parent> block so we don't pick up the parent's groupId
+	parentRe := regexp.MustCompile(`(?s)<parent>.*?</parent>`)
+	content = parentRe.ReplaceAllString(content, "")
 
 	groupMatch := pomGroupRe.FindStringSubmatch(content)
 	if len(groupMatch) < 2 {

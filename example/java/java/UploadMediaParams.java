@@ -3,10 +3,14 @@
 package java;
 
 
-public record CreateNotificationArgs(
+public record UploadMediaParams(
     int user_id,
+    int post_id,
     String type,
-    String title,
-    String body,
+    String url,
+    long size_bytes,
+    String mime_type,
+    int width,
+    int height,
     java.util.Map<String, Object> metadata
 ) {}

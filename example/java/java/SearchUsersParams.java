@@ -3,8 +3,9 @@
 package java;
 
 
-public record CreateTagArgs(
+public record SearchUsersParams(
     String name,
-    String slug,
-    String color
+    String email,
+    int limit,
+    int offset
 ) {}
