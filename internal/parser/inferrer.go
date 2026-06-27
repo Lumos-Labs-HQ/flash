@@ -91,13 +91,13 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) ||
-				strings.EqualFold(col.Name, strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")) {
+				strings.EqualFold(col.Name, strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end"), "_delta"), "_prefix")) {
 				return col.Type
 			}
 		}
 		// Cross-table lookup: param name may refer to a column in another table (subquery joins)
 		if ti.schema != nil {
-			baseName := strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")
+			baseName := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end"), "_delta"), "_prefix")
 			for _, t := range ti.schema.Tables {
 				for _, col := range t.Columns {
 					if strings.EqualFold(col.Name, baseName) {
@@ -134,8 +134,8 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		}
 	}
 
-	// ILIKE / SIMILAR TO / LIKE patterns: WHERE col ILIKE $N
-	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\$%d`, paramIndex)
+	// ILIKE / SIMILAR TO / LIKE patterns: WHERE col ILIKE $N or col ILIKE '%' || $N || '%'
+	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+[^,;]*?\$%d\b`, paramIndex)
 	likeRe := regexp.MustCompile(likePattern)
 	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
@@ -289,6 +289,15 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	if strings.Contains(sql, "?") {
+		// ? || col or col || ? in SELECT — concatenation prefix/suffix
+		concatRe := regexp.MustCompile(`\?\s*\|\|\s*(\w+)`)
+		if match := concatRe.FindStringSubmatch(sql); len(match) > 1 {
+			beforeMatch := sql[:strings.Index(sql, match[0])]
+			if strings.Count(beforeMatch, "?")+1 == paramIndex {
+				return match[1] + "_prefix"
+			}
+		}
+
 		// SET clause with ? params: SET col = ?, col2 = ?, col = col + ?
 		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
 		if setMatch := setColPattern.FindStringSubmatch(sql); len(setMatch) > 1 {
@@ -317,10 +326,30 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		whereRegex := regexp.MustCompile(`(?is)WHERE\s+([\s\S]+?)(?:LIMIT|ORDER|GROUP|HAVING|ALLOW FILTERING|$)`)
 		if whereMatch := whereRegex.FindStringSubmatch(sql); len(whereMatch) > 1 {
 			whereClause := whereMatch[1]
+
+			// col ILIKE '%' || ? || '%' or col ILIKE ? (concatenated search)
+			ilikePattern := regexp.MustCompile(`(?i)(\w+)\s+I?LIKE\s+.*?\?`)
+			ilikeMatches := ilikePattern.FindAllStringSubmatch(whereClause, -1)
+
 			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*\?`)
 			matches := colPattern.FindAllStringSubmatch(whereClause, -1)
 			if paramIndex <= len(matches) && len(matches[paramIndex-1]) > 1 {
 				return matches[paramIndex-1][1]
+			}
+
+			// ILIKE with ? (including '%' || ? || '%' patterns)
+			if len(ilikeMatches) > 0 {
+				// Count ? before WHERE to get relative position
+				beforeWhere := sql[:strings.Index(strings.ToUpper(sql), "WHERE")]
+				paramsBefore := strings.Count(beforeWhere, "?")
+				relIdx := paramIndex - paramsBefore
+				// Check if this param falls within an ILIKE pattern
+				for _, m := range ilikeMatches {
+					if relIdx > 0 && relIdx <= strings.Count(m[0], "?") {
+						return m[1]
+					}
+					relIdx -= strings.Count(m[0], "?")
+				}
 			}
 
 			// CONTAINS ? pattern
@@ -348,6 +377,15 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			}
 		}
 
+		// OFFSET ? — count total params before OFFSET
+		if regexp.MustCompile(`(?i)OFFSET\s+\?`).MatchString(sql) {
+			beforeOffset := regexp.MustCompile(`(?i)OFFSET\s+\?`).Split(sql, 2)[0]
+			totalBefore := strings.Count(beforeOffset, "?")
+			if paramIndex == totalBefore+1 {
+				return "offset"
+			}
+		}
+
 		// SET col = col + ? (counter increment) → use the column name
 		counterRe := regexp.MustCompile(`(?i)(\w+)\s*=\s*(\w+)\s*\+\s*\?`)
 		for _, m := range counterRe.FindAllStringSubmatch(sql, -1) {
@@ -370,8 +408,18 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		return match[1]
 	}
 
+	limitPattern := fmt.Sprintf(`(?i)LIMIT\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(limitPattern, sql); matched {
+		return "limit"
+	}
+
+	offsetPattern := fmt.Sprintf(`(?i)OFFSET\s+\$%d`, paramIndex)
+	if matched, _ := regexp.MatchString(offsetPattern, sql); matched {
+		return "offset"
+	}
+
 	// ILIKE / LIKE / SIMILAR TO
-	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\$%d`, paramIndex)
+	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+[^,;]*?\$%d\b`, paramIndex)
 	likeRe := regexp.MustCompile(likePattern)
 	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
@@ -383,20 +431,22 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		return match[1]
 	}
 
+	// SET col = col + $N or SET col = col - $N (counter increment/decrement)
+	setCounterRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*=\s*\w+\s*[+\-]\s*\$%d`, paramIndex))
+	if match := setCounterRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1] + "_delta"
+	}
+
 	// SET col = COALESCE($N, col) — "update if not null" pattern
 	setCoalesceRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*=\s*COALESCE\s*\(\s*\$%d\b`, paramIndex))
 	if match := setCoalesceRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
 
-	limitPattern := fmt.Sprintf(`(?i)LIMIT\s+\$%d`, paramIndex)
-	if matched, _ := regexp.MatchString(limitPattern, sql); matched {
-		return "limit"
-	}
-
-	offsetPattern := fmt.Sprintf(`(?i)OFFSET\s+\$%d`, paramIndex)
-	if matched, _ := regexp.MatchString(offsetPattern, sql); matched {
-		return "offset"
+	// Multi-assignment SET: ..., col = $N (not just first SET position)
+	setAnyRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*=\s*\$%d\b`, paramIndex))
+	if match := setAnyRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
 	}
 
 	betweenPattern := fmt.Sprintf(`(?i)(\w+)\s+BETWEEN\s+\$%d`, paramIndex)
