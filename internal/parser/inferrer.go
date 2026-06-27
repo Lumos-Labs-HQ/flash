@@ -402,6 +402,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 	}
 
+	// $N || col (concatenation prefix)
+	concatDollarRe := regexp.MustCompile(fmt.Sprintf(`\$%d\s*\|\|\s*(\w+)`, paramIndex))
+	if match := concatDollarRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1] + "_prefix"
+	}
+
 	wherePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$%d\b`, paramIndex)
 	whereRe := regexp.MustCompile(wherePattern)
 	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {

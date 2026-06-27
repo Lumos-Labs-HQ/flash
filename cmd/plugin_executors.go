@@ -13,6 +13,11 @@ func ExecuteCorePlugin() error {
 		Short: "FlashORM - Core ORM Features",
 	}
 
+	coreRoot.PersistentFlags().BoolP("force", "f", false, "Skip confirmations / force regenerate")
+	coreRoot.PersistentFlags().String("db", "", "database name (for multi-database configs)")
+	coreRoot.PersistentFlags().String("config", "", "config file (default is ./flash.toml)")
+	coreRoot.PersistentFlags().String("env", "", "environment name")
+
 	// Add all core commands
 	coreRoot.AddCommand(initCmd)
 	coreRoot.AddCommand(migrateCmd)
