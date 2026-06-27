@@ -43,7 +43,7 @@ func (g *Generator) Generate() error {
 	// Compute checksums for incremental generation
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
 	configHash := fmt.Sprintf("%x", []byte(fmt.Sprintf("%s|%s|%s", g.Config.Database.Provider, g.Config.Gen.JS.Out, g.Config.Gen.JS.Driver)))
-	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+	fullRegen := g.Config.ForceRegen || g.cache.ShouldRegenerateAll(schemaHash, configHash)
 
 	queries, err := g.queryParser.Parse(schema)
 	if err != nil {

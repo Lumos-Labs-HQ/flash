@@ -46,7 +46,7 @@ func (g *Generator) Generate() error {
 	schemaHash, _ := g.cache.ComputeSchemaChecksum(g.Config.SchemaDir)
 	configStr := fmt.Sprintf("%s|%s|%v|%s", g.Config.Database.Provider, g.Config.Gen.Python.Out, g.Config.Gen.Python.Async, g.Config.Gen.Python.Driver)
 	configHash := fmt.Sprintf("%x", []byte(configStr))
-	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+	fullRegen := g.Config.ForceRegen || g.cache.ShouldRegenerateAll(schemaHash, configHash)
 
 	queries, err := g.queryParser.Parse(schema)
 	if err != nil {

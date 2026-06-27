@@ -56,7 +56,7 @@ func (g *Generator) Generate() error {
 	configHash := g.computeConfigChecksum()
 
 	// Check if full regeneration is needed
-	fullRegen := g.cache.ShouldRegenerateAll(schemaHash, configHash)
+	fullRegen := g.Config.ForceRegen || g.cache.ShouldRegenerateAll(schemaHash, configHash)
 
 	// Parse queries
 	queries, err := g.queryParser.Parse(schema)

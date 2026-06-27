@@ -35,6 +35,9 @@ Configuration is read from flash.toml`,
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
+		force, _ := cmd.Flags().GetBool("force")
+		cfg.ForceRegen = force
+
 		generated := false
 
 		if cfg.Gen.JS.Enabled {

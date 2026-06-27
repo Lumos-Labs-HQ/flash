@@ -195,6 +195,7 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 		}
 	}
 
+	w.WriteString("@Suppress(\"DuplicatedCode\")\n")
 	w.WriteString(fmt.Sprintf("class %sQueries(private val %s: %s) {\n",
 		utils.ToPascalCase(strings.TrimSuffix(src, ".sql")), paramName, connType))
 

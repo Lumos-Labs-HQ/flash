@@ -29,9 +29,10 @@ type Config struct {
 	Queries        string   `toml:"queries"`
 	MigrationsPath string   `toml:"migrations_path"`
 	ExportPath     string   `toml:"export_path"`
-	EnvPath        string   `toml:"env_path"` // custom .env file path, e.g. "config/.env"
+	EnvPath        string   `toml:"env_path"`
 	Database       Database `toml:"database"`
 	Gen            Gen      `toml:"gen"`
+	ForceRegen     bool     `toml:"-"` // runtime flag: skip cache, regenerate all
 }
 
 type Database struct {
