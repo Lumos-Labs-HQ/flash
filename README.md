@@ -308,7 +308,7 @@ flash raw db/seed.sql      # Execute SQL file (supports comment blocks)
 - [TypeScript Usage Guide](docs/USAGE_TYPESCRIPT.md)
 - [Python Usage Guide](docs/USAGE_PYTHON.md)
 - [How It Works](docs/HOW_IT_WORKS.md)
-- [Architecture & Internals](docs/ARCHITECTURE.md)
+- [Architecture & Internals](ARCHITECTURE.md)
 - [Release Notes](docs/notes/RELEASE_NOTES.md)
 - [Contributing](docs/contributing.md)
 

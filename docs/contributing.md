@@ -198,32 +198,7 @@ FlashORM/
 | Type inference | Priority-ordered regex chain | O(patterns) | `parser/inferrer.go:InferParamType` |
 | Concurrent query parsing | Worker pool + WaitGroup | O(files/workers) | `parser/query.go:parseFilesConcurrently` |
 
-For detailed algorithm descriptions, see [ARCHITECTURE.md](ARCHITECTURE.md).
-│   ├── studio/                # Studio backends
-│   │   ├── sql/               # SQL Studio
-│   │   ├── mongodb/           # MongoDB Studio
-│   │   ├── redis/             # Redis Studio
-│   │   └── common/            # Shared studio utilities
-│   ├── types/                 # Shared type definitions
-│   └── utils/                 # General utilities
-├── plugins/                   # Standalone plugin binaries
-│   ├── core/                  # Core ORM plugin
-│   └── studio/                # Studio plugin
-├── template/                  # Project init templates
-├── example/                   # Example projects
-│   ├── go/                    # Go example
-│   ├── python/                # Python example
-│   └── ts/                    # TypeScript example
-├── test/
-│   └── integration/           # Integration tests (requires Docker)
-├── npm/                       # npm package wrapper
-├── python/                    # Python package wrapper
-├── docs/                      # VitePress documentation site
-├── Taskfile.yml               # Build automation (task)
-├── Makefile                   # Legacy / CI build targets
-├── main.go                    # Entry point
-└── go.mod                     # Go module
-```
+For detailed algorithm descriptions, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Development Workflow
 
