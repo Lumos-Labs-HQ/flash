@@ -118,7 +118,43 @@ flash gen
 | `flash export` | Export database |
 | `flash seed` | Seed with fake data |
 | `flash gen` | Generate type-safe code |
+| `flash gen -f` | Force regenerate (skip cache) |
+| `flash gen --db <name>` | Generate for specific database |
+| `flash dblist` | List all configured databases |
 | `flash update` | Update plugins and flash binary |
+| `flash uninstall` | Remove flash and ~/.flash |
+
+## 🗄️ Multi-Database Support
+
+Configure multiple databases in one project:
+
+```toml
+[[databases]]
+name = "main"
+provider = "postgresql"
+url_env = "DATABASE_URL"
+schema_dir = "db/main/schema"
+queries = "db/main/queries/"
+migrations_path = "db/main/migrations"
+default = true
+
+[databases.gen.kotlin]
+enabled = true
+package = "com.example.main.flashgen"
+
+[[databases]]
+name = "analytics"
+provider = "clickhouse"
+url_env = "ANALYTICS_URL"
+schema_dir = "db/analytics/schema"
+queries = "db/analytics/queries/"
+
+[databases.gen.go]
+enabled = true
+out = "gen/analytics"
+```
+
+All commands support `--db <name>`: `flash gen --db main`, `flash apply --db analytics`, `flash studio --db main`
 
 ## 🗄️ Database Support
 
@@ -272,6 +308,7 @@ flash raw db/seed.sql      # Execute SQL file (supports comment blocks)
 - [TypeScript Usage Guide](docs/USAGE_TYPESCRIPT.md)
 - [Python Usage Guide](docs/USAGE_PYTHON.md)
 - [How It Works](docs/HOW_IT_WORKS.md)
+- [Architecture & Internals](docs/ARCHITECTURE.md)
 - [Release Notes](docs/notes/RELEASE_NOTES.md)
 - [Contributing](docs/contributing.md)
 

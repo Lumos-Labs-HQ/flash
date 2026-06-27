@@ -71,17 +71,18 @@ flash --version
 
 ```
 FlashORM/
-├── cmd/                        # CLI commands
-│   ├── root.go                # Root command (production build tag)
-│   ├── root_dev.go            # Root command (dev build tag)
-│   ├── base.go                # Base command registration
-│   ├── base_dev.go            # Dev-only command registration
+├── cmd/                        # CLI commands (cobra)
+│   ├── root.go                # Root command (production)
+│   ├── root_dev.go            # Root command (dev: all-in-one binary)
+│   ├── base.go                # Command registration (prod)
+│   ├── base_dev.go            # Command registration (dev)
+│   ├── helpers.go             # loadConfigForDB() — multi-db config resolver
 │   ├── init.go                # flash init
 │   ├── migrate.go             # flash migrate
 │   ├── apply.go               # flash apply
 │   ├── down.go                # flash down
 │   ├── status.go              # flash status
-│   ├── gen.go                 # flash gen
+│   ├── gen.go                 # flash gen + runGenForConfig()
 │   ├── seed.go                # flash seed
 │   ├── export.go              # flash export
 │   ├── pull.go                # flash pull
@@ -89,35 +90,115 @@ FlashORM/
 │   ├── reset.go               # flash reset
 │   ├── studio.go              # flash studio
 │   ├── branch.go              # flash branch
+│   ├── dblist.go              # flash dblist (multi-db listing)
+│   ├── uninstall.go           # flash uninstall
 │   ├── plugins.go             # flash plugins
 │   ├── add_plugin.go          # flash add-plugin
 │   ├── remove_plugin.go       # flash remove-plugin
-│   ├── update.go              # flash update
-│   ├── plugin_executors.go    # Plugin executor wiring
-│   └── plugin_executor_studio.go
-├── internal/                  # Internal packages
-│   ├── config/                # Configuration (flash.toml)
-│   ├── database/              # Database adapters
-│   │   ├── adapter.go         # Common interface
-│   │   ├── factory.go         # Adapter factory
-│   │   ├── common/            # Shared DB utilities
-│   │   ├── postgres/          # PostgreSQL adapter
-│   │   ├── mysql/             # MySQL adapter
-│   │   ├── sqlite/            # SQLite adapter
-│   │   └── mongodb/           # MongoDB adapter
-│   ├── migrator/              # Migration engine
-│   ├── schema/                # Schema parsing & diffing
-│   ├── parser/                # SQL / query parser
+│   └── update.go              # flash update
+├── internal/
+│   ├── config/                # Config loading, validation, multi-db resolution
+│   │   └── config.go          # Load(), ResolveForDB(), GetDefaultDB(), Validate()
+│   ├── schema/                # SQL DDL parser & diff engine
+│   │   ├── parser.go          # parseCreateTableStatement(), splitColumnDefinitions()
+│   │   ├── schema.go          # ParseSchemaDir(), GenerateSchemaDiff()
+│   │   ├── compare.go         # compareSchemas() → SchemaDiff
+│   │   ├── snapshot.go        # SaveSchemaSnapshot(), LoadSchemaSnapshot()
+│   │   └── sqlcompare.go      # CompareWithDatabase() — live DB vs file diff
+│   ├── parser/                # Query parsing & type inference
+│   │   ├── query.go           # QueryParser.Parse(), analyzeQuery(), rewriteINListToANY()
+│   │   ├── inferrer.go        # TypeInferrer: InferParamName(), InferParamType()
+│   │   ├── schema.go          # SchemaParser.Parse() (schema file reading)
+│   │   ├── indexed_schema.go  # Fast column lookup by table+name
+│   │   └── regex_cache.go     # GetCachedPattern() — compiled regex pool
+│   ├── migrator/              # Migration lifecycle
+│   │   ├── migrator.go        # NewMigrator(), GenerateMigration()
+│   │   ├── operations.go      # Apply(), Down(), Status(), Reset()
+│   │   └── branch_aware.go    # Branch-aware migration support
 │   ├── gencommon/             # Shared codegen utilities
+│   │   ├── cache.go           # GenerationCache — checksum-based incremental gen
+│   │   ├── schema.go          # SchemaExpander: ExpandWildcardColumns(), extractTableAliases()
+│   │   ├── naming.go          # QueryPascal(), ToCamelCase()
+│   │   ├── pipeline.go        # GroupQueries(), Run() — parallel file generation
+│   │   ├── enum.go            # ExtractEnumValues()
+│   │   └── collections.go     # CQL collection type parsing
 │   ├── gogen/                 # Go code generator
-│   ├── jsgen/                 # JS/TS code generator
-│   ├── pygen/                 # Python code generator
-│   ├── seeder/                # Database seeder
-│   ├── export/                # Data export (JSON/CSV/SQLite)
-│   ├── backup/                # Backup utilities
-│   ├── pull/                  # Schema introspection (flash pull)
-│   ├── branch/                # Git-like schema branching
-│   ├── plugin/                # Plugin registry & manager
+│   │   ├── generator.go       # Generate(), generateSQLQueryMethod(), mapSQLTypeToGo()
+│   │   └── incremental.go     # Per-file incremental generation
+│   ├── jsgen/                 # TypeScript/JavaScript generator
+│   │   ├── generator.go       # Generate(), generateOptimizedQueryMethod(), mapSQLTypeToJS()
+│   │   └── incremental.go
+│   ├── pygen/                 # Python generator
+│   │   ├── generator.go       # Generate(), generateQueryMethod(), sqlTypeToPython()
+│   │   └── incremental.go
+│   ├── kotlingen/             # Kotlin generator
+│   │   ├── generator.go       # Generate(), generateDB(), ktTypedGetter(), ktTypedSetter()
+│   │   └── incremental.go     # generateSingleKtFile()
+│   ├── javagen/               # Java generator
+│   │   ├── generator.go       # Generate(), generateDB(), javaTypedGetter(), javaTypedSetter()
+│   │   └── incremental.go     # generateSingleJavaFile()
+│   ├── database/              # Database adapters
+│   │   ├── adapter.go         # Adapter interface definition
+│   │   ├── factory.go         # NewAdapter(provider) → Adapter
+│   │   ├── postgres/          # PostgreSQL: schema, operations, branch
+│   │   ├── mysql/             # MySQL: schema, operations, branch
+│   │   ├── sqlite/            # SQLite: schema, operations, branch
+│   │   ├── scylla/            # ScyllaDB/Cassandra
+│   │   ├── clickhouse/        # ClickHouse
+│   │   └── mongodb/           # MongoDB (studio-only, no ORM)
+│   ├── studio/                # Visual database management
+│   │   ├── sql/               # SQL Studio (Postgres/MySQL/SQLite/Scylla/ClickHouse)
+│   │   ├── mongodb/           # MongoDB Studio
+│   │   └── redis/             # Redis Studio
+│   ├── seeder/                # Smart data seeding
+│   │   ├── seeder.go          # Seed() — dependency-ordered insertion
+│   │   ├── faker.go           # DataGenerator — realistic fake data
+│   │   └── graph.go           # DependencyGraph — topological sort for FK order
+│   ├── pull/                  # Reverse-engineer DB → schema files
+│   ├── export/                # Export DB to JSON/CSV/SQLite
+│   ├── backup/                # Table-level backup before destructive ops
+│   ├── branch/                # Schema branching (DB-level isolation)
+│   ├── plugin/                # Plugin binary management
+│   ├── utils/                 # SQL utilities, naming, validation
+│   └── types/                 # Shared type definitions
+├── template/                  # flash init templates & project detection
+│   ├── init.go                # GetFlashORMConfig(), getGenSection()
+│   ├── detect_test.go         # Project type detection tests
+│   └── package.go             # DetectJavaPackage(), DetectKotlinPackage()
+├── plugins/
+│   ├── core/                  # Core plugin binary (prod only)
+│   └── studio/                # Studio plugin binary (prod only)
+├── example/
+│   ├── go/                    # Go example project
+│   ├── ts/                    # TypeScript example
+│   ├── python/                # Python example
+│   ├── java/                  # Java + Kotlin example
+│   └── multidb/               # Multi-database example
+├── docs/                      # Documentation (VitePress)
+│   ├── ARCHITECTURE.md        # Internal architecture & algorithms
+│   ├── contributing.md        # This file
+│   └── notes/RELEASE_NOTES.md # Changelog
+├── test/integration/          # Integration tests (require Docker/DB)
+├── Taskfile.yml               # Build tasks
+└── main.go                    # Entry point
+```
+
+### Key Algorithms & Data Structures
+
+| Component | Algorithm | Complexity | Location |
+|-----------|-----------|------------|----------|
+| Schema dependency sort | Topological sort (Kahn's) | O(V+E) | `schema/schema.go:sortTablesByDependencies` |
+| Schema diff | Map-based set diff | O(n) | `schema/compare.go:compareSchemas` |
+| Migration conflict detection | Checksum comparison | O(n) | `migrator/operations.go:hasConflicts` |
+| Query param deduplication | Ordered unique set | O(n) | `parser/query.go:extractOrderedParamNums` |
+| Wildcard expansion | Alias map + set intersection | O(tables × cols) | `gencommon/schema.go:ExpandWildcardColumns` |
+| IN-list rewrite | Regex match + renumber | O(params) | `parser/query.go:rewriteINListToANY` |
+| Incremental generation | SHA256 file checksums | O(files) | `gencommon/cache.go` |
+| Seeder dependency order | Topological sort | O(V+E) | `seeder/graph.go:BuildInsertionOrder` |
+| Type inference | Priority-ordered regex chain | O(patterns) | `parser/inferrer.go:InferParamType` |
+| Concurrent query parsing | Worker pool + WaitGroup | O(files/workers) | `parser/query.go:parseFilesConcurrently` |
+
+For detailed algorithm descriptions, see [ARCHITECTURE.md](ARCHITECTURE.md).
 │   ├── studio/                # Studio backends
 │   │   ├── sql/               # SQL Studio
 │   │   ├── mongodb/           # MongoDB Studio
