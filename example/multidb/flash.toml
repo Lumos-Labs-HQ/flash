@@ -7,9 +7,9 @@ url_env = "DATABASE_URL"
 schema_dir = "db/main/schema"
 queries = "db/main/queries/"
 migrations_path = "db/main/migrations"
-default = true
+# default = true
 
-[databases.gen.go]
+[databases.gen.kotlin]
 enabled = true
 out = "gen/main"
 
@@ -21,6 +21,6 @@ schema_dir = "db/analytics/schema"
 queries = "db/analytics/queries/"
 migrations_path = "db/analytics/migrations"
 
-[databases.gen.go]
+[databases.gen.kotlin]
 enabled = true
 out = "gen/analytics"

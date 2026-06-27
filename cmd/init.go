@@ -167,10 +167,15 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 		}
 	}
 
+	ext := ".sql"
+	if projectTemplate.DatabaseType == tmpl.ScyllaDB {
+		ext = ".cql"
+	}
+
 	files := map[string]string{
-		"flash.toml":           projectTemplate.GetFlashORMConfig(),
-		"db/schema/schema.sql": projectTemplate.GetSchema(),
-		"db/queries/users.sql": projectTemplate.GetQueries(),
+		"flash.toml":             projectTemplate.GetFlashORMConfig(),
+		"db/schema/schema" + ext: projectTemplate.GetSchema(),
+		"db/queries/users" + ext: projectTemplate.GetQueries(),
 	}
 
 	if _, err := os.Stat(".env"); os.IsNotExist(err) {
@@ -206,8 +211,8 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 	fmt.Println()
 	fmt.Println("Created files and directories:")
 	fmt.Println("  flash.toml")
-	fmt.Println("  db/schema/schema.sql")
-	fmt.Println("  db/queries/users.sql")
+	fmt.Printf("  db/schema/schema%s\n", ext)
+	fmt.Printf("  db/queries/users%s\n", ext)
 	if _, err := os.Stat(".env"); os.IsNotExist(err) {
 		fmt.Println("  .env")
 	}

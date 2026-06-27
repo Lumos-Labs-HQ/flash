@@ -126,7 +126,11 @@ func (g *Generator) generateModels() error {
 
 	// One file per record
 	for _, table := range g.schema.Tables {
-		name := utils.ToPascalCase(table.Name)
+		tableName := table.Name
+		if idx := strings.LastIndex(tableName, "."); idx >= 0 {
+			tableName = tableName[idx+1:]
+		}
+		name := utils.ToPascalCase(tableName)
 		var w strings.Builder
 		w.WriteString(header)
 		if needsUUID(table.Columns) {
@@ -791,7 +795,12 @@ func (g *Generator) sqlTypeToJava(sqlType string, nullable bool) string {
 	case sqlLower == "timeuuid":
 		jt = "UUID"
 	case strings.Contains(sqlLower, "timestamp") || strings.Contains(sqlLower, "date") || strings.Contains(sqlLower, "time"):
-		jt = "LocalDateTime"
+		provider := g.Config.Database.Provider
+		if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
+			jt = "java.time.Instant"
+		} else {
+			jt = "LocalDateTime"
+		}
 	case strings.Contains(sqlLower, "uuid"):
 		jt = "UUID"
 	case strings.Contains(sqlLower, "json"):

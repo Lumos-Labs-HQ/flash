@@ -44,11 +44,15 @@ func TestImportNullableOnly(t *testing.T) {
 	for _, q := range queries {
 		for _, col := range q.Columns {
 			kt := g.sqlTypeToKotlin(col.Type, false)
-			if strings.Contains(kt, "UUID") { needsUUID = true }
-			if strings.Contains(kt, "LocalDateTime") { needsLDT = true }
+			if strings.Contains(kt, "UUID") {
+				needsUUID = true
+			}
+			if strings.Contains(kt, "LocalDateTime") {
+				needsLDT = true
+			}
 		}
 	}
-	
+
 	if !needsUUID {
 		t.Error("expected needsUUID=true for query with UUID column")
 	}

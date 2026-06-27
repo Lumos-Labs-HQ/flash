@@ -42,15 +42,15 @@ type Config struct {
 
 // DatabaseConfig represents a single database in multi-db mode
 type DatabaseConfig struct {
-	Name           string   `toml:"name"`
-	Provider       string   `toml:"provider"`
-	URLEnv         string   `toml:"url_env"`
-	SchemaDir      string   `toml:"schema_dir"`
-	Queries        string   `toml:"queries"`
-	MigrationsPath string   `toml:"migrations_path"`
-	ExportPath     string   `toml:"export_path"`
-	Default        bool     `toml:"default"`
-	Gen            Gen      `toml:"gen"`
+	Name           string `toml:"name"`
+	Provider       string `toml:"provider"`
+	URLEnv         string `toml:"url_env"`
+	SchemaDir      string `toml:"schema_dir"`
+	Queries        string `toml:"queries"`
+	MigrationsPath string `toml:"migrations_path"`
+	ExportPath     string `toml:"export_path"`
+	Default        bool   `toml:"default"`
+	Gen            Gen    `toml:"gen"`
 }
 
 type Database struct {
@@ -122,7 +122,7 @@ type rawConfig struct {
 	Queries        string           `toml:"queries"`
 	MigrationsPath string           `toml:"migrations_path"`
 	ExportPath     string           `toml:"export_path"`
-	Default        bool     `toml:"default"`
+	Default        bool             `toml:"default"`
 	EnvPath        string           `toml:"env_path"`
 	Database       Database         `toml:"database"`
 	Gen            rawGen           `toml:"gen"`
@@ -442,7 +442,7 @@ func (c *Config) GetSchemaFiles() ([]string, error) {
 
 	var files []string
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+		if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".sql") || strings.HasSuffix(entry.Name(), ".cql")) {
 			files = append(files, filepath.Join(schemaDir, entry.Name()))
 		}
 	}

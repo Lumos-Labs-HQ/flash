@@ -4,7 +4,7 @@
     "db/main/queries/users.sql": "ae7b2f4995d7c41d141a7e46047270d56ec91ee5bc8d51db3c726dcbdda3422f"
   },
   "schema_checksum": "0fc3ae3f4bd44cefed907671e9d5f693a91e2f4fec85c702136a610139ef6fa5",
-  "config_checksum": "cd8cfb5a10f63467a581cffc9064015082c9aca7a2b57311188b95c0631617f8",
+  "config_checksum": "706f737467726573716c7c67656e2f6d61696e7c",
   "query_table_deps": {
     "db/main/queries/users.sql": [
       "users",
@@ -12,8 +12,10 @@
     ]
   },
   "generated_file_checksums": {
-    "gen/main/users.go": "44262484fd2513b2c0aca55f41105b535b6204bf992aeb9d60287ff4b9f2af0a"
+    "gen/main/Models.kt": "eb8bc7dc13b893524aa73e6e702230ea9cba9c98f05317eeb346a5e46e7ab14a",
+    "gen/main/Queries.kt": "04212d47c8075027df1cedf72d6f5426d8c6540344c3c2eb13eee7b6722dbb20",
+    "gen/main/Users.kt": "1fea3c6fd08c86aa6d070f2cf3e3a03bdfdb64c9e211b51fbaec2f36d82c242f"
   },
-  "last_generation": "2026-06-27T16:28:35.07050517+05:30",
+  "last_generation": "2026-06-27T22:46:09.022365739+05:30",
   "OutDir": "gen/main"
 }

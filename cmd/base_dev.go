@@ -26,7 +26,7 @@ func RegisterBaseCommands() {
 	// Seed command
 	rootCmd.AddCommand(seedCmd)
 
-	// Plugin management 
+	// Plugin management
 	rootCmd.AddCommand(pluginsCmd)
 	rootCmd.AddCommand(addPluginCmd)
 	rootCmd.AddCommand(removePluginCmd)

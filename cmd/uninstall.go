@@ -19,7 +19,7 @@ var uninstallCmd = &cobra.Command{
 		if !force {
 			fmt.Print("This will remove the flash binary and ~/.flash directory. Continue? [y/N] ")
 			var answer string
-			fmt.Scanln(&answer)
+			_, _ = fmt.Scanln(&answer)
 			if answer != "y" && answer != "Y" {
 				fmt.Println("Cancelled.")
 				return

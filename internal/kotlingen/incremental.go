@@ -84,7 +84,7 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 	w.WriteString(fmt.Sprintf("package %s\n\n", pkg))
 
 	// Collect imports
-	needsUUID, needsLocalDateTime := false, false
+	needsUUID, needsLDT, needsInstant := false, false, false
 	for _, q := range queries {
 		for _, col := range q.Columns {
 			kt := g.sqlTypeToKotlin(col.Type, false)
@@ -92,7 +92,10 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 				needsUUID = true
 			}
 			if strings.Contains(kt, "LocalDateTime") {
-				needsLocalDateTime = true
+				needsLDT = true
+			}
+			if strings.Contains(kt, "Instant") {
+				needsInstant = true
 			}
 		}
 		for _, param := range q.Params {
@@ -101,17 +104,23 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 				needsUUID = true
 			}
 			if strings.Contains(kt, "LocalDateTime") {
-				needsLocalDateTime = true
+				needsLDT = true
+			}
+			if strings.Contains(kt, "Instant") {
+				needsInstant = true
 			}
 		}
 	}
 	if needsUUID {
 		w.WriteString("import java.util.UUID\n")
 	}
-	if needsLocalDateTime {
+	if needsLDT {
 		w.WriteString("import java.time.LocalDateTime\n")
 	}
-	if needsUUID || needsLocalDateTime {
+	if needsInstant {
+		w.WriteString("import java.time.Instant\n")
+	}
+	if needsUUID || needsLDT || needsInstant {
 		w.WriteString("\n")
 	}
 
