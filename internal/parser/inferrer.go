@@ -95,6 +95,17 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 				return col.Type
 			}
 		}
+		// Cross-table lookup: param name may refer to a column in another table (subquery joins)
+		if ti.schema != nil {
+			baseName := strings.TrimSuffix(strings.TrimSuffix(paramName, "_start"), "_end")
+			for _, t := range ti.schema.Tables {
+				for _, col := range t.Columns {
+					if strings.EqualFold(col.Name, baseName) {
+						return col.Type
+					}
+				}
+			}
+		}
 	}
 
 	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*|\b\w+_count\b\s*[<>=!]+\s*\$%d|\b\w+_sum\b\s*[<>=!]+\s*\$%d`, paramIndex, paramIndex, paramIndex, paramIndex)
@@ -353,7 +364,7 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 	}
 
-	wherePattern := fmt.Sprintf(`(?i)WHERE\s+(?:\w+\.)?(\w+)\s*=\s*\$%d`, paramIndex)
+	wherePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$%d\b`, paramIndex)
 	whereRe := regexp.MustCompile(wherePattern)
 	if match := whereRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
@@ -402,10 +413,22 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 	}
 
-	compPattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+(?:\w+\.)?(\w+)\s*[<>=!]+\s*\$%d`, paramIndex)
+	compPattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+(?:\w+\.)?(\w+)\s*([<>=!]+)\s*\$%d`, paramIndex)
 	compRe := regexp.MustCompile(compPattern)
-	if match := compRe.FindStringSubmatch(sql); len(match) > 1 {
-		return match[1]
+	if match := compRe.FindStringSubmatch(sql); len(match) > 2 {
+		col := match[1]
+		op := match[2]
+		// Detect range pattern: same col with opposite operator on another param
+		otherRangeRe := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s*[<>=!]+\s*\$\d+`, regexp.QuoteMeta(col)))
+		if len(otherRangeRe.FindAllString(sql, -1)) > 1 {
+			if op == ">=" || op == ">" {
+				return col + "_start"
+			}
+			if op == "<=" || op == "<" {
+				return col + "_end"
+			}
+		}
+		return col
 	}
 
 	// COALESCE(col, ...) op $N

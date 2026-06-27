@@ -59,11 +59,11 @@ class Queries(private val conn: Connection) {
     fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEParams): List<SearchUsersWithCOALESCERow> =
         users.searchUsersWithCOALESCE(args)
 
-    fun getUsersCreatedBetween(created_at: LocalDateTime, created_at2: LocalDateTime): List<GetUsersCreatedBetweenRow> =
-        users.getUsersCreatedBetween(created_at, created_at2)
+    fun getUsersCreatedBetween(created_at_start: LocalDateTime, created_at_end: LocalDateTime): List<GetUsersCreatedBetweenRow> =
+        users.getUsersCreatedBetween(created_at_start, created_at_end)
 
-    fun getUsersByAgeRange(age: Int, age2: Int): List<GetUsersByAgeRangeRow> =
-        users.getUsersByAgeRange(age, age2)
+    fun getUsersByAgeRange(age_start: Int, age_end: Int): List<GetUsersByAgeRangeRow> =
+        users.getUsersByAgeRange(age_start, age_end)
 
     fun getUsersByGeneratedRange(age_range: Int): List<GetUsersByGeneratedRangeRow> =
         users.getUsersByGeneratedRange(age_range)
@@ -218,8 +218,8 @@ class Queries(private val conn: Connection) {
     fun getTopCommenters(limit: Int): List<GetTopCommentersRow> =
         users.getTopCommenters(limit)
 
-    fun getEngagementTimeSeries(created_at: LocalDateTime): List<GetEngagementTimeSeriesRow> =
-        users.getEngagementTimeSeries(created_at)
+    fun getEngagementTimeSeries(created_at_start: LocalDateTime): List<GetEngagementTimeSeriesRow> =
+        users.getEngagementTimeSeries(created_at_start)
 
     fun createCategory(name: String): Categories? =
         users.createCategory(name)

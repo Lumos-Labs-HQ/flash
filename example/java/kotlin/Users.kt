@@ -469,6 +469,21 @@ data class SearchPostsFullTextRow(
 )
 
 data class GetUserWithStatsRow(
+    val id: Int,
+    val name: String?,
+    val address: String?,
+    val isadmin: Boolean,
+    val age: Int?,
+    val age_range: Int?,
+    val bio: String?,
+    val email: String?,
+    val preferences: String?,
+    val tags: List<String>?,
+    val avatar_hash: UUID?,
+    val shipping: String?,
+    val created_at: LocalDateTime?,
+    val updated_at: LocalDateTime?,
+    val role: UserRole?,
     val published_posts: Int?,
     val total_comments: Int?,
     val unread_notifications: Int?,
@@ -947,11 +962,11 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUsersCreatedBetween(created_at: LocalDateTime, created_at2: LocalDateTime): List<GetUsersCreatedBetweenRow> {
+    fun getUsersCreatedBetween(created_at_start: LocalDateTime, created_at_end: LocalDateTime): List<GetUsersCreatedBetweenRow> {
         val sql = """SELECT id, name, email, created_at FROM users WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC;"""
         val stmt = stmts.getOrPut("getUsersCreatedBetween") { conn.prepareStatement(sql) }
-        stmt.setObject(1, java.sql.Timestamp.valueOf(created_at))
-        stmt.setObject(2, java.sql.Timestamp.valueOf(created_at2))
+        stmt.setObject(1, java.sql.Timestamp.valueOf(created_at_start))
+        stmt.setObject(2, java.sql.Timestamp.valueOf(created_at_end))
         val items = mutableListOf<GetUsersCreatedBetweenRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -966,11 +981,11 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUsersByAgeRange(age: Int, age2: Int): List<GetUsersByAgeRangeRow> {
+    fun getUsersByAgeRange(age_start: Int, age_end: Int): List<GetUsersByAgeRangeRow> {
         val sql = """SELECT id, name, age, age_range FROM users WHERE age >= ? AND age <= ? ORDER BY age;"""
         val stmt = stmts.getOrPut("getUsersByAgeRange") { conn.prepareStatement(sql) }
-        stmt.setInt(1, age)
-        stmt.setInt(2, age2)
+        stmt.setInt(1, age_start)
+        stmt.setInt(2, age_end)
         val items = mutableListOf<GetUsersByAgeRangeRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1925,10 +1940,10 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getEngagementTimeSeries(created_at: LocalDateTime): List<GetEngagementTimeSeriesRow> {
+    fun getEngagementTimeSeries(created_at_start: LocalDateTime): List<GetEngagementTimeSeriesRow> {
         val sql = """SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= ? GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= ? GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;"""
         val stmt = stmts.getOrPut("getEngagementTimeSeries") { conn.prepareStatement(sql) }
-        stmt.setObject(1, java.sql.Timestamp.valueOf(created_at))
+        stmt.setObject(1, java.sql.Timestamp.valueOf(created_at_start))
         val items = mutableListOf<GetEngagementTimeSeriesRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -2480,7 +2495,21 @@ class UsersQueries(private val conn: Connection) {
         stmt.setInt(1, id)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) GetUserWithStatsRow(
-                rs.getString("*"),
+                rs.getInt("id"),
+                rs.getString("name"),
+                rs.getString("address"),
+                rs.getBoolean("isadmin"),
+                rs.getInt("age"),
+                rs.getInt("age_range"),
+                rs.getString("bio"),
+                rs.getString("email"),
+                rs.getString("preferences"),
+                (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
+                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getString("shipping"),
+                rs.getTimestamp("created_at")?.toLocalDateTime(),
+                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                rs.getString("role")?.let { UserRole.valueOf(it) },
                 rs.getInt("published_posts"),
                 rs.getInt("total_comments"),
                 rs.getInt("unread_notifications"),
