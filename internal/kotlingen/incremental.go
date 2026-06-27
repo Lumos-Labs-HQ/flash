@@ -168,7 +168,7 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 				if i == len(ktCols)-1 {
 					comma = ""
 				}
-				w.WriteString(fmt.Sprintf("    val %s: %s%s\n", col.Name, kt, comma))
+				w.WriteString(fmt.Sprintf("    val %s: %s%s\n", gencommon.ToCamelCase(col.Name), kt, comma))
 			}
 			w.WriteString(")\n\n")
 		}
@@ -188,7 +188,7 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 						comma = ""
 					}
 					w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
-						utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
+						gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
 				}
 				w.WriteString(")\n\n")
 			}

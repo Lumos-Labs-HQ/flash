@@ -33,21 +33,28 @@ enum class OrderState {
     REFUNDED
 }
 
+data class Testss(
+    val id: UUID?,
+    val testting: UUID?,
+    val name: String?,
+    val createdAt: LocalDateTime?
+)
+
 data class Users(
     val id: Int,
     val name: String,
     val address: String?,
     val isadmin: Boolean,
     val age: Int?,
-    val age_range: Int?,
+    val ageRange: Int?,
     val bio: String?,
     val email: String,
     val preferences: String?,
     val tags: List<String>?,
-    val avatar_hash: UUID?,
+    val avatarHash: UUID?,
     val shipping: String?,
-    val created_at: LocalDateTime,
-    val updated_at: LocalDateTime,
+    val createdAt: LocalDateTime,
+    val updatedAt: LocalDateTime,
     val role: UserRole
 )
 
@@ -57,86 +64,86 @@ data class Categories(
     val slug: String?,
     val color: String?,
     val metadata: String?,
-    val created_at: LocalDateTime
+    val createdAt: LocalDateTime
 )
 
 data class Posts(
     val id: Int,
-    val user_id: Int,
-    val category_id: Int,
+    val userId: Int,
+    val categoryId: Int,
     val title: String,
     val content: String,
     val excerpt: String?,
     val tags: List<String>?,
     val metadata: String?,
-    val view_count: Long,
-    val is_featured: Boolean,
-    val published_at: LocalDateTime?,
-    val created_at: LocalDateTime,
-    val updated_at: LocalDateTime,
+    val viewCount: Long,
+    val isFeatured: Boolean,
+    val publishedAt: LocalDateTime?,
+    val createdAt: LocalDateTime,
+    val updatedAt: LocalDateTime,
     val status: PostStatus
 )
 
 data class Comments(
     val id: Int,
-    val post_id: Int,
-    val user_id: Int,
-    val parent_id: Int?,
+    val postId: Int,
+    val userId: Int,
+    val parentId: Int?,
     val content: String,
-    val created_at: LocalDateTime
+    val createdAt: LocalDateTime
 )
 
 data class Subscriptions(
     val id: Int,
-    val user_id: Int,
+    val userId: Int,
     val tier: SubscriptionTier,
-    val started_at: LocalDateTime,
-    val expires_at: LocalDateTime?,
-    val auto_renew: Boolean
+    val startedAt: LocalDateTime,
+    val expiresAt: LocalDateTime?,
+    val autoRenew: Boolean
 )
 
 data class Orders(
     val id: UUID,
-    val user_id: Int,
-    val total_amount: Double,
-    val discount_pct: String?,
-    val shipping_addr: String,
-    val line_items: String,
+    val userId: Int,
+    val totalAmount: Double,
+    val discountPct: String?,
+    val shippingAddr: String,
+    val lineItems: String,
     val state: OrderState,
-    val placed_at: LocalDateTime,
-    val updated_at: LocalDateTime
+    val placedAt: LocalDateTime,
+    val updatedAt: LocalDateTime
 )
 
 data class AuditLog(
     val id: Int,
-    val table_name: String,
-    val record_id: String,
+    val tableName: String,
+    val recordId: String,
     val action: String,
-    val old_data: String?,
-    val new_data: String?,
-    val changed_by: Int?,
-    val changed_at: LocalDateTime
+    val oldData: String?,
+    val newData: String?,
+    val changedBy: Int?,
+    val changedAt: LocalDateTime
 )
 
 data class UserSessions(
     val id: UUID,
-    val user_id: Int,
+    val userId: Int,
     val token: String,
-    val ip_address: String?,
-    val user_agent: String?,
-    val expires_at: LocalDateTime,
-    val created_at: LocalDateTime
+    val ipAddress: String?,
+    val userAgent: String?,
+    val expiresAt: LocalDateTime,
+    val createdAt: LocalDateTime
 )
 
 data class Notifications(
     val id: Int,
-    val user_id: Int,
+    val userId: Int,
     val type: String,
     val title: String,
     val body: String,
-    val is_read: Boolean,
+    val isRead: Boolean,
     val metadata: String?,
-    val created_at: LocalDateTime
+    val createdAt: LocalDateTime
 )
 
 data class Tags(
@@ -147,22 +154,22 @@ data class Tags(
 )
 
 data class PostTags(
-    val post_id: Int,
-    val tag_id: Int
+    val postId: Int,
+    val tagId: Int
 )
 
 data class Media(
     val id: UUID,
-    val user_id: Int,
-    val post_id: Int?,
+    val userId: Int,
+    val postId: Int?,
     val type: String,
     val url: String,
-    val size_bytes: Long,
-    val mime_type: String,
+    val sizeBytes: Long,
+    val mimeType: String,
     val width: Int?,
     val height: Int?,
     val metadata: String?,
-    val created_at: LocalDateTime
+    val createdAt: LocalDateTime
 )
 
 data class ActiveUsers(
@@ -170,24 +177,24 @@ data class ActiveUsers(
     val name: String?,
     val email: String?,
     val role: String?,
-    val created_at: String?
+    val createdAt: String?
 )
 
 data class UserActivitySummary(
     val id: String?,
     val name: String?,
     val email: String?,
-    val post_count: String?,
-    val comment_count: String?,
-    val last_post_at: String?,
-    val user_type: String?
+    val postCount: String?,
+    val commentCount: String?,
+    val lastPostAt: String?,
+    val userType: String?
 )
 
 data class PostStats(
-    val post_id: String?,
+    val postId: String?,
     val title: String?,
-    val comment_count: String?,
-    val unique_commenters: String?,
-    val last_comment_at: String?
+    val commentCount: String?,
+    val uniqueCommenters: String?,
+    val lastCommentAt: String?
 )
 

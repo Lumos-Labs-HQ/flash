@@ -3,11 +3,11 @@
 package java;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
 
-public record GetTopTagsRow(
+public record Testss(
     UUID id,
+    UUID testting,
     String name,
-    String slug,
-    String color,
-    int post_count
+    LocalDateTime created_at
 ) {}

@@ -2,8 +2,25 @@
 
 package java;
 
+import java.util.UUID;
+import java.time.LocalDateTime;
 
 public record GetUserWithStatsRow(
+    int id,
+    String name,
+    String address,
+    boolean isadmin,
+    Integer age,
+    Integer age_range,
+    String bio,
+    String email,
+    java.util.Map<String, Object> preferences,
+    java.util.List<String> tags,
+    UUID avatar_hash,
+    String shipping,
+    LocalDateTime created_at,
+    LocalDateTime updated_at,
+    UserRole role,
     int published_posts,
     int total_comments,
     int unread_notifications,

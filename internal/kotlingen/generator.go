@@ -128,7 +128,7 @@ func (g *Generator) generateModels() error {
 			if i == len(table.Columns)-1 {
 				comma = ""
 			}
-			w.WriteString(fmt.Sprintf("    val %s: %s%s\n", utils.ToSnakeCase(col.Name), kt, comma))
+			w.WriteString(fmt.Sprintf("    val %s: %s%s\n", gencommon.ToCamelCase(col.Name), kt, comma))
 		}
 		w.WriteString(")\n\n")
 	}
@@ -267,8 +267,8 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 		useStructParams := len(q.Params) > 2
 		var proxyArgStr string
 		for i, p := range q.Params {
-			params[i] = fmt.Sprintf("%s: %s", utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
-			args[i] = utils.ToSnakeCase(p.Name)
+			params[i] = fmt.Sprintf("%s: %s", gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
+			args[i] = gencommon.ToCamelCase(p.Name)
 		}
 
 		if useStructParams && len(q.Params) > 0 {
@@ -335,7 +335,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	// Build param list
 	params := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		params[i] = fmt.Sprintf("%s: %s", utils.ToSnakeCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
+		params[i] = fmt.Sprintf("%s: %s", gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
 	}
 
 	// Return type
@@ -376,7 +376,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	if useStructParams {
 		for _, p := range query.Params {
 			w.WriteString(fmt.Sprintf("        val %s = args.%s\n",
-				utils.ToSnakeCase(p.Name), utils.ToSnakeCase(p.Name)))
+				gencommon.ToCamelCase(p.Name), gencommon.ToCamelCase(p.Name)))
 		}
 	}
 
@@ -430,7 +430,7 @@ func (g *Generator) ktTypedGetter(colName, sqlType string, nullable bool) string
 	case strings.Contains(sl, "bool"):
 		return fmt.Sprintf("rs.getBoolean(\"%s\")", colName)
 	case sl == "timeuuid" || strings.Contains(sl, "uuid"):
-		return fmt.Sprintf("rs.getObject(\"%s\", java.util.UUID::class.java)", colName)
+		return fmt.Sprintf("rs.getObject(\"%s\", UUID::class.java)", colName)
 	case strings.Contains(sl, "timestamp") || strings.Contains(sl, "date") || strings.Contains(sl, "time"):
 		if nullable {
 			return fmt.Sprintf("rs.getTimestamp(\"%s\")?.toLocalDateTime()", colName)
@@ -527,7 +527,7 @@ func cqlKtGetter(colName, sqlType string) string {
 func cqlInnerKtClass(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "uuid", "timeuuid":
-		return "java.util.UUID"
+		return "UUID"
 	case "bigint", "counter", "varint", "int8":
 		return "Long"
 	case "int":
@@ -552,7 +552,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 	w.WriteString(fmt.Sprintf("        val stmt = stmts.getOrPut(%s) { conn.prepareStatement(sql) }\n", key))
 
 	for i, p := range query.Params {
-		w.WriteString(fmt.Sprintf("        %s\n", ktTypedSetter(i+1, utils.ToSnakeCase(p.Name), p.Type)))
+		w.WriteString(fmt.Sprintf("        %s\n", ktTypedSetter(i+1, gencommon.ToCamelCase(p.Name), p.Type)))
 	}
 
 	isRowType := rowType == gencommon.QueryPascal(query.Name)+"Row" // JOIN/aggregate result, not a model
@@ -614,7 +614,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 func (g *Generator) generateScyllaBody(w *strings.Builder, query *parser.Query, columns []*parser.QueryColumn, cmd, rowType string) {
 	args := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		args[i] = utils.ToSnakeCase(p.Name)
+		args[i] = gencommon.ToCamelCase(p.Name)
 	}
 
 	execLine := "        session.execute(sql)\n"
@@ -671,7 +671,7 @@ func (g *Generator) generateR2DBCBody(w *strings.Builder, query *parser.Query, c
 	w.WriteString("        // R2DBC: use reactive execute, this is a blocking stub\n")
 	w.WriteString("        val stmt = conn.createStatement(sql)\n")
 	for i, p := range query.Params {
-		w.WriteString(fmt.Sprintf("        stmt.bind(%d, %s)\n", i, utils.ToSnakeCase(p.Name)))
+		w.WriteString(fmt.Sprintf("        stmt.bind(%d, %s)\n", i, gencommon.ToCamelCase(p.Name)))
 	}
 	w.WriteString("        // TODO: subscribe to stmt.execute() with your reactor/coroutine bridge\n")
 	if cmd == ":one" || cmd == ":many" {
@@ -685,7 +685,7 @@ func (g *Generator) generateExposedBody(w *strings.Builder, query *parser.Query,
 	if len(query.Params) > 0 {
 		args := make([]string, len(query.Params))
 		for i, p := range query.Params {
-			args[i] = utils.ToSnakeCase(p.Name)
+			args[i] = gencommon.ToCamelCase(p.Name)
 		}
 		w.WriteString(fmt.Sprintf("            exec(sql, args = listOf(%s)) { rs ->\n", strings.Join(args, ", ")))
 	} else {
@@ -712,7 +712,7 @@ func (g *Generator) generateExposedBody(w *strings.Builder, query *parser.Query,
 func cqlInnerKtType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "uuid", "timeuuid":
-		return "java.util.UUID"
+		return "UUID"
 	case "bigint", "counter", "varint", "int8":
 		return "Long"
 	case "int":

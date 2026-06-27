@@ -4,10 +4,7 @@ package java;
 
 import java.util.UUID;
 
-public record GetTopTagsRow(
+public record CreateTesstsRow(
     UUID id,
-    String name,
-    String slug,
-    String color,
-    int post_count
+    String name
 ) {}

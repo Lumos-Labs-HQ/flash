@@ -363,13 +363,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersCreatedBetweenRow> getUsersCreatedBetween(LocalDateTime created_at, LocalDateTime created_at2) throws java.sql.SQLException {
+    public java.util.List<GetUsersCreatedBetweenRow> getUsersCreatedBetween(LocalDateTime created_at_start, LocalDateTime created_at_end) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, created_at FROM users WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, java.sql.Timestamp.valueOf(created_at));
-            stmt.setObject(2, java.sql.Timestamp.valueOf(created_at2));
+            stmt.setObject(1, java.sql.Timestamp.valueOf(created_at_start));
+            stmt.setObject(2, java.sql.Timestamp.valueOf(created_at_end));
             var items = new java.util.ArrayList<GetUsersCreatedBetweenRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -385,13 +385,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersByAgeRangeRow> getUsersByAgeRange(int age, int age2) throws java.sql.SQLException {
+    public java.util.List<GetUsersByAgeRangeRow> getUsersByAgeRange(int age_start, int age_end) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, age, age_range FROM users WHERE age >= ? AND age <= ? ORDER BY age;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, age);
-            stmt.setInt(2, age2);
+            stmt.setInt(1, age_start);
+            stmt.setInt(2, age_end);
             var items = new java.util.ArrayList<GetUsersByAgeRangeRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1482,12 +1482,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetEngagementTimeSeriesRow> getEngagementTimeSeries(LocalDateTime created_at) throws java.sql.SQLException {
+    public java.util.List<GetEngagementTimeSeriesRow> getEngagementTimeSeries(LocalDateTime created_at_start) throws java.sql.SQLException {
         final String sql = """
                 SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= ? GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= ? GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setObject(1, java.sql.Timestamp.valueOf(created_at));
+            stmt.setObject(1, java.sql.Timestamp.valueOf(created_at_start));
             var items = new java.util.ArrayList<GetEngagementTimeSeriesRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1808,7 +1808,7 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     items.add(new Tags(
-                        rs.getInt("id"),
+                        rs.getObject("id", java.util.UUID.class),
                         rs.getString("name"),
                         rs.getString("slug"),
                         rs.getString("color")
@@ -1854,7 +1854,7 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     items.add(new GetTopTagsRow(
-                        rs.getInt("id"),
+                        rs.getObject("id", java.util.UUID.class),
                         rs.getString("name"),
                         rs.getString("slug"),
                         rs.getString("color"),
@@ -2102,7 +2102,21 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new GetUserWithStatsRow(
-                    rs.getString("*"),
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getString("address"),
+                    rs.getBoolean("isadmin"),
+                    rs.getInt("age"),
+                    rs.getInt("age_range"),
+                    rs.getString("bio"),
+                    rs.getString("email"),
+                    rs.getString("preferences"),
+                    rs.getArray("tags") != null ? java.util.Arrays.asList((String[]) rs.getArray("tags").getArray()) : null,
+                    rs.getObject("avatar_hash", java.util.UUID.class),
+                    rs.getString("shipping"),
+                    rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
+                    rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
+                    UserRole.valueOf(rs.getString("role")),
                     rs.getInt("published_posts"),
                     rs.getInt("total_comments"),
                     rs.getInt("unread_notifications"),

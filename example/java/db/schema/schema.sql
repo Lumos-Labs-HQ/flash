@@ -23,6 +23,13 @@ CREATE TYPE address_type AS (
     country TEXT
 );
 
+CREATE TABLE testss(
+    id UUID,
+    testting UUID,
+    name TEXT,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- === CORE TABLES ===
 
 CREATE TABLE IF NOT EXISTS users (

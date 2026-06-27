@@ -1,36 +1,42 @@
 {
   "version": "1.0",
   "query_file_checksums": {
+    "db/queries/tests.sql": "098b996280a386b4ca6b45d7218fe900db251a406158617a8e49c965d3c7e033",
     "db/queries/users.sql": "0fec496bff1e53d041b080e9275485ccbdc1b8156767b4a70a0c522aa0715c52"
   },
-  "schema_checksum": "171ee2528639fefc00afe1f6aa4bcacbb98359e6d077dab8d08aa3e2e14cd4c7",
+  "schema_checksum": "2b191b40b7e7077e3310d6a1b437dd7cfc7e93c5b0debcbc1781b7bf46912c2c",
   "config_checksum": "706f737467726573716c7c6b6f746c696e7c",
   "query_table_deps": {
+    "db/queries/tests.sql": [
+      "testss"
+    ],
     "db/queries/users.sql": [
+      "post_tags",
+      "posts",
+      "active_users",
+      "notifications",
+      "users;",
+      "user_activity_summary",
+      "audit_log",
       "media",
+      "u",
+      "users",
+      "post_stats",
+      "orders",
+      "categories",
       "user_post_stats",
       "active_commenters",
-      "posts",
-      "orders",
-      "comments",
-      "post_tags",
-      "users",
-      "active_users",
-      "audit_log",
-      "categories",
-      "post_stats",
       "subscriptions",
-      "notifications",
-      "tags",
-      "users;",
-      "user_activity_summary"
+      "comments",
+      "tags"
     ]
   },
   "generated_file_checksums": {
-    "kotlin/Models.kt": "cf35d3a1d9bb3d3d36bee532b62a44dee171c1d711e9b100584b0f1d2dbb5b78",
-    "kotlin/Queries.kt": "5842e4d1c780a82736b62ff36cd8178e7fdab158ce05ab4db8dc7dc77fc1fd72",
-    "kotlin/Users.kt": "eb64c21e85bbb1ce0ca10a7e6f3f6d1b7422eee5238a6a41134e76d7063ac601"
+    "kotlin/Models.kt": "d43c55342e425ffa81bf54d7fb556198a12c3406ce40f57fe95f04101d569a07",
+    "kotlin/Queries.kt": "665958b81421debb94bae11cf794c608f0734f9d27402ff79c95b5fd9999987f",
+    "kotlin/Tests.kt": "de894451480333d2f30c5c8fbfb09851263696fe424421b42eaa85a5430078c3",
+    "kotlin/Users.kt": "15d2726d0f606f5b0fcb79a52afe1ffbcb44d61988aab8f39c5899c8524b594a"
   },
-  "last_generation": "2026-06-27T12:48:06.463921+05:30",
+  "last_generation": "2026-06-27T15:33:22.909493729+05:30",
   "OutDir": "kotlin"
 }

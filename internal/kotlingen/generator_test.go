@@ -91,8 +91,8 @@ func TestSQLTypeToKotlin_ScyllaCollections(t *testing.T) {
 		{"list<int>", "List<Int>"},
 		{"map<text, int>", "Map<String, Int>"},
 		{"uuid", "UUID"},
-		{"set<uuid>", "Set<java.util.UUID>"},
-		{"list<uuid>", "List<java.util.UUID>"},
+		{"set<uuid>", "Set<UUID>"},
+		{"list<uuid>", "List<UUID>"},
 	}
 	for _, c := range cases {
 		got := g.sqlTypeToKotlin(c.sql, false)

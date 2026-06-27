@@ -1,29 +1,34 @@
 {
   "version": "1.0",
   "query_file_checksums": {
+    "db/queries/tests.sql": "098b996280a386b4ca6b45d7218fe900db251a406158617a8e49c965d3c7e033",
     "db/queries/users.sql": "0fec496bff1e53d041b080e9275485ccbdc1b8156767b4a70a0c522aa0715c52"
   },
-  "schema_checksum": "171ee2528639fefc00afe1f6aa4bcacbb98359e6d077dab8d08aa3e2e14cd4c7",
+  "schema_checksum": "2b191b40b7e7077e3310d6a1b437dd7cfc7e93c5b0debcbc1781b7bf46912c2c",
   "config_checksum": "706f737467726573716c7c6a6176617c",
   "query_table_deps": {
+    "db/queries/tests.sql": [
+      "testss"
+    ],
     "db/queries/users.sql": [
       "orders",
+      "media",
+      "users",
+      "user_post_stats",
+      "active_commenters",
+      "posts",
+      "user_activity_summary",
+      "audit_log",
+      "tags",
+      "active_users",
+      "subscriptions",
       "categories",
       "notifications",
       "post_tags",
-      "users",
       "users;",
-      "subscriptions",
-      "media",
-      "user_activity_summary",
       "post_stats",
-      "audit_log",
       "comments",
-      "tags",
-      "user_post_stats",
-      "posts",
-      "active_commenters",
-      "active_users"
+      "u"
     ]
   },
   "generated_file_checksums": {
@@ -39,16 +44,18 @@
     "java/PostStatus.java": "74279ad9e10f7ab0e2cfcea22f2b54467eac3b59592c2d41c4a8f466b6f8b5d1",
     "java/PostTags.java": "a33271555084f83554e101044843f914e065912556675c09e41821f0f6c0af27",
     "java/Posts.java": "2549971705f3fa9b56aecd74b460863d1506b0ee9c9c36d7e92939c50ef887be",
-    "java/Queries.java": "3bbdd0abc0f806b3ac527bc692e8fa9708a84f6dafa2bd0936acf3dc4727facf",
+    "java/Queries.java": "4d2417b6ced348bb8685afb7a53f6d2b65bbf08c6555f4f46d44a2c549d36b06",
     "java/SubscriptionTier.java": "03b55f5195d6cb896efab5efde50966e87b27037f117cde4c048876a1a6d2ac9",
     "java/Subscriptions.java": "9fa996eb6a8c825fbc245c17deb296a210d64dcf75f8e3c85f3b729ab4a0bff2",
     "java/Tags.java": "7d25859795785c95bebe8419949f7bba0c9f51e6113f162e298e4ed6fb896479",
+    "java/TestsQueries.java": "04edd1a1913503e4cb13d45650ad06536aaa2bed126840c82c75c2f24deed90b",
+    "java/Testss.java": "a9f67af099e3b4600ea939d7e170696a7ebc95cdde6ec56e035de94751437140",
     "java/UserActivitySummary.java": "61c8f6a97ff5d823e566d88b203749704fd2c78ddf8e7e9f1d037439ae7108ea",
     "java/UserRole.java": "3ecf24bcf9ad2f8584d78493f3abb8d73a0d246a577355d17eb14af779fbd6bd",
     "java/UserSessions.java": "27aed63bffd9bcd641a887e129b2e5eb5eeb475e43f9276ba04d954f92e5e877",
     "java/Users.java": "84a111a7c26b9ed90309e9b1b164c6e30c89667a0fd4182d84dd658ac0e23abe",
-    "java/UsersQueries.java": "8367e5e8255e1f3bc8a72a38db2f57dffaf4690f590c2244cccc79776219ec9d"
+    "java/UsersQueries.java": "43daac57e5a35baf893b53e8d30a0aef8f19d7778478e53957b53a0e43e607dd"
   },
-  "last_generation": "2026-06-27T12:48:06.515966636+05:30",
+  "last_generation": "2026-06-27T15:33:22.975551591+05:30",
   "OutDir": "java"
 }

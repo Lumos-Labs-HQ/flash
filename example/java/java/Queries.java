@@ -10,14 +10,24 @@ import java.sql.Connection;
  * Unified query interface. Use {@code DB.newq(conn)} to obtain an instance.
  */
 public class Queries {
+    private final TestsQueries tests;
     private final UsersQueries users;
 
     Queries(Connection conn) {
+        this.tests = new TestsQueries(conn);
         this.users = new UsersQueries(conn);
     }
 
     public static Queries newq(Connection conn) {
         return new Queries(conn);
+    }
+
+    public CreateTesstsRow createTessts(UUID id, String name) throws java.sql.SQLException {
+        return this.tests.createTessts(id, name);
+    }
+
+    public java.util.List<Testss> gETTestss(UUID id) throws java.sql.SQLException {
+        return this.tests.gETTestss(id);
     }
 
     public Users createUser(String name, String email) throws java.sql.SQLException {
@@ -76,12 +86,12 @@ public class Queries {
         return this.users.searchUsersWithCOALESCE(args);
     }
 
-    public java.util.List<GetUsersCreatedBetweenRow> getUsersCreatedBetween(LocalDateTime created_at, LocalDateTime created_at2) throws java.sql.SQLException {
-        return this.users.getUsersCreatedBetween(created_at, created_at2);
+    public java.util.List<GetUsersCreatedBetweenRow> getUsersCreatedBetween(LocalDateTime created_at_start, LocalDateTime created_at_end) throws java.sql.SQLException {
+        return this.users.getUsersCreatedBetween(created_at_start, created_at_end);
     }
 
-    public java.util.List<GetUsersByAgeRangeRow> getUsersByAgeRange(int age, int age2) throws java.sql.SQLException {
-        return this.users.getUsersByAgeRange(age, age2);
+    public java.util.List<GetUsersByAgeRangeRow> getUsersByAgeRange(int age_start, int age_end) throws java.sql.SQLException {
+        return this.users.getUsersByAgeRange(age_start, age_end);
     }
 
     public java.util.List<GetUsersByGeneratedRangeRow> getUsersByGeneratedRange(int age_range) throws java.sql.SQLException {
@@ -288,8 +298,8 @@ public class Queries {
         return this.users.getTopCommenters(limit);
     }
 
-    public java.util.List<GetEngagementTimeSeriesRow> getEngagementTimeSeries(LocalDateTime created_at) throws java.sql.SQLException {
-        return this.users.getEngagementTimeSeries(created_at);
+    public java.util.List<GetEngagementTimeSeriesRow> getEngagementTimeSeries(LocalDateTime created_at_start) throws java.sql.SQLException {
+        return this.users.getEngagementTimeSeries(created_at_start);
     }
 
     public Categories createCategory(String name) throws java.sql.SQLException {
