@@ -162,6 +162,15 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 			}
 		}
 	}
+	// SET col = COALESCE($N, col)
+	setCoalesceRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*=\s*COALESCE\s*\(\s*\$%d\b`, paramIndex))
+	if match := setCoalesceRe.FindStringSubmatch(sql); len(match) > 1 {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, match[1]) {
+				return col.Type
+			}
+		}
+	}
 	// SET with ? params — extract by using same logic as InferParamName
 	if strings.Contains(sql, "?") {
 		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
@@ -360,6 +369,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)
 	setRe := regexp.MustCompile(setPattern)
 	if match := setRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// SET col = COALESCE($N, col) — "update if not null" pattern
+	setCoalesceRe := regexp.MustCompile(fmt.Sprintf(`(?i)(\w+)\s*=\s*COALESCE\s*\(\s*\$%d\b`, paramIndex))
+	if match := setCoalesceRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
 

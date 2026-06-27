@@ -11,29 +11,29 @@
       "users"
     ],
     "db/queries/users.sql": [
-      "post_stats",
+      "user_post_stats",
+      "posts",
+      "user_activity_summary",
       "audit_log",
       "comments",
-      "media",
       "users",
-      "user_post_stats",
-      "users;",
-      "user_activity_summary",
-      "notifications",
-      "post_tags",
       "subscriptions",
       "orders",
       "categories",
+      "active_users",
+      "notifications",
       "tags",
+      "media",
       "active_commenters",
-      "posts",
-      "active_users"
+      "users;",
+      "post_stats",
+      "post_tags"
     ]
   },
   "generated_file_checksums": {
     "flash_gen/newss.go": "3a7200b08754cefc2ca1c8cbc07b34b01394fc3f80f06b73db135bcc74bb07b7",
-    "flash_gen/users.go": "a39decadacfc3b9f6339c2e410d42127dd07a879c913a94f8a429663d2b72183"
+    "flash_gen/users.go": "d9306b3dbb651dd8f997cd493964fa234fbc77f6287f943ee40aa53b9bd7d1e3"
   },
-  "last_generation": "2026-06-23T03:31:27.182378733+05:30",
+  "last_generation": "2026-06-27T12:33:20.257189704+05:30",
   "OutDir": "flash_gen"
 }

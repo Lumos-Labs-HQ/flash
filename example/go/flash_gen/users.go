@@ -102,7 +102,7 @@ func (q *Queries) Updateuserrole(role UserRole, id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Updateuserrole_stmt"] = stmt
 	}
@@ -119,7 +119,7 @@ func (q *Queries) Deleteuser(id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Deleteuser_stmt"] = stmt
 	}
@@ -563,7 +563,7 @@ func (q *Queries) Updateuserpreferences(preferences []byte, id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Updateuserpreferences_stmt"] = stmt
 	}
@@ -727,7 +727,7 @@ func (q *Queries) Addusertag(tags []string, id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Addusertag_stmt"] = stmt
 	}
@@ -744,7 +744,7 @@ func (q *Queries) Removeusertag(tags []string, id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Removeusertag_stmt"] = stmt
 	}
@@ -811,7 +811,7 @@ func (q *Queries) Updateusershipping(arg UpdateusershippingParams) (error) {
 type GetcomplexuseranalyticsParams struct {
 	TotalPosts string `json:"total_posts"`
 	TotalComments string `json:"total_comments"`
-	Limit string `json:"limit"`
+	Limit int64 `json:"limit"`
 }
 
 func (q *Queries) Getcomplexuseranalytics(arg GetcomplexuseranalyticsParams) ([]GetcomplexuseranalyticsRow, error) {
@@ -865,7 +865,7 @@ type GetcomplexuseranalyticsRow struct {
 	EngagementScore int64 `json:"engagement_score"`
 }
 
-func (q *Queries) Getpostwithactivecommenters(rn string, post_id string) ([]GetpostwithactivecommentersRow, error) {
+func (q *Queries) Getpostwithactivecommenters(rn string, post_id int64) ([]GetpostwithactivecommentersRow, error) {
 	const query = `WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;`
 	stmt := q.stmts["Getpostwithactivecommenters_stmt"]
 	if stmt == nil {
@@ -980,7 +980,7 @@ type GetusertrendingpostsRow struct {
 	ViewDelta float64 `json:"view_delta"`
 }
 
-func (q *Queries) Getpostcountbyuser(user_id string) (GetpostcountbyuserRow, error) {
+func (q *Queries) Getpostcountbyuser(user_id int64) (GetpostcountbyuserRow, error) {
 	const query = `SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;`
 	stmt := q.stmts["Getpostcountbyuser_stmt"]
 	if stmt == nil {
@@ -1839,7 +1839,7 @@ func (q *Queries) Getactiveusers(limit int64) ([]ActiveUsers, error) {
 	return items, rows.Err()
 }
 
-func (q *Queries) Getuseractivitysummary(post_count string, comment_count string) ([]UserActivitySummary, error) {
+func (q *Queries) Getuseractivitysummary(post_count int64, comment_count int64) ([]UserActivitySummary, error) {
 	const query = `SELECT * FROM user_activity_summary WHERE post_count > $1 OR comment_count > $2 ORDER BY post_count DESC;`
 	stmt := q.stmts["Getuseractivitysummary_stmt"]
 	if stmt == nil {
@@ -2345,7 +2345,7 @@ func (q *Queries) Deleteoldusers(created_at time.Time) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Deleteoldusers_stmt"] = stmt
 	}
@@ -2362,7 +2362,7 @@ func (q *Queries) Updateusertimestamp(updated_at time.Time, id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Updateusertimestamp_stmt"] = stmt
 	}
@@ -2472,7 +2472,7 @@ func (q *Queries) Marknotificationread(id int64, user_id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Marknotificationread_stmt"] = stmt
 	}
@@ -2489,7 +2489,7 @@ func (q *Queries) Markallnotificationsread(user_id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Markallnotificationsread_stmt"] = stmt
 	}
@@ -2506,7 +2506,7 @@ func (q *Queries) Deleteoldnotifications(user_id int64, created_at time.Time) (e
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Deleteoldnotifications_stmt"] = stmt
 	}
@@ -2661,7 +2661,7 @@ func (q *Queries) Addtagtopost(post_id int64, tag_id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Addtagtopost_stmt"] = stmt
 	}
@@ -2678,7 +2678,7 @@ func (q *Queries) Removetagfrompost(post_id int64, tag_id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Removetagfrompost_stmt"] = stmt
 	}
@@ -2965,7 +2965,7 @@ func (q *Queries) Deletemedia(id uuid.UUID, user_id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Deletemedia_stmt"] = stmt
 	}
@@ -3148,7 +3148,7 @@ func (q *Queries) Bulkmarknotificationsread(user_id int64, id int64) (error) {
 		var err error
 		stmt, err = q.db.Prepare(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		q.stmts["Bulkmarknotificationsread_stmt"] = stmt
 	}
@@ -3183,11 +3183,26 @@ func (q *Queries) Getuserwithstats(id int64) (GetuserwithstatsRow, error) {
 		}
 		return result, sql.ErrNoRows
 	}
-	err = rows.Scan(&result.*, &result.PublishedPosts, &result.TotalComments, &result.UnreadNotifications, &result.StorageUsed)
+	err = rows.Scan(&result.Id, &result.Name, &result.Address, &result.Isadmin, &result.Age, &result.AgeRange, &result.Bio, &result.Email, &result.Preferences, &result.Tags, &result.AvatarHash, &result.Shipping, &result.CreatedAt, &result.UpdatedAt, &result.Role, &result.PublishedPosts, &result.TotalComments, &result.UnreadNotifications, &result.StorageUsed)
 	return result, err
 }
 
 type GetuserwithstatsRow struct {
+	Id int64 `json:"id"`
+	Name string `json:"name"`
+	Address string `json:"address"`
+	Isadmin bool `json:"isadmin"`
+	Age int64 `json:"age"`
+	AgeRange int64 `json:"age_range"`
+	Bio string `json:"bio"`
+	Email string `json:"email"`
+	Preferences []byte `json:"preferences"`
+	Tags []string `json:"tags"`
+	AvatarHash uuid.UUID `json:"avatar_hash"`
+	Shipping string `json:"shipping"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Role UserRole `json:"role"`
 	PublishedPosts int64 `json:"published_posts"`
 	TotalComments int64 `json:"total_comments"`
 	UnreadNotifications int64 `json:"unread_notifications"`

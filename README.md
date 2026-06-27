@@ -54,10 +54,29 @@ A powerful, database-agnostic ORM built in Go with multi-database support and ty
 
 ## 🚀 Installation
 
-```bash
-# Linux / macOS (curl)
-curl -fsSL https://lumos-labs-hq.github.io/flash/install.sh | bash
+### Direct installer by platform
 
+#### Linux
+
+```bash
+curl -fsSL https://lumos-labs-hq.github.io/flash/install.sh | bash
+```
+
+#### macOS
+
+```bash
+curl -fsSL https://lumos-labs-hq.github.io/flash/install.sh | bash
+```
+
+#### Windows PowerShell
+
+```powershell
+irm https://lumos-labs-hq.github.io/flash/install.ps1 | iex
+```
+
+### Package manager alternatives
+
+```bash
 # NPM (Node.js/TypeScript)
 npm install -g flashorm
 
@@ -254,7 +273,7 @@ flash raw db/seed.sql      # Execute SQL file (supports comment blocks)
 - [Python Usage Guide](docs/USAGE_PYTHON.md)
 - [How It Works](docs/HOW_IT_WORKS.md)
 - [Release Notes](docs/notes/RELEASE_NOTES.md)
-- [Contributing](docs/CONTRIBUTING.md)
+- [Contributing](docs/contributing.md)
 
 ## 🤝 Contributing
 
