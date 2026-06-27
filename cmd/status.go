@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/migrator"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +24,7 @@ This command helps you understand which migrations have been applied
 and which are still pending.`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

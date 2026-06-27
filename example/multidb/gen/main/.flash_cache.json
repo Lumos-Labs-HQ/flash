@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "query_file_checksums": {
+    "db/main/queries/users.sql": "ae7b2f4995d7c41d141a7e46047270d56ec91ee5bc8d51db3c726dcbdda3422f"
+  },
+  "schema_checksum": "0fc3ae3f4bd44cefed907671e9d5f693a91e2f4fec85c702136a610139ef6fa5",
+  "config_checksum": "cd8cfb5a10f63467a581cffc9064015082c9aca7a2b57311188b95c0631617f8",
+  "query_table_deps": {
+    "db/main/queries/users.sql": [
+      "users",
+      "posts"
+    ]
+  },
+  "generated_file_checksums": {
+    "gen/main/users.go": "44262484fd2513b2c0aca55f41105b535b6204bf992aeb9d60287ff4b9f2af0a"
+  },
+  "last_generation": "2026-06-27T16:28:35.07050517+05:30",
+  "OutDir": "gen/main"
+}

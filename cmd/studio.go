@@ -86,7 +86,7 @@ Examples:
 		}
 
 		// No URL provided — load from config as before
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

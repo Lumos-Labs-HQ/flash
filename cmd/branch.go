@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/branch"
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +17,7 @@ var branchCmd = &cobra.Command{
 	Short: "List, create, or delete branches",
 	Long:  `List, create, or delete branches. Similar to git branch.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -58,7 +57,7 @@ var checkoutCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		branchName := args[0]
 
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -200,7 +199,7 @@ var branchDiffCmd = &cobra.Command{
 		branch1 := args[0]
 		branch2 := args[1]
 
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

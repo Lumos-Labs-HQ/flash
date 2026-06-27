@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/migrator"
 
 	"github.com/spf13/cobra"
@@ -35,7 +34,7 @@ Examples:
   flash migrate  # Interactive mode`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

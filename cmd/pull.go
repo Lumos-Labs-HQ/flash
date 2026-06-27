@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/pull"
 	"github.com/spf13/cobra"
 )
@@ -32,7 +31,7 @@ The command will:
 5. Optionally create a backup before making changes`,
 
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/database"
 	"github.com/Lumos-Labs-HQ/flash/internal/export"
 	"github.com/spf13/cobra"
@@ -21,7 +20,7 @@ Export all database tables (excluding migration table) to JSON format.
 Examples:
   flash export`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load()
+		cfg, err := loadConfigForDB(cmd)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}

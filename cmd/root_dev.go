@@ -99,6 +99,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./flash.toml)")
 	rootCmd.PersistentFlags().StringVar(&envName, "env", "", "environment name to load (loads .env.{name}, e.g. --env prod loads .env.prod)")
+	rootCmd.PersistentFlags().String("db", "", "database name (for multi-database configs)")
 	rootCmd.PersistentFlags().BoolP("force", "f", false, "Skip confirmations")
 	rootCmd.Flags().BoolP("version", "v", false, "Show CLI version")
 }

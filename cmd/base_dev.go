@@ -33,4 +33,7 @@ func RegisterBaseCommands() {
 
 	// Uninstall
 	rootCmd.AddCommand(uninstallCmd)
+
+	// Multi-database
+	rootCmd.AddCommand(dblistCmd)
 }

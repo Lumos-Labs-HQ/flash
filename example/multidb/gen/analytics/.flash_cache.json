@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "query_file_checksums": {
+    "db/analytics/queries/events.sql": "221f6ded1c4dd418f1f15a3bd884fe796d083c546bc1a2fbb97e91fa13fef64f"
+  },
+  "schema_checksum": "c280fef4e6e3e7ef69861e33586e230221c4fa9154a76173ec3f7000a5603d9a",
+  "config_checksum": "6d7973716c7c67656e2f616e616c79746963737c",
+  "query_table_deps": {
+    "db/analytics/queries/events.sql": [
+      "events",
+      "metrics"
+    ]
+  },
+  "generated_file_checksums": {
+    "gen/analytics/Events.kt": "3813eaadfdac4e809ebc6c59c7f1e14c03a291c60cb07846738a9fbf5d541dfc",
+    "gen/analytics/Models.kt": "14c838e480ab73b48252c26482af100803e6d704cadd06e59a0eb398957b73c7",
+    "gen/analytics/Queries.kt": "3c6afa54ad9f104f6022396ca437218e51d90097f02edb7ea5d713758f1ce7df"
+  },
+  "last_generation": "2026-06-27T16:27:54.15676419+05:30",
+  "OutDir": "gen/analytics"
+}

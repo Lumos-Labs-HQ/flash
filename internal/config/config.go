@@ -29,10 +29,28 @@ type Config struct {
 	Queries        string   `toml:"queries"`
 	MigrationsPath string   `toml:"migrations_path"`
 	ExportPath     string   `toml:"export_path"`
+	Default        bool     `toml:"default"`
 	EnvPath        string   `toml:"env_path"`
 	Database       Database `toml:"database"`
 	Gen            Gen      `toml:"gen"`
-	ForceRegen     bool     `toml:"-"` // runtime flag: skip cache, regenerate all
+	ForceRegen     bool     `toml:"-"`
+	// Multi-database support
+	Databases []DatabaseConfig `toml:"databases"`
+	// ActiveDB is the database selected by --db flag (runtime only)
+	ActiveDB string `toml:"-"`
+}
+
+// DatabaseConfig represents a single database in multi-db mode
+type DatabaseConfig struct {
+	Name           string   `toml:"name"`
+	Provider       string   `toml:"provider"`
+	URLEnv         string   `toml:"url_env"`
+	SchemaDir      string   `toml:"schema_dir"`
+	Queries        string   `toml:"queries"`
+	MigrationsPath string   `toml:"migrations_path"`
+	ExportPath     string   `toml:"export_path"`
+	Default        bool     `toml:"default"`
+	Gen            Gen      `toml:"gen"`
 }
 
 type Database struct {
@@ -98,15 +116,17 @@ type rawGen struct {
 }
 
 type rawConfig struct {
-	Version        string   `toml:"version"`
-	SchemaPath     string   `toml:"schema_path"`
-	SchemaDir      string   `toml:"schema_dir"`
-	Queries        string   `toml:"queries"`
-	MigrationsPath string   `toml:"migrations_path"`
-	ExportPath     string   `toml:"export_path"`
-	EnvPath        string   `toml:"env_path"`
-	Database       Database `toml:"database"`
-	Gen            rawGen   `toml:"gen"`
+	Version        string           `toml:"version"`
+	SchemaPath     string           `toml:"schema_path"`
+	SchemaDir      string           `toml:"schema_dir"`
+	Queries        string           `toml:"queries"`
+	MigrationsPath string           `toml:"migrations_path"`
+	ExportPath     string           `toml:"export_path"`
+	Default        bool     `toml:"default"`
+	EnvPath        string           `toml:"env_path"`
+	Database       Database         `toml:"database"`
+	Gen            rawGen           `toml:"gen"`
+	Databases      []DatabaseConfig `toml:"databases"`
 }
 
 // Load reads and returns the config, with in-memory caching keyed by file path
@@ -191,6 +211,7 @@ func loadUncached() (*Config, error) {
 		cfg.ExportPath = raw.ExportPath
 		cfg.EnvPath = raw.EnvPath
 		cfg.Database = raw.Database
+		cfg.Databases = raw.Databases
 		cfg.Gen.Go = raw.Gen.Go
 		cfg.Gen.JS = raw.Gen.JS
 		cfg.Gen.Python.Enabled = raw.Gen.Python.Enabled
@@ -251,10 +272,18 @@ func loadUncached() (*Config, error) {
 		cfg.Gen.Go.Out = "flash_gen"
 	}
 	if cfg.Gen.Kotlin.Out == "" && cfg.Gen.Kotlin.Enabled {
-		cfg.Gen.Kotlin.Out = "flash_gen"
+		if cfg.Gen.Kotlin.Package != "" {
+			cfg.Gen.Kotlin.Out = "src/main/kotlin/" + strings.ReplaceAll(cfg.Gen.Kotlin.Package, ".", "/")
+		} else {
+			cfg.Gen.Kotlin.Out = "flash_gen"
+		}
 	}
 	if cfg.Gen.Java.Out == "" && cfg.Gen.Java.Enabled {
-		cfg.Gen.Java.Out = "flash_gen"
+		if cfg.Gen.Java.Package != "" {
+			cfg.Gen.Java.Out = "src/main/java/" + strings.ReplaceAll(cfg.Gen.Java.Package, ".", "/")
+		} else {
+			cfg.Gen.Java.Out = "flash_gen"
+		}
 	}
 	if cfg.Gen.Python.Enabled && !pythonAsyncSet {
 		cfg.Gen.Python.Async = true
@@ -269,6 +298,65 @@ func (c *Config) GetDatabaseURL() (string, error) {
 		return "", fmt.Errorf("database URL not found in environment variable %s", c.Database.URLEnv)
 	}
 	return dbURL, nil
+}
+
+// IsMultiDB returns true if the config uses the multi-database format.
+func (c *Config) IsMultiDB() bool {
+	return len(c.Databases) > 0
+}
+
+// ListDatabases returns all database names configured.
+func (c *Config) ListDatabases() []string {
+	if !c.IsMultiDB() {
+		return []string{"default"}
+	}
+	names := make([]string, len(c.Databases))
+	for i, db := range c.Databases {
+		names[i] = db.Name
+	}
+	return names
+}
+
+// GetDefaultDB returns the name of the database marked as default.
+// If none is marked, returns empty string (meaning: run all).
+func (c *Config) GetDefaultDB() string {
+	for _, db := range c.Databases {
+		if db.Default {
+			return db.Name
+		}
+	}
+	return ""
+}
+
+// ResolveForDB returns a Config resolved for a specific database name.
+// For single-db configs (no [[databases]]), returns self unchanged.
+// For multi-db configs, overrides paths/database/gen from the named database.
+func (c *Config) ResolveForDB(name string) (*Config, error) {
+	if !c.IsMultiDB() {
+		return c, nil
+	}
+	for _, db := range c.Databases {
+		if db.Name == name {
+			resolved := *c
+			resolved.Database = Database{Provider: db.Provider, URLEnv: db.URLEnv}
+			if db.SchemaDir != "" {
+				resolved.SchemaDir = db.SchemaDir
+			}
+			if db.Queries != "" {
+				resolved.Queries = db.Queries
+			}
+			if db.MigrationsPath != "" {
+				resolved.MigrationsPath = db.MigrationsPath
+			}
+			if db.ExportPath != "" {
+				resolved.ExportPath = db.ExportPath
+			}
+			resolved.Gen = db.Gen
+			resolved.ActiveDB = name
+			return &resolved, nil
+		}
+	}
+	return nil, fmt.Errorf("database %q not found in config. Available: %v", name, c.ListDatabases())
 }
 
 func (c *Config) EnsureDirectories() error {

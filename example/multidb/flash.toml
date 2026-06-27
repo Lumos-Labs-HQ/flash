@@ -1,0 +1,26 @@
+version = "2"
+
+[[databases]]
+name = "main"
+provider = "postgresql"
+url_env = "DATABASE_URL"
+schema_dir = "db/main/schema"
+queries = "db/main/queries/"
+migrations_path = "db/main/migrations"
+default = true
+
+[databases.gen.go]
+enabled = true
+out = "gen/main"
+
+[[databases]]
+name = "analytics"
+provider = "postgresql"
+url_env = "ANALYTICS_DATABASE_URL"
+schema_dir = "db/analytics/schema"
+queries = "db/analytics/queries/"
+migrations_path = "db/analytics/migrations"
+
+[databases.gen.go]
+enabled = true
+out = "gen/analytics"
