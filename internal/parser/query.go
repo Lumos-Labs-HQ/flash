@@ -456,7 +456,20 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 						if !strings.Contains(colName, "(") {
 							if idx := strings.Index(colName, "."); idx != -1 {
 								originalExpr = colName
-								colName = colName[idx+1:]
+								qualifier := strings.TrimSpace(colName[:idx])
+								// Strip DISTINCT/ALL keywords from qualifier
+								qualifier = regexp.MustCompile(`(?i)^(DISTINCT|ALL)\s+`).ReplaceAllString(qualifier, "")
+								remainder := colName[idx+1:]
+								// Preserve the table qualifier for wildcard columns (f.*, u.*)
+								if remainder == "*" {
+									query.Columns = append(query.Columns, &QueryColumn{
+										Name:  "*",
+										Type:  "string",
+										Table: qualifier,
+									})
+									continue
+								}
+								colName = remainder
 							}
 						}
 					}

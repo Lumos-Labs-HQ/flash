@@ -740,3 +740,10 @@ SELECT
     (SELECT COALESCE(SUM(size_bytes), 0) FROM media WHERE user_id = u.id) AS storage_used
 FROM users u
 WHERE u.id = $1;
+
+-- name: GetPostsWithAuthors :many
+SELECT p.*, u.name AS author_name, u.email AS author_email
+FROM posts p
+JOIN users u ON u.id = p.user_id
+ORDER BY p.created_at DESC
+LIMIT $1;

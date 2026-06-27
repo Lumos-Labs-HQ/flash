@@ -374,7 +374,7 @@ type SearchuserswithcoalesceRow struct {
 	BioText string `json:"bio_text"`
 }
 
-func (q *Queries) Getuserscreatedbetween(created_at time.Time, created_at2 time.Time) ([]GetuserscreatedbetweenRow, error) {
+func (q *Queries) Getuserscreatedbetween(created_at_start time.Time, created_at_end time.Time) ([]GetuserscreatedbetweenRow, error) {
 	const query = `SELECT id, name, email, created_at FROM users WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC;`
 	stmt := q.stmts["Getuserscreatedbetween_stmt"]
 	if stmt == nil {
@@ -385,7 +385,7 @@ func (q *Queries) Getuserscreatedbetween(created_at time.Time, created_at2 time.
 		}
 		q.stmts["Getuserscreatedbetween_stmt"] = stmt
 	}
-	args := []interface{}{created_at, created_at2}
+	args := []interface{}{created_at_start, created_at_end}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -411,7 +411,7 @@ type GetuserscreatedbetweenRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-func (q *Queries) Getusersbyagerange(age int64, age2 int64) ([]GetusersbyagerangeRow, error) {
+func (q *Queries) Getusersbyagerange(age_start int64, age_end int64) ([]GetusersbyagerangeRow, error) {
 	const query = `SELECT id, name, age, age_range FROM users WHERE age >= $1 AND age <= $2 ORDER BY age;`
 	stmt := q.stmts["Getusersbyagerange_stmt"]
 	if stmt == nil {
@@ -422,7 +422,7 @@ func (q *Queries) Getusersbyagerange(age int64, age2 int64) ([]Getusersbyagerang
 		}
 		q.stmts["Getusersbyagerange_stmt"] = stmt
 	}
-	args := []interface{}{age, age2}
+	args := []interface{}{age_start, age_end}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
@@ -2220,9 +2220,9 @@ type GettopcommentersRow struct {
 	Rank int64 `json:"rank"`
 }
 
-func (q *Queries) Getengagementtimeseries(created_at time.Time) ([]GetengagementtimeseriesRow, error) {
+func (q *Queries) Getengagementtimeseries(created_at_start time.Time) ([]GetengagementtimeseriesRow, error) {
 	const query = `SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;`
-	args := []interface{}{created_at}
+	args := []interface{}{created_at_start}
 
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
@@ -3207,5 +3207,54 @@ type GetuserwithstatsRow struct {
 	TotalComments int64 `json:"total_comments"`
 	UnreadNotifications int64 `json:"unread_notifications"`
 	StorageUsed float64 `json:"storage_used"`
+}
+
+func (q *Queries) Getpostswithauthors(limit int64) ([]GetpostswithauthorsRow, error) {
+	const query = `SELECT p.*, u.name AS author_name, u.email AS author_email FROM posts p JOIN users u ON u.id = p.user_id ORDER BY p.created_at DESC LIMIT $1;`
+	stmt := q.stmts["Getpostswithauthors_stmt"]
+	if stmt == nil {
+		var err error
+		stmt, err = q.db.Prepare(query)
+		if err != nil {
+			return nil, err
+		}
+		q.stmts["Getpostswithauthors_stmt"] = stmt
+	}
+	args := []interface{}{limit}
+
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]GetpostswithauthorsRow, 0, 8) 
+	for rows.Next() {
+		var item GetpostswithauthorsRow
+		if err := rows.Scan(&item.Id, &item.UserId, &item.CategoryId, &item.Title, &item.Content, &item.Excerpt, &item.Tags, &item.Metadata, &item.ViewCount, &item.IsFeatured, &item.PublishedAt, &item.CreatedAt, &item.UpdatedAt, &item.Status, &item.AuthorName, &item.AuthorEmail); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type GetpostswithauthorsRow struct {
+	Id int64 `json:"id"`
+	UserId int64 `json:"user_id"`
+	CategoryId int64 `json:"category_id"`
+	Title string `json:"title"`
+	Content string `json:"content"`
+	Excerpt string `json:"excerpt"`
+	Tags []string `json:"tags"`
+	Metadata []byte `json:"metadata"`
+	ViewCount int64 `json:"view_count"`
+	IsFeatured bool `json:"is_featured"`
+	PublishedAt time.Time `json:"published_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Status PostStatus `json:"status"`
+	AuthorName string `json:"author_name"`
+	AuthorEmail string `json:"author_email"`
 }
 

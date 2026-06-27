@@ -1,6 +1,7 @@
 package gencommon
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
@@ -20,68 +21,165 @@ func NewSchemaExpander(schema *parser.Schema) *SchemaExpander {
 	return &SchemaExpander{Tables: schema.Tables}
 }
 
-// ExpandWildcardColumns expands SELECT * columns. If the query has a
-// column which is "*", it replaces it with all columns from the matched schema table.
+// ExpandWildcardColumns expands SELECT * columns. Resolves table aliases
+// (e.g. f.*, u.*) and expands each wildcard to the corresponding table's columns.
+// When column names conflict across tables, they are prefixed with the table alias.
 func (e *SchemaExpander) ExpandWildcardColumns(query *parser.Query) []*parser.QueryColumn {
 	if e == nil || len(e.Tables) == 0 || len(query.Columns) == 0 {
 		return query.Columns
 	}
 
-	// Check if any column is a wildcard
-	hasWildcard := false
+	// Count wildcards
+	wildcardCount := 0
 	for _, col := range query.Columns {
 		if col.Name == "*" {
-			hasWildcard = true
-			break
+			wildcardCount++
 		}
 	}
-	if !hasWildcard {
+	if wildcardCount == 0 {
 		return query.Columns
 	}
 
-	tableName := utils.ExtractTableName(query.SQL)
-	if tableName == "" {
-		return query.Columns
-	}
-	if idx := strings.LastIndex(tableName, "."); idx >= 0 {
-		tableName = tableName[idx+1:]
-	}
+	// Build alias → table map from SQL: "FROM tbl alias" and "JOIN tbl alias"
+	aliasMap := extractTableAliases(query.SQL)
 
-	var matchedTable *parser.Table
+	// Also map table name → table for direct lookup
+	tableByName := make(map[string]*parser.Table)
 	for _, t := range e.Tables {
 		name := t.Name
 		if idx := strings.LastIndex(name, "."); idx >= 0 {
 			name = name[idx+1:]
 		}
-		if strings.EqualFold(name, tableName) {
-			matchedTable = t
-			break
-		}
-	}
-	if matchedTable == nil {
-		return query.Columns
+		tableByName[strings.ToLower(name)] = t
 	}
 
-	// Expand: replace each "*" with all table columns, keep non-wildcard columns
-	expanded := make([]*parser.QueryColumn, 0, len(matchedTable.Columns)+len(query.Columns))
-	for _, col := range query.Columns {
-		if col.Name == "*" {
-			for _, tc := range matchedTable.Columns {
-				if tc.Name == "*" || strings.HasPrefix(tc.Name, "/*") {
-					continue
-				}
-				expanded = append(expanded, &parser.QueryColumn{
-					Name:     tc.Name,
-					Type:     tc.Type,
-					Table:    matchedTable.Name,
-					Nullable: tc.Nullable,
-				})
+	// Single wildcard — expand from primary table or resolved alias
+	if wildcardCount == 1 {
+		// Find the wildcard column
+		var wcCol *parser.QueryColumn
+		for _, col := range query.Columns {
+			if col.Name == "*" {
+				wcCol = col
+				break
 			}
+		}
+		// Resolve table: use alias map if qualifier present, else primary table
+		resolvedTable := ""
+		if wcCol.Table != "" {
+			if resolved, ok := aliasMap[strings.ToLower(wcCol.Table)]; ok {
+				resolvedTable = resolved
+			} else {
+				resolvedTable = wcCol.Table
+			}
+		} else {
+			resolvedTable = utils.ExtractTableName(query.SQL)
+		}
+		if resolvedTable == "" {
+			return query.Columns
+		}
+		if idx := strings.LastIndex(resolvedTable, "."); idx >= 0 {
+			resolvedTable = resolvedTable[idx+1:]
+		}
+		t := tableByName[strings.ToLower(resolvedTable)]
+		if t == nil {
+			return query.Columns
+		}
+		expanded := make([]*parser.QueryColumn, 0, len(t.Columns)+len(query.Columns))
+		for _, col := range query.Columns {
+			if col.Name == "*" {
+				for _, tc := range t.Columns {
+					if tc.Name == "*" || strings.HasPrefix(tc.Name, "/*") {
+						continue
+					}
+					expanded = append(expanded, &parser.QueryColumn{
+						Name: tc.Name, Type: tc.Type, Table: t.Name, Nullable: tc.Nullable,
+					})
+				}
+			} else {
+				expanded = append(expanded, col)
+			}
+		}
+		return expanded
+	}
+
+	// Multiple wildcards: expand each using its table qualifier
+	// First pass: collect all expanded columns to detect name conflicts
+	type expandedCol struct {
+		alias string
+		col   *parser.QueryColumn
+	}
+	var allCols []expandedCol
+
+	for _, col := range query.Columns {
+		if col.Name != "*" {
+			allCols = append(allCols, expandedCol{"", col})
+			continue
+		}
+		// Resolve the table from the qualifier (col.Table holds the alias like "f", "u")
+		alias := col.Table
+		tableName := alias
+		if resolved, ok := aliasMap[strings.ToLower(alias)]; ok {
+			tableName = resolved
+		}
+		t := tableByName[strings.ToLower(tableName)]
+		if t == nil {
+			// Can't resolve — skip this wildcard
+			continue
+		}
+		for _, tc := range t.Columns {
+			if tc.Name == "*" || strings.HasPrefix(tc.Name, "/*") {
+				continue
+			}
+			allCols = append(allCols, expandedCol{alias, &parser.QueryColumn{
+				Name: tc.Name, Type: tc.Type, Table: t.Name, Nullable: tc.Nullable,
+			}})
+		}
+	}
+
+	// Detect duplicate names
+	nameCounts := make(map[string]int)
+	for _, ec := range allCols {
+		nameCounts[strings.ToLower(ec.col.Name)]++
+	}
+
+	// Build final list: prefix duplicates with alias
+	expanded := make([]*parser.QueryColumn, 0, len(allCols))
+	for _, ec := range allCols {
+		col := ec.col
+		if nameCounts[strings.ToLower(col.Name)] > 1 && ec.alias != "" {
+			// Prefix with alias to disambiguate
+			expanded = append(expanded, &parser.QueryColumn{
+				Name:     ec.alias + "_" + col.Name,
+				Type:     col.Type,
+				Table:    col.Table,
+				Nullable: true, // JOIN columns are potentially nullable
+			})
 		} else {
 			expanded = append(expanded, col)
 		}
 	}
 	return expanded
+}
+
+// extractTableAliases extracts alias → table_name mappings from FROM/JOIN clauses.
+func extractTableAliases(sql string) map[string]string {
+	m := make(map[string]string)
+	// Match: FROM/JOIN table alias (alias is a word that's NOT a SQL keyword)
+	re := regexp.MustCompile(`(?i)(?:FROM|JOIN)\s+(\w+)\s+(?:AS\s+)?(\w+)`)
+	keywords := map[string]bool{
+		"ON": true, "LEFT": true, "RIGHT": true, "INNER": true, "OUTER": true,
+		"CROSS": true, "WHERE": true, "AND": true, "JOIN": true, "SET": true,
+		"ORDER": true, "GROUP": true, "HAVING": true, "LIMIT": true, "AS": true,
+		"NATURAL": true, "FULL": true, "SELECT": true, "INTO": true, "VALUES": true,
+	}
+	for _, match := range re.FindAllStringSubmatch(sql, -1) {
+		alias := match[2]
+		if keywords[strings.ToUpper(alias)] {
+			continue
+		}
+		m[strings.ToLower(alias)] = match[1]
+	}
+	return m
 }
 
 // ModelTypeForQuery returns the model struct name if the query columns exactly
