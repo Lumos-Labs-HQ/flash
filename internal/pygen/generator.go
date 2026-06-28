@@ -138,7 +138,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 			paramName = fmt.Sprintf("p%d", i+1)
 		}
 		paramNames[i] = paramName
-		paramTypes[i] = fmt.Sprintf("%s: %s", paramName, g.sqlTypeToPython(param.Type, false))
+		paramTypes[i] = fmt.Sprintf("%s: %s", paramName, g.sqlTypeToPython(param.Type, param.Nullable))
 	}
 
 	returnType := g.getReturnType(query)
@@ -873,7 +873,7 @@ func (g *Generator) generateTypingStub(queries []*parser.Query) error {
 			if paramName == "" {
 				paramName = fmt.Sprintf("p%d", i+1)
 			}
-			paramTypes[i] = fmt.Sprintf("%s: %s", paramName, g.sqlTypeToPython(param.Type, false))
+			paramTypes[i] = fmt.Sprintf("%s: %s", paramName, g.sqlTypeToPython(param.Type, param.Nullable))
 		}
 
 		// Get return type
@@ -971,7 +971,8 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	if g.expander == nil {
 		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	return g.expander.ExpandWildcardColumns(query)
+	cols := g.expander.ExpandWildcardColumns(query)
+	return cols
 }
 
 func (g *Generator) getReturnType(query *parser.Query) string {

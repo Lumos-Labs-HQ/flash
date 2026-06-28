@@ -659,7 +659,12 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 			if paramName == "" {
 				paramName = fmt.Sprintf("p%d", i+1)
 			}
-			w.WriteString(fmt.Sprintf("  %s: %s;\n", paramName, g.mapSQLTypeToJS(param.Type)))
+			tsType := g.mapSQLTypeToJS(param.Type)
+			if param.Nullable {
+				w.WriteString(fmt.Sprintf("  %s?: %s | null;\n", paramName, tsType))
+			} else {
+				w.WriteString(fmt.Sprintf("  %s: %s;\n", paramName, tsType))
+			}
 		}
 		w.WriteString("}\n\n")
 	}
@@ -689,7 +694,12 @@ func (g *Generator) generateTypeScriptDeclarations(schema *parser.Schema, querie
 				if paramName == "" {
 					paramName = fmt.Sprintf("p%d", i+1)
 				}
-				parts[i] = fmt.Sprintf("%s: %s", paramName, g.mapSQLTypeToJS(param.Type))
+				tsType := g.mapSQLTypeToJS(param.Type)
+				if param.Nullable {
+					parts[i] = fmt.Sprintf("%s: %s | null", paramName, tsType)
+				} else {
+					parts[i] = fmt.Sprintf("%s: %s", paramName, tsType)
+				}
 			}
 			paramDecl = strings.Join(parts, ", ")
 		}

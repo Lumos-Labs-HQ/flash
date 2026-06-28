@@ -169,9 +169,9 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 				}
 			}
 			for i, col := range ktCols {
-				// For JOIN/aggregate result rows, use nullable for non-primitive types
-				// because LEFT JOIN columns and computed columns can be null in JDBC
-				nullable := col.Nullable || col.IsComputed || !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false))
+				// Use col.Nullable directly — it's already set correctly by the parser
+				// (schema defaults + @required annotation override)
+				nullable := col.Nullable || col.IsComputed
 				kt := g.sqlTypeToKotlin(col.Type, nullable)
 				comma := ","
 				if i == len(ktCols)-1 {
@@ -197,7 +197,7 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 						comma = ""
 					}
 					w.WriteString(fmt.Sprintf("    val %s: %s%s\n",
-						gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, false), comma))
+						gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, p.Nullable), comma))
 				}
 				w.WriteString(")\n\n")
 			}

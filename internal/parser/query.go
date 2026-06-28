@@ -166,6 +166,7 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 	var currentQuery *Query
 	var sqlLines []string
 	var comment string
+	var pendingRequired []string
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -195,11 +196,34 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 			parts := strings.Fields(remainder)
 			if len(parts) >= 2 {
 				currentQuery = &Query{
-					Name: parts[0],
-					Cmd:  parts[1],
+					Name:         parts[0],
+					Cmd:          parts[1],
+					RequiredCols: pendingRequired,
 				}
 				sqlLines = []string{}
 				comment = ""
+				pendingRequired = nil
+			}
+		} else if strings.HasPrefix(line, "-- @required:") {
+			val := strings.TrimPrefix(line, "-- @required:")
+			val = strings.TrimSpace(val)
+			var cols []string
+			if val == "*" {
+				cols = []string{"*"}
+			} else {
+				for _, col := range strings.Split(val, ",") {
+					col = strings.TrimSpace(col)
+					if col != "" {
+						cols = append(cols, col)
+					}
+				}
+			}
+			// If we already have a currentQuery (annotation after -- name:), assign directly
+			if currentQuery != nil && len(sqlLines) == 0 {
+				currentQuery.RequiredCols = cols
+			} else {
+				// Before -- name: line, save as pending
+				pendingRequired = cols
 			}
 		} else if strings.HasPrefix(line, "--") {
 			comment = strings.TrimPrefix(line, "--")
@@ -360,6 +384,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 			Name:     paramName,
 			Type:     paramType,
 			ParamNum: paramNum,
+			Nullable: p.isParamNullable(paramName, table),
 		}
 	}
 
@@ -575,7 +600,54 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
+	// Apply @required annotation (CQL only): mark specified params as non-nullable
+	// In CQL, all non-PK columns are nullable by default. @required lets users
+	// declare which params must be provided (non-null in generated Params class).
+	if len(query.RequiredCols) > 0 {
+		if len(query.RequiredCols) == 1 && query.RequiredCols[0] == "*" {
+			for _, param := range query.Params {
+				param.Nullable = false
+			}
+		} else {
+			paramMap := make(map[string]*Param)
+			for _, param := range query.Params {
+				paramMap[strings.ToLower(param.Name)] = param
+			}
+			for _, reqCol := range query.RequiredCols {
+				if param, ok := paramMap[strings.ToLower(reqCol)]; ok {
+					param.Nullable = false
+				} else {
+					return fmt.Errorf("@required param %q not found in query %q params. Available: %v",
+						reqCol, query.Name, func() []string {
+							names := make([]string, len(query.Params))
+							for i, p := range query.Params {
+								names[i] = p.Name
+							}
+							return names
+						}())
+				}
+			}
+		}
+	}
+
 	return nil
+}
+
+// isParamNullable checks if a param's corresponding schema column is nullable.
+// For INSERT params, the column name matches the param name.
+func (p *QueryParser) isParamNullable(paramName string, table *Table) bool {
+	if table == nil {
+		return false
+	}
+	// Strip suffixes that were added during inference
+	baseName := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(
+		strings.TrimSuffix(paramName, "_start"), "_end"), "_delta"), "_prefix")
+	for _, col := range table.Columns {
+		if strings.EqualFold(col.Name, baseName) {
+			return col.Nullable
+		}
+	}
+	return false
 }
 
 // inferColumnType determines the correct SQL type for a column based on the expression and schema

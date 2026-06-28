@@ -106,9 +106,12 @@ export default defineConfig({
           items: [
             { text: 'Architecture', link: '/advanced/architecture' },
             { text: 'How It Works', link: '/advanced/how-it-works' },
+            { text: 'Multi-Database', link: '/advanced/multi-database' },
+            { text: 'CQL @required', link: '/advanced/cql-required' },
             { text: 'Plugin System', link: '/advanced/plugins' },
             { text: 'Technology Stack', link: '/advanced/technology-stack' },
-            { text: 'Performance', link: '/advanced/performance' }
+            { text: 'Performance', link: '/advanced/performance' },
+            { text: 'Contributing', link: '/advanced/contributing' }
           ]
         }
       ]

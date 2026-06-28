@@ -284,7 +284,7 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 		useStructParams := len(q.Params) > 2
 		var proxyArgStr string
 		for i, p := range q.Params {
-			params[i] = fmt.Sprintf("%s: %s", gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
+			params[i] = fmt.Sprintf("%s: %s", gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, p.Nullable))
 			args[i] = gencommon.ToCamelCase(p.Name)
 		}
 
@@ -352,7 +352,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	// Build param list
 	params := make([]string, len(query.Params))
 	for i, p := range query.Params {
-		params[i] = fmt.Sprintf("%s: %s", gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, false))
+		params[i] = fmt.Sprintf("%s: %s", gencommon.ToCamelCase(p.Name), g.sqlTypeToKotlin(p.Type, p.Nullable))
 	}
 
 	// Return type
@@ -843,7 +843,8 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	if g.expander == nil {
 		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	return g.expander.ExpandWildcardColumns(query)
+	cols := g.expander.ExpandWildcardColumns(query)
+	return cols
 }
 
 func (g *Generator) modelTypeForQuery(query *parser.Query, columns []*parser.QueryColumn) string {
