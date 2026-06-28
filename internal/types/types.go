@@ -14,6 +14,7 @@ type SchemaTable struct {
 	Columns     []SchemaColumn
 	Indexes     []SchemaIndex
 	CompositePK string // raw CQL PRIMARY KEY clause, e.g. "((country, city), order_id)"
+	Suffix      string // e.g. "PARTITION BY RANGE (changed_at)" — appended after closing paren
 }
 
 type SchemaColumn struct {

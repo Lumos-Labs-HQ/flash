@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- === ENUMS ===
 
 CREATE TYPE post_status AS ENUM ('draft', 'published', 'archived');
@@ -113,14 +114,15 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (
-    id          BIGSERIAL PRIMARY KEY,
+    id          BIGSERIAL NOT NULL,
     table_name  TEXT NOT NULL,
     record_id   TEXT NOT NULL,
     action      TEXT NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
     old_data    JSONB,
     new_data    JSONB,
-    changed_by  INT REFERENCES users(id),
-    changed_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    changed_by  INT REFERENCES users(id) ON DELETE SET NULL,
+    changed_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, changed_at)
 ) PARTITION BY RANGE (changed_at);
 
 -- Partition tables
@@ -265,7 +267,7 @@ COMMENT ON TABLE audit_log IS 'Partitioned audit trail for all data changes';
 -- === NOTIFICATIONS ===
 
 CREATE TABLE IF NOT EXISTS notifications (
-    id          BIGSERIAL PRIMARY KEY,
+    id          BIGSERIAL NOT NULL,
     user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type        TEXT NOT NULL,
     title       TEXT NOT NULL,

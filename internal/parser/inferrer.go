@@ -135,7 +135,7 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	}
 
 	// ILIKE / SIMILAR TO / LIKE patterns: WHERE col ILIKE $N or col ILIKE '%' || $N || '%'
-	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+[^,;]*?\$%d\b`, paramIndex)
+	likePattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\S*\$%d\b`, paramIndex)
 	likeRe := regexp.MustCompile(likePattern)
 	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
 		for _, col := range table.Columns {
@@ -425,7 +425,7 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	// ILIKE / LIKE / SIMILAR TO
-	likePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+[^,;]*?\$%d\b`, paramIndex)
+	likePattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\S*\$%d\b`, paramIndex)
 	likeRe := regexp.MustCompile(likePattern)
 	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]

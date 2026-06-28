@@ -384,7 +384,7 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 			Name:     paramName,
 			Type:     paramType,
 			ParamNum: paramNum,
-			Nullable: p.isParamNullable(paramName, table),
+			Nullable: p.isCQLProvider() && p.isParamNullable(paramName, table),
 		}
 	}
 
@@ -634,12 +634,10 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 }
 
 // isParamNullable checks if a param's corresponding schema column is nullable.
-// For INSERT params, the column name matches the param name.
 func (p *QueryParser) isParamNullable(paramName string, table *Table) bool {
 	if table == nil {
 		return false
 	}
-	// Strip suffixes that were added during inference
 	baseName := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(
 		strings.TrimSuffix(paramName, "_start"), "_end"), "_delta"), "_prefix")
 	for _, col := range table.Columns {
@@ -648,6 +646,14 @@ func (p *QueryParser) isParamNullable(paramName string, table *Table) bool {
 		}
 	}
 	return false
+}
+
+func (p *QueryParser) isCQLProvider() bool {
+	if p.Config == nil {
+		return false
+	}
+	prov := p.Config.Database.Provider
+	return prov == "scylla" || prov == "scylladb" || prov == "cassandra"
 }
 
 // inferColumnType determines the correct SQL type for a column based on the expression and schema

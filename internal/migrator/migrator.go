@@ -271,15 +271,28 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		downStatements = append([]string{fmt.Sprintf("DROP TYPE IF EXISTS %s;", udt.Name)}, downStatements...)
 	}
 
-	// UP: Emit raw passthrough statements (DOMAIN types, composite types, PARTITION OF, functions, triggers).
-	// These are emitted before tables since DOMAINs/composite types may be referenced by table columns.
+	// UP: Emit raw passthrough statements (DOMAIN types, composite types, PARTITION OF).
+	var rawExtensions []string
+	var rawBeforeTables []string
+	var rawAfterTables []string
 	for _, raw := range diff.NewRawStatements {
-		upStatements = append(upStatements, raw)
+		upper := strings.ToUpper(raw)
+		if strings.Contains(upper, "CREATE FUNCTION") || strings.Contains(upper, "CREATE OR REPLACE FUNCTION") ||
+			strings.Contains(upper, "CREATE TRIGGER") || strings.Contains(upper, "CREATE OR REPLACE TRIGGER") ||
+			strings.Contains(upper, "PARTITION OF") {
+			rawAfterTables = append(rawAfterTables, raw)
+		} else if strings.Contains(upper, "CREATE EXTENSION") {
+			rawExtensions = append(rawExtensions, raw)
+		} else {
+			rawBeforeTables = append(rawBeforeTables, raw)
+		}
 		hasExecutableSQL = true
 	}
+	// Extensions must be first (before enums, domains, tables)
+	upStatements = append(rawExtensions, upStatements...)
+	upStatements = append(upStatements, rawBeforeTables...)
 
 	// UP: Create new tables and their indexes.
-	// Defer MATERIALIZED VIEWs — they must be created AFTER the tables they reference.
 	var viewUpStatements []string
 	var viewDownStatements []string
 	for _, table := range diff.NewTables {
@@ -349,6 +362,9 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	upStatements = append(upStatements, viewUpStatements...)
 	hasExecutableSQL = hasExecutableSQL || len(viewUpStatements) > 0
 	downStatements = append(viewDownStatements, downStatements...)
+
+	// Append functions/triggers after tables and views
+	upStatements = append(upStatements, rawAfterTables...)
 
 	// UP: Modify existing tables
 	for _, tableDiff := range diff.ModifiedTables {
@@ -555,7 +571,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		upStatements = append(upStatements, dropTableSQL(tableName))
 		hasExecutableSQL = true
 		// DOWN: We can't restore dropped tables, add a comment
-		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped table: %s (data lost)", tableName)}, downStatements...)
+		// downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped table: %s (data lost)", tableName)}, downStatements...)
 	}
 
 	// UP: Drop enums
@@ -565,7 +581,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		}
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
 		hasExecutableSQL = true
-		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
+		// downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
 	}
 
 	// UP: Add values to existing enums (PostgreSQL only — ALTER TYPE ... ADD VALUE)
@@ -586,7 +602,7 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(index))
 		hasExecutableSQL = true
 		// DOWN: We can't fully restore dropped indexes
-		downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", index.Name)}, downStatements...)
+		// downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", index.Name)}, downStatements...)
 	}
 
 	// UP: Add new indexes
@@ -630,12 +646,16 @@ func (m *Migrator) formatMigrationFileWithDown(name string, upStatements []strin
 	// UP section
 	builder.WriteString("-- +migrate Up\n")
 	if len(upStatements) > 0 {
-		for _, stmt := range upStatements {
-			builder.WriteString(stmt)
-			if !strings.HasSuffix(stmt, ";") {
+		for i, stmt := range upStatements {
+			trimmed := strings.TrimSpace(stmt)
+			builder.WriteString(trimmed)
+			if !strings.HasSuffix(trimmed, ";") {
 				builder.WriteString(";")
 			}
 			builder.WriteString("\n")
+			if i < len(upStatements)-1 {
+				builder.WriteString("\n")
+			}
 		}
 	} else {
 		builder.WriteString("-- No migration statements\n")
@@ -644,12 +664,16 @@ func (m *Migrator) formatMigrationFileWithDown(name string, upStatements []strin
 	// DOWN section
 	builder.WriteString("\n-- +migrate Down\n")
 	if len(downStatements) > 0 {
-		for _, stmt := range downStatements {
-			builder.WriteString(stmt)
-			if !strings.HasSuffix(strings.TrimSpace(stmt), ";") && !strings.HasPrefix(strings.TrimSpace(stmt), "--") {
+		for i, stmt := range downStatements {
+			trimmed := strings.TrimSpace(stmt)
+			builder.WriteString(trimmed)
+			if !strings.HasSuffix(strings.TrimSpace(trimmed), ";") && !strings.HasPrefix(trimmed, "--") {
 				builder.WriteString(";")
 			}
-			builder.WriteString("\n")
+			// builder.WriteString("\n")
+			if i < len(downStatements)-1 {
+				builder.WriteString("\n")
+			}
 		}
 	} else {
 		builder.WriteString("-- Add rollback statements here\n")

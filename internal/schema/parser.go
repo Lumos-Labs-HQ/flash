@@ -265,11 +265,21 @@ func (sm *SchemaManager) parseCreateTableStatement(stmt string) (types.SchemaTab
 	// Extract raw PRIMARY KEY clause for CQL compound/composite keys
 	compositePK := extractRawPKClause(stmt[start+1 : parenEnd])
 
+	// Extract table suffix (e.g. "PARTITION BY RANGE (changed_at)")
+	suffix := ""
+	afterParen := strings.TrimSpace(stmt[parenEnd+1:])
+	afterParen = strings.TrimSuffix(afterParen, ";")
+	afterParen = strings.TrimSpace(afterParen)
+	if afterParen != "" {
+		suffix = afterParen
+	}
+
 	return types.SchemaTable{
 		Name:        tableName,
 		Columns:     columns,
 		Indexes:     []types.SchemaIndex{},
 		CompositePK: compositePK,
+		Suffix:      suffix,
 	}, nil
 }
 

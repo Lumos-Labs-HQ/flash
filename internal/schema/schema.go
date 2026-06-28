@@ -360,7 +360,10 @@ func (sm *SchemaManager) parseSchemaContentAllV2(content string) ([]types.Schema
 				})
 			}
 		} else if sm.isCreateTableStatement(stmt) {
-			if table, err := sm.parseCreateTableStatement(stmt); err == nil {
+			upper := strings.ToUpper(stmt)
+			if strings.Contains(upper, "PARTITION OF") {
+				// Handled as raw statement — skip table parsing
+			} else if table, err := sm.parseCreateTableStatement(stmt); err == nil {
 				tables = append(tables, table)
 				tableMap[table.Name] = &tables[len(tables)-1]
 			}
@@ -390,6 +393,7 @@ func extractRawStatements(content string) []string {
 	for _, s := range stmts {
 		upper := strings.ToUpper(strings.TrimSpace(s))
 		if strings.HasPrefix(upper, "CREATE DOMAIN") ||
+			strings.HasPrefix(upper, "CREATE EXTENSION") ||
 			strings.HasPrefix(upper, "CREATE OR REPLACE FUNCTION") ||
 			strings.HasPrefix(upper, "CREATE FUNCTION") ||
 			strings.HasPrefix(upper, "CREATE OR REPLACE TRIGGER") ||

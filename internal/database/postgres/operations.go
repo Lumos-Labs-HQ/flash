@@ -256,7 +256,11 @@ func (p *Adapter) GenerateCreateTableSQL(table types.SchemaTable) string {
 		lines = append(lines, fmt.Sprintf("  PRIMARY KEY (%s)", strings.Join(pkCols, ", ")))
 	}
 
-	lines = append(lines, ");")
+	if table.Suffix != "" {
+		lines = append(lines, ") "+table.Suffix+";")
+	} else {
+		lines = append(lines, ");")
+	}
 	return strings.Join(lines, "\n")
 }
 

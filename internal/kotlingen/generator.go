@@ -327,13 +327,6 @@ func (g *Generator) generateDB(queries []*parser.Query) error {
 
 // isPrimitiveKtType returns true for Kotlin types that can never be null from JDBC
 // (Int, Long, Double, Float, Boolean — returned as primitives by typed getters).
-func isPrimitiveKtType(kt string) bool {
-	switch kt {
-	case "Int", "Long", "Double", "Float", "Boolean":
-		return true
-	}
-	return false
-}
 
 func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query) {
 	methodName := gencommon.ToCamelCase(query.Name)
@@ -578,8 +571,6 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 		w.WriteString(fmt.Sprintf("        %s\n", ktTypedSetter(i+1, gencommon.ToCamelCase(p.Name), p.Type)))
 	}
 
-	isRowType := rowType == gencommon.QueryPascal(query.Name)+"Row" // JOIN/aggregate result, not a model
-
 	switch cmd {
 
 	case ":one":
@@ -595,7 +586,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 				if i == len(columns)-1 {
 					comma = ""
 				}
-				nullable := col.Nullable || (isRowType && !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false)))
+				nullable := col.Nullable
 				w.WriteString(fmt.Sprintf("                %s%s\n", g.ktTypedGetter(col.Name, col.Type, nullable), comma))
 			}
 			w.WriteString("            ) else null\n")
@@ -619,7 +610,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 				if i == len(columns)-1 {
 					comma = ""
 				}
-				nullable := col.Nullable || (isRowType && !isPrimitiveKtType(g.sqlTypeToKotlin(col.Type, false)))
+				nullable := col.Nullable
 				w.WriteString(fmt.Sprintf("                    %s%s\n", g.ktTypedGetter(col.Name, col.Type, nullable), comma))
 			}
 			w.WriteString("                )\n            )\n")
