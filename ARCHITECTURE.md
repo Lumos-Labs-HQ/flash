@@ -846,3 +846,29 @@ If no pattern matches, the fallback is always safe:
 - Column type → `String` (safe default for all languages)
 
 The generated code compiles and runs correctly even with fallback types — it's just less specific in the type system. Users can always override by adjusting their SQL to use clearer patterns.
+
+---
+
+## `-- @required` Annotation (CQL)
+
+CQL/ScyllaDB tables have no `NOT NULL` constraint. By default, all non-PK columns generate nullable params (`String?`, `UUID?`). The `-- @required` annotation lets users declare which params must be non-null:
+
+```sql
+-- @required: id, username, email
+-- name: CreateUser :exec
+INSERT INTO myapp.users (id, username, email, bio) VALUES (?, ?, ?, ?);
+```
+
+**Parser flow:**
+1. `-- @required:` parsed before or after `-- name:` line → stored in `Query.RequiredCols`
+2. After params are created in `analyzeQuery()`, iterate `RequiredCols`
+3. For `*`: set all `Param.Nullable = false`
+4. For specific names: lookup in params map, set `Nullable = false`
+5. If name not found → return validation error
+
+**Generator usage:**
+- Kotlin: `g.sqlTypeToKotlin(p.Type, p.Nullable)` → `String` vs `String?`
+- TypeScript: `field: Type` vs `field?: Type | null`
+- Python: `Type` vs `Optional[Type]`
+- Go: `Type` vs `*Type` (pointer for nullable)
+- Java: uses boxed types (all nullable in Java anyway)

@@ -1,129 +1,82 @@
-# flash 2.7.0
+# flash 2.7.3
 
-**Release Date:** 2026-06-27
+**Release Date:** 2026-06-28
 
 ## 🚀 New Features
 
-### Multi-Database Support
+### `-- @required` Annotation for CQL Params
 
-FlashORM now supports multiple databases in a single project. Each database gets its own schema, queries, migrations, and code generation config.
+Mark CQL INSERT/UPDATE params as non-nullable in generated code:
 
-```toml
-version = "2"
+```sql
+-- @required: *
+-- name: CreateUser :exec
+INSERT INTO myapp.users (id, username, email, bio) VALUES (?, ?, ?, ?);
 
-[[databases]]
-name = "main"
-provider = "postgresql"
-url_env = "DATABASE_URL"
-schema_dir = "db/main/schema"
-queries = "db/main/queries/"
-migrations_path = "db/main/migrations"
-default = true
-
-[databases.gen.kotlin]
-enabled = true
-package = "com.example.main.flashgen"
-
-[[databases]]
-name = "analytics"
-provider = "clickhouse"
-url_env = "ANALYTICS_URL"
-schema_dir = "db/analytics/schema"
-queries = "db/analytics/queries/"
-migrations_path = "db/analytics/migrations"
-
-[databases.gen.go]
-enabled = true
-out = "gen/analytics"
+-- @required: id, username, email
+-- name: CreateUserPartial :exec
+INSERT INTO myapp.users (id, username, email, bio) VALUES (?, ?, ?, ?);
 ```
 
-**Commands:**
-- `flash dblist` — shows all configured databases with provider and paths
-- `flash gen --db main` — generate code for a specific database
-- `flash migrate "name" --db analytics` — create migration for specific database
-- `flash apply --db main` — apply migrations to specific database
-- `flash studio --db analytics` — open studio for specific database
-- All commands accept `--db <name>` flag
+**Generated Kotlin:**
+```kotlin
+// @required: * → all non-null
+data class CreateUserParams(val id: UUID, val username: String, val email: String, val bio: String)
 
-**Default database:**
-- `default = true` on a database entry — `flash gen` without `--db` only generates the default
-- No default set — `flash gen` generates ALL databases
-- Single-db config (old format) works unchanged
-
-### `flash gen -f` — Force Regeneration
-
-Skip incremental cache checking and regenerate all files:
-```bash
-flash gen -f          # regenerate all
-flash gen -f --db main  # force regen specific db
+// @required: id, username, email → only specified non-null
+data class CreateUserPartialParams(val id: UUID, val username: String, val email: String, val bio: String?)
 ```
 
-### Auto-Derived `out` Path for Java/Kotlin
+- Works with `-- @required: *` (all params non-null) or specific column names
+- Annotation can appear before OR after `-- name:` line
+- Validates param names — error if invalid name listed
+- Only affects input params, not output columns
+- All generators respect it: Go, TypeScript, Python, Kotlin, Java
 
-When `out` is not set, it's computed from `package`:
-```toml
-[gen.kotlin]
-enabled = true
-package = "com.example.myapp.flashgen"
-# out auto-computed: src/main/kotlin/com/example/myapp/flashgen
-```
+### Nullable Params from Schema
 
-### `flash uninstall`
+Params now inherit nullability from their corresponding schema column:
 
-Removes the flash binary and `~/.flash` directory:
-```bash
-flash uninstall       # interactive confirmation
-flash uninstall -f    # skip confirmation
-```
+- **CQL**: All non-PK columns are nullable → params are `Type?` / `Optional[Type]` / `Type | null`
+- **PostgreSQL/MySQL/SQLite**: Columns with `NOT NULL` → params are non-null; without → nullable
+- `-- @required` overrides schema defaults for CQL
+
+### `.cql` Extension for ScyllaDB/Cassandra
+
+`flash init --scylla` now creates `schema.cql` and `users.cql` instead of `.sql`. The parser accepts both `.sql` and `.cql` files.
 
 ---
 
-## 🔧 Bug Fixes & Improvements
+## 🔧 Bug Fixes
+
+### ScyllaDB/Cassandra
+
+- **`timestamp` → `Instant`** (not `LocalDateTime`) — uses `java.time.Instant` for CQL timestamp type
+- **`import java.time.Instant`** in Models.kt, Users.kt, Queries.kt
+- **Keyspace prefix stripped** from model names (`myapp.users` → `Users`)
+- **`!!` on non-nullable getters** — PK fields use `row.getUuid("id")!!`, nullable fields have no assertion
+- **CQL getter nullable** — `cqlKtGetter` takes `nullable` param, adds `!!` only for non-null columns
 
 ### Parser
 
-- **`IN ($1,$2,$3)` → `= ANY($1)` rewrite** — collapses multi-param IN lists into a single typed array parameter
-- **COALESCE `SET col = COALESCE($N, col)`** — correctly infers param name and type from the target column
-- **Range params** — `col >= $1 AND col <= $2` now infers `col_start`/`col_end` instead of `col`/`col2`
-- **CTE param inference** — `InferParamTypeByName` fallback for params not in the primary table (`*_count` → INTEGER, `limit`/`offset` → INTEGER)
-- **Cross-table type lookup** — params referencing columns in JOINed/subquery tables resolve correctly
-- **Broader WHERE matching** — `WHERE (col = $N ...)` inside parentheses now matches correctly
-- **JSONB `->> $N`** — infers param name as `key`
-- **Concurrent map fix** — `sync.RWMutex` on TypeInferrer cache prevents crash with multiple query files
-- **POM parent skip** — `<parent><groupId>` no longer pollutes detected package name
-- **Lowercase packages** — all auto-detected Java/Kotlin package names are lowercased
+- **`$N || col` concat** → infers `col_prefix: TEXT` (dollar-style params)
+- **ILIKE `'%' || $N || '%'`** → infers column name from ILIKE context
+- **`OFFSET $N` / `OFFSET ?`** → correctly infers `offset: INTEGER`
+- **LIMIT/OFFSET priority** — checked before ILIKE to prevent false matches
+- **SET counter `col = col + $N`** → infers `col_delta` with correct type
+- **SET COALESCE `col = COALESCE($N, col)`** → infers column name and type
+- **Multi-assignment SET** → `..., col = $N` matches anywhere in SET clause
+- **Invalid regex syntax** — removed Go-unsupported `(?!` lookahead
 
-### Wildcard Expansion
+### Code Generation
 
-- **Single qualified wildcard** (`SELECT u.* FROM users u`) — resolves alias, expands to all table columns
-- **`SELECT DISTINCT u.*`** — strips DISTINCT before resolving alias
-- **Multi-wildcard** (`SELECT f.*, u.*`) — resolves each alias independently, expands both tables, prefixes duplicates with alias (`f_id`, `u_id`)
-- **Mixed wildcard + explicit** (`SELECT p.*, COUNT(*) AS likes`) — expands `p.*` and keeps explicit columns
-
-### Code Generation (all languages)
-
-- **Params objects** — queries with >2 params get a typed Params struct/record/TypedDict/data class
-- **Renamed `Args` → `Params`** — `CreateUserParams`, `UpdatePostParams`, etc.
-- **Top-level declarations** — Kotlin data classes and Java records in their own files (no inner class conflicts)
-- **Enum getters** — `EnumType.valueOf(rs.getString("col"))` for Kotlin/Java
-- **Array getters** — `.map { it.toString() }` (Kotlin), proper cast (Java)
-- **Array setters** — `stmt.setArray(N, conn.createArrayOf("type", arr))` for both
-- **Redundant qualifier removed** — `UUID::class.java` instead of `java.util.UUID::class.java`
-- **`@Suppress("DuplicatedCode")`** — silences IntelliJ warning on generated Kotlin
-
-### Kotlin Specific
-
-- **camelCase** for all field/param names — `userId`, `createdAt`, `isActive`
-- **Enum columns** — `UserRole.valueOf(rs.getString("role"))` with nullable support
-
-### Java Specific
-
-- **PreparedStatement try-with-resources** — no more cached stmts map, no IDE warnings
-- **Duplicate proxy dedup** in `Queries.java`
-- **No `.toString()`** on String params
+- **`@Suppress("DuplicatedCode")`** on generated Kotlin query classes
+- **`UUID::class.java`** instead of `java.util.UUID::class.java` (no redundant qualifier)
+- **`-f` flag in production** — added persistent flags to plugin executor
+- **`--db` flag in production** — works in both dev and plugin mode
 
 ---
 
 ## 📦 Version
 
-`2.7.0` (prod) · `2.7.0-beta-dev` (dev)
+`2.7.3` (prod) · `2.7.3-beta-dev` (dev)
