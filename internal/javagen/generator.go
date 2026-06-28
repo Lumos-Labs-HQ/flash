@@ -831,7 +831,8 @@ func (g *Generator) expandWildcardColumns(query *parser.Query) []*parser.QueryCo
 	if g.expander == nil {
 		g.expander = gencommon.NewSchemaExpander(g.schema)
 	}
-	return g.expander.ExpandWildcardColumns(query)
+	cols := g.expander.ExpandWildcardColumns(query)
+	return cols
 }
 
 func (g *Generator) modelTypeForQuery(query *parser.Query, columns []*parser.QueryColumn) string {

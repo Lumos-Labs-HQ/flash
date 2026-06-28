@@ -34,19 +34,21 @@ type Column struct {
 }
 
 type Query struct {
-	Name       string
-	SQL        string
-	Cmd        string
-	Comment    string
-	Params     []*Param
-	Columns    []*QueryColumn
-	SourceFile string
+	Name         string
+	SQL          string
+	Cmd          string
+	Comment      string
+	Params       []*Param
+	Columns      []*QueryColumn
+	SourceFile   string
+	RequiredCols []string // from -- @required: col1, col2 or * for all
 }
 
 type Param struct {
 	Name     string
 	Type     string
-	ParamNum int // the actual $N number in SQL (1-based)
+	ParamNum int  // the actual $N number in SQL (1-based)
+	Nullable bool // true if the corresponding schema column is nullable
 }
 
 type QueryColumn struct {
