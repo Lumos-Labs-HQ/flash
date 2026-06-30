@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/database/common"
 )
@@ -45,7 +45,7 @@ func (s *Adapter) Connect(ctx context.Context, url string) error {
 	}
 	s.currentPath = s.originalPath
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to open SQLite connection: %w", err)
 	}
@@ -87,7 +87,7 @@ func (s *Adapter) SwitchDatabase(ctx context.Context, branchFile string) error {
 	// Open new database file
 	dbPath := branchFile
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to switch to database %s: %w", branchFile, err)
 	}

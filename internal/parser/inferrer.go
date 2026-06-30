@@ -134,6 +134,16 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		}
 	}
 
+	// func(col) = $N pattern
+	funcColTypeRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:\w+\.)?(\w+)\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
+	if match := funcColTypeRe.FindStringSubmatch(sql); len(match) > 1 {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, match[1]) {
+				return col.Type
+			}
+		}
+	}
+
 	// ILIKE / SIMILAR TO / LIKE patterns: WHERE col ILIKE $N or col ILIKE '%' || $N || '%'
 	likePattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s+(?:I?LIKE|SIMILAR\s+TO|NOT\s+I?LIKE)\s+\S*\$%d\b`, paramIndex)
 	likeRe := regexp.MustCompile(likePattern)
@@ -406,6 +416,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	concatDollarRe := regexp.MustCompile(fmt.Sprintf(`\$%d\s*\|\|\s*(\w+)`, paramIndex))
 	if match := concatDollarRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1] + "_prefix"
+	}
+
+	// func(col) = $N or func(col)::type = $N (function-wrapped column comparison)
+	funcColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:\w+\.)?(\w+)\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
+	if match := funcColRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
 	}
 
 	wherePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$%d\b`, paramIndex)

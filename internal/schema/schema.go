@@ -495,8 +495,23 @@ func splitStatementsDollarAware(sql string) []string {
 			}
 			continue
 		}
-		// Statement terminator
+		// Statement terminator — but only if not inside BEGIN...END block
 		if sql[i] == ';' {
+			bufUpper := strings.ToUpper(cur.String())
+			trimmed := strings.TrimSpace(bufUpper)
+			beginCount := strings.Count(bufUpper, " BEGIN") + strings.Count(bufUpper, "\nBEGIN") + strings.Count(bufUpper, "\tBEGIN")
+			if strings.HasPrefix(trimmed, "BEGIN") {
+				beginCount++
+			}
+			endCount := strings.Count(bufUpper, "\nEND") + strings.Count(bufUpper, " END") + strings.Count(bufUpper, "\tEND")
+			if strings.HasSuffix(trimmed, "END") || strings.HasSuffix(trimmed, "END;") {
+				endCount++
+			}
+			if beginCount > endCount {
+				cur.WriteByte(sql[i])
+				i++
+				continue
+			}
 			s := strings.TrimSpace(cur.String())
 			if s != "" {
 				result = append(result, s)

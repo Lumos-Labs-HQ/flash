@@ -14,7 +14,6 @@ require (
 	github.com/redis/go-redis/v9 v9.20.1
 	github.com/spf13/cobra v1.10.2
 	go.mongodb.org/mongo-driver v1.17.9
-	modernc.org/sqlite v1.52.0
 )
 
 require (
@@ -31,7 +30,6 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/ClickHouse/ch-go v0.72.0 // indirect
 	github.com/andybalholm/brotli v1.2.1 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -44,10 +42,9 @@ require (
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
-	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/paulmach/orb v0.13.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
-	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
@@ -61,7 +58,4 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	modernc.org/libc v1.73.0 // indirect
-	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.11.0 // indirect
 )
