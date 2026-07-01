@@ -781,6 +781,10 @@ func (g *Generator) sqlTypeToKotlin(sqlType string, nullable bool) string {
 		return nullable_(fmt.Sprintf("Map<%s, %s>", cqlInnerKtType(k), cqlInnerKtType(v)), nullable)
 	case strings.HasPrefix(sqlLower, "frozen<"), strings.HasPrefix(sqlLower, "tuple<"):
 		kt = "String"
+	// SQL array types — must be before contains("int"), contains("uuid"), etc.
+	case strings.HasSuffix(sqlLower, "[]"):
+		inner := g.sqlTypeToKotlin(strings.TrimSuffix(sqlLower, "[]"), false)
+		kt = fmt.Sprintf("List<%s>", inner)
 	// ClickHouse exact unsigned — before contains("int")
 	case sqlLower == "uint8" || sqlLower == "uint16" || sqlLower == "uint32" || sqlLower == "uint64":
 		kt = "Long"
@@ -818,9 +822,6 @@ func (g *Generator) sqlTypeToKotlin(sqlType string, nullable bool) string {
 		kt = "String" // raw JSON string
 	case sqlLower == "bytea" || strings.Contains(sqlLower, "blob"):
 		kt = "ByteArray"
-	case strings.HasSuffix(sqlLower, "[]"):
-		inner := g.sqlTypeToKotlin(strings.TrimSuffix(sqlLower, "[]"), false)
-		kt = fmt.Sprintf("List<%s>", inner)
 	default:
 		kt = "String"
 	}

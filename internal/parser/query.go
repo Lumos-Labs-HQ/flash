@@ -747,6 +747,13 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 		return "NUMERIC", true, true
 	}
 
+	// JSONB aggregate functions
+	if strings.Contains(exprUpper, "JSONB_AGG(") || strings.Contains(exprUpper, "JSON_AGG(") ||
+		strings.Contains(exprUpper, "JSONB_BUILD_OBJECT(") || strings.Contains(exprUpper, "JSONB_BUILD_ARRAY(") ||
+		strings.Contains(exprUpper, "TO_JSONB(") {
+		return "JSONB", true, true
+	}
+
 	// STRING_AGG / ARRAY_AGG — use HasPrefix check so ORDER BY inside doesn't break it
 	if strings.HasPrefix(exprUpper, "STRING_AGG(") || strings.Contains(exprUpper, "STRING_AGG(") {
 		return "TEXT", true, true
@@ -824,8 +831,31 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 				if found {
 					return cteType, false, true
 				}
+				// Try resolving via table alias in schema (covers LATERAL join aliases
+				// where the alias refers to a subquery column with known aggregate type)
+				colName := strings.TrimSpace(cteParts[1])
+				for _, table := range schema.Tables {
+					for _, col := range table.Columns {
+						if strings.EqualFold(col.Name, colName) {
+							return col.Type, true, true
+						}
+					}
+				}
 			}
 		}
+
+		// Check for explicit ::type cast on any COALESCE argument as type hint.
+		// e.g., COALESCE(a.attachments, '[]'::jsonb) → JSONB
+		coalesceCastRe := regexp.MustCompile(`(?i)COALESCE\s*\([^)]*::\s*([a-zA-Z][a-zA-Z0-9_]*)`)
+		if castMatch := coalesceCastRe.FindStringSubmatch(expr); len(castMatch) > 1 {
+			return strings.ToUpper(castMatch[1]), true, true
+		}
+
+		// Check if COALESCE wraps a jsonb_agg or json_agg call
+		if strings.Contains(exprUpper, "JSONB_AGG(") || strings.Contains(exprUpper, "JSON_AGG(") {
+			return "JSONB", true, true
+		}
+
 		return "TEXT", false, true
 	}
 	if strings.Contains(exprUpper, "CASE") && strings.Contains(exprUpper, "END") {

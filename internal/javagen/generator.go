@@ -740,6 +740,20 @@ func (g *Generator) sqlTypeToJava(sqlType string, nullable bool) string {
 
 	var jt string
 	switch {
+	// SQL array types — must be before contains("int"), contains("uuid"), etc.
+	case strings.HasSuffix(sqlLower, "[]"):
+		inner := g.sqlTypeToJava(strings.TrimSuffix(sqlLower, "[]"), false)
+		jt = fmt.Sprintf("java.util.List<%s>", inner)
+	// CQL collections
+	case strings.HasPrefix(sqlLower, "set<"):
+		inner, _ := gencommon.ParseCQLInner(sqlLower)
+		return fmt.Sprintf("java.util.Set<%s>", cqlInnerJavaClass(inner))
+	case strings.HasPrefix(sqlLower, "list<"):
+		inner, _ := gencommon.ParseCQLInner(sqlLower)
+		return fmt.Sprintf("java.util.List<%s>", cqlInnerJavaClass(inner))
+	case strings.HasPrefix(sqlLower, "map<"):
+		k, v := gencommon.ParseCQLInner(sqlLower)
+		return fmt.Sprintf("java.util.Map<%s, %s>", cqlInnerJavaClass(k), cqlInnerJavaClass(v))
 	// ClickHouse exact unsigned types — must be before contains("int")
 	case sqlLower == "uint8" || sqlLower == "uint16" || sqlLower == "uint32" || sqlLower == "uint64":
 		if nullable {
@@ -807,20 +821,6 @@ func (g *Generator) sqlTypeToJava(sqlType string, nullable bool) string {
 		jt = "java.util.Map<String, Object>"
 	case sqlLower == "bytea" || strings.Contains(sqlLower, "blob"):
 		jt = "byte[]"
-	case strings.HasSuffix(sqlLower, "[]"):
-		inner := g.sqlTypeToJava(strings.TrimSuffix(sqlLower, "[]"), false)
-		jt = fmt.Sprintf("java.util.List<%s>", inner)
-	case strings.HasPrefix(sqlLower, "set<"):
-		inner, _ := gencommon.ParseCQLInner(sqlLower)
-		return fmt.Sprintf("java.util.Set<%s>", cqlInnerJavaClass(inner))
-	case strings.HasPrefix(sqlLower, "list<"):
-		inner, _ := gencommon.ParseCQLInner(sqlLower)
-		return fmt.Sprintf("java.util.List<%s>", cqlInnerJavaClass(inner))
-	case strings.HasPrefix(sqlLower, "map<"):
-		k, v := gencommon.ParseCQLInner(sqlLower)
-		return fmt.Sprintf("java.util.Map<%s, %s>", cqlInnerJavaClass(k), cqlInnerJavaClass(v))
-	case strings.Contains(sqlLower, "json"):
-		jt = "String" // raw JSON
 	default:
 		jt = "String"
 	}

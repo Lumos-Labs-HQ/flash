@@ -497,3 +497,163 @@ func TestInferParamName_MultiColSet(t *testing.T) {
 		t.Errorf("SET multi-col $3 = %q, want email", got)
 	}
 }
+
+func TestInferParamName_LateralSubqueryWithANY(t *testing.T) {
+	ti := NewTypeInferrer()
+
+	// Complex query with ? inside a LATERAL subquery (? = ANY(grouped.users))
+	// followed by WHERE clause params
+	sql := `SELECT m.*, COALESCE(a.attachments, '[]'::jsonb) AS attachments,
+COALESCE(r.reactions, '[]'::jsonb) AS reactions,
+COALESCE(n.mentions, '[]'::jsonb) AS mentions
+FROM messages m
+LEFT JOIN LATERAL (
+  SELECT jsonb_agg(to_jsonb(ma)) AS attachments
+  FROM message_attachments ma
+  WHERE ma.channel_id = m.channel_id AND ma.message_id = m.id
+) a ON TRUE
+LEFT JOIN LATERAL (
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'emoji', grouped.emoji,
+      'users', grouped.users,
+      'count', grouped.count,
+      'me', ? = ANY(grouped.users)
+    )
+  ) AS reactions
+  FROM (
+    SELECT mr.emoji, array_agg(mr.user_id) AS users, COUNT(*) AS count
+    FROM message_reactions mr
+    WHERE mr.channel_id = m.channel_id AND mr.message_id = m.id
+    GROUP BY mr.emoji
+  ) grouped
+) r ON TRUE
+LEFT JOIN LATERAL (
+  SELECT jsonb_agg(mm.user_id) AS mentions
+  FROM message_mentions mm
+  WHERE mm.channel_id = m.channel_id AND mm.message_id = m.id
+) n ON TRUE
+WHERE m.channel_id = ? AND m.id = ? AND m.deleted = FALSE;`
+
+	// Param 1: ? = ANY(grouped.users) → should infer name "users"
+	if got := ti.InferParamName(sql, 1); got != "users" {
+		t.Errorf("LATERAL ANY param1 = %q, want users", got)
+	}
+	// Param 2: m.channel_id = ? → should infer name "channel_id"
+	if got := ti.InferParamName(sql, 2); got != "channel_id" {
+		t.Errorf("WHERE param2 = %q, want channel_id", got)
+	}
+	// Param 3: m.id = ? → should infer name "id"
+	if got := ti.InferParamName(sql, 3); got != "id" {
+		t.Errorf("WHERE param3 = %q, want id", got)
+	}
+}
+
+func TestInferParamName_DollarNWithLateralANY(t *testing.T) {
+	ti := NewTypeInferrer()
+
+	// Same pattern but with $N-style params
+	sql := `SELECT m.* FROM messages m
+LEFT JOIN LATERAL (
+  SELECT jsonb_agg(jsonb_build_object('me', $1 = ANY(grouped.users))) AS reactions
+  FROM (SELECT array_agg(mr.user_id) AS users FROM message_reactions mr) grouped
+) r ON TRUE
+WHERE m.channel_id = $2 AND m.id = $3`
+
+	if got := ti.InferParamName(sql, 1); got != "users" {
+		t.Errorf("$1 = ANY(grouped.users) → got %q, want users", got)
+	}
+	if got := ti.InferParamName(sql, 2); got != "channel_id" {
+		t.Errorf("$2 channel_id → got %q, want channel_id", got)
+	}
+	if got := ti.InferParamName(sql, 3); got != "id" {
+		t.Errorf("$3 id → got %q, want id", got)
+	}
+}
+
+func TestInferParamType_LateralSubqueryANY(t *testing.T) {
+	ti := NewTypeInferrerWithSchema(&Schema{
+		Tables: []*Table{
+			{
+				Name: "messages",
+				Columns: []*Column{
+					{Name: "id", Type: "BIGINT"},
+					{Name: "channel_id", Type: "UUID"},
+					{Name: "content", Type: "TEXT"},
+					{Name: "deleted", Type: "BOOLEAN"},
+				},
+			},
+			{
+				Name: "message_reactions",
+				Columns: []*Column{
+					{Name: "channel_id", Type: "UUID"},
+					{Name: "message_id", Type: "BIGINT"},
+					{Name: "user_id", Type: "UUID"},
+					{Name: "emoji", Type: "TEXT"},
+				},
+			},
+		},
+	})
+
+	table := ti.schema.Tables[0] // messages
+
+	// $1 = ANY(grouped.users) — users is from array_agg(user_id), param is scalar UUID
+	sql := `SELECT m.* FROM messages m
+LEFT JOIN LATERAL (
+  SELECT jsonb_agg(jsonb_build_object('me', $1 = ANY(grouped.users))) AS reactions
+  FROM (SELECT array_agg(mr.user_id) AS users FROM message_reactions mr) grouped
+) r ON TRUE
+WHERE m.channel_id = $2 AND m.id = $3`
+
+	// The param name for $1 is "users" — since the column "users" is a subquery alias
+	// (not a real schema column), the type inferrer should look for the singular form
+	// "user_id" in the schema as a fallback for ID-like param resolution.
+	typ := ti.InferParamType(sql, 1, table, "users")
+	// "users" doesn't exist as a column, so the inferrer tries singular form "user_id"
+	// via cross-table lookup and finds it in message_reactions → UUID
+	if typ != "UUID" {
+		t.Errorf("param1 type = %q, want UUID", typ)
+	}
+
+	typ2 := ti.InferParamType(sql, 2, table, "channel_id")
+	if typ2 != "UUID" {
+		t.Errorf("param2 type = %q, want UUID", typ2)
+	}
+
+	typ3 := ti.InferParamType(sql, 3, table, "id")
+	if typ3 != "BIGINT" {
+		t.Errorf("param3 type = %q, want BIGINT", typ3)
+	}
+}
+
+func TestInferColumnType_CoalesceWithCast(t *testing.T) {
+	cfg := &config.Config{
+		Database: config.Database{Provider: "postgresql"},
+	}
+	parser := NewQueryParser(cfg)
+
+	schema := &Schema{
+		Tables: []*Table{
+			{
+				Name: "messages",
+				Columns: []*Column{
+					{Name: "id", Type: "BIGINT"},
+					{Name: "channel_id", Type: "UUID"},
+					{Name: "content", Type: "TEXT"},
+					{Name: "deleted", Type: "BOOLEAN"},
+				},
+			},
+		},
+	}
+
+	sql := `SELECT m.*, COALESCE(a.attachments, '[]'::jsonb) AS attachments FROM messages m`
+
+	// The expression "COALESCE(a.attachments, '[]'::jsonb)" should infer JSONB from the cast
+	typ, nullable := parser.inferColumnType("attachments", "COALESCE(a.attachments, '[]'::jsonb)", sql, schema, schema.Tables[0])
+	if typ != "JSONB" {
+		t.Errorf("COALESCE with ::jsonb cast: got type %q, want JSONB", typ)
+	}
+	if !nullable {
+		t.Errorf("COALESCE with LATERAL alias should be nullable")
+	}
+}

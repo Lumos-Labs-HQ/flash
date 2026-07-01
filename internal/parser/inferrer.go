@@ -88,6 +88,42 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		}
 	}
 
+	// $N = ANY(col) or $N = ANY(alias.col) — reverse form: param is a scalar element
+	// being checked for membership in an array column. Type is the element type.
+	anyRevArrayRe := regexp.MustCompile(fmt.Sprintf(`(?i)\$%d\s*=\s*ANY\s*\(\s*(?:(\w+)\.)?(\w+)\s*\)`, paramIndex))
+	if match := anyRevArrayRe.FindStringSubmatch(sql); len(match) > 2 {
+		colName := match[2]
+		// Search primary table
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, colName) {
+				elemType := strings.TrimSuffix(col.Type, "[]")
+				return elemType
+			}
+		}
+		// Cross-table lookup for qualified references
+		if ti.schema != nil {
+			for _, t := range ti.schema.Tables {
+				for _, col := range t.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						elemType := strings.TrimSuffix(col.Type, "[]")
+						return elemType
+					}
+				}
+			}
+			// Fallback: if colName is a plural (e.g., "users"), try singular + "_id" form
+			// (e.g., "user_id") since subquery aliases often pluralize the source column.
+			singular := strings.TrimSuffix(colName, "s")
+			singularID := singular + "_id"
+			for _, t := range ti.schema.Tables {
+				for _, col := range t.Columns {
+					if strings.EqualFold(col.Name, singularID) {
+						return col.Type
+					}
+				}
+			}
+		}
+	}
+
 	if paramName != "" && paramName != fmt.Sprintf("param%d", paramIndex) {
 		for _, col := range table.Columns {
 			if strings.EqualFold(col.Name, paramName) ||
@@ -298,6 +334,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		return match[1]
 	}
 
+	// $N = ANY(col) or $N = ANY(alias.col) — reverse form, param on left side
+	anyRevRe := regexp.MustCompile(fmt.Sprintf(`(?i)\$%d\s*=\s*ANY\s*\(\s*(?:\w+\.)?(\w+)\s*\)`, paramIndex))
+	if match := anyRevRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
 	if strings.Contains(sql, "?") {
 		// ? || col or col || ? in SELECT — concatenation prefix/suffix
 		concatRe := regexp.MustCompile(`\?\s*\|\|\s*(\w+)`)
@@ -305,6 +347,32 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			beforeMatch := sql[:strings.Index(sql, match[0])]
 			if strings.Count(beforeMatch, "?")+1 == paramIndex {
 				return match[1] + "_prefix"
+			}
+		}
+
+		// ? = ANY(col) or ? = ANY(alias.col) — reverse ANY pattern with ? params
+		anyQRe := regexp.MustCompile(`\?\s*=\s*ANY\s*\(\s*(?:\w+\.)?(\w+)\s*\)`)
+		if allAnyMatches := anyQRe.FindAllStringSubmatchIndex(sql, -1); len(allAnyMatches) > 0 {
+			for _, loc := range allAnyMatches {
+				beforeMatch := sql[:loc[0]]
+				if strings.Count(beforeMatch, "?")+1 == paramIndex {
+					return anyQRe.FindStringSubmatch(sql[loc[0]:loc[1]])[1]
+				}
+			}
+		}
+
+		// col = ANY(?) — forward ANY pattern with ? params
+		anyFwdQRe := regexp.MustCompile(`(?i)(?:\w+\.)?(\w+)\s*=\s*ANY\s*\(\s*\?\s*\)`)
+		if allFwdMatches := anyFwdQRe.FindAllStringSubmatchIndex(sql, -1); len(allFwdMatches) > 0 {
+			for _, loc := range allFwdMatches {
+				beforeMatch := sql[:loc[0]]
+				// Count ? up to the ? inside ANY(...) — the ? is inside the parentheses
+				matchStr := sql[loc[0]:loc[1]]
+				qMarkPos := strings.Index(matchStr, "?")
+				totalBefore := strings.Count(beforeMatch, "?") + strings.Count(matchStr[:qMarkPos], "?") + 1
+				if paramIndex == totalBefore {
+					return anyFwdQRe.FindStringSubmatch(matchStr)[1]
+				}
 			}
 		}
 
@@ -333,26 +401,48 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 
 		// WHERE clause with ? params
-		whereRegex := regexp.MustCompile(`(?is)WHERE\s+([\s\S]+?)(?:LIMIT|ORDER|GROUP|HAVING|ALLOW FILTERING|$)`)
-		if whereMatch := whereRegex.FindStringSubmatch(sql); len(whereMatch) > 1 {
-			whereClause := whereMatch[1]
+		// Find the LAST/outermost WHERE clause to avoid matching subquery WHERE clauses
+		wherePos := strings.LastIndex(strings.ToUpper(sql), "WHERE")
+		if wherePos >= 0 {
+			// Extract the WHERE clause content after the last WHERE keyword
+			afterWhere := sql[wherePos+5:] // skip "WHERE"
+			// Trim to the end of the WHERE clause (stop at LIMIT/ORDER/GROUP/HAVING/ALLOW FILTERING)
+			endRe := regexp.MustCompile(`(?i)\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`)
+			if endLoc := endRe.FindStringIndex(afterWhere); endLoc != nil {
+				afterWhere = afterWhere[:endLoc[0]]
+			}
+			whereClause := strings.TrimSpace(afterWhere)
+
+			// Count ? that appear BEFORE the WHERE clause but AFTER any SET clause
+			// (SET ? params are already handled above via paramIndex reduction).
+			// This accounts for ? in LATERAL subqueries, inline subqueries, etc.
+			beforeWhere := sql[:wherePos]
+			paramsBefore := strings.Count(beforeWhere, "?")
+			// Subtract SET params that were already handled (paramIndex was already reduced)
+			setColPattern2 := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
+			setParamsHandled := 0
+			if setMatch2 := setColPattern2.FindStringSubmatch(sql); len(setMatch2) > 1 {
+				setParamsHandled = strings.Count(setMatch2[1], "?")
+			}
+			subqueryParamsBefore := paramsBefore - setParamsHandled
+			if subqueryParamsBefore < 0 {
+				subqueryParamsBefore = 0
+			}
+			relParamIndex := paramIndex - subqueryParamsBefore
 
 			// col ILIKE '%' || ? || '%' or col ILIKE ? (concatenated search)
 			ilikePattern := regexp.MustCompile(`(?i)(\w+)\s+I?LIKE\s+.*?\?`)
 			ilikeMatches := ilikePattern.FindAllStringSubmatch(whereClause, -1)
 
-			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*\?`)
+			colPattern := regexp.MustCompile(`(?i)(?:\w+\.)?(\w+)\s*=\s*\?`)
 			matches := colPattern.FindAllStringSubmatch(whereClause, -1)
-			if paramIndex <= len(matches) && len(matches[paramIndex-1]) > 1 {
-				return matches[paramIndex-1][1]
+			if relParamIndex > 0 && relParamIndex <= len(matches) && len(matches[relParamIndex-1]) > 1 {
+				return matches[relParamIndex-1][1]
 			}
 
 			// ILIKE with ? (including '%' || ? || '%' patterns)
 			if len(ilikeMatches) > 0 {
-				// Count ? before WHERE to get relative position
-				beforeWhere := sql[:strings.Index(strings.ToUpper(sql), "WHERE")]
-				paramsBefore := strings.Count(beforeWhere, "?")
-				relIdx := paramIndex - paramsBefore
+				relIdx := relParamIndex
 				// Check if this param falls within an ILIKE pattern
 				for _, m := range ilikeMatches {
 					if relIdx > 0 && relIdx <= strings.Count(m[0], "?") {
@@ -366,11 +456,11 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			containsPattern := regexp.MustCompile(`(?i)(\w+)\s+CONTAINS\s+\?`)
 			allContains := containsPattern.FindAllStringSubmatch(whereClause, -1)
 			// Only match if this paramIndex maps to a CONTAINS position
-			if paramIndex <= len(allContains) {
-				return allContains[paramIndex-1][1]
+			if relParamIndex > 0 && relParamIndex <= len(allContains) {
+				return allContains[relParamIndex-1][1]
 			}
 			// Also match >= AND <= BETWEEN-style
-			whereParamIndex := paramIndex - len(matches)
+			whereParamIndex := relParamIndex - len(matches)
 			rangePattern := regexp.MustCompile(`(?i)(\w+)\s*(>=|<=|>|<)\s*\?`)
 			rangeMatches := rangePattern.FindAllStringSubmatch(whereClause, -1)
 			if whereParamIndex > 0 && whereParamIndex <= len(rangeMatches) {
@@ -521,8 +611,8 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		return "key"
 	}
 
-	// $N = ANY(col)
-	anyRe := regexp.MustCompile(fmt.Sprintf(`(?i)\$%d\s*=\s*ANY\s*\(\s*(\w+)\s*\)`, paramIndex))
+	// $N = ANY(col) or $N = ANY(alias.col)
+	anyRe := regexp.MustCompile(fmt.Sprintf(`(?i)\$%d\s*=\s*ANY\s*\(\s*(?:\w+\.)?(\w+)\s*\)`, paramIndex))
 	if match := anyRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
 	}
