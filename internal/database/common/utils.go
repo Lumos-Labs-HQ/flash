@@ -10,8 +10,7 @@ type QueryResult struct {
 }
 
 // ParseSQLStatements splits SQL migration text into individual statements,
-// correctly handling string literals, comments, and PostgreSQL dollar-quoted
-// blocks so that semicolons inside them do not terminate statements.
+// blocks, and SQLite BEGIN...END trigger blocks so that semicolons inside
 func ParseSQLStatements(sql string) []string {
 	var statements []string
 	var current strings.Builder
@@ -27,6 +26,7 @@ func ParseSQLStatements(sql string) []string {
 	)
 	state := normal
 	var dollarTag string
+	beginDepth := 0 // tracks SQLite BEGIN...END blocks (triggers)
 
 	for i := 0; i < len(sql); {
 		ch := sql[i]
@@ -160,7 +160,43 @@ func ParseSQLStatements(sql string) []string {
 			}
 		}
 
+		// Track SQLite BEGIN...END blocks (triggers).
+		// END followed by ; closes the block.
+		if (ch == 'B' || ch == 'b') && i+5 <= len(sql) {
+			word := sql[i : i+5]
+			if strings.EqualFold(word, "BEGIN") && (i+5 >= len(sql) || !isIdentChar(sql[i+5])) &&
+				(i == 0 || !isIdentChar(sql[i-1])) {
+				// Check that this is not BEGIN TRANSACTION/DEFERRED/IMMEDIATE/EXCLUSIVE
+				rest := strings.TrimSpace(sql[i+5:])
+				isTransaction := strings.HasPrefix(strings.ToUpper(rest), "TRANSACTION") ||
+					strings.HasPrefix(strings.ToUpper(rest), "DEFERRED") ||
+					strings.HasPrefix(strings.ToUpper(rest), "IMMEDIATE") ||
+					strings.HasPrefix(strings.ToUpper(rest), "EXCLUSIVE")
+				if !isTransaction {
+					beginDepth++
+					current.WriteString(sql[i : i+5])
+					i += 5
+					continue
+				}
+			}
+		}
+		if beginDepth > 0 && (ch == 'E' || ch == 'e') && i+3 <= len(sql) {
+			word := sql[i : i+3]
+			if strings.EqualFold(word, "END") && (i+3 >= len(sql) || !isIdentChar(sql[i+3])) &&
+				(i == 0 || !isIdentChar(sql[i-1])) {
+				beginDepth--
+				current.WriteString(sql[i : i+3])
+				i += 3
+				continue
+			}
+		}
+
 		if ch == ';' {
+			if beginDepth > 0 {
+				current.WriteByte(ch)
+				i++
+				continue
+			}
 			stmt := strings.TrimSpace(current.String())
 			if stmt != "" {
 				statements = append(statements, stmt)
@@ -182,6 +218,10 @@ func ParseSQLStatements(sql string) []string {
 	}
 
 	return statements
+}
+
+func isIdentChar(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
 func isDollarTagChar(ch byte) bool {
