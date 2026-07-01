@@ -198,7 +198,7 @@ FlashORM/
 | Type inference | Priority-ordered regex chain | O(patterns) | `parser/inferrer.go:InferParamType` |
 | Concurrent query parsing | Worker pool + WaitGroup | O(files/workers) | `parser/query.go:parseFilesConcurrently` |
 
-For detailed algorithm descriptions, see [ARCHITECTURE.md](../ARCHITECTURE.md).
+For detailed algorithm descriptions, see [ARCHITECTURE.md](https://github.com/Lumos-Labs-HQ/flash/blob/main/ARCHITECTURE.md).
 
 ## Development Workflow
 
