@@ -5,6 +5,37 @@ description: Flash ORM release notes and changelog
 
 # FlashORM Release Notes
 
+## Version 2.7.6 — Typed JSON Columns & Smart Migrations
+
+**Released:** July 2026
+
+### ✨ New Features
+
+- **`@json` Typed JSON Columns** — Generate typed data classes for JSONB columns with auto-serialization. Supports inline definitions and file imports. All 5 languages supported. [See docs →](/concepts/json-types)
+
+- **Smart Column Rename Detection** — Migrations auto-detect when a column is renamed (same type, new name) and generate `ALTER TABLE RENAME COLUMN` instead of drop + add. Preserves data.
+
+- **Smart Table Rename Detection** — Same pattern for entire tables. Generates `ALTER TABLE RENAME TO` instead of destructive recreate.
+
+- **Improved Down Migrations** — Dropped tables/enums now generate proper `CREATE TABLE`/`CREATE TYPE` in down migrations using schema snapshots. Fully reversible.
+
+- **SQLite Trigger Support** — `BEGIN...END` blocks in triggers are parsed correctly in migrations.
+
+- **JSONB Aggregate Type Detection** — `jsonb_agg()`, `json_agg()`, `jsonb_build_object()`, `to_jsonb()` correctly resolve to JSONB type.
+
+- **`jsonb_set()` Param Inference** — Parameters inside `jsonb_set(col, $1, $2)` correctly named as `path` and `value`.
+
+### 🐛 Bug Fixes
+
+- **LATERAL Subquery Params** — `$N = ANY(qualified.col)` inside LATERAL joins now correctly infers param names and types.
+- **COALESCE `::type` Casts** — `COALESCE(a.col, '[]'::jsonb)` resolves to JSONB (was TEXT).
+- **Array Type Mapping** — `UUID[]` correctly maps to `List<UUID>` in Kotlin/Java (was `UUID`).
+- **WHERE `?` Positioning** — Fixed param index mismatch when `?` appears inside subqueries before the outer WHERE.
+
+See [detailed release notes →](/notes/RELEASE_NOTES)
+
+---
+
 ## Version 2.4.5 — ScyllaDB Support & Multi-Provider Hardening
 
 **Released:** June 2025

@@ -40,9 +40,15 @@ features:
 
   - icon: 🎯
     title: Type-Safe Code Generation
-    details: Generate type-safe code for Go, TypeScript/JavaScript, and Python with full IDE autocomplete support.
+    details: Generate type-safe code for Go, TypeScript/JavaScript, Python, Kotlin, and Java with full IDE autocomplete support.
     link: /concepts/code-generation
     linkText: See code generation
+
+  - icon: 🔮
+    title: Typed JSON Columns
+    details: Generate typed classes for JSONB columns with auto-serialization. @json annotations with inline or file imports — no manual parsing.
+    link: /concepts/json-types
+    linkText: Learn about @json
 
   - icon: 📖
     title: Complete Examples

@@ -17,6 +17,8 @@ This document explains how FlashORM works internally — the pipeline from SQL f
 - [Config Resolution](#config-resolution-internalconfig)
 - [Key Algorithms](#key-algorithms)
 - [Why Regex Instead of AST](#why-regex-instead-of-ast)
+- [required Annotation(CQL)](#---required-annotation-cql)
+- [json Annotation](#---json-annotation-typed-json-columns)
 - [Contributing](#contributing)
 
 ---
@@ -35,18 +37,20 @@ FlashORM is **2.8x faster than Drizzle** and **11.9x faster than Prisma** becaus
 
 ### Comparison with sqlc
 
-| Feature                     | FlashORM                     | sqlc                      |
-| --------------------------- | ---------------------------- | ------------------------- |
-| Languages                   | Go, TS, Python, Kotlin, Java | Go, Python, Kotlin (beta) |
-| Multi-DB in one project     | ✅ `[[databases]]`           | ❌                        |
-| Wildcard expansion `u.*`    | ✅ with alias resolution     | ✅                        |
-| Multi-wildcard `f.*, u.*`   | ✅ with dedup prefixing      | ❌ (manual only)          |
-| `IN ($1,$2,$3)` → `ANY($1)` | ✅ automatic                 | ❌                        |
-| COALESCE param inference    | ✅                           | ❌                        |
-| Visual Studio (web UI)      | ✅ SQL, MongoDB, Redis       | ❌                        |
-| Database seeding            | ✅ with smart faker          | ❌                        |
-| Schema branching            | ✅                           | ❌                        |
-| Plugin system               | ✅                           | ❌                        |
+| Feature                      | FlashORM                     | sqlc                      |
+| ---------------------------- | ---------------------------- | ------------------------- |
+| Languages                    | Go, TS, Python, Kotlin, Java | Go, Python, Kotlin (beta) |
+| Multi-DB in one project      | ✅ `[[databases]]`           | ❌                        |
+| Wildcard expansion `u.*`     | ✅ with alias resolution     | ✅                        |
+| Multi-wildcard `f.*, u.*`    | ✅ with dedup prefixing      | ❌ (manual only)          |
+| `IN ($1,$2,$3)` → `ANY($1)`  | ✅ automatic                 | ❌                        |
+| Typed JSON columns (`@json`) | ✅ all 5 languages           | ❌                        |
+| Smart rename detection       | ✅ column + table            | ❌                        |
+| COALESCE param inference     | ✅                           | ❌                        |
+| Visual Studio (web UI)       | ✅ SQL, MongoDB, Redis       | ❌                        |
+| Database seeding             | ✅ with smart faker          | ❌                        |
+| Schema branching             | ✅                           | ❌                        |
+| Plugin system                | ✅                           | ❌                        |
 
 ---
 
@@ -54,10 +58,14 @@ FlashORM is **2.8x faster than Drizzle** and **11.9x faster than Prisma** becaus
 
 ```
 SQL Schema Files → Parser → Schema AST → Diff Engine → Migration SQL
+                                ↓              ↓
+                         Rename Detection   Down Migration (reversible)
                                 ↓
 SQL Query Files  → Parser → Query AST → Code Generator → Go/TS/Python/Kotlin/Java
-                                ↓
-                         Type Inferrer → Param names & types
+                      ↓          ↓
+               @json Parser   Type Inferrer → Param names & types
+                      ↓
+               JSON Type Files (.json) → Typed Data Classes (per language)
 ```
 
 ---
@@ -552,78 +560,95 @@ FlashORM uses **regex-based SQL parsing** instead of a full SQL AST parser. This
 
 ### Why not AST?
 
-| Concern | AST approach | Regex approach (FlashORM) |
-|---------|-------------|--------------------------|
+| Concern               | AST approach                                                              | Regex approach (FlashORM)                                   |
+| --------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Multi-dialect support | Need separate grammar per DB (PostgreSQL, MySQL, SQLite, CQL, ClickHouse) | One regex set handles all — SQL structure is similar enough |
-| Build dependency | Heavy parser generators (ANTLR, pg_query) add 10-50MB+ to binary | Zero dependencies, pure Go stdlib `regexp` |
-| Speed | Parse tree construction + traversal = slower | Direct pattern match = faster for targeted extraction |
-| Maintenance | Grammar files need updating per DB version | Add a new regex for new patterns |
-| Edge cases | Full coverage requires complete grammar | Targeted patterns cover real-world usage (80/20 rule) |
+| Build dependency      | Heavy parser generators (ANTLR, pg_query) add 10-50MB+ to binary          | Zero dependencies, pure Go stdlib `regexp`                  |
+| Speed                 | Parse tree construction + traversal = slower                              | Direct pattern match = faster for targeted extraction       |
+| Maintenance           | Grammar files need updating per DB version                                | Add a new regex for new patterns                            |
+| Edge cases            | Full coverage requires complete grammar                                   | Targeted patterns cover real-world usage (80/20 rule)       |
 
 ### How regex handles "impossible" edge cases
 
 **1. Nested parentheses (subqueries, CASE, function calls)**
+
 ```sql
 WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)
 ```
+
 - Pattern: `(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$N` — optional `(` after WHERE/AND/OR
 - First occurrence of `$N` wins — produces correct name from first context
 
 **2. Dollar-quoted strings (PostgreSQL functions)**
+
 ```sql
 $$ BEGIN ... END $$
 ```
+
 - `splitStatements()` tracks `$$` boundaries, never splits inside them
 - Param regex `\$\d+` doesn't match `$$` (requires digit after `$`)
 
 **3. CQL vs PostgreSQL param styles**
+
 ```sql
 -- PostgreSQL: $1, $2
 -- CQL/MySQL: ?
 ```
+
 - `extractOrderedParamNums()` detects style: if first match is `?`, count occurrences; if `$N`, extract unique numbers
 - Subsequent inference adapts patterns accordingly
 
 **4. COALESCE / CASE / computed expressions**
+
 ```sql
 SET name = COALESCE($1, name), age = COALESCE($2, age)
 ```
+
 - Dedicated pattern: `(\w+)\s*=\s*COALESCE\s*\(\s*\$N` — extracts column before COALESCE
 - Falls through generic patterns only if specific one doesn't match
 
 **5. Multi-wildcard JOINs (`f.*, u.*`)**
+
 ```sql
 SELECT f.*, u.*, d.channel_id FROM friendships f LEFT JOIN users u ...
 ```
+
 - Parser preserves table qualifier on `*` columns: `{Name: "*", Table: "f"}`
 - Expander resolves aliases via `extractTableAliases()` regex
 - Deduplication prefixes conflicting names: `f_id`, `u_id`
 
 **6. IN-list with varied spacing**
+
 ```sql
 WHERE id IN ( $1 , $2,  $3 )
 ```
+
 - Pattern: `(\w+)\s+IN\s*\(\s*(\$\d+(?:\s*,\s*\$\d+)*)\s*\)` — handles any whitespace
 - Doesn't match subqueries: `IN (SELECT ...)` because inner content contains non-`$N` text
 
 **7. Table aliases vs SQL keywords**
+
 ```sql
 FROM guilds g JOIN guild_members gm ON ...
 ```
+
 - `extractTableAliases()` regex: `(?:FROM|JOIN)\s+(\w+)\s+(?:AS\s+)?(\w+)`
 - Keyword filter: rejects `ON`, `LEFT`, `WHERE`, `JOIN`, etc. as aliases
 
 **8. Subqueries with repeated $N**
+
 ```sql
 WHERE u.id = $2
   OR u.id IN (SELECT friend_id FROM friendships WHERE user_id = $2)
   OR u.id IN (SELECT user_id FROM friendships WHERE friend_id = $2)
 ```
+
 - `extractOrderedParamNums()` deduplicates: `$2` appears 4 times but produces 1 param
 - Name inference matches the **first occurrence** in source order (`u.id = $2` → `id`)
 - Subquery `WHERE user_id = $2` doesn't override because outer match has priority in regex scan
 
 **9. CTE (WITH ... AS) queries**
+
 ```sql
 WITH stats AS (
     SELECT u.id, COUNT(p.id)::INT AS post_count
@@ -632,6 +657,7 @@ WITH stats AS (
 )
 SELECT id, post_count FROM stats WHERE post_count > $1 LIMIT $2
 ```
+
 - CTE body is inside balanced parentheses — `extractBalancedParens()` extracts it
 - `resolveCTEColumn(sql, alias, colName)` traces column types through CTE definitions
 - `post_count > $1` — name inferred via `WHERE|AND|OR col op $N` pattern
@@ -639,6 +665,7 @@ SELECT id, post_count FROM stats WHERE post_count > $1 LIMIT $2
 - `LIMIT $2` → `limit: INTEGER` via dedicated LIMIT pattern
 
 **10. Multiple JOINs with column conflicts**
+
 ```sql
 SELECT p.id, p.title, u.name AS author, c.name AS category
 FROM posts p
@@ -646,6 +673,7 @@ JOIN users u ON u.id = p.user_id
 JOIN categories c ON c.id = p.category_id
 WHERE p.user_id = $1 AND c.id = $2
 ```
+
 - `$1`: regex matches `p.user_id = $1` → strips qualifier → `user_id`
 - `$2`: regex matches `c.id = $2` → strips qualifier → `id`
 - No naming conflict because they come from different `$N` numbers
@@ -653,6 +681,7 @@ WHERE p.user_id = $1 AND c.id = $2
 - Cross-table lookup handles when column isn't in primary table
 
 **11. Deeply nested subqueries**
+
 ```sql
 WHERE guild_id IN (
     SELECT gm.guild_id FROM guild_members gm
@@ -661,12 +690,14 @@ WHERE guild_id IN (
     )
 )
 ```
+
 - Param `$1` appears only in innermost subquery
 - Regex `(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$1` matches `friend_id = $1`
 - Type resolved from `friendships.friend_id` via cross-table lookup
 - Outer subquery structure doesn't confuse regex — it only needs the direct `col = $N` pattern
 
 **12. Self-referencing queries (recursive)**
+
 ```sql
 WITH RECURSIVE tree AS (
     SELECT id, parent_id, name, 0 AS depth FROM categories WHERE parent_id IS NULL
@@ -675,6 +706,7 @@ WITH RECURSIVE tree AS (
 )
 SELECT * FROM tree WHERE depth <= $1
 ```
+
 - `depth` is a CTE-computed column — not in any schema table
 - `InferParamTypeByName("depth")` doesn't match known suffixes → fallback TEXT
 - But `depth <= $1` context: aggregate pattern `\b\w+\b\s*[<>=]+\s*\$N` in combination with numeric literal `0 AS depth` suggests INTEGER
@@ -692,11 +724,13 @@ Total cost per query = params × patterns × avg_match_time
 ```
 
 Real-world benchmarks:
+
 - **100 query files, 500 total queries** → full parse + inference in **~45ms**
 - **Cached re-run (no changes)** → **<1ms** (checksum skip)
 - **Single file change** → **~5ms** (incremental)
 
 Compare to AST-based parsers:
+
 - pg_query_go: ~200ms for 500 queries (tree construction overhead)
 - ANTLR SQL grammar: ~500ms+ (JVM startup + parse + walk)
 
@@ -705,6 +739,7 @@ The regex approach is **4-10x faster** for the specific task of extracting param
 ### AST vs Regex: What happens at compile time
 
 **AST approach (sqlc, pg_query, ANTLR):**
+
 ```
 SQL text
   → Lexer (tokenization): split into tokens          ~5μs per query
@@ -720,6 +755,7 @@ SQL text
 The AST must represent EVERY token — keywords, operators, literals, whitespace — even though we only need param positions and column names.
 
 **FlashORM regex approach:**
+
 ```
 SQL text
   → Regex match (compiled, cached): find $N positions   ~2μs per pattern
@@ -733,19 +769,20 @@ SQL text
 
 **Key structural differences:**
 
-| Step | AST | Regex (FlashORM) |
-|------|-----|------------------|
-| Input | Full SQL text | Full SQL text |
-| Intermediate | Parse tree (heap-allocated nodes, parent/child pointers) | None — direct match |
-| Output | Typed AST nodes → walk to extract | Match groups → direct string extraction |
-| Memory model | O(tokens) tree nodes on heap | O(1) — regex state machine on stack |
-| GC pressure | High (thousands of small allocations) | Near-zero |
-| Error on invalid SQL | Parse error (strict grammar) | Graceful fallback (no crash) |
-| Dialect handling | Separate grammar per dialect | Same patterns work across dialects |
+| Step                 | AST                                                      | Regex (FlashORM)                        |
+| -------------------- | -------------------------------------------------------- | --------------------------------------- |
+| Input                | Full SQL text                                            | Full SQL text                           |
+| Intermediate         | Parse tree (heap-allocated nodes, parent/child pointers) | None — direct match                     |
+| Output               | Typed AST nodes → walk to extract                        | Match groups → direct string extraction |
+| Memory model         | O(tokens) tree nodes on heap                             | O(1) — regex state machine on stack     |
+| GC pressure          | High (thousands of small allocations)                    | Near-zero                               |
+| Error on invalid SQL | Parse error (strict grammar)                             | Graceful fallback (no crash)            |
+| Dialect handling     | Separate grammar per dialect                             | Same patterns work across dialects      |
 
 **Why regex is specifically better for THIS task:**
 
 We don't need a full understanding of SQL. We need exactly 3 things:
+
 1. **Where are the `$N` params?** → one regex: `\$(\d+)`
 2. **What column is each param compared to?** → ~15 context patterns
 3. **What type is that column?** → schema map lookup
@@ -755,92 +792,128 @@ An AST parser does 100x more work to answer these same 3 questions — it parses
 ### Output comparison: AST tree vs FlashORM internal representation
 
 **Input SQL:**
+
 ```sql
 SELECT id, name, email FROM users WHERE age >= $1 AND role = $2 LIMIT $3;
 ```
 
 **AST output (pg_query JSON — what sqlc parses into):**
+
 ```json
 {
-  "stmts": [{
-    "stmt": {
-      "SelectStmt": {
-        "targetList": [
-          {"ResTarget": {"val": {"ColumnRef": {"fields": [{"String": {"sval": "id"}}]}}}},
-          {"ResTarget": {"val": {"ColumnRef": {"fields": [{"String": {"sval": "name"}}]}}}},
-          {"ResTarget": {"val": {"ColumnRef": {"fields": [{"String": {"sval": "email"}}]}}}}
-        ],
-        "fromClause": [
-          {"RangeVar": {"relname": "users"}}
-        ],
-        "whereClause": {
-          "BoolExpr": {
-            "boolop": "AND_EXPR",
-            "args": [
-              {"A_Expr": {
-                "kind": "AEXPR_OP",
-                "name": [{"String": {"sval": ">="}}],
-                "lexpr": {"ColumnRef": {"fields": [{"String": {"sval": "age"}}]}},
-                "rexpr": {"ParamRef": {"number": 1}}
-              }},
-              {"A_Expr": {
-                "kind": "AEXPR_OP",
-                "name": [{"String": {"sval": "="}}],
-                "lexpr": {"ColumnRef": {"fields": [{"String": {"sval": "role"}}]}},
-                "rexpr": {"ParamRef": {"number": 2}}
-              }}
-            ]
-          }
-        },
-        "limitCount": {"ParamRef": {"number": 3}}
+  "stmts": [
+    {
+      "stmt": {
+        "SelectStmt": {
+          "targetList": [
+            {
+              "ResTarget": {
+                "val": {
+                  "ColumnRef": { "fields": [{ "String": { "sval": "id" } }] }
+                }
+              }
+            },
+            {
+              "ResTarget": {
+                "val": {
+                  "ColumnRef": { "fields": [{ "String": { "sval": "name" } }] }
+                }
+              }
+            },
+            {
+              "ResTarget": {
+                "val": {
+                  "ColumnRef": { "fields": [{ "String": { "sval": "email" } }] }
+                }
+              }
+            }
+          ],
+          "fromClause": [{ "RangeVar": { "relname": "users" } }],
+          "whereClause": {
+            "BoolExpr": {
+              "boolop": "AND_EXPR",
+              "args": [
+                {
+                  "A_Expr": {
+                    "kind": "AEXPR_OP",
+                    "name": [{ "String": { "sval": ">=" } }],
+                    "lexpr": {
+                      "ColumnRef": {
+                        "fields": [{ "String": { "sval": "age" } }]
+                      }
+                    },
+                    "rexpr": { "ParamRef": { "number": 1 } }
+                  }
+                },
+                {
+                  "A_Expr": {
+                    "kind": "AEXPR_OP",
+                    "name": [{ "String": { "sval": "=" } }],
+                    "lexpr": {
+                      "ColumnRef": {
+                        "fields": [{ "String": { "sval": "role" } }]
+                      }
+                    },
+                    "rexpr": { "ParamRef": { "number": 2 } }
+                  }
+                }
+              ]
+            }
+          },
+          "limitCount": { "ParamRef": { "number": 3 } }
+        }
       }
     }
-  }]
+  ]
 }
 ```
+
 **~2KB JSON, 40+ nodes allocated, requires tree traversal to extract param info.**
 
 ---
 
 **FlashORM internal representation (what our parser produces):**
+
 ```json
 {
   "name": "GetUsersByAgeAndRole",
   "cmd": ":many",
   "sql": "SELECT id, name, email FROM users WHERE age >= $1 AND role = $2 LIMIT $3",
   "params": [
-    {"name": "age_start", "type": "INT", "paramNum": 1},
-    {"name": "role", "type": "user_role", "paramNum": 2},
-    {"name": "limit", "type": "INTEGER", "paramNum": 3}
+    { "name": "age_start", "type": "INT", "paramNum": 1 },
+    { "name": "role", "type": "user_role", "paramNum": 2 },
+    { "name": "limit", "type": "INTEGER", "paramNum": 3 }
   ],
   "columns": [
-    {"name": "id", "type": "UUID", "nullable": false},
-    {"name": "name", "type": "VARCHAR(255)", "nullable": false},
-    {"name": "email", "type": "VARCHAR(255)", "nullable": false}
+    { "name": "id", "type": "UUID", "nullable": false },
+    { "name": "name", "type": "VARCHAR(255)", "nullable": false },
+    { "name": "email", "type": "VARCHAR(255)", "nullable": false }
   ]
 }
 ```
+
 **~300 bytes, 3 params + 3 columns. Direct input to code generator. No tree walking.**
 
 ---
 
 **What FlashORM validates without AST:**
 
-| Validation | How |
-|------------|-----|
-| Table exists in schema | `ExtractTableName()` + schema map lookup |
-| Column exists in table | Per-column check against `table.Columns` |
-| Param count matches placeholders | `extractOrderedParamNums()` count vs `$N` max |
+| Validation                         | How                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------- |
+| Table exists in schema             | `ExtractTableName()` + schema map lookup                             |
+| Column exists in table             | Per-column check against `table.Columns`                             |
+| Param count matches placeholders   | `extractOrderedParamNums()` count vs `$N` max                        |
 | INSERT column count matches VALUES | regex: `INSERT INTO t (cols) VALUES (params)` — split and count both |
-| UPDATE columns exist | regex: `SET col1 = ..., col2 = ...` — extract and validate each |
-| FK referenced table exists | Schema parsing stores FK targets, validated at parse time |
-| Type compatibility | Param type inferred from column type — same source of truth |
+| UPDATE columns exist               | regex: `SET col1 = ..., col2 = ...` — extract and validate each      |
+| FK referenced table exists         | Schema parsing stores FK targets, validated at parse time            |
+| Type compatibility                 | Param type inferred from column type — same source of truth          |
 
 All validations produce clear error messages pointing to the query name and file, without needing a parse tree.
 
 ### When regex falls back gracefully
 
 If no pattern matches, the fallback is always safe:
+
 - Param name → `paramN` (generic but valid)
 - Param type → `TEXT` (works with any DB, just less optimized)
 - Column type → `String` (safe default for all languages)
@@ -860,6 +933,7 @@ INSERT INTO myapp.users (id, username, email, bio) VALUES (?, ?, ?, ?);
 ```
 
 **Parser flow:**
+
 1. `-- @required:` parsed before or after `-- name:` line → stored in `Query.RequiredCols`
 2. After params are created in `analyzeQuery()`, iterate `RequiredCols`
 3. For `*`: set all `Param.Nullable = false`
@@ -867,8 +941,77 @@ INSERT INTO myapp.users (id, username, email, bio) VALUES (?, ?, ?, ?);
 5. If name not found → return validation error
 
 **Generator usage:**
+
 - Kotlin: `g.sqlTypeToKotlin(p.Type, p.Nullable)` → `String` vs `String?`
 - TypeScript: `field: Type` vs `field?: Type | null`
 - Python: `Type` vs `Optional[Type]`
 - Go: `Type` vs `*Type` (pointer for nullable)
 - Java: uses boxed types (all nullable in Java anyway)
+
+---
+
+## `-- @json` Annotation (Typed JSON Columns)
+
+Generates typed data classes for JSONB/JSON columns with serialization/deserialization.
+
+### Syntax
+
+```sql
+-- @json column_name {"field": "type", "field2": "type"}
+-- @json import filename.json as column_name
+```
+
+### Parser Flow (`internal/parser/json_types.go`)
+
+1. `-- @json` lines parsed during query file scanning
+2. `ParseJsonAnnotation(line, jsonBasePath)` dispatches to:
+   - `parseJsonInline(content)` — extracts column name + JSON object
+   - `parseJsonImport(content, basePath)` — reads `.json` file from `json_path` directory
+3. `parseJsonFieldsFromBytes(data)` — parses `{"key": "type"}` into `[]*JsonField`
+4. `normalizeJsonType(t)` — normalizes aliases: `str`→`string`, `integer`→`int`, etc.
+5. Result stored in `Query.JsonTypes []*JsonType`
+
+### Attachment (`attachJsonTypesToQuery`)
+
+After `analyzeQuery()`:
+
+1. Build map: `column_name → *JsonType`
+2. Match against `query.Columns` → set `col.JsonDef = jt`
+3. Match against `query.Params` → set `param.Type = "@json:TypeName"`
+
+### Code Generation
+
+**Shared JSON types file** (e.g., `JsonTypes.kt`):
+
+- Collected from ALL query files (deduplicated by type name)
+- Generated once per `flash gen` run
+- Contains data class + `fromJson()`/`toJson()` methods
+- Includes `raw` field for accessing unmentioned JSON keys
+
+**Per-query file:**
+
+- Row class: uses typed class (`Settings?`) instead of `String?` for `@json` columns
+- Getter: calls `TypeName.fromJson(rs.getString("col"))` instead of `rs.getString("col")`
+- Setter: calls `param.toJson()` instead of raw `setString()`
+
+### Type Mapping
+
+| `@json` type | Kotlin          | Go            | TypeScript         | Python                | Java           |
+| ------------ | --------------- | ------------- | ------------------ | --------------------- | -------------- |
+| `string`     | `String?`       | `*string`     | `string \| null`   | `Optional[str]`       | `String`       |
+| `int`        | `Int?`          | `*int64`      | `number \| null`   | `Optional[int]`       | `Integer`      |
+| `float`      | `Double?`       | `*float64`    | `number \| null`   | `Optional[float]`     | `Double`       |
+| `boolean`    | `Boolean?`      | `*bool`       | `boolean \| null`  | `Optional[bool]`      | `Boolean`      |
+| `string[]`   | `List<String>?` | `[]string`    | `string[] \| null` | `Optional[List[str]]` | `List<String>` |
+| `any`        | `Any?`          | `interface{}` | `any`              | `Any`                 | `Object`       |
+
+### Raw Field Access
+
+All generated JSON types include:
+
+- `raw: JsonObject?` — the full parsed JSON (Kotlin/Java)
+- `fun get(key: String): String?` — accessor for unmentioned fields
+
+This ensures fields NOT listed in `@json` are still accessible without modifying the type definition.
+
+---

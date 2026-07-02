@@ -37,6 +37,8 @@ A powerful, database-agnostic ORM built in Go with multi-database support and ty
 - 🔄 **Migration Management**: Create, apply, and track migrations with transaction safety
 - 📤 **Smart Export System**: JSON, CSV, SQLite formats
 - 🔧 **Code Generation**: Type-safe code for Go, TypeScript/JavaScript, Python, **Kotlin**, and **Java**
+- 🎯 **Typed JSON Columns**: `@json` annotations generate typed classes for JSONB with auto-serialization
+- 🔄 **Smart Migrations**: Auto-detects column/table renames (preserves data), generates reversible down migrations
 - 🌱 **Database Seeding**: Generate realistic fake data for development
 - ⚡ **Blazing Fast**: Outperforms Drizzle and Prisma in benchmarks
 - 📊 **FlashORM Studio**: Visual database management for SQL, MongoDB, and Redis
@@ -231,6 +233,66 @@ Users user = q.getUser(42);                          // Users
 List<GetPostsByUserRow> posts = q.getPostsByUser(42); // List<GetPostsByUserRow>
 ```
 
+## 🎯 Typed JSON Columns *(new in 2.7.6)*
+
+Generate typed classes for JSONB columns with auto-serialization. No manual JSON parsing needed.
+
+### Inline Definition
+
+```sql
+-- name: GetUser :one
+-- @json settings {"theme": "string", "language": "string", "font_size": "int"}
+-- @json metadata {"level": "int", "badges": "string[]", "xp_points": "int"}
+SELECT id, name, settings, metadata FROM users WHERE id = $1;
+```
+
+### Import from File
+
+```sql
+-- name: GetUser :one
+-- @json import user_settings.json as settings
+SELECT id, name, settings FROM users WHERE id = $1;
+```
+
+**`db/json/user_settings.json`:**
+```json
+{"theme": "string", "language": "string", "font_size": "int", "notifications": "boolean"}
+```
+
+**Config:**
+```toml
+json_path = "db/json"
+```
+
+### Supported Types
+
+`string` · `int` · `float` · `boolean` · `string[]` · `int[]` · `float[]` · `boolean[]` · `any`
+
+### Generated Output
+
+All fields are nullable. Unmentioned JSON fields accessible via `.raw` / `.get("key")`.
+
+```kotlin
+// Auto-generated:
+data class Settings(
+    val theme: String?,
+    val language: String?,
+    val fontSize: Int?,
+    val raw: JsonObject? = null
+) {
+    fun toJson(): String
+    fun get(key: String): String?  // access any field not in the definition
+    companion object { fun fromJson(json: String?): Settings? }
+}
+
+// Usage — everything is typed:
+val user = queries.getUser(id)
+val theme = user?.settings?.theme           // String?
+val extra = user?.settings?.get("custom")   // access unmentioned fields
+```
+
+Works with SELECT, INSERT, UPDATE, and RETURNING. All 5 languages supported.
+
 ## 🔧 Configuration
 
 ```toml
@@ -238,6 +300,7 @@ version = "2"
 schema_dir = "db/schema"
 queries = "db/queries/"
 migrations_path = "db/migrations"
+json_path = "db/json"     # optional: directory for @json import files
 env_path = "config/.env"   # optional: custom .env file path
 
 [database]
