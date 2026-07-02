@@ -139,6 +139,17 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 		w.WriteString("import java.sql.Connection\n\n")
 	}
 
+	// JSON types are generated in a shared JsonTypes.kt file (see generateJsonTypes).
+	// Add Gson import for query files that use @json (for fromJson/toJson calls).
+	hasJsonTypes := false
+	for _, q := range queries {
+		if len(q.JsonTypes) > 0 {
+			hasJsonTypes = true
+			break
+		}
+	}
+	_ = hasJsonTypes
+
 	paramName := "conn"
 	var connType string
 	switch {
@@ -173,6 +184,10 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 				// (schema defaults + @required annotation override)
 				nullable := col.Nullable || col.IsComputed
 				kt := g.sqlTypeToKotlin(col.Type, nullable)
+				// Use typed JSON class if @json annotation exists for this column
+				if col.JsonDef != nil {
+					kt = col.JsonDef.Name + "?"
+				}
 				comma := ","
 				if i == len(ktCols)-1 {
 					comma = ""
@@ -238,4 +253,37 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 	deps := gencommon.ExtractTableDependencies(queries)
 	gencommon.UpdateCacheForFile(g.cache, queryFile, currentHash, deps, path)
 	return nil
+}
+
+// jsonFieldToKotlinType converts a JsonField type to its Kotlin representation.
+// All JSON fields are nullable since JSON values can be null.
+func jsonFieldToKotlinType(field *parser.JsonField) string {
+	var kt string
+	switch field.Type {
+	case "string":
+		kt = "String"
+	case "int":
+		kt = "Int"
+	case "float":
+		kt = "Double"
+	case "boolean":
+		kt = "Boolean"
+	case "string[]":
+		kt = "List<String>"
+	case "int[]":
+		kt = "List<Int>"
+	case "float[]":
+		kt = "List<Double>"
+	case "boolean[]":
+		kt = "List<Boolean>"
+	case "any":
+		kt = "Any"
+	default:
+		// Could be a nested object type (PascalCase name)
+		kt = field.Type
+	}
+	if field.Nullable {
+		return kt + "?"
+	}
+	return kt
 }

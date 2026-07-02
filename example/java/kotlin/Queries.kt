@@ -90,10 +90,10 @@ class Queries(private val conn: Connection) {
     fun findUsersByJsonContains(preferences: String): List<FindUsersByJsonContainsRow> =
         users.findUsersByJsonContains(preferences)
 
-    fun getUsersWithTag(tags: List<String>): List<GetUsersWithTagRow> =
+    fun getUsersWithTag(tags: String): List<GetUsersWithTagRow> =
         users.getUsersWithTag(tags)
 
-    fun getUsersWithAnyTag(tags: List<String>): List<GetUsersWithAnyTagRow> =
+    fun getUsersWithAnyTag(tags: String): List<GetUsersWithAnyTagRow> =
         users.getUsersWithAnyTag(tags)
 
     fun addUserTag(tags: List<String>, id: Int): Unit =
@@ -315,7 +315,7 @@ class Queries(private val conn: Connection) {
     fun searchPostsFullText(searchQuery: String, limit: Int): List<SearchPostsFullTextRow> =
         users.searchPostsFullText(searchQuery, limit)
 
-    fun bulkMarkNotificationsRead(userId: Int, id: Int): Unit =
+    fun bulkMarkNotificationsRead(userId: Int, id: List<Int>): Unit =
         users.bulkMarkNotificationsRead(userId, id)
 
     fun getUserWithStats(id: Int): GetUserWithStatsRow? =

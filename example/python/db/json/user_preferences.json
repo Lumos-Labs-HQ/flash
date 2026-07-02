@@ -1,0 +1,6 @@
+{
+    "theme": "string",
+    "notifications": "boolean",
+    "language": "string",
+    "font_size": "int"
+}

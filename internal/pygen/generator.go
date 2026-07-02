@@ -947,6 +947,9 @@ func (g *Generator) generateResultClass(w *strings.Builder, query *parser.Query)
 	w.WriteString(fmt.Sprintf("class %s:\n", className))
 	for _, col := range realCols {
 		pyType := g.sqlTypeToPython(col.Type, col.Nullable)
+		if col.JsonDef != nil {
+			pyType = fmt.Sprintf("Optional[%s]", col.JsonDef.Name)
+		}
 		w.WriteString(fmt.Sprintf("    %s: %s\n", utils.ToSnakeCase(col.Name), pyType))
 	}
 

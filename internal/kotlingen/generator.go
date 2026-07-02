@@ -65,6 +65,11 @@ func (g *Generator) Generate() error {
 		return err
 	}
 
+	// Generate shared JSON types file (if any @json annotations exist)
+	if err := g.generateJsonTypes(queries); err != nil {
+		return err
+	}
+
 	g.cache.UpdateSchemaChecksum(schemaHash)
 	g.cache.UpdateConfigChecksum(configHash)
 	g.cache.MarkGeneration()
@@ -413,6 +418,15 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 	w.WriteString("    }\n\n")
 }
 
+// ktColumnGetter returns the getter expression for a column, handling @json typed columns.
+func (g *Generator) ktColumnGetter(col *parser.QueryColumn) string {
+	if col.JsonDef != nil {
+		// Uses the generated companion fromJson method (backed by Gson in JsonTypes.kt)
+		return fmt.Sprintf("%s.fromJson(rs.getString(\"%s\"))", col.JsonDef.Name, col.Name)
+	}
+	return g.ktTypedGetter(col.Name, col.Type, col.Nullable)
+}
+
 // ktTypedGetter returns the typed Kotlin ResultSet getter by column name.
 func (g *Generator) ktTypedGetter(colName, sqlType string, nullable bool) string {
 	sl := strings.ToLower(sqlType)
@@ -460,6 +474,10 @@ func (g *Generator) ktTypedGetter(colName, sqlType string, nullable bool) string
 // ktTypedSetter returns a typed Kotlin PreparedStatement setter.
 func ktTypedSetter(idx int, paramName, sqlType string) string {
 	sl := strings.ToLower(sqlType)
+	// @json: typed param → serialize with .toJson()
+	if strings.HasPrefix(sqlType, "@json:") {
+		return fmt.Sprintf("stmt.setString(%d, %s.toJson())", idx, paramName)
+	}
 	// Any SQL array type → createArrayOf
 	if strings.HasSuffix(sl, "[]") {
 		baseType := strings.TrimSuffix(sl, "[]")
@@ -578,7 +596,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 		if len(columns) == 0 {
 			w.WriteString("            return\n")
 		} else if len(columns) == 1 {
-			w.WriteString(fmt.Sprintf("            return if (rs.next()) %s else null\n", g.ktTypedGetter(columns[0].Name, columns[0].Type, columns[0].Nullable)))
+			w.WriteString(fmt.Sprintf("            return if (rs.next()) %s else null\n", g.ktColumnGetter(columns[0])))
 		} else {
 			w.WriteString(fmt.Sprintf("            return if (rs.next()) %s(\n", rowType))
 			for i, col := range columns {
@@ -586,8 +604,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 				if i == len(columns)-1 {
 					comma = ""
 				}
-				nullable := col.Nullable
-				w.WriteString(fmt.Sprintf("                %s%s\n", g.ktTypedGetter(col.Name, col.Type, nullable), comma))
+				w.WriteString(fmt.Sprintf("                %s%s\n", g.ktColumnGetter(col), comma))
 			}
 			w.WriteString("            ) else null\n")
 		}
@@ -601,7 +618,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 		}()))
 		w.WriteString("        stmt.executeQuery().use { rs ->\n")
 		if len(columns) == 1 {
-			w.WriteString(fmt.Sprintf("            while (rs.next()) items.add(%s)\n", g.ktTypedGetter(columns[0].Name, columns[0].Type, columns[0].Nullable)))
+			w.WriteString(fmt.Sprintf("            while (rs.next()) items.add(%s)\n", g.ktColumnGetter(columns[0])))
 		} else if len(columns) > 1 {
 			w.WriteString("            while (rs.next()) items.add(\n")
 			w.WriteString(fmt.Sprintf("                %s(\n", rowType))
@@ -610,8 +627,7 @@ func (g *Generator) generateJDBCBody(w *strings.Builder, query *parser.Query, co
 				if i == len(columns)-1 {
 					comma = ""
 				}
-				nullable := col.Nullable
-				w.WriteString(fmt.Sprintf("                    %s%s\n", g.ktTypedGetter(col.Name, col.Type, nullable), comma))
+				w.WriteString(fmt.Sprintf("                    %s%s\n", g.ktColumnGetter(col), comma))
 			}
 			w.WriteString("                )\n            )\n")
 		}
@@ -753,6 +769,15 @@ func nullable_(t string, nullable bool) string {
 }
 
 func (g *Generator) sqlTypeToKotlin(sqlType string, nullable bool) string {
+	// Handle @json: type prefix — generated JSON type class for params
+	if strings.HasPrefix(sqlType, "@json:") {
+		typeName := strings.TrimPrefix(sqlType, "@json:")
+		if nullable {
+			return typeName + "?"
+		}
+		return typeName
+	}
+
 	sqlLower := strings.ToLower(sqlType)
 
 	if g.schema != nil {
@@ -853,4 +878,52 @@ func toKotlinPackage(cfg *config.KotlinGen) string {
 	}
 	base := filepath.Base(cfg.Out)
 	return strings.ReplaceAll(strings.ToLower(base), "-", "_")
+}
+
+// generateJsonTypes creates a shared JsonTypes.kt file with all @json data classes.
+// Uses Gson for JSON serialization (standard in Kotlin/JVM projects).
+func (g *Generator) generateJsonTypes(queries []*parser.Query) error {
+	emitted := make(map[string]*parser.JsonType)
+	for _, q := range queries {
+		for _, jt := range q.JsonTypes {
+			if _, ok := emitted[jt.Name]; !ok {
+				emitted[jt.Name] = jt
+			}
+		}
+	}
+
+	if len(emitted) == 0 {
+		jsonTypesPath := filepath.Join(g.Config.Gen.Kotlin.Out, "JsonTypes.kt")
+		os.Remove(jsonTypesPath)
+		return nil
+	}
+
+	var w strings.Builder
+	pkg := toKotlinPackage(&g.Config.Gen.Kotlin)
+	w.WriteString("// Code generated by FlashORM. DO NOT EDIT.\n\n")
+	w.WriteString(fmt.Sprintf("package %s\n\n", pkg))
+	w.WriteString("import com.google.gson.Gson\nimport com.google.gson.reflect.TypeToken\n\n")
+	w.WriteString("private val gson = Gson()\n\n")
+
+	for _, jt := range emitted {
+		w.WriteString(fmt.Sprintf("/** JSON type for column '%s' */\n", jt.Column))
+		w.WriteString(fmt.Sprintf("data class %s(\n", jt.Name))
+		for i, field := range jt.Fields {
+			kt := jsonFieldToKotlinType(field)
+			comma := ","
+			if i == len(jt.Fields)-1 {
+				comma = ""
+			}
+			w.WriteString(fmt.Sprintf("    val %s: %s%s\n", gencommon.ToCamelCase(field.Name), kt, comma))
+		}
+		w.WriteString(") {\n")
+		w.WriteString("    fun toJson(): String = gson.toJson(this)\n\n")
+		w.WriteString("    companion object {\n")
+		w.WriteString(fmt.Sprintf("        fun fromJson(json: String?): %s? = json?.let { gson.fromJson(it, %s::class.java) }\n", jt.Name, jt.Name))
+		w.WriteString("    }\n")
+		w.WriteString("}\n\n")
+	}
+
+	jsonTypesPath := filepath.Join(g.Config.Gen.Kotlin.Out, "JsonTypes.kt")
+	return os.WriteFile(jsonTypesPath, []byte(w.String()), 0644)
 }

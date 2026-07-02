@@ -1,34 +1,41 @@
 {
   "version": "1.0",
   "query_file_checksums": {
+    "db/queries/json_typed.sql": "37617be50f2bfabe272de5d2d664a01e5e406b448a9add8fcaaac3b76015ed3e",
     "db/queries/users.sql": "173ae13b1b54f512d432abb99ac44cc3de014641603014ad8aaf71c4bd4819cf"
   },
   "schema_checksum": "09990e20105a32c9f615cc91173f07f80a726920547018c116e3f876e0d073c8",
   "config_checksum": "706f737467726573716c7c666c6173685f67656e7c",
   "query_table_deps": {
+    "db/queries/json_typed.sql": [
+      "users",
+      "posts"
+    ],
     "db/queries/users.sql": [
-      "comments",
-      "media",
-      "posts",
+      "u",
+      "orders",
       "audit_log",
-      "categories",
-      "notifications",
+      "active_commenters",
+      "posts",
+      "active_users",
+      "post_stats",
+      "subscriptions",
+      "user_activity_summary",
+      "tags",
       "post_tags",
+      "categories",
+      "comments",
+      "notifications",
+      "users",
       "user_post_stats",
       "users;",
-      "active_users",
-      "user_activity_summary",
-      "orders",
-      "tags",
-      "users",
-      "active_commenters",
-      "post_stats",
-      "subscriptions"
+      "media"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/users.js": "9466b1367e82b9c774d72ac3d565632e672b76c393b5be251a8fa481b7a29769"
+    "flash_gen/json_typed.js": "38418a0f5a5ff78c519b58fa3af6c068142e5848f0a0e74eeee9a0e68f1c7f6d",
+    "flash_gen/users.js": "a9d376301cf53b23ff27d2abe604fc47c3787b08a647e81a3edc28c950b7b33e"
   },
-  "last_generation": "2026-06-23T03:33:39.275791487+05:30",
+  "last_generation": "2026-07-02T15:11:32.331873136+05:30",
   "OutDir": "flash_gen"
 }

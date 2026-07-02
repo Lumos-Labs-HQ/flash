@@ -33,6 +33,7 @@ type Config struct {
 	EnvPath        string   `toml:"env_path"`
 	Database       Database `toml:"database"`
 	Gen            Gen      `toml:"gen"`
+	JsonPath       string   `toml:"json_path"` // directory for JSON type definition files
 	ForceRegen     bool     `toml:"-"`
 	// Multi-database support
 	Databases []DatabaseConfig `toml:"databases"`
@@ -124,6 +125,7 @@ type rawConfig struct {
 	ExportPath     string           `toml:"export_path"`
 	Default        bool             `toml:"default"`
 	EnvPath        string           `toml:"env_path"`
+	JsonPath       string           `toml:"json_path"`
 	Database       Database         `toml:"database"`
 	Gen            rawGen           `toml:"gen"`
 	Databases      []DatabaseConfig `toml:"databases"`
@@ -210,6 +212,7 @@ func loadUncached() (*Config, error) {
 		cfg.MigrationsPath = raw.MigrationsPath
 		cfg.ExportPath = raw.ExportPath
 		cfg.EnvPath = raw.EnvPath
+		cfg.JsonPath = raw.JsonPath
 		cfg.Database = raw.Database
 		cfg.Databases = raw.Databases
 		cfg.Gen.Go = raw.Gen.Go

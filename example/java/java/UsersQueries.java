@@ -531,12 +531,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersWithTagRow> getUsersWithTag(java.util.List<String> tags) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithTagRow> getUsersWithTag(String tags) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, tags FROM users WHERE ? = ANY(tags);
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setArray(1, conn.createArrayOf("text", tags.toArray()));
+            stmt.setString(1, tags);
             var items = new java.util.ArrayList<GetUsersWithTagRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -552,12 +552,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersWithAnyTagRow> getUsersWithAnyTag(java.util.List<String> tags) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithAnyTagRow> getUsersWithAnyTag(String tags) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, tags FROM users WHERE tags && ?::text[];
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setArray(1, conn.createArrayOf("text", tags.toArray()));
+            stmt.setString(1, tags);
             var items = new java.util.ArrayList<GetUsersWithAnyTagRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -2082,7 +2082,7 @@ public class UsersQueries {
         }
     }
 
-    public void bulkMarkNotificationsRead(int user_id, int id) throws java.sql.SQLException {
+    public void bulkMarkNotificationsRead(int user_id, java.util.List<int> id) throws java.sql.SQLException {
         final String sql = """
                 UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND id = ANY(?::bigint[]);
                 """;

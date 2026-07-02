@@ -11,6 +11,7 @@ data class CreateTesstsRow(
     val name: String?
 )
 
+@Suppress("DuplicatedCode")
 class TestsQueries(private val conn: Connection) {
     private val stmts = mutableMapOf<String, java.sql.PreparedStatement>()
 
@@ -23,7 +24,7 @@ class TestsQueries(private val conn: Connection) {
         stmt.setString(2, name)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) CreateTesstsRow(
-                rs.getObject("id", java.util.UUID::class.java),
+                rs.getObject("id", UUID::class.java),
                 rs.getString("name")
             ) else null
         }
@@ -37,8 +38,8 @@ class TestsQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 Testss(
-                    rs.getObject("id", java.util.UUID::class.java),
-                    rs.getObject("testting", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
+                    rs.getObject("testting", UUID::class.java),
                     rs.getString("name"),
                     rs.getTimestamp("created_at")?.toLocalDateTime()
                 )
