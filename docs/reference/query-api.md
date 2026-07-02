@@ -62,6 +62,43 @@ WHERE user_id = $1 AND published = $2
 ORDER BY created_at DESC;
 ```
 
+## Annotations
+
+FlashORM supports special annotations in SQL comments that control code generation:
+
+### `@json` — Typed JSON Columns
+
+Define typed classes for JSONB/JSON columns:
+
+```sql
+-- name: GetUser :one
+-- @json settings {"theme": "string", "language": "string", "font_size": "int"}
+-- @json metadata {"level": "int", "badges": "string[]"}
+SELECT id, name, settings, metadata FROM users WHERE id = $1;
+```
+
+Or import from a file:
+
+```sql
+-- name: GetUser :one
+-- @json import user_settings.json as settings
+SELECT id, name, settings FROM users WHERE id = $1;
+```
+
+See [Typed JSON Columns](/concepts/json-types) for full documentation.
+
+### `@required` — Non-nullable Params (CQL)
+
+Mark CQL INSERT/UPDATE params as non-nullable:
+
+```sql
+-- @required: id, username, email
+-- name: CreateUser :exec
+INSERT INTO myapp.users (id, username, email, bio) VALUES (?, ?, ?, ?);
+```
+
+See [CQL @required](/advanced/cql-required) for details.
+
 ## Generated Code
 
 ### Go

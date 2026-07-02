@@ -635,6 +635,9 @@ func (g *Generator) generateSQLQueryMethod(code *strings.Builder, query *parser.
 			fieldName := utils.ToPascalCase(col.Name)
 			// Gocql Row types use value types not pointers (assigned via fmt.Sprint)
 			goType := g.mapSQLTypeToGo(col.Type, false)
+			if col.JsonDef != nil {
+				goType = "*" + col.JsonDef.Name
+			}
 			code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", fieldName, goType, utils.ToSnakeCase(col.Name)))
 		}
 		code.WriteString("}\n\n")

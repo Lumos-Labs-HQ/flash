@@ -10,6 +10,7 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 // generateQueriesIncremental generates queries with incremental support
@@ -180,6 +181,25 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 		code.WriteString(")\n\n")
 	}
 
+	// Generate JSON type structs from @json annotations
+	emittedJsonTypes := make(map[string]bool)
+	for _, query := range fileQueries {
+		for _, jt := range query.JsonTypes {
+			if emittedJsonTypes[jt.Name] {
+				continue
+			}
+			emittedJsonTypes[jt.Name] = true
+			code.WriteString(fmt.Sprintf("// %s represents the JSON structure for the '%s' column.\n", jt.Name, jt.Column))
+			code.WriteString(fmt.Sprintf("// Unmarshal with: json.Unmarshal([]byte(row.%s), &obj)\n", utils.ToPascalCase(jt.Column)))
+			code.WriteString(fmt.Sprintf("type %s struct {\n", jt.Name))
+			for _, field := range jt.Fields {
+				goType := jsonFieldToGoType(field)
+				code.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", utils.ToPascalCase(field.Name), goType, field.Name))
+			}
+			code.WriteString("}\n\n")
+		}
+	}
+
 	for _, query := range fileQueries {
 		if err := g.generateQueryMethod(code, query); err != nil {
 			return err
@@ -208,4 +228,34 @@ func (g *Generator) generateSingleFile(sourceFile string, fileQueries []*parser.
 	gencommon.UpdateCacheForFile(g.cache, queryFile, currentHash, tableDeps, queriesPath)
 
 	return nil
+}
+
+// jsonFieldToGoType converts a JsonField type to its Go representation.
+func jsonFieldToGoType(field *parser.JsonField) string {
+	prefix := "*" // nullable pointer
+	if !field.Nullable {
+		prefix = ""
+	}
+	switch field.Type {
+	case "string":
+		return prefix + "string"
+	case "int":
+		return prefix + "int64"
+	case "float":
+		return prefix + "float64"
+	case "boolean":
+		return prefix + "bool"
+	case "string[]":
+		return "[]string"
+	case "int[]":
+		return "[]int64"
+	case "float[]":
+		return "[]float64"
+	case "boolean[]":
+		return "[]bool"
+	case "any":
+		return "interface{}"
+	default:
+		return prefix + field.Type
+	}
 }

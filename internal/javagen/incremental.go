@@ -136,6 +136,35 @@ func (g *Generator) generateSingleJavaFile(src string, queries []*parser.Query, 
 	}
 	w.WriteString(connImport + "\n")
 
+	// Generate JSON type record files from @json annotations
+	emittedJsonTypes := make(map[string]bool)
+	for _, q := range queries {
+		for _, jt := range q.JsonTypes {
+			if emittedJsonTypes[jt.Name] {
+				continue
+			}
+			emittedJsonTypes[jt.Name] = true
+			var jw strings.Builder
+			jw.WriteString(fmt.Sprintf("package %s;\n\n", javaPackage(&g.Config.Gen.Java)))
+			jw.WriteString(fmt.Sprintf("/**\n * JSON type for column '%s'.\n", jt.Column))
+			jw.WriteString(fmt.Sprintf(" * Parse with: new Gson().fromJson(jsonString, %s.class)\n */\n", jt.Name))
+			jw.WriteString(fmt.Sprintf("public record %s(\n", jt.Name))
+			for i, field := range jt.Fields {
+				javaType := jsonFieldToJavaType(field)
+				sep := ","
+				if i == len(jt.Fields)-1 {
+					sep = ""
+				}
+				jw.WriteString(fmt.Sprintf("    %s %s%s\n", javaType, gencommon.ToCamelCase(field.Name), sep))
+			}
+			jw.WriteString(") {}\n")
+			jsonFile := filepath.Join(g.Config.Gen.Java.Out, jt.Name+".java")
+			if err := os.WriteFile(jsonFile, []byte(jw.String()), 0644); err != nil {
+				return err
+			}
+		}
+	}
+
 	// Emit each Row type as its own top-level .java file
 	for _, q := range queries {
 		columns := g.expandWildcardColumns(q)
@@ -264,4 +293,32 @@ func (g *Generator) generateSingleJavaFile(src string, queries []*parser.Query, 
 	deps := gencommon.ExtractTableDependencies(queries)
 	gencommon.UpdateCacheForFile(g.cache, queryFile, currentHash, deps, path)
 	return nil
+}
+
+// jsonFieldToJavaType converts a JsonField type to its Java representation.
+func jsonFieldToJavaType(field *parser.JsonField) string {
+	var jt string
+	switch field.Type {
+	case "string":
+		jt = "String"
+	case "int":
+		jt = "Integer"
+	case "float":
+		jt = "Double"
+	case "boolean":
+		jt = "Boolean"
+	case "string[]":
+		jt = "java.util.List<String>"
+	case "int[]":
+		jt = "java.util.List<Integer>"
+	case "float[]":
+		jt = "java.util.List<Double>"
+	case "boolean[]":
+		jt = "java.util.List<Boolean>"
+	case "any":
+		jt = "Object"
+	default:
+		jt = field.Type
+	}
+	return jt
 }

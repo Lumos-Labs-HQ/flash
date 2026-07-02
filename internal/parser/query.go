@@ -167,6 +167,7 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 	var sqlLines []string
 	var comment string
 	var pendingRequired []string
+	var pendingJsonTypes []*JsonType
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -183,6 +184,8 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 				if err := p.analyzeQuery(currentQuery, schema); err != nil {
 					return nil, err
 				}
+				// Attach JSON types to matching columns
+				attachJsonTypesToQuery(currentQuery)
 				queries = append(queries, currentQuery)
 			}
 
@@ -199,10 +202,12 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 					Name:         parts[0],
 					Cmd:          parts[1],
 					RequiredCols: pendingRequired,
+					JsonTypes:    pendingJsonTypes,
 				}
 				sqlLines = []string{}
 				comment = ""
 				pendingRequired = nil
+				pendingJsonTypes = nil
 			}
 		} else if strings.HasPrefix(line, "-- @required:") {
 			val := strings.TrimPrefix(line, "-- @required:")
@@ -225,6 +230,21 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 				// Before -- name: line, save as pending
 				pendingRequired = cols
 			}
+		} else if strings.HasPrefix(line, "-- @json") {
+			// Parse @json annotation
+			jsonBasePath := ""
+			if p.Config != nil {
+				jsonBasePath = p.Config.JsonPath
+			}
+			jt, err := ParseJsonAnnotation(line, jsonBasePath)
+			if err != nil {
+				return nil, fmt.Errorf("in file %s: %w", filename, err)
+			}
+			if currentQuery != nil && len(sqlLines) == 0 {
+				currentQuery.JsonTypes = append(currentQuery.JsonTypes, jt)
+			} else {
+				pendingJsonTypes = append(pendingJsonTypes, jt)
+			}
 		} else if strings.HasPrefix(line, "--") {
 			comment = strings.TrimPrefix(line, "--")
 			comment = strings.TrimSpace(comment)
@@ -240,6 +260,7 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 		if err := p.analyzeQuery(currentQuery, schema); err != nil {
 			return nil, err
 		}
+		attachJsonTypesToQuery(currentQuery)
 		queries = append(queries, currentQuery)
 	}
 
@@ -1398,4 +1419,33 @@ func rewriteINListToANY(sql string) string {
 	}
 
 	return sql
+}
+
+// attachJsonTypesToQuery links @json type definitions to matching query columns and params.
+// JSON types are stored on the query for data class generation, and columns get typed fields.
+// Params matching a JSON column name get their type marked for serialization.
+func attachJsonTypesToQuery(q *Query) {
+	if len(q.JsonTypes) == 0 {
+		return
+	}
+
+	// Build lookup map
+	jsonMap := make(map[string]*JsonType, len(q.JsonTypes))
+	for _, jt := range q.JsonTypes {
+		jsonMap[strings.ToLower(jt.Column)] = jt
+	}
+
+	// Attach to return columns
+	for _, col := range q.Columns {
+		if jt, ok := jsonMap[strings.ToLower(col.Name)]; ok {
+			col.JsonDef = jt
+		}
+	}
+
+	// Mark params that correspond to JSON columns for serialization
+	for _, param := range q.Params {
+		if jt, ok := jsonMap[strings.ToLower(param.Name)]; ok {
+			param.Type = "@json:" + jt.Name
+		}
+	}
 }

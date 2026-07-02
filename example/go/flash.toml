@@ -8,6 +8,7 @@ schema_dir = "db/schema"
 queries = "db/queries/"
 migrations_path = "db/migrations"
 export_path = "db/export"
+json_path = "db/json"
 
 [database]
 provider = "postgresql"

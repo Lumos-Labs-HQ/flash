@@ -1,0 +1,7 @@
+{
+    "views": "int",
+    "shares": "int",
+    "bookmarks": "int",
+    "avg_read_time": "float",
+    "tags_used": "string[]"
+}

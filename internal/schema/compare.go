@@ -2,6 +2,7 @@ package schema
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/types"
 )
@@ -47,6 +48,49 @@ func (sm *SchemaManager) compareSchemas(current, target []types.SchemaTable, cur
 		}
 	}
 
+	// Detect table renames: if a table is dropped and a new one with the same columns appears
+	if len(diff.DroppedTables) > 0 && len(diff.NewTables) > 0 {
+		renamedOld := make(map[string]bool)
+		renamedNew := make(map[string]bool)
+		for _, droppedName := range diff.DroppedTables {
+			droppedTable := currentMap[droppedName]
+			for i, newTable := range diff.NewTables {
+				if renamedNew[newTable.Name] {
+					continue
+				}
+				// Same columns (ignoring order) = likely a rename
+				if sm.tablesHaveSameColumns(droppedTable, newTable) {
+					diff.RenamedTables = append(diff.RenamedTables, types.RenameOp{
+						OldName: droppedName,
+						NewName: newTable.Name,
+					})
+					renamedOld[droppedName] = true
+					renamedNew[newTable.Name] = true
+					_ = i
+					break
+				}
+			}
+		}
+		// Remove renamed tables from dropped and new lists
+		if len(renamedOld) > 0 {
+			var filteredDropped []string
+			for _, name := range diff.DroppedTables {
+				if !renamedOld[name] {
+					filteredDropped = append(filteredDropped, name)
+				}
+			}
+			diff.DroppedTables = filteredDropped
+
+			var filteredNew []types.SchemaTable
+			for _, t := range diff.NewTables {
+				if !renamedNew[t.Name] {
+					filteredNew = append(filteredNew, t)
+				}
+			}
+			diff.NewTables = filteredNew
+		}
+	}
+
 	sm.compareIndexes(current, sm.tableMapsToSlice(targetMap), diff)
 	sm.compareEnums(currentEnums, targetEnums, diff)
 	return diff
@@ -83,11 +127,60 @@ func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable)
 	currentCols, targetCols := sm.buildColumnMaps(current.Columns, target.Columns)
 	hasChanges := false
 
+	// Detect column renames: if a column is dropped and a new one with the same type
+	// appears (and there's only one candidate match), treat it as a rename.
+	droppedCols := []types.SchemaColumn{}
+	newCols := []types.SchemaColumn{}
+
+	for _, currentCol := range current.Columns {
+		if _, exists := targetCols[currentCol.Name]; !exists {
+			droppedCols = append(droppedCols, currentCol)
+		}
+	}
 	for _, targetCol := range target.Columns {
-		if currentCol, exists := currentCols[targetCol.Name]; !exists {
-			tableDiff.NewColumns = append(tableDiff.NewColumns, targetCol)
+		if _, exists := currentCols[targetCol.Name]; !exists {
+			newCols = append(newCols, targetCol)
+		}
+	}
+
+	// Match dropped → new by type similarity (same type, same nullable, same position hint)
+	renamedOldNames := make(map[string]bool)
+	renamedNewNames := make(map[string]bool)
+	for _, dropped := range droppedCols {
+		var bestMatch *types.SchemaColumn
+		matchCount := 0
+		for i := range newCols {
+			nc := &newCols[i]
+			if renamedNewNames[nc.Name] {
+				continue
+			}
+			// Same type and nullable = likely a rename
+			if sm.typesEquivalent(dropped.Type, nc.Type) && dropped.Nullable == nc.Nullable {
+				bestMatch = nc
+				matchCount++
+			}
+		}
+		// Only rename if there's exactly one candidate (unambiguous)
+		if matchCount == 1 && bestMatch != nil {
+			tableDiff.RenamedColumns = append(tableDiff.RenamedColumns, types.RenameOp{
+				Table:   target.Name,
+				OldName: dropped.Name,
+				NewName: bestMatch.Name,
+			})
+			renamedOldNames[dropped.Name] = true
+			renamedNewNames[bestMatch.Name] = true
 			hasChanges = true
-		} else if !sm.columnsEqual(currentCol, targetCol) {
+		}
+	}
+
+	for _, targetCol := range target.Columns {
+		if _, exists := currentCols[targetCol.Name]; !exists {
+			if !renamedNewNames[targetCol.Name] {
+				tableDiff.NewColumns = append(tableDiff.NewColumns, targetCol)
+				hasChanges = true
+			}
+		} else if !sm.columnsEqual(currentCols[targetCol.Name], targetCol) {
+			currentCol := currentCols[targetCol.Name]
 			tableDiff.ModifiedColumns = append(tableDiff.ModifiedColumns, types.ColumnDiff{
 				Name:             targetCol.Name,
 				OldType:          currentCol.Type,
@@ -105,9 +198,10 @@ func (sm *SchemaManager) compareTablesForDiff(current, target types.SchemaTable)
 
 	for _, currentCol := range current.Columns {
 		if _, exists := targetCols[currentCol.Name]; !exists {
-			// Store full column info for DOWN migration
-			tableDiff.DroppedColumns = append(tableDiff.DroppedColumns, currentCol)
-			hasChanges = true
+			if !renamedOldNames[currentCol.Name] {
+				tableDiff.DroppedColumns = append(tableDiff.DroppedColumns, currentCol)
+				hasChanges = true
+			}
 		}
 	}
 
@@ -128,6 +222,76 @@ func (sm *SchemaManager) buildColumnMaps(current, target []types.SchemaColumn) (
 		targetCols[col.Name] = col
 	}
 	return currentCols, targetCols
+}
+
+// typesEquivalent checks if two SQL type strings are semantically the same,
+// accounting for aliases (VARCHAR = TEXT, INTEGER = INT, SERIAL = INTEGER, etc.)
+func (sm *SchemaManager) typesEquivalent(a, b string) bool {
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	na := normalizeTypeForComparison(a)
+	nb := normalizeTypeForComparison(b)
+	return na == nb
+}
+
+func normalizeTypeForComparison(t string) string {
+	t = strings.ToLower(strings.TrimSpace(t))
+	// Remove parenthesized precision/length
+	if idx := strings.Index(t, "("); idx > 0 {
+		t = t[:idx]
+	}
+	switch t {
+	case "int", "integer", "int4":
+		return "integer"
+	case "bigint", "int8":
+		return "bigint"
+	case "smallint", "int2":
+		return "smallint"
+	case "serial":
+		return "integer"
+	case "bigserial":
+		return "bigint"
+	case "varchar", "character varying", "text":
+		return "text"
+	case "bool", "boolean":
+		return "boolean"
+	case "float", "float4", "real":
+		return "real"
+	case "float8", "double precision", "double":
+		return "double precision"
+	case "numeric", "decimal":
+		return "numeric"
+	case "timestamp", "timestamp without time zone":
+		return "timestamp"
+	case "timestamptz", "timestamp with time zone":
+		return "timestamptz"
+	case "datetime":
+		return "datetime"
+	}
+	return t
+}
+
+// tablesHaveSameColumns checks if two tables have the same column names and types.
+// Used for table rename detection.
+func (sm *SchemaManager) tablesHaveSameColumns(a, b types.SchemaTable) bool {
+	if len(a.Columns) != len(b.Columns) {
+		return false
+	}
+	aMap := make(map[string]string, len(a.Columns))
+	for _, col := range a.Columns {
+		aMap[col.Name] = col.Type
+	}
+	for _, col := range b.Columns {
+		aType, exists := aMap[col.Name]
+		if !exists {
+			return false
+		}
+		if !sm.typesEquivalent(aType, col.Type) {
+			return false
+		}
+	}
+	return true
 }
 
 func (sm *SchemaManager) compareIndexes(current, target []types.SchemaTable, diff *types.SchemaDiff) {

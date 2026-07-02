@@ -146,22 +146,22 @@ class Queries {
     const r = await this.db.query(stmt, [name, email, age, limit, offset]);
   }
 
-  async getUsersCreatedBetween(created_at, created_at2) {
+  async getUsersCreatedBetween(created_at_start, created_at_end) {
     let stmt = this._stmts.get('getUsersCreatedBetween');
     if (!stmt) {
       stmt = `SELECT id, name, email, created_at FROM users WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC;`;
       this._stmts.set('getUsersCreatedBetween', stmt);
     }
-    const r = await this.db.query(stmt, [created_at, created_at2]);
+    const r = await this.db.query(stmt, [created_at_start, created_at_end]);
   }
 
-  async getUsersByAgeRange(age, age2) {
+  async getUsersByAgeRange(age_start, age_end) {
     let stmt = this._stmts.get('getUsersByAgeRange');
     if (!stmt) {
       stmt = `SELECT id, name, age, age_range FROM users WHERE age >= $1 AND age <= $2 ORDER BY age;`;
       this._stmts.set('getUsersByAgeRange', stmt);
     }
-    const r = await this.db.query(stmt, [age, age2]);
+    const r = await this.db.query(stmt, [age_start, age_end]);
   }
 
   async getUsersByGeneratedRange(age_range) {
@@ -645,13 +645,13 @@ class Queries {
     const r = await this.db.query(stmt, [limit]);
   }
 
-  async getEngagementTimeSeries(created_at) {
+  async getEngagementTimeSeries(created_at_start) {
     let stmt = this._stmts.get('getEngagementTimeSeries');
     if (!stmt) {
       stmt = `SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;`;
       this._stmts.set('getEngagementTimeSeries', stmt);
     }
-    const r = await this.db.query(stmt, [created_at]);
+    const r = await this.db.query(stmt, [created_at_start]);
   }
 
   async createCategory(name) {

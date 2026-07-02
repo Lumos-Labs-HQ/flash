@@ -9,21 +9,21 @@ import java.sql.Connection
 
 data class GetUsersWithNullAddressRow(
     val id: Int,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class GetUsersWithBioRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val bio: String?
 )
 
 data class GetUserDisplayInfoRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val displayAddress: String?,
     val age: String?,
     val bio: String?
@@ -31,68 +31,68 @@ data class GetUserDisplayInfoRow(
 
 data class SearchUsersWithCOALESCERow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val bioText: String?
 )
 
 data class GetUsersCreatedBetweenRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
-    val createdAt: LocalDateTime?
+    val name: String,
+    val email: String,
+    val createdAt: LocalDateTime
 )
 
 data class GetUsersByAgeRangeRow(
     val id: Int,
-    val name: String?,
+    val name: String,
     val age: Int?,
     val ageRange: Int?
 )
 
 data class GetUsersByGeneratedRangeRow(
     val id: Int,
-    val name: String?,
+    val name: String,
     val age: Int?,
     val ageRange: Int?
 )
 
 data class GetUserPreferencesRow(
     val id: Int,
-    val name: String?,
+    val name: String,
     val preferences: String?
 )
 
 data class FindUsersByJsonKeyRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val preferences: String?
 )
 
 data class FindUsersByJsonContainsRow(
     val id: Int,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class GetUsersWithTagRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val tags: List<String>?
 )
 
 data class GetUsersWithAnyTagRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val tags: List<String>?
 )
 
 data class GetUserShippingAddressRow(
     val id: Int,
-    val name: String?,
+    val name: String,
     val shipping: String?,
     val shippingCity: String?,
     val shippingCountry: String?
@@ -101,10 +101,10 @@ data class GetUserShippingAddressRow(
 data class GetComplexUserAnalyticsRow(
     val id: Int,
     val name: String?,
-    val email: String?,
-    val role: UserRole?,
+    val email: String,
+    val role: UserRole,
     val isadmin: Boolean,
-    val userCreatedAt: LocalDateTime?,
+    val userCreatedAt: LocalDateTime,
     val totalPosts: Int?,
     val publishedPosts: Int?,
     val draftPosts: Int?,
@@ -120,13 +120,13 @@ data class GetComplexUserAnalyticsRow(
 )
 
 data class GetPostWithActiveCommentersRow(
-    val commenterName: String?,
+    val commenterName: String,
     val lastCommentAt: String?
 )
 
 data class GetUserPostRankingsRow(
     val id: Int,
-    val name: String?,
+    val name: String,
     val postCount: Int?,
     val postRank: Int?,
     val densePostRank: Int?,
@@ -135,10 +135,10 @@ data class GetUserPostRankingsRow(
 
 data class GetUserTrendingPostsRow(
     val id: Int,
-    val title: String?,
+    val title: String,
     val userId: Int,
     val viewCount: Long,
-    val createdAt: LocalDateTime?,
+    val createdAt: LocalDateTime,
     val prevViewCount: Int?,
     val nextViewCount: Int?,
     val viewDelta: Double?
@@ -151,15 +151,15 @@ data class GetPostCountByUserRow(
 
 data class GetUsersWithManyPostsRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val totalPosts: Int?
 )
 
 data class GetPostsWithCommentCountRow(
     val id: Int,
-    val title: String?,
-    val createdAt: LocalDateTime?,
+    val title: String,
+    val createdAt: LocalDateTime,
     val commentCount: Int?,
     val uniqueCommenters: Int?,
     val lastCommentAt: LocalDateTime?
@@ -167,36 +167,36 @@ data class GetPostsWithCommentCountRow(
 
 data class GetUsersWithActivityLevelRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
-    val createdAt: LocalDateTime?,
+    val name: String,
+    val email: String,
+    val createdAt: LocalDateTime,
     val accountAgeCategory: String?,
     val effectiveRole: String?
 )
 
 data class GetPostWithCommentsRow(
     val postId: Int,
-    val title: String?,
-    val content: String?,
-    val author: String?,
-    val commentText: String?,
-    val commenter: String?
+    val title: String,
+    val content: String,
+    val author: String,
+    val commentText: String,
+    val commenter: String
 )
 
 data class GetPostDetailsWithAllRelationsRow(
     val id: Int,
-    val title: String?,
-    val content: String?,
-    val status: PostStatus?,
-    val createdAt: LocalDateTime?,
-    val updatedAt: LocalDateTime?,
+    val title: String,
+    val content: String,
+    val status: PostStatus,
+    val createdAt: LocalDateTime,
+    val updatedAt: LocalDateTime,
     val authorId: Int,
-    val authorName: String?,
-    val authorEmail: String?,
-    val authorRole: UserRole?,
+    val authorName: String,
+    val authorEmail: String,
+    val authorRole: UserRole,
     val authorIsAdmin: Boolean,
     val categoryId: Int,
-    val categoryName: String?,
+    val categoryName: String,
     val commentCount: Int?,
     val uniqueCommenters: Int?,
     val allComments: String?,
@@ -213,7 +213,7 @@ data class CountUsersRow(
 )
 
 data class GetUserRoleCountRow(
-    val role: UserRole?,
+    val role: UserRole,
     val count: Int?
 )
 
@@ -226,7 +226,7 @@ data class GetUserAgeStatsRow(
 )
 
 data class GetPostsGroupedByStatusRow(
-    val status: PostStatus?,
+    val status: PostStatus,
     val count: Int?,
     val oldest: LocalDateTime?,
     val newest: LocalDateTime?
@@ -234,34 +234,34 @@ data class GetPostsGroupedByStatusRow(
 
 data class GetDistinctCommentersRow(
     val id: Int?,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class GetLatestPostPerUserRow(
     val userId: Int,
     val postId: Int,
-    val title: String?,
-    val status: PostStatus?,
-    val createdAt: LocalDateTime?
+    val title: String,
+    val status: PostStatus,
+    val createdAt: LocalDateTime
 )
 
 data class SearchUsersRow(
     val id: Int,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class SearchPostsByTitleRow(
     val id: Int,
-    val title: String?,
-    val status: PostStatus?,
-    val createdAt: LocalDateTime?
+    val title: String,
+    val status: PostStatus,
+    val createdAt: LocalDateTime
 )
 
 data class FullTextSearchPostsRow(
     val id: Int,
-    val title: String?,
+    val title: String,
     val rank: Double?
 )
 
@@ -279,72 +279,72 @@ data class GetWeeklyPostStatsRow(
 
 data class GetUsersByNamesRow(
     val id: Int,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class GetUsersWhoCommentedRow(
     val id: Int,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class GetUsersWithNoPostsRow(
     val id: Int,
-    val name: String?,
-    val email: String?
+    val name: String,
+    val email: String
 )
 
 data class GetAllContentByUserRow(
     val contentType: String?,
     val contentId: String?,
-    val contentSummary: String?,
-    val createdAt: LocalDateTime?
+    val contentSummary: String,
+    val createdAt: LocalDateTime
 )
 
 data class GetUserSubscriptionsRow(
     val id: Int,
-    val tier: SubscriptionTier?,
-    val startedAt: LocalDateTime?,
+    val tier: SubscriptionTier,
+    val startedAt: LocalDateTime,
     val expiresAt: LocalDateTime?,
     val autoRenew: Boolean
 )
 
 data class GetOrdersByUserRow(
-    val id: UUID?,
+    val id: UUID,
     val totalAmount: Double,
     val discountPct: String?,
-    val state: OrderState?,
-    val shippingAddr: String?,
-    val placedAt: LocalDateTime?
+    val state: OrderState,
+    val shippingAddr: String,
+    val placedAt: LocalDateTime
 )
 
 data class GetOrdersInStateRow(
-    val id: UUID?,
+    val id: UUID,
     val userId: Int,
-    val userName: String?,
+    val userName: String,
     val totalAmount: Double,
-    val state: OrderState?,
-    val placedAt: LocalDateTime?
+    val state: OrderState,
+    val placedAt: LocalDateTime
 )
 
 data class GetAuditLogForUserRow(
     val id: Int,
-    val tableName: String?,
-    val recordId: String?,
-    val action: String?,
+    val tableName: String,
+    val recordId: String,
+    val action: String,
     val oldData: String?,
     val newData: String?,
-    val changedAt: LocalDateTime?
+    val changedAt: LocalDateTime
 )
 
 data class GetAuditLogForTableRow(
     val id: Int,
-    val tableName: String?,
-    val recordId: String?,
-    val action: String?,
+    val tableName: String,
+    val recordId: String,
+    val action: String,
     val changedBy: Int?,
-    val changedAt: LocalDateTime?
+    val changedAt: LocalDateTime
 )
 
 data class GetDashboardStatsRow(
@@ -360,8 +360,8 @@ data class GetDashboardStatsRow(
 
 data class GetTopCommentersRow(
     val id: Int,
-    val name: String?,
-    val email: String?,
+    val name: String,
+    val email: String,
     val commentCount: Int?,
     val rank: Int?
 )
@@ -374,57 +374,57 @@ data class GetEngagementTimeSeriesRow(
 
 data class GetNotificationsByTypeRow(
     val id: Int,
-    val type: String?,
-    val title: String?,
-    val body: String?,
+    val type: String,
+    val title: String,
+    val body: String,
     val isRead: Boolean,
-    val createdAt: LocalDateTime?
+    val createdAt: LocalDateTime
 )
 
 data class GetPostsByTagRow(
     val id: Int,
-    val title: String?,
-    val status: PostStatus?,
-    val createdAt: LocalDateTime?,
-    val authorName: String?,
+    val title: String,
+    val status: PostStatus,
+    val createdAt: LocalDateTime,
+    val authorName: String,
     val commentCount: Int?
 )
 
 data class GetTopTagsRow(
     val id: UUID?,
     val name: String?,
-    val slug: String?,
+    val slug: String,
     val color: String?,
     val postCount: Int?
 )
 
 data class GetMediaByPostRow(
-    val id: UUID?,
-    val type: String?,
-    val url: String?,
+    val id: UUID,
+    val type: String,
+    val url: String,
     val sizeBytes: Long,
-    val mimeType: String?,
+    val mimeType: String,
     val width: Int?,
     val height: Int?,
-    val createdAt: LocalDateTime?
+    val createdAt: LocalDateTime
 )
 
 data class GetMediaByUserRow(
-    val id: UUID?,
-    val type: String?,
-    val url: String?,
+    val id: UUID,
+    val type: String,
+    val url: String,
     val sizeBytes: Long,
-    val mimeType: String?,
-    val createdAt: LocalDateTime?
+    val mimeType: String,
+    val createdAt: LocalDateTime
 )
 
 data class GetMediaByTypeRow(
-    val id: UUID?,
+    val id: UUID,
     val userId: Int,
-    val url: String?,
+    val url: String,
     val sizeBytes: Long,
-    val mimeType: String?,
-    val createdAt: LocalDateTime?
+    val mimeType: String,
+    val createdAt: LocalDateTime
 )
 
 data class GetStorageUsedByUserRow(
@@ -436,23 +436,23 @@ data class GetStorageUsedByUserRow(
 )
 
 data class GetLargeMediaFilesRow(
-    val id: UUID?,
+    val id: UUID,
     val userId: Int,
-    val type: String?,
-    val url: String?,
+    val type: String,
+    val url: String,
     val sizeBytes: Long,
-    val mimeType: String?,
-    val createdAt: LocalDateTime?
+    val mimeType: String,
+    val createdAt: LocalDateTime
 )
 
 data class GetUserFeedRow(
     val id: Int,
-    val title: String?,
+    val title: String,
     val excerpt: String?,
-    val status: PostStatus?,
-    val createdAt: LocalDateTime?,
+    val status: PostStatus,
+    val createdAt: LocalDateTime,
     val authorId: Int,
-    val authorName: String?,
+    val authorName: String,
     val avatarHash: UUID?,
     val commentCount: Int?,
     val tagCount: Int?
@@ -460,30 +460,30 @@ data class GetUserFeedRow(
 
 data class SearchPostsFullTextRow(
     val id: Int,
-    val title: String?,
+    val title: String,
     val excerpt: String?,
-    val status: PostStatus?,
-    val createdAt: LocalDateTime?,
-    val authorName: String?,
+    val status: PostStatus,
+    val createdAt: LocalDateTime,
+    val authorName: String,
     val rank: Double?
 )
 
 data class GetUserWithStatsRow(
     val id: Int,
-    val name: String?,
+    val name: String,
     val address: String?,
     val isadmin: Boolean,
     val age: Int?,
     val ageRange: Int?,
     val bio: String?,
-    val email: String?,
+    val email: String,
     val preferences: String?,
     val tags: List<String>?,
     val avatarHash: UUID?,
     val shipping: String?,
-    val createdAt: LocalDateTime?,
-    val updatedAt: LocalDateTime?,
-    val role: UserRole?,
+    val createdAt: LocalDateTime,
+    val updatedAt: LocalDateTime,
+    val role: UserRole,
     val publishedPosts: Int?,
     val totalComments: Int?,
     val unreadNotifications: Int?,
@@ -636,6 +636,7 @@ data class GetUserFeedParams(
     val offset: Int
 )
 
+@Suppress("DuplicatedCode")
 class UsersQueries(private val conn: Connection) {
     private val stmts = mutableMapOf<String, java.sql.PreparedStatement>()
 
@@ -658,7 +659,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -696,7 +697,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -721,7 +722,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -746,7 +747,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -772,7 +773,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -815,7 +816,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("email"),
                     rs.getString("preferences"),
                     (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                    rs.getObject("avatar_hash", java.util.UUID::class.java),
+                    rs.getObject("avatar_hash", UUID::class.java),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -847,7 +848,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -877,7 +878,7 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -974,7 +975,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1041,7 +1042,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("email"),
                     rs.getString("preferences"),
                     (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                    rs.getObject("avatar_hash", java.util.UUID::class.java),
+                    rs.getObject("avatar_hash", UUID::class.java),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -1108,10 +1109,10 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUsersWithTag(tags: List<String>): List<GetUsersWithTagRow> {
+    fun getUsersWithTag(tags: String): List<GetUsersWithTagRow> {
         val sql = """SELECT id, name, email, tags FROM users WHERE ? = ANY(tags);"""
         val stmt = stmts.getOrPut("getUsersWithTag") { conn.prepareStatement(sql) }
-        stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
+        stmt.setString(1, tags)
         val items = mutableListOf<GetUsersWithTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1126,10 +1127,10 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUsersWithAnyTag(tags: List<String>): List<GetUsersWithAnyTagRow> {
+    fun getUsersWithAnyTag(tags: String): List<GetUsersWithAnyTagRow> {
         val sql = """SELECT id, name, email, tags FROM users WHERE tags && ?::text[];"""
         val stmt = stmts.getOrPut("getUsersWithAnyTag") { conn.prepareStatement(sql) }
-        stmt.setArray(1, conn.createArrayOf("text", tags.toTypedArray()))
+        stmt.setString(1, tags)
         val items = mutableListOf<GetUsersWithAnyTagRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1209,9 +1210,9 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getString("role")?.let { UserRole.valueOf(it) },
+                    UserRole.valueOf(rs.getString("role")),
                     rs.getBoolean("isadmin"),
-                    rs.getTimestamp("user_created_at")?.toLocalDateTime(),
+                    rs.getTimestamp("user_created_at")!!.toLocalDateTime(),
                     rs.getInt("total_posts"),
                     rs.getInt("published_posts"),
                     rs.getInt("draft_posts"),
@@ -1280,7 +1281,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("title"),
                     rs.getInt("user_id"),
                     rs.getLong("view_count"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getInt("prev_view_count"),
                     rs.getInt("next_view_count"),
                     rs.getDouble("view_delta")
@@ -1331,7 +1332,7 @@ class UsersQueries(private val conn: Connection) {
                 GetPostsWithCommentCountRow(
                     rs.getInt("id"),
                     rs.getString("title"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getInt("comment_count"),
                     rs.getInt("unique_commenters"),
                     rs.getTimestamp("last_comment_at")?.toLocalDateTime()
@@ -1351,7 +1352,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getString("account_age_category"),
                     rs.getString("effective_role")
                 )
@@ -1389,13 +1390,13 @@ class UsersQueries(private val conn: Connection) {
                 rs.getInt("id"),
                 rs.getString("title"),
                 rs.getString("content"),
-                rs.getString("status")?.let { PostStatus.valueOf(it) },
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
+                PostStatus.valueOf(rs.getString("status")),
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 rs.getInt("author_id"),
                 rs.getString("author_name"),
                 rs.getString("author_email"),
-                rs.getString("author_role")?.let { UserRole.valueOf(it) },
+                UserRole.valueOf(rs.getString("author_role")),
                 rs.getBoolean("author_is_admin"),
                 rs.getInt("category_id"),
                 rs.getString("category_name"),
@@ -1438,7 +1439,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetUserRoleCountRow(
-                    rs.getString("role")?.let { UserRole.valueOf(it) },
+                    UserRole.valueOf(rs.getString("role")),
                     rs.getInt("count")
                 )
             )
@@ -1468,7 +1469,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetPostsGroupedByStatusRow(
-                    rs.getString("status")?.let { PostStatus.valueOf(it) },
+                    PostStatus.valueOf(rs.getString("status")),
                     rs.getInt("count"),
                     rs.getTimestamp("oldest")?.toLocalDateTime(),
                     rs.getTimestamp("newest")?.toLocalDateTime()
@@ -1504,8 +1505,8 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("user_id"),
                     rs.getInt("post_id"),
                     rs.getString("title"),
-                    rs.getString("status")?.let { PostStatus.valueOf(it) },
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    PostStatus.valueOf(rs.getString("status")),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1551,8 +1552,8 @@ class UsersQueries(private val conn: Connection) {
                 SearchPostsByTitleRow(
                     rs.getInt("id"),
                     rs.getString("title"),
-                    rs.getString("status")?.let { PostStatus.valueOf(it) },
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    PostStatus.valueOf(rs.getString("status")),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1628,7 +1629,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("email"),
                     rs.getString("preferences"),
                     (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                    rs.getObject("avatar_hash", java.util.UUID::class.java),
+                    rs.getObject("avatar_hash", UUID::class.java),
                     rs.getString("shipping"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getTimestamp("updated_at")!!.toLocalDateTime(),
@@ -1700,7 +1701,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("content_type"),
                     rs.getString("content_id"),
                     rs.getString("content_summary"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1782,8 +1783,8 @@ class UsersQueries(private val conn: Connection) {
             while (rs.next()) items.add(
                 GetUserSubscriptionsRow(
                     rs.getInt("id"),
-                    rs.getString("tier")?.let { SubscriptionTier.valueOf(it) },
-                    rs.getTimestamp("started_at")?.toLocalDateTime(),
+                    SubscriptionTier.valueOf(rs.getString("tier")),
+                    rs.getTimestamp("started_at")!!.toLocalDateTime(),
                     rs.getTimestamp("expires_at")?.toLocalDateTime(),
                     rs.getBoolean("auto_renew")
                 )
@@ -1824,12 +1825,12 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetOrdersByUserRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getDouble("total_amount"),
                     rs.getString("discount_pct"),
-                    rs.getString("state")?.let { OrderState.valueOf(it) },
+                    OrderState.valueOf(rs.getString("state")),
                     rs.getString("shipping_addr"),
-                    rs.getTimestamp("placed_at")?.toLocalDateTime()
+                    rs.getTimestamp("placed_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1845,12 +1846,12 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetOrdersInStateRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getInt("user_id"),
                     rs.getString("user_name"),
                     rs.getDouble("total_amount"),
-                    rs.getString("state")?.let { OrderState.valueOf(it) },
-                    rs.getTimestamp("placed_at")?.toLocalDateTime()
+                    OrderState.valueOf(rs.getString("state")),
+                    rs.getTimestamp("placed_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1876,7 +1877,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("action"),
                     rs.getString("old_data"),
                     rs.getString("new_data"),
-                    rs.getTimestamp("changed_at")?.toLocalDateTime()
+                    rs.getTimestamp("changed_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -1897,7 +1898,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("record_id"),
                     rs.getString("action"),
                     rs.getInt("changed_by"),
-                    rs.getTimestamp("changed_at")?.toLocalDateTime()
+                    rs.getTimestamp("changed_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -2144,7 +2145,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("title"),
                     rs.getString("body"),
                     rs.getBoolean("is_read"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -2225,7 +2226,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 Tags(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getString("name"),
                     rs.getString("slug"),
                     rs.getString("color")
@@ -2250,8 +2251,8 @@ class UsersQueries(private val conn: Connection) {
                 GetPostsByTagRow(
                     rs.getInt("id"),
                     rs.getString("title"),
-                    rs.getString("status")?.let { PostStatus.valueOf(it) },
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
+                    PostStatus.valueOf(rs.getString("status")),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getString("author_name"),
                     rs.getInt("comment_count")
                 )
@@ -2268,7 +2269,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetTopTagsRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getString("name"),
                     rs.getString("slug"),
                     rs.getString("color"),
@@ -2302,7 +2303,7 @@ class UsersQueries(private val conn: Connection) {
         stmt.setObject(9, metadata)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) Media(
-                rs.getObject("id", java.util.UUID::class.java),
+                rs.getObject("id", UUID::class.java),
                 rs.getInt("user_id"),
                 rs.getInt("post_id"),
                 rs.getString("type"),
@@ -2325,14 +2326,14 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetMediaByPostRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getString("type"),
                     rs.getString("url"),
                     rs.getLong("size_bytes"),
                     rs.getString("mime_type"),
                     rs.getInt("width"),
                     rs.getInt("height"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -2352,12 +2353,12 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetMediaByUserRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getString("type"),
                     rs.getString("url"),
                     rs.getLong("size_bytes"),
                     rs.getString("mime_type"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -2373,12 +2374,12 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetMediaByTypeRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getInt("user_id"),
                     rs.getString("url"),
                     rs.getLong("size_bytes"),
                     rs.getString("mime_type"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -2417,13 +2418,13 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
                 GetLargeMediaFilesRow(
-                    rs.getObject("id", java.util.UUID::class.java),
+                    rs.getObject("id", UUID::class.java),
                     rs.getInt("user_id"),
                     rs.getString("type"),
                     rs.getString("url"),
                     rs.getLong("size_bytes"),
                     rs.getString("mime_type"),
-                    rs.getTimestamp("created_at")?.toLocalDateTime()
+                    rs.getTimestamp("created_at")!!.toLocalDateTime()
                 )
             )
         }
@@ -2446,11 +2447,11 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("excerpt"),
-                    rs.getString("status")?.let { PostStatus.valueOf(it) },
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
+                    PostStatus.valueOf(rs.getString("status")),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getInt("author_id"),
                     rs.getString("author_name"),
-                    rs.getObject("avatar_hash", java.util.UUID::class.java),
+                    rs.getObject("avatar_hash", UUID::class.java),
                     rs.getInt("comment_count"),
                     rs.getInt("tag_count")
                 )
@@ -2471,8 +2472,8 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getString("excerpt"),
-                    rs.getString("status")?.let { PostStatus.valueOf(it) },
-                    rs.getTimestamp("created_at")?.toLocalDateTime(),
+                    PostStatus.valueOf(rs.getString("status")),
+                    rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getString("author_name"),
                     rs.getDouble("rank")
                 )
@@ -2481,7 +2482,7 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun bulkMarkNotificationsRead(userId: Int, id: Int): Unit {
+    fun bulkMarkNotificationsRead(userId: Int, id: List<Int>): Unit {
         val sql = """UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND id = ANY(?::bigint[]);"""
         val stmt = stmts.getOrPut("bulkMarkNotificationsRead") { conn.prepareStatement(sql) }
         stmt.setInt(1, userId)
@@ -2505,11 +2506,11 @@ class UsersQueries(private val conn: Connection) {
                 rs.getString("email"),
                 rs.getString("preferences"),
                 (rs.getArray("tags")?.array as? Array<*>)?.map { it.toString() },
-                rs.getObject("avatar_hash", java.util.UUID::class.java),
+                rs.getObject("avatar_hash", UUID::class.java),
                 rs.getString("shipping"),
-                rs.getTimestamp("created_at")?.toLocalDateTime(),
-                rs.getTimestamp("updated_at")?.toLocalDateTime(),
-                rs.getString("role")?.let { UserRole.valueOf(it) },
+                rs.getTimestamp("created_at")!!.toLocalDateTime(),
+                rs.getTimestamp("updated_at")!!.toLocalDateTime(),
+                UserRole.valueOf(rs.getString("role")),
                 rs.getInt("published_posts"),
                 rs.getInt("total_comments"),
                 rs.getInt("unread_notifications"),

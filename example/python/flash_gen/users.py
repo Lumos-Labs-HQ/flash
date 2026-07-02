@@ -1718,6 +1718,21 @@ class SearchPostsFullTextRow:
 
 @dataclass
 class GetUserWithStatsRow:
+    id: int
+    name: str
+    address: Optional[str]
+    isadmin: bool
+    age: Optional[int]
+    age_range: Optional[int]
+    bio: Optional[str]
+    email: str
+    preferences: Optional[dict]
+    tags: Optional[List[str]]
+    avatar_hash: Optional[UUID]
+    shipping: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    role: Literal['admin', 'moderator', 'user', 'guest']
     published_posts: int
     total_comments: int
     unread_notifications: int
@@ -1726,6 +1741,21 @@ class GetUserWithStatsRow:
     @classmethod
     def _make_fast(cls, record):
         return cls(
+            record['id'],
+            record['name'],
+            record['address'],
+            record['isadmin'],
+            record['age'],
+            record['age_range'],
+            record['bio'],
+            record['email'],
+            record['preferences'],
+            record['tags'],
+            record['avatar_hash'],
+            record['shipping'],
+            record['created_at'],
+            record['updated_at'],
+            record['role'],
             record['published_posts'],
             record['total_comments'],
             record['unread_notifications'],
@@ -1745,7 +1775,7 @@ class Queries:
         result = await self.db.fetch(stmt, name, email)
         return CreateUserRow._make_fast(result[0]) if result else None
 
-class CreateUserFullArgs(TypedDict):
+class CreateUserFullParams(TypedDict):
     name: str
     email: str
     age: int
@@ -1754,7 +1784,7 @@ class CreateUserFullArgs(TypedDict):
     tags: List[str]
     role: Literal['admin', 'moderator', 'user', 'guest']
 
-    async def create_user_full(self, args: CreateUserFullArgs) -> Optional[CreateUserFullRow]:
+    async def create_user_full(self, args: CreateUserFullParams) -> Optional[CreateUserFullRow]:
         _key = 'create_user_full'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO users (name, email, age, bio, preferences, tags, role) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;"""
@@ -1810,12 +1840,12 @@ class CreateUserFullArgs(TypedDict):
         result = await self.db.fetch(stmt, limit, offset)
         return [ListUsersRow._make_fast(row) for row in result]
 
-class UpsertUserArgs(TypedDict):
+class UpsertUserParams(TypedDict):
     name: str
     email: str
     role: Literal['admin', 'moderator', 'user', 'guest']
 
-    async def upsert_user(self, args: UpsertUserArgs) -> Optional[UpsertUserRow]:
+    async def upsert_user(self, args: UpsertUserParams) -> Optional[UpsertUserRow]:
         _key = 'upsert_user'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO users (name, email, role) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW() RETURNING *;"""
@@ -1823,12 +1853,12 @@ class UpsertUserArgs(TypedDict):
         result = await self.db.fetch(stmt, args["name"], args["email"], args["role"])
         return UpsertUserRow._make_fast(result[0]) if result else None
 
-class UpsertUserWithCOALESCEArgs(TypedDict):
+class UpsertUserWithCOALESCEParams(TypedDict):
     name: str
     email: str
     bio: str
 
-    async def upsert_user_with_c_o_a_l_e_s_c_e(self, args: UpsertUserWithCOALESCEArgs) -> Optional[UpsertUserWithCOALESCERow]:
+    async def upsert_user_with_c_o_a_l_e_s_c_e(self, args: UpsertUserWithCOALESCEParams) -> Optional[UpsertUserWithCOALESCERow]:
         _key = 'upsert_user_with_c_o_a_l_e_s_c_e'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO users (name, email, bio) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = COALESCE(EXCLUDED.name, users.name), bio  = COALESCE(EXCLUDED.bio, users.bio), updated_at = NOW() RETURNING *;"""
@@ -1860,14 +1890,14 @@ class UpsertUserWithCOALESCEArgs(TypedDict):
         result = await self.db.fetch(stmt, id)
         return GetUserDisplayInfoRow._make_fast(result[0]) if result else None
 
-class SearchUsersWithCOALESCEArgs(TypedDict):
+class SearchUsersWithCOALESCEParams(TypedDict):
     name: str
     email: str
     age: int
     limit: int
     offset: int
 
-    async def search_users_with_c_o_a_l_e_s_c_e(self, args: SearchUsersWithCOALESCEArgs) -> List[SearchUsersWithCOALESCERow]:
+    async def search_users_with_c_o_a_l_e_s_c_e(self, args: SearchUsersWithCOALESCEParams) -> List[SearchUsersWithCOALESCERow]:
         _key = 'search_users_with_c_o_a_l_e_s_c_e'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;"""
@@ -1875,20 +1905,20 @@ class SearchUsersWithCOALESCEArgs(TypedDict):
         result = await self.db.fetch(stmt, args["name"], args["email"], args["age"], args["limit"], args["offset"])
         return [SearchUsersWithCOALESCERow._make_fast(row) for row in result]
 
-    async def get_users_created_between(self, created_at: datetime, created_at2: datetime) -> List[GetUsersCreatedBetweenRow]:
+    async def get_users_created_between(self, created_at_start: datetime, created_at_end: datetime) -> List[GetUsersCreatedBetweenRow]:
         _key = 'get_users_created_between'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email, created_at FROM users WHERE created_at >= $1 AND created_at <= $2 ORDER BY created_at DESC;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, created_at, created_at2)
+        result = await self.db.fetch(stmt, created_at_start, created_at_end)
         return [GetUsersCreatedBetweenRow._make_fast(row) for row in result]
 
-    async def get_users_by_age_range(self, age: int, age2: int) -> List[GetUsersByAgeRangeRow]:
+    async def get_users_by_age_range(self, age_start: int, age_end: int) -> List[GetUsersByAgeRangeRow]:
         _key = 'get_users_by_age_range'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, age, age_range FROM users WHERE age >= $1 AND age <= $2 ORDER BY age;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, age, age2)
+        result = await self.db.fetch(stmt, age_start, age_end)
         return [GetUsersByAgeRangeRow._make_fast(row) for row in result]
 
     async def get_users_by_generated_range(self, age_range: int) -> List[GetUsersByGeneratedRangeRow]:
@@ -1899,12 +1929,12 @@ class SearchUsersWithCOALESCEArgs(TypedDict):
         result = await self.db.fetch(stmt, age_range)
         return [GetUsersByGeneratedRangeRow._make_fast(row) for row in result]
 
-class GetRecentUsersArgs(TypedDict):
+class GetRecentUsersParams(TypedDict):
     created_at: datetime
     limit: int
     offset: int
 
-    async def get_recent_users(self, args: GetRecentUsersArgs) -> List[GetRecentUsersRow]:
+    async def get_recent_users(self, args: GetRecentUsersParams) -> List[GetRecentUsersRow]:
         _key = 'get_recent_users'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT * FROM users WHERE created_at > $1 LIMIT $2 OFFSET $3;"""
@@ -1944,7 +1974,7 @@ class GetRecentUsersArgs(TypedDict):
         result = await self.db.fetch(stmt, preferences)
         return [FindUsersByJsonContainsRow._make_fast(row) for row in result]
 
-    async def get_users_with_tag(self, tags: List[str]) -> List[GetUsersWithTagRow]:
+    async def get_users_with_tag(self, tags: str) -> List[GetUsersWithTagRow]:
         _key = 'get_users_with_tag'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email, tags FROM users WHERE $1 = ANY(tags);"""
@@ -1952,7 +1982,7 @@ class GetRecentUsersArgs(TypedDict):
         result = await self.db.fetch(stmt, tags)
         return [GetUsersWithTagRow._make_fast(row) for row in result]
 
-    async def get_users_with_any_tag(self, tags: List[str]) -> List[GetUsersWithAnyTagRow]:
+    async def get_users_with_any_tag(self, tags: str) -> List[GetUsersWithAnyTagRow]:
         _key = 'get_users_with_any_tag'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email, tags FROM users WHERE tags && $1::text[];"""
@@ -1984,7 +2014,7 @@ class GetRecentUsersArgs(TypedDict):
         result = await self.db.fetch(stmt, id)
         return GetUserShippingAddressRow._make_fast(result[0]) if result else None
 
-class UpdateUserShippingArgs(TypedDict):
+class UpdateUserShippingParams(TypedDict):
     shipping_field1: str
     shipping_field2: str
     shipping_field3: str
@@ -1992,7 +2022,7 @@ class UpdateUserShippingArgs(TypedDict):
     shipping_field5: str
     id: int
 
-    async def update_user_shipping(self, args: UpdateUserShippingArgs) -> int:
+    async def update_user_shipping(self, args: UpdateUserShippingParams) -> int:
         _key = 'update_user_shipping'
         if _key not in self._stmts:
             self._stmts[_key] = """UPDATE users SET shipping = ROW($1, $2, $3, $4, $5), updated_at = NOW() WHERE id = $6;"""
@@ -2000,12 +2030,12 @@ class UpdateUserShippingArgs(TypedDict):
         await self.db.execute(stmt, args["shipping_field1"], args["shipping_field2"], args["shipping_field3"], args["shipping_field4"], args["shipping_field5"], args["id"])
         return 1
 
-class GetComplexUserAnalyticsArgs(TypedDict):
+class GetComplexUserAnalyticsParams(TypedDict):
     total_posts: str
     total_comments: str
-    limit: str
+    limit: int
 
-    async def get_complex_user_analytics(self, args: GetComplexUserAnalyticsArgs) -> List[GetComplexUserAnalyticsRow]:
+    async def get_complex_user_analytics(self, args: GetComplexUserAnalyticsParams) -> List[GetComplexUserAnalyticsRow]:
         _key = 'get_complex_user_analytics'
         if _key not in self._stmts:
             self._stmts[_key] = """WITH user_post_stats AS ( SELECT u.id AS user_id, u.name, u.email, u.role, u.isadmin, u.created_at AS user_created_at, COUNT(DISTINCT p.id) AS total_posts, COUNT(DISTINCT CASE WHEN p.status = 'published' THEN p.id END) AS published_posts, COUNT(DISTINCT CASE WHEN p.status = 'draft' THEN p.id END) AS draft_posts, MAX(p.created_at) AS last_post_date, AVG(LENGTH(p.content)) AS avg_post_length FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name, u.email, u.role, u.isadmin, u.created_at ), user_comment_stats AS ( SELECT u.id AS user_id, COUNT(c.id) AS total_comments, COUNT(DISTINCT c.post_id) AS posts_commented_on, MAX(c.created_at) AS last_comment_date FROM users u LEFT JOIN comments c ON u.id = c.user_id GROUP BY u.id ), category_engagement AS ( SELECT p.user_id, COUNT(DISTINCT p.category_id) AS categories_used, STRING_AGG(DISTINCT cat.name, ', ' ORDER BY cat.name) AS category_names FROM posts p INNER JOIN categories cat ON p.category_id = cat.id GROUP BY p.user_id ) SELECT ups.user_id AS id, ups.name, ups.email, ups.role, ups.isadmin, ups.user_created_at, COALESCE(ups.total_posts, 0) AS total_posts, COALESCE(ups.published_posts, 0) AS published_posts, COALESCE(ups.draft_posts, 0) AS draft_posts, COALESCE(ucs.total_comments, 0) AS total_comments, COALESCE(ucs.posts_commented_on, 0) AS posts_commented_on, COALESCE(ce.categories_used, 0) AS categories_used, COALESCE(ce.category_names, '') AS category_names, ups.last_post_date, ucs.last_comment_date, COALESCE(ups.avg_post_length, 0)::NUMERIC(10,2) AS avg_post_length, CASE WHEN ups.total_posts > 10 AND ucs.total_comments > 20 THEN 'highly_active' WHEN ups.total_posts > 5 OR ucs.total_comments > 10 THEN 'active' WHEN ups.total_posts > 0 OR ucs.total_comments > 0 THEN 'casual' ELSE 'inactive' END AS activity_level, (COALESCE(ups.total_posts, 0) + COALESCE(ucs.total_comments, 0)) AS engagement_score FROM user_post_stats ups LEFT JOIN user_comment_stats ucs ON ups.user_id = ucs.user_id LEFT JOIN category_engagement ce ON ups.user_id = ce.user_id WHERE ups.total_posts > $1 OR ucs.total_comments > $2 ORDER BY engagement_score DESC, ups.last_post_date DESC NULLS LAST LIMIT $3;"""
@@ -2013,7 +2043,7 @@ class GetComplexUserAnalyticsArgs(TypedDict):
         result = await self.db.fetch(stmt, args["total_posts"], args["total_comments"], args["limit"])
         return [GetComplexUserAnalyticsRow._make_fast(row) for row in result]
 
-    async def get_post_with_active_commenters(self, rn: str, post_id: str) -> List[GetPostWithActiveCommentersRow]:
+    async def get_post_with_active_commenters(self, rn: str, post_id: int) -> List[GetPostWithActiveCommentersRow]:
         _key = 'get_post_with_active_commenters'
         if _key not in self._stmts:
             self._stmts[_key] = """WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;"""
@@ -2037,7 +2067,7 @@ class GetComplexUserAnalyticsArgs(TypedDict):
         result = await self.db.fetch(stmt, user_id, limit)
         return [GetUserTrendingPostsRow._make_fast(row) for row in result]
 
-    async def get_post_count_by_user(self, user_id: str) -> Optional[GetPostCountByUserRow]:
+    async def get_post_count_by_user(self, user_id: int) -> Optional[GetPostCountByUserRow]:
         _key = 'get_post_count_by_user'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;"""
@@ -2141,13 +2171,13 @@ class GetComplexUserAnalyticsArgs(TypedDict):
         result = await self.db.fetch(stmt)
         return [GetLatestPostPerUserRow._make_fast(row) for row in result]
 
-class SearchUsersArgs(TypedDict):
+class SearchUsersParams(TypedDict):
     name: str
     email: str
     limit: int
     offset: int
 
-    async def search_users(self, args: SearchUsersArgs) -> List[SearchUsersRow]:
+    async def search_users(self, args: SearchUsersParams) -> List[SearchUsersRow]:
         _key = 'search_users'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email FROM users WHERE name ILIKE $1 OR email ILIKE $2 ORDER BY name ASC LIMIT $3 OFFSET $4;"""
@@ -2155,12 +2185,12 @@ class SearchUsersArgs(TypedDict):
         result = await self.db.fetch(stmt, args["name"], args["email"], args["limit"], args["offset"])
         return [SearchUsersRow._make_fast(row) for row in result]
 
-class SearchPostsByTitleArgs(TypedDict):
+class SearchPostsByTitleParams(TypedDict):
     title: str
     limit: int
     offset: int
 
-    async def search_posts_by_title(self, args: SearchPostsByTitleArgs) -> List[SearchPostsByTitleRow]:
+    async def search_posts_by_title(self, args: SearchPostsByTitleParams) -> List[SearchPostsByTitleRow]:
         _key = 'search_posts_by_title'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, title, status, created_at FROM posts WHERE title ILIKE $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;"""
@@ -2240,7 +2270,7 @@ class SearchPostsByTitleArgs(TypedDict):
         result = await self.db.fetch(stmt, limit)
         return [GetActiveUsersRow._make_fast(row) for row in result]
 
-    async def get_user_activity_summary(self, post_count: str, comment_count: str) -> List[GetUserActivitySummaryRow]:
+    async def get_user_activity_summary(self, post_count: int, comment_count: int) -> List[GetUserActivitySummaryRow]:
         _key = 'get_user_activity_summary'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT * FROM user_activity_summary WHERE post_count > $1 OR comment_count > $2 ORDER BY post_count DESC;"""
@@ -2272,13 +2302,13 @@ class SearchPostsByTitleArgs(TypedDict):
         result = await self.db.fetch(stmt, user_id)
         return [GetUserSubscriptionsRow._make_fast(row) for row in result]
 
-class CreateSubscriptionArgs(TypedDict):
+class CreateSubscriptionParams(TypedDict):
     user_id: int
     tier: Literal['free', 'pro', 'enterprise']
     expires_at: datetime
     auto_renew: bool
 
-    async def create_subscription(self, args: CreateSubscriptionArgs) -> Optional[CreateSubscriptionRow]:
+    async def create_subscription(self, args: CreateSubscriptionParams) -> Optional[CreateSubscriptionRow]:
         _key = 'create_subscription'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO subscriptions (user_id, tier, expires_at, auto_renew) VALUES ($1, $2, $3, $4) RETURNING *;"""
@@ -2302,12 +2332,12 @@ class CreateSubscriptionArgs(TypedDict):
         result = await self.db.fetch(stmt, state, limit)
         return [GetOrdersInStateRow._make_fast(row) for row in result]
 
-class GetAuditLogForUserArgs(TypedDict):
+class GetAuditLogForUserParams(TypedDict):
     changed_by: int
     limit: int
     offset: int
 
-    async def get_audit_log_for_user(self, args: GetAuditLogForUserArgs) -> List[GetAuditLogForUserRow]:
+    async def get_audit_log_for_user(self, args: GetAuditLogForUserParams) -> List[GetAuditLogForUserRow]:
         _key = 'get_audit_log_for_user'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, table_name, record_id, action, old_data, new_data, changed_at FROM audit_log WHERE changed_by = $1 ORDER BY changed_at DESC LIMIT $2 OFFSET $3;"""
@@ -2339,12 +2369,12 @@ class GetAuditLogForUserArgs(TypedDict):
         result = await self.db.fetch(stmt, limit)
         return [GetTopCommentersRow._make_fast(row) for row in result]
 
-    async def get_engagement_time_series(self, created_at: datetime) -> List[GetEngagementTimeSeriesRow]:
+    async def get_engagement_time_series(self, created_at_start: datetime) -> List[GetEngagementTimeSeriesRow]:
         _key = 'get_engagement_time_series'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'post' AS event_type FROM posts WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) UNION ALL SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS count, 'comment' AS event_type FROM comments WHERE created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) ORDER BY day DESC;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, created_at)
+        result = await self.db.fetch(stmt, created_at_start)
         return [GetEngagementTimeSeriesRow._make_fast(row) for row in result]
 
     async def create_category(self, name: str) -> Optional[CreateCategoryRow]:
@@ -2355,13 +2385,13 @@ class GetAuditLogForUserArgs(TypedDict):
         result = await self.db.fetch(stmt, name)
         return CreateCategoryRow._make_fast(result[0]) if result else None
 
-class CreatePostArgs(TypedDict):
+class CreatePostParams(TypedDict):
     user_id: int
     category_id: int
     title: str
     content: str
 
-    async def create_post(self, args: CreatePostArgs) -> Optional[CreatePostRow]:
+    async def create_post(self, args: CreatePostParams) -> Optional[CreatePostRow]:
         _key = 'create_post'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO posts (user_id, category_id, title, content) VALUES ($1, $2, $3, $4) RETURNING *;"""
@@ -2369,12 +2399,12 @@ class CreatePostArgs(TypedDict):
         result = await self.db.fetch(stmt, args["user_id"], args["category_id"], args["title"], args["content"])
         return CreatePostRow._make_fast(result[0]) if result else None
 
-class CreateCommentArgs(TypedDict):
+class CreateCommentParams(TypedDict):
     post_id: int
     user_id: int
     content: str
 
-    async def create_comment(self, args: CreateCommentArgs) -> Optional[CreateCommentRow]:
+    async def create_comment(self, args: CreateCommentParams) -> Optional[CreateCommentRow]:
         _key = 'create_comment'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO comments (post_id, user_id, content) VALUES ($1, $2, $3) RETURNING *;"""
@@ -2398,14 +2428,14 @@ class CreateCommentArgs(TypedDict):
         await self.db.execute(stmt, updated_at, id)
         return 1
 
-class CreateNotificationArgs(TypedDict):
+class CreateNotificationParams(TypedDict):
     user_id: int
     type: str
     title: str
     body: str
     metadata: dict
 
-    async def create_notification(self, args: CreateNotificationArgs) -> Optional[CreateNotificationRow]:
+    async def create_notification(self, args: CreateNotificationParams) -> Optional[CreateNotificationRow]:
         _key = 'create_notification'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO notifications (user_id, type, title, body, metadata) VALUES ($1, $2, $3, $4, $5) RETURNING *;"""
@@ -2413,12 +2443,12 @@ class CreateNotificationArgs(TypedDict):
         result = await self.db.fetch(stmt, args["user_id"], args["type"], args["title"], args["body"], args["metadata"])
         return CreateNotificationRow._make_fast(result[0]) if result else None
 
-class GetNotificationsByUserArgs(TypedDict):
+class GetNotificationsByUserParams(TypedDict):
     user_id: int
     limit: int
     offset: int
 
-    async def get_notifications_by_user(self, args: GetNotificationsByUserArgs) -> List[GetNotificationsByUserRow]:
+    async def get_notifications_by_user(self, args: GetNotificationsByUserParams) -> List[GetNotificationsByUserRow]:
         _key = 'get_notifications_by_user'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;"""
@@ -2458,12 +2488,12 @@ class GetNotificationsByUserArgs(TypedDict):
         await self.db.execute(stmt, user_id, created_at)
         return 1
 
-class GetNotificationsByTypeArgs(TypedDict):
+class GetNotificationsByTypeParams(TypedDict):
     user_id: int
     type: str
     limit: int
 
-    async def get_notifications_by_type(self, args: GetNotificationsByTypeArgs) -> List[GetNotificationsByTypeRow]:
+    async def get_notifications_by_type(self, args: GetNotificationsByTypeParams) -> List[GetNotificationsByTypeRow]:
         _key = 'get_notifications_by_type'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, type, title, body, is_read, created_at FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY created_at DESC LIMIT $3;"""
@@ -2471,12 +2501,12 @@ class GetNotificationsByTypeArgs(TypedDict):
         result = await self.db.fetch(stmt, args["user_id"], args["type"], args["limit"])
         return [GetNotificationsByTypeRow._make_fast(row) for row in result]
 
-class CreateTagArgs(TypedDict):
+class CreateTagParams(TypedDict):
     name: str
     slug: str
     color: str
 
-    async def create_tag(self, args: CreateTagArgs) -> Optional[CreateTagRow]:
+    async def create_tag(self, args: CreateTagParams) -> Optional[CreateTagRow]:
         _key = 'create_tag'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO tags (name, slug, color) VALUES ($1, $2, $3) ON CONFLICT (slug) DO UPDATE SET color = EXCLUDED.color RETURNING *;"""
@@ -2524,12 +2554,12 @@ class CreateTagArgs(TypedDict):
         result = await self.db.fetch(stmt, post_id)
         return [GetTagsForPostRow._make_fast(row) for row in result]
 
-class GetPostsByTagArgs(TypedDict):
+class GetPostsByTagParams(TypedDict):
     slug: str
     limit: int
     offset: int
 
-    async def get_posts_by_tag(self, args: GetPostsByTagArgs) -> List[GetPostsByTagRow]:
+    async def get_posts_by_tag(self, args: GetPostsByTagParams) -> List[GetPostsByTagRow]:
         _key = 'get_posts_by_tag'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT p.id, p.title, p.status, p.created_at, u.name AS author_name, COUNT(DISTINCT c.id) AS comment_count FROM posts p JOIN post_tags pt ON p.id = pt.post_id JOIN tags t ON pt.tag_id = t.id JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id WHERE t.slug = $1 AND p.status = 'published' GROUP BY p.id, p.title, p.status, p.created_at, u.name ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;"""
@@ -2545,7 +2575,7 @@ class GetPostsByTagArgs(TypedDict):
         result = await self.db.fetch(stmt, limit)
         return [GetTopTagsRow._make_fast(row) for row in result]
 
-class UploadMediaArgs(TypedDict):
+class UploadMediaParams(TypedDict):
     user_id: int
     post_id: int
     type: str
@@ -2556,7 +2586,7 @@ class UploadMediaArgs(TypedDict):
     height: int
     metadata: dict
 
-    async def upload_media(self, args: UploadMediaArgs) -> Optional[UploadMediaRow]:
+    async def upload_media(self, args: UploadMediaParams) -> Optional[UploadMediaRow]:
         _key = 'upload_media'
         if _key not in self._stmts:
             self._stmts[_key] = """INSERT INTO media (user_id, post_id, type, url, size_bytes, mime_type, width, height, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *;"""
@@ -2572,12 +2602,12 @@ class UploadMediaArgs(TypedDict):
         result = await self.db.fetch(stmt, post_id)
         return [GetMediaByPostRow._make_fast(row) for row in result]
 
-class GetMediaByUserArgs(TypedDict):
+class GetMediaByUserParams(TypedDict):
     user_id: int
     limit: int
     offset: int
 
-    async def get_media_by_user(self, args: GetMediaByUserArgs) -> List[GetMediaByUserRow]:
+    async def get_media_by_user(self, args: GetMediaByUserParams) -> List[GetMediaByUserRow]:
         _key = 'get_media_by_user'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, type, url, size_bytes, mime_type, created_at FROM media WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;"""
@@ -2617,12 +2647,12 @@ class GetMediaByUserArgs(TypedDict):
         result = await self.db.fetch(stmt, size_bytes, limit)
         return [GetLargeMediaFilesRow._make_fast(row) for row in result]
 
-class GetUserFeedArgs(TypedDict):
+class GetUserFeedParams(TypedDict):
     user_id: int
     limit: int
     offset: int
 
-    async def get_user_feed(self, args: GetUserFeedArgs) -> List[GetUserFeedRow]:
+    async def get_user_feed(self, args: GetUserFeedParams) -> List[GetUserFeedRow]:
         _key = 'get_user_feed'
         if _key not in self._stmts:
             self._stmts[_key] = """WITH followed_users AS ( SELECT following_id FROM subscriptions WHERE user_id = $1 ) SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.id AS author_id, u.name AS author_name, u.avatar_hash, COUNT(DISTINCT c.id) AS comment_count, COUNT(DISTINCT l.tag_id) AS tag_count FROM posts p JOIN users u ON p.user_id = u.id LEFT JOIN comments c ON p.id = c.post_id LEFT JOIN post_tags l ON p.id = l.post_id WHERE p.user_id = ANY(SELECT following_id FROM followed_users) AND p.status = 'published' GROUP BY p.id, p.title, p.excerpt, p.status, p.created_at, u.id, u.name, u.avatar_hash ORDER BY p.created_at DESC LIMIT $2 OFFSET $3;"""

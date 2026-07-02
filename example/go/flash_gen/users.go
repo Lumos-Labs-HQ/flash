@@ -5,6 +5,7 @@ package flash_gen
 import (
 	"database/sql"
 	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -646,7 +647,7 @@ type FindusersbyjsoncontainsRow struct {
 	Email string `json:"email"`
 }
 
-func (q *Queries) Getuserswithtag(tags []string) ([]GetuserswithtagRow, error) {
+func (q *Queries) Getuserswithtag(tags string) ([]GetuserswithtagRow, error) {
 	const query = `SELECT id, name, email, tags FROM users WHERE $1 = ANY(tags);`
 	stmt := q.stmts["Getuserswithtag_stmt"]
 	if stmt == nil {
@@ -683,7 +684,7 @@ type GetuserswithtagRow struct {
 	Tags []string `json:"tags"`
 }
 
-func (q *Queries) Getuserswithanytag(tags []string) ([]GetuserswithanytagRow, error) {
+func (q *Queries) Getuserswithanytag(tags string) ([]GetuserswithanytagRow, error) {
 	const query = `SELECT id, name, email, tags FROM users WHERE tags && $1::text[];`
 	stmt := q.stmts["Getuserswithanytag_stmt"]
 	if stmt == nil {

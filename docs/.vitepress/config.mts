@@ -49,6 +49,7 @@ export default defineConfig({
             { text: 'Schema Definition', link: '/concepts/schema' },
             { text: 'Migrations', link: '/concepts/migrations' },
             { text: 'Code Generation', link: '/concepts/code-generation' },
+            { text: 'Typed JSON Columns', link: '/concepts/json-types' },
             { text: 'Database Seeding', link: '/concepts/seeding' },
             { text: 'Data Export', link: '/concepts/export' },
             { text: 'Branching', link: '/concepts/branching' }

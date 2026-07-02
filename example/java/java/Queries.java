@@ -118,11 +118,11 @@ public class Queries {
         return this.users.findUsersByJsonContains(preferences);
     }
 
-    public java.util.List<GetUsersWithTagRow> getUsersWithTag(java.util.List<String> tags) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithTagRow> getUsersWithTag(String tags) throws java.sql.SQLException {
         return this.users.getUsersWithTag(tags);
     }
 
-    public java.util.List<GetUsersWithAnyTagRow> getUsersWithAnyTag(java.util.List<String> tags) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithAnyTagRow> getUsersWithAnyTag(String tags) throws java.sql.SQLException {
         return this.users.getUsersWithAnyTag(tags);
     }
 
@@ -418,7 +418,7 @@ public class Queries {
         return this.users.searchPostsFullText(search_query, limit);
     }
 
-    public void bulkMarkNotificationsRead(int user_id, int id) throws java.sql.SQLException {
+    public void bulkMarkNotificationsRead(int user_id, java.util.List<int> id) throws java.sql.SQLException {
         this.users.bulkMarkNotificationsRead(user_id, id);
     }
 

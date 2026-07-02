@@ -19,6 +19,7 @@ schema_dir = "db/schema"
 queries = "db/queries/"
 migrations_path = "db/migrations"
 export_path = "db/export"
+json_path = "db/json"
 
 [database]
 provider = "postgresql"
@@ -65,6 +66,12 @@ Directory for migration files. Default: `"db/migrations"`
 ### `export_path` (string)
 
 Directory for exported data files. Default: `"db/export"`
+
+### `json_path` (string)
+
+Directory for JSON type definition files used with `-- @json import`. Default: none (resolves relative to working directory).
+
+See [Typed JSON Columns](/concepts/json-types) for details.
 
 ### `database` (table)
 

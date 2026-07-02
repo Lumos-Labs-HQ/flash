@@ -10,6 +10,7 @@ import (
 
 	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 // generateQueriesIncremental generates Python queries with incremental support and parallel code generation
@@ -131,6 +132,25 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 	}
 	w.WriteString("\n")
 
+	// Generate JSON type dataclasses from @json annotations
+	emittedJsonTypes := make(map[string]bool)
+	for _, query := range fileQueries {
+		for _, jt := range query.JsonTypes {
+			if emittedJsonTypes[jt.Name] {
+				continue
+			}
+			emittedJsonTypes[jt.Name] = true
+			w.WriteString("@dataclass\n")
+			w.WriteString(fmt.Sprintf("class %s:\n", jt.Name))
+			w.WriteString(fmt.Sprintf("    \"\"\"JSON type for column '%s'. Parse with: %s(**json.loads(row.%s))\"\"\"\n", jt.Column, jt.Name, jt.Column))
+			for _, field := range jt.Fields {
+				pyType := jsonFieldToPythonType(field)
+				w.WriteString(fmt.Sprintf("    %s: %s\n", utils.ToSnakeCase(field.Name), pyType))
+			}
+			w.WriteString("\n")
+		}
+	}
+
 	for _, query := range fileQueries {
 		if g.needsResultClass(query) {
 			g.generateResultClass(w, query)
@@ -184,4 +204,35 @@ func (g *Generator) generateSinglePyFile(sourceFile string, fileQueries []*parse
 	gencommon.UpdateCacheForFile(g.cache, queryFile, currentHash, tableDeps, path)
 
 	return nil
+}
+
+// jsonFieldToPythonType converts a JsonField type to its Python type annotation.
+func jsonFieldToPythonType(field *parser.JsonField) string {
+	var pyType string
+	switch field.Type {
+	case "string":
+		pyType = "str"
+	case "int":
+		pyType = "int"
+	case "float":
+		pyType = "float"
+	case "boolean":
+		pyType = "bool"
+	case "string[]":
+		pyType = "List[str]"
+	case "int[]":
+		pyType = "List[int]"
+	case "float[]":
+		pyType = "List[float]"
+	case "boolean[]":
+		pyType = "List[bool]"
+	case "any":
+		pyType = "Any"
+	default:
+		pyType = field.Type
+	}
+	if field.Nullable {
+		return "Optional[" + pyType + "]"
+	}
+	return pyType
 }
