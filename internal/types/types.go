@@ -104,6 +104,7 @@ type TableDiff struct {
 	NewColumns      []SchemaColumn
 	DroppedColumns  []SchemaColumn
 	ModifiedColumns []ColumnDiff
+	RenamedColumns  []RenameOp
 	OldTable        SchemaTable
 	NewTable        SchemaTable
 }

@@ -508,6 +508,47 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		return match[1] + "_prefix"
 	}
 
+	// jsonb_set / json_set function params: jsonb_set(expr, $1, $2) → "path", "value"
+	// The first arg to jsonb_set can be complex (e.g. COALESCE(col, '{}'))
+	jsonbSetPathRe := regexp.MustCompile(fmt.Sprintf(`(?i)jsonb?_set\s*\(.*\$%d`, paramIndex))
+	if jsonbSetPathRe.MatchString(sql) {
+		// Find all $N params inside jsonb_set(...)
+		jsonbSetFullRe := regexp.MustCompile(`(?i)jsonb?_set\s*\(`)
+		if loc := jsonbSetFullRe.FindStringIndex(sql); loc != nil {
+			// Extract params after the function name, counting from first $N
+			afterFn := sql[loc[1]:]
+			paramRe := regexp.MustCompile(`\$(\d+)`)
+			params := paramRe.FindAllStringSubmatch(afterFn, -1)
+			if len(params) >= 2 {
+				if fmt.Sprintf("$%d", paramIndex) == params[0][0] {
+					return "path"
+				}
+				if fmt.Sprintf("$%d", paramIndex) == params[1][0] {
+					return "value"
+				}
+			}
+		}
+	}
+
+	// jsonb_insert(expr, $1, $2) → "path", "value"
+	jsonbInsertPathRe := regexp.MustCompile(fmt.Sprintf(`(?i)jsonb?_insert\s*\(.*\$%d`, paramIndex))
+	if jsonbInsertPathRe.MatchString(sql) {
+		jsonbInsertFullRe := regexp.MustCompile(`(?i)jsonb?_insert\s*\(`)
+		if loc := jsonbInsertFullRe.FindStringIndex(sql); loc != nil {
+			afterFn := sql[loc[1]:]
+			paramRe := regexp.MustCompile(`\$(\d+)`)
+			params := paramRe.FindAllStringSubmatch(afterFn, -1)
+			if len(params) >= 2 {
+				if fmt.Sprintf("$%d", paramIndex) == params[0][0] {
+					return "path"
+				}
+				if fmt.Sprintf("$%d", paramIndex) == params[1][0] {
+					return "value"
+				}
+			}
+		}
+	}
+
 	// func(col) = $N or func(col)::type = $N (function-wrapped column comparison)
 	funcColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:\w+\.)?(\w+)\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
 	if match := funcColRe.FindStringSubmatch(sql); len(match) > 1 {

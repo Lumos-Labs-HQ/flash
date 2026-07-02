@@ -292,6 +292,31 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	upStatements = append(rawExtensions, upStatements...)
 	upStatements = append(upStatements, rawBeforeTables...)
 
+	// UP: Rename tables (detected renames — preserves data, no drop+recreate)
+	for _, rename := range diff.RenamedTables {
+		var renameSQL, renameDownSQL string
+		switch m.provider {
+		case "postgresql", "postgres":
+			renameSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME TO \"%s\";", rename.OldName, rename.NewName)
+			renameDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME TO \"%s\";", rename.NewName, rename.OldName)
+		case "mysql":
+			renameSQL = fmt.Sprintf("RENAME TABLE `%s` TO `%s`;", rename.OldName, rename.NewName)
+			renameDownSQL = fmt.Sprintf("RENAME TABLE `%s` TO `%s`;", rename.NewName, rename.OldName)
+		case "sqlite", "sqlite3":
+			renameSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME TO \"%s\";", rename.OldName, rename.NewName)
+			renameDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME TO \"%s\";", rename.NewName, rename.OldName)
+		case "clickhouse":
+			renameSQL = fmt.Sprintf("RENAME TABLE `%s` TO `%s`;", rename.OldName, rename.NewName)
+			renameDownSQL = fmt.Sprintf("RENAME TABLE `%s` TO `%s`;", rename.NewName, rename.OldName)
+		default:
+			renameSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME TO \"%s\";", rename.OldName, rename.NewName)
+			renameDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME TO \"%s\";", rename.NewName, rename.OldName)
+		}
+		upStatements = append(upStatements, renameSQL)
+		hasExecutableSQL = true
+		downStatements = append([]string{renameDownSQL}, downStatements...)
+	}
+
 	// UP: Create new tables and their indexes.
 	var viewUpStatements []string
 	var viewDownStatements []string
@@ -368,6 +393,42 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 
 	// UP: Modify existing tables
 	for _, tableDiff := range diff.ModifiedTables {
+		// Handle column renames first (before add/drop to preserve data)
+		for _, rename := range tableDiff.RenamedColumns {
+			var renameSQL, renameDownSQL string
+			switch m.provider {
+			case "postgresql", "postgres":
+				renameSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME COLUMN \"%s\" TO \"%s\";", tableDiff.Name, rename.OldName, rename.NewName)
+				renameDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME COLUMN \"%s\" TO \"%s\";", tableDiff.Name, rename.NewName, rename.OldName)
+			case "mysql":
+				// MySQL needs the column type in CHANGE COLUMN — find it from the new table
+				var colType string
+				for _, col := range tableDiff.NewTable.Columns {
+					if col.Name == rename.NewName {
+						colType = col.Type
+						break
+					}
+				}
+				if colType == "" {
+					colType = "TEXT"
+				}
+				renameSQL = fmt.Sprintf("ALTER TABLE `%s` CHANGE COLUMN `%s` `%s` %s;", tableDiff.Name, rename.OldName, rename.NewName, colType)
+				renameDownSQL = fmt.Sprintf("ALTER TABLE `%s` CHANGE COLUMN `%s` `%s` %s;", tableDiff.Name, rename.NewName, rename.OldName, colType)
+			case "sqlite", "sqlite3":
+				renameSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME COLUMN \"%s\" TO \"%s\";", tableDiff.Name, rename.OldName, rename.NewName)
+				renameDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME COLUMN \"%s\" TO \"%s\";", tableDiff.Name, rename.NewName, rename.OldName)
+			case "clickhouse":
+				renameSQL = fmt.Sprintf("ALTER TABLE `%s` RENAME COLUMN `%s` TO `%s`;", tableDiff.Name, rename.OldName, rename.NewName)
+				renameDownSQL = fmt.Sprintf("ALTER TABLE `%s` RENAME COLUMN `%s` TO `%s`;", tableDiff.Name, rename.NewName, rename.OldName)
+			default:
+				renameSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME COLUMN \"%s\" TO \"%s\";", tableDiff.Name, rename.OldName, rename.NewName)
+				renameDownSQL = fmt.Sprintf("ALTER TABLE \"%s\" RENAME COLUMN \"%s\" TO \"%s\";", tableDiff.Name, rename.NewName, rename.OldName)
+			}
+			upStatements = append(upStatements, renameSQL)
+			hasExecutableSQL = true
+			downStatements = append([]string{renameDownSQL}, downStatements...)
+		}
+
 		needsSQLiteRecreate := (m.provider == "sqlite" || m.provider == "sqlite3") &&
 			len(tableDiff.ModifiedColumns) > 0 &&
 			m.hasSignificantSQLiteModifications(tableDiff)
@@ -570,8 +631,16 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	for _, tableName := range diff.DroppedTables {
 		upStatements = append(upStatements, dropTableSQL(tableName))
 		hasExecutableSQL = true
-		// DOWN: We can't restore dropped tables, add a comment
-		// downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped table: %s (data lost)", tableName)}, downStatements...)
+		// DOWN: Restore the dropped table using schema snapshot info
+		if m.schemaManager != nil {
+			oldTable := findTableInSchema(tableName, m.schemaManager, m.schemaPath)
+			if oldTable != nil {
+				restoreSQL := m.adapter.GenerateCreateTableSQL(*oldTable)
+				if restoreSQL != "" {
+					downStatements = append([]string{restoreSQL}, downStatements...)
+				}
+			}
+		}
 	}
 
 	// UP: Drop enums
@@ -581,7 +650,22 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		}
 		upStatements = append(upStatements, fmt.Sprintf("DROP TYPE IF EXISTS \"%s\";", enumName))
 		hasExecutableSQL = true
-		// downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped enum: %s", enumName)}, downStatements...)
+		// DOWN: Recreate the dropped enum if we have its definition from the schema snapshot
+		if m.schemaManager != nil {
+			snapshot, err := schema.LoadSchemaSnapshot(m.migrationsDir)
+			if err == nil {
+				for _, e := range snapshot.Enums {
+					if strings.EqualFold(e.Name, enumName) && len(e.Values) > 0 {
+						values := make([]string, len(e.Values))
+						for i, v := range e.Values {
+							values[i] = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
+						}
+						downStatements = append([]string{fmt.Sprintf("CREATE TYPE \"%s\" AS ENUM (%s);", enumName, strings.Join(values, ", "))}, downStatements...)
+						break
+					}
+				}
+			}
+		}
 	}
 
 	// UP: Add values to existing enums (PostgreSQL only — ALTER TYPE ... ADD VALUE)
@@ -601,8 +685,6 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 	for _, index := range diff.DroppedIndexes {
 		upStatements = append(upStatements, m.adapter.GenerateDropIndexSQL(index))
 		hasExecutableSQL = true
-		// DOWN: We can't fully restore dropped indexes
-		// downStatements = append([]string{fmt.Sprintf("-- Cannot restore dropped index: %s", index.Name)}, downStatements...)
 	}
 
 	// UP: Add new indexes
@@ -614,7 +696,6 @@ END $$;`, escapedNameSingle, escapedNameDouble, strings.Join(values, ", "))
 		if indexSQL != "" {
 			upStatements = append(upStatements, indexSQL)
 			hasExecutableSQL = true
-			// DOWN: Drop the added index
 			downStatements = append([]string{fmt.Sprintf("DROP INDEX IF EXISTS \"%s\";", index.Name)}, downStatements...)
 		}
 	}
