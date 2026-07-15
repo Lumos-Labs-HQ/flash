@@ -192,6 +192,16 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 		return "TEXT" // default for LIKE params
 	}
 
+	// Interval expression: ($N || ' days')::INTERVAL — param is an integer (number of days/hours/etc.)
+	intervalTypeRe := regexp.MustCompile(fmt.Sprintf(`(?i)\(\s*\$%d\s*\|\|\s*'[^']*'\s*\)\s*::\s*INTERVAL`, paramIndex))
+	if intervalTypeRe.MatchString(sql) {
+		return "INTEGER"
+	}
+	intervalTypeRe2 := regexp.MustCompile(fmt.Sprintf(`(?i)INTERVAL\s+\$%d\b`, paramIndex))
+	if intervalTypeRe2.MatchString(sql) {
+		return "INTEGER"
+	}
+
 	if strings.Contains(strings.ToUpper(sql), "INSERT") {
 		insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\S+\s*\(([\s\S]*?)\)\s*VALUES`)
 		allInsertCols := []string{}
@@ -576,6 +586,23 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	likeRe := regexp.MustCompile(likePattern)
 	if match := likeRe.FindStringSubmatch(sql); len(match) > 1 {
 		return match[1]
+	}
+	// ILIKE/LIKE with concatenation: col ILIKE '%' || $N || '%'
+	likeConcatPattern := fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s+(?:I?LIKE|NOT\s+I?LIKE)\s+.*?\$%d\b`, paramIndex)
+	likeConcatRe := regexp.MustCompile(likeConcatPattern)
+	if match := likeConcatRe.FindStringSubmatch(sql); len(match) > 1 {
+		return match[1]
+	}
+
+	// Interval expressions: ($N || ' days')::INTERVAL or INTERVAL $N or ($N || ' hours')::INTERVAL
+	intervalPattern := fmt.Sprintf(`(?i)\(\s*\$%d\s*\|\|\s*'[^']*'\s*\)\s*::\s*INTERVAL`, paramIndex)
+	if regexp.MustCompile(intervalPattern).MatchString(sql) {
+		return "days"
+	}
+	// Also: NOW() - INTERVAL '$N days' or INTERVAL '$N' DAY
+	intervalPattern2 := fmt.Sprintf(`(?i)INTERVAL\s+\$%d\b`, paramIndex)
+	if regexp.MustCompile(intervalPattern2).MatchString(sql) {
+		return "days"
 	}
 
 	setPattern := fmt.Sprintf(`(?i)SET\s+(\w+)\s*=\s*\$%d`, paramIndex)

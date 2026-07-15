@@ -51,7 +51,7 @@ class UpsertUserWithCOALESCEParams(TypedDict):
 class SearchUsersWithCOALESCEParams(TypedDict):
     name: str
     email: str
-    age: int
+    name2: str
     limit: int
     offset: int
 

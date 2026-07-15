@@ -11,24 +11,24 @@
       "testss"
     ],
     "db/queries/users.sql": [
-      "active_commenters",
-      "users;",
-      "user_activity_summary",
-      "orders",
-      "post_tags",
-      "audit_log",
-      "tags",
-      "users",
-      "user_post_stats",
-      "active_users",
-      "post_stats",
-      "categories",
-      "notifications",
-      "u",
-      "posts",
       "subscriptions",
+      "notifications",
+      "tags",
+      "post_tags",
+      "media",
+      "post_stats",
+      "audit_log",
       "comments",
-      "media"
+      "users",
+      "posts",
+      "users;",
+      "active_users",
+      "u",
+      "active_commenters",
+      "orders",
+      "categories",
+      "user_post_stats",
+      "user_activity_summary"
     ]
   },
   "generated_file_checksums": {
@@ -54,8 +54,8 @@
     "java/UserRole.java": "3ecf24bcf9ad2f8584d78493f3abb8d73a0d246a577355d17eb14af779fbd6bd",
     "java/UserSessions.java": "27aed63bffd9bcd641a887e129b2e5eb5eeb475e43f9276ba04d954f92e5e877",
     "java/Users.java": "84a111a7c26b9ed90309e9b1b164c6e30c89667a0fd4182d84dd658ac0e23abe",
-    "java/UsersQueries.java": "366f4548b7df391c87e5ecb1225f127f673dab27844a591ab9ee0d429e77c6ba"
+    "java/UsersQueries.java": "331fa1595a9fd6c4cad12deb559264a82086c081dabbd00f264c800a848f3d95"
   },
-  "last_generation": "2026-07-16T01:17:05.302738775+05:30",
+  "last_generation": "2026-07-16T01:39:12.556217537+05:30",
   "OutDir": "java"
 }

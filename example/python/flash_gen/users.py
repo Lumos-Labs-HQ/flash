@@ -1893,7 +1893,7 @@ class UpsertUserWithCOALESCEParams(TypedDict):
 class SearchUsersWithCOALESCEParams(TypedDict):
     name: str
     email: str
-    age: int
+    name2: str
     limit: int
     offset: int
 
@@ -1902,7 +1902,7 @@ class SearchUsersWithCOALESCEParams(TypedDict):
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, args["name"], args["email"], args["age"], args["limit"], args["offset"])
+        result = await self.db.fetch(stmt, args["name"], args["email"], args["name2"], args["limit"], args["offset"])
         return [SearchUsersWithCOALESCERow._make_fast(row) for row in result]
 
     async def get_users_created_between(self, created_at_start: datetime, created_at_end: datetime) -> List[GetUsersCreatedBetweenRow]:

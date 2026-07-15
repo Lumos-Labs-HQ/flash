@@ -137,13 +137,13 @@ class Queries {
   }
 
   async searchUsersWithCOALESCE(args) {
-    const { name, email, age, limit, offset } = args;
+    const { name, email, name2, limit, offset } = args;
     let stmt = this._stmts.get('searchUsersWithCOALESCE');
     if (!stmt) {
       stmt = `SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;`;
       this._stmts.set('searchUsersWithCOALESCE', stmt);
     }
-    const r = await this.db.query(stmt, [name, email, age, limit, offset]);
+    const r = await this.db.query(stmt, [name, email, name2, limit, offset]);
   }
 
   async getUsersCreatedBetween(created_at_start, created_at_end) {

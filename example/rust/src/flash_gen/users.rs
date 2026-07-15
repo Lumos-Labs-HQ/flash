@@ -190,12 +190,12 @@ impl Queries {
     /// SearchUsersByName
     pub async fn search_users_by_name(
         &self,
-        param1: &str,
+        name: &str,
     ) -> Result<Vec<Users>, sqlx::Error> {
         sqlx::query_as::<_, Users>(
             "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE name ILIKE '%' || $1 || '%' ORDER BY name ASC;"
         )
-        .bind(param1)
+        .bind(name)
         .fetch_all(&self.pool)
         .await
     }
@@ -576,12 +576,12 @@ impl Queries {
     /// GetDormantUsers
     pub async fn get_dormant_users(
         &self,
-        param1: &str,
+        days: i32,
     ) -> Result<Vec<GetDormantUsersRow>, sqlx::Error> {
         sqlx::query_as::<_, GetDormantUsersRow>(
             "WITH last_action AS ( SELECT user_id, MAX(created_at) AS last_at FROM ( SELECT user_id, created_at FROM posts UNION ALL SELECT user_id, created_at FROM comments ) actions GROUP BY user_id ) SELECT u.id, u.name, u.email, u.created_at, la.last_at AS last_action_at FROM users u INNER JOIN last_action la ON la.user_id = u.id WHERE u.is_active = TRUE AND la.last_at < NOW() - ($1 || ' days')::INTERVAL ORDER BY la.last_at ASC;"
         )
-        .bind(param1)
+        .bind(days)
         .fetch_all(&self.pool)
         .await
     }
@@ -612,13 +612,13 @@ impl Queries {
     pub async fn get_users_with_recent_high_view_post(
         &self,
         views: i32,
-        param1: &str,
+        days: i32,
     ) -> Result<Vec<GetUsersWithRecentHighViewPostRow>, sqlx::Error> {
         sqlx::query_as::<_, GetUsersWithRecentHighViewPostRow>(
             "SELECT u.id, u.name, u.email, u.created_at FROM users u WHERE EXISTS ( SELECT 1 FROM posts p WHERE p.user_id = u.id AND p.published = TRUE AND p.views > $1 AND p.created_at > NOW() - ($2 || ' days')::INTERVAL ) ORDER BY u.name ASC;"
         )
         .bind(views)
-        .bind(param1)
+        .bind(days)
         .fetch_all(&self.pool)
         .await
     }

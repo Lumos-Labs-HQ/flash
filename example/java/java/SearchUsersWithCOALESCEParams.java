@@ -6,7 +6,7 @@ package java;
 public record SearchUsersWithCOALESCEParams(
     String name,
     String email,
-    int age,
+    String name2,
     int limit,
     int offset
 ) {}

@@ -11,32 +11,32 @@
       "testss"
     ],
     "db/queries/users.sql": [
-      "users;",
-      "active_users",
-      "categories",
-      "comments",
-      "notifications",
-      "post_tags",
-      "u",
-      "user_post_stats",
-      "user_activity_summary",
-      "orders",
-      "tags",
       "active_commenters",
       "posts",
-      "post_stats",
-      "subscriptions",
+      "users;",
+      "orders",
       "audit_log",
+      "categories",
+      "comments",
+      "subscriptions",
+      "notifications",
+      "u",
+      "active_users",
+      "tags",
+      "post_tags",
       "media",
-      "users"
+      "users",
+      "user_activity_summary",
+      "post_stats",
+      "user_post_stats"
     ]
   },
   "generated_file_checksums": {
     "kotlin/Models.kt": "d43c55342e425ffa81bf54d7fb556198a12c3406ce40f57fe95f04101d569a07",
     "kotlin/Queries.kt": "0b76eef65e9416180999b853d7fa8a3ccb8ae2e1c78f6d51c27ff424d624f6dd",
     "kotlin/Tests.kt": "1c756749eb2d9d3607cc4a4007d79b61802aa95291ae69d9441f5ec39a13628d",
-    "kotlin/Users.kt": "55e9d36fbcebb632ebbcfea09bfb2613881dd18d106e8586c544794b1a7ad1fd"
+    "kotlin/Users.kt": "aab90e341a47d97b828434cdd081ce8b1893dea844eb980a7b9d1ef9adf0ec90"
   },
-  "last_generation": "2026-07-16T01:17:05.240264475+05:30",
+  "last_generation": "2026-07-16T01:39:12.477896603+05:30",
   "OutDir": "kotlin"
 }

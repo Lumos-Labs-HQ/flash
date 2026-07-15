@@ -341,14 +341,14 @@ type GetuserdisplayinfoRow struct {
 type SearchuserswithcoalesceParams struct {
 	Name string `json:"name"`
 	Email string `json:"email"`
-	Age int64 `json:"age"`
+	Name2 string `json:"name2"`
 	Limit int64 `json:"limit"`
 	Offset int64 `json:"offset"`
 }
 
 func (q *Queries) Searchuserswithcoalesce(arg SearchuserswithcoalesceParams) ([]SearchuserswithcoalesceRow, error) {
 	const query = `SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;`
-	args := []interface{}{arg.Name, arg.Email, arg.Age, arg.Limit, arg.Offset}
+	args := []interface{}{arg.Name, arg.Email, arg.Name2, arg.Limit, arg.Offset}
 
 	rows, err := q.db.Query(query, args...)
 	if err != nil {

@@ -291,12 +291,12 @@ impl Queries {
     /// SearchPostsByTitle
     pub async fn search_posts_by_title(
         &self,
-        param1: &str,
+        title: &str,
     ) -> Result<Vec<Posts>, sqlx::Error> {
         sqlx::query_as::<_, Posts>(
             "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE title ILIKE '%' || $1 || '%' ORDER BY created_at DESC;"
         )
-        .bind(param1)
+        .bind(title)
         .fetch_all(&self.pool)
         .await
     }

@@ -515,7 +515,7 @@ data class UpsertUserWithCOALESCEParams(
 data class SearchUsersWithCOALESCEParams(
     val name: String,
     val email: String,
-    val age: Int,
+    val name2: String,
     val limit: Int,
     val offset: Int
 )
@@ -939,14 +939,14 @@ class UsersQueries(private val conn: Connection) {
     fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEParams): List<SearchUsersWithCOALESCERow> {
         val name = args.name
         val email = args.email
-        val age = args.age
+        val name2 = args.name2
         val limit = args.limit
         val offset = args.offset
         val sql = """SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE ? OR ? IS NULL) AND (email ILIKE ? OR ? IS NULL) AND COALESCE(age, 0) >= ? ORDER BY name LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("searchUsersWithCOALESCE") { conn.prepareStatement(sql) }
         stmt.setString(1, name)
         stmt.setString(2, email)
-        stmt.setInt(3, age)
+        stmt.setString(3, name2)
         stmt.setInt(4, limit)
         stmt.setInt(5, offset)
         val items = mutableListOf<SearchUsersWithCOALESCERow>()

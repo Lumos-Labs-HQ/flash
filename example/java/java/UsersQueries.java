@@ -345,7 +345,7 @@ public class UsersQueries {
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, args.name());
             stmt.setString(2, args.email());
-            stmt.setInt(3, args.age());
+            stmt.setString(3, args.name2());
             stmt.setInt(4, args.limit());
             stmt.setInt(5, args.offset());
             var items = new java.util.ArrayList<SearchUsersWithCOALESCERow>();
