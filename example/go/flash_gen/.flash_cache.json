@@ -9,39 +9,39 @@
   "config_checksum": "2b830583743a1e919dfbb71ac169ec632459c70b9335cd180c7d80a891f75537",
   "query_table_deps": {
     "db/queries/json_typed.sql": [
-      "users",
-      "posts"
+      "posts",
+      "users"
     ],
     "db/queries/newss.sql": [
       "users"
     ],
     "db/queries/users.sql": [
       "comments",
+      "media",
+      "u",
+      "active_commenters",
       "posts",
-      "active_users",
-      "subscriptions",
+      "users;",
+      "user_activity_summary",
       "audit_log",
       "categories",
-      "tags",
+      "post_tags",
       "p",
       "user_post_stats",
-      "user_activity_summary",
-      "post_stats",
-      "orders",
       "notifications",
+      "post_stats",
+      "subscriptions",
+      "tags",
       "users",
-      "active_commenters",
-      "users;",
-      "post_tags",
-      "media",
-      "u"
+      "active_users",
+      "orders"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/json_typed.go": "62d24021978ae9588d053018f731c8f056502f4461dd2b4ffcc00943d2b6d4a5",
+    "flash_gen/json_typed.go": "e281017039e8ad84817d1b2078ab7268456b8cf28bc9aa54db7e64f35ed641b0",
     "flash_gen/newss.go": "3a7200b08754cefc2ca1c8cbc07b34b01394fc3f80f06b73db135bcc74bb07b7",
     "flash_gen/users.go": "90cb9ab0ea240dd570ad2603cd1d01fca5ccb82ed5c9f11e7498261c22872131"
   },
-  "last_generation": "2026-07-02T15:11:32.259601558+05:30",
+  "last_generation": "2026-07-16T01:17:05.164458943+05:30",
   "OutDir": "flash_gen"
 }

@@ -5,7 +5,6 @@ package flash_gen
 import (
 	"database/sql"
 	"time"
-
 	"github.com/google/uuid"
 )
 

@@ -10,20 +10,20 @@ import (
 // Preferences represents the JSON structure for the 'preferences' column.
 // Unmarshal with: json.Unmarshal([]byte(row.Preferences), &obj)
 type Preferences struct {
-	Notifications *bool `json:"notifications"`
-	Language *string `json:"language"`
 	FontSize *int64 `json:"font_size"`
 	Theme *string `json:"theme"`
+	Notifications *bool `json:"notifications"`
+	Language *string `json:"language"`
 }
 
 // Metadata represents the JSON structure for the 'metadata' column.
 // Unmarshal with: json.Unmarshal([]byte(row.Metadata), &obj)
 type Metadata struct {
-	Views *int64 `json:"views"`
 	Shares *int64 `json:"shares"`
 	Bookmarks *int64 `json:"bookmarks"`
 	AvgReadTime *float64 `json:"avg_read_time"`
 	TagsUsed []string `json:"tags_used"`
+	Views *int64 `json:"views"`
 }
 
 func (q *Queries) Getuserprefs(id int64) (GetuserprefsRow, error) {

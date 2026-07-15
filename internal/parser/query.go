@@ -753,7 +753,7 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 	}
 
 	if strings.Contains(exprUpper, "COUNT(") {
-		return "INTEGER", false, true
+		return "BIGINT", false, true
 	}
 	if strings.Contains(exprUpper, "SUM(") {
 		return "NUMERIC", true, true

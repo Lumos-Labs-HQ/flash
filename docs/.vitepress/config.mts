@@ -38,7 +38,8 @@ export default defineConfig({
             { text: 'TypeScript / JavaScript', link: '/guides/typescript' },
             { text: 'Python', link: '/guides/python' },
             { text: 'Java', link: '/guides/java' },
-            { text: 'Kotlin', link: '/guides/kotlin' }
+            { text: 'Kotlin', link: '/guides/kotlin' },
+            { text: 'Rust', link: '/guides/rust' }
           ]
         }
       ],

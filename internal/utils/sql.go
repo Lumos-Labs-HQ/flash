@@ -365,6 +365,18 @@ var sqlKeywords = map[string]bool{
 	"UNNEST": true, "INTERVAL": true,
 	"EXCEPT": true, "INTERSECT": true, "UNION": true, "RETURNING": true,
 	"CONFLICT": true, "DO": true, "NOTHING": true, "EXCLUDED": true,
+	// Date/time keywords and functions that are NOT column references
+	"CURRENT_TIMESTAMP": true, "CURRENT_DATE": true, "CURRENT_TIME": true,
+	"LOCALTIME": true, "LOCALTIMESTAMP": true, "NOW": true,
+	"TRUE": true, "FALSE": true,
+	"COALESCE": true, "NULLIF": true, "GREATEST": true, "LEAST": true,
+	"CAST": true, "REPLACE": true, "TRIM": true, "LOWER": true, "UPPER": true,
+	"LENGTH": true, "SUBSTR": true, "SUBSTRING": true, "CONCAT": true,
+	"ABS": true, "ROUND": true, "CEIL": true, "FLOOR": true,
+	"DATE": true, "TIME": true, "TIMESTAMP": true, "EXTRACT": true,
+	"ARRAY": true, "ARRAY_AGG": true, "STRING_AGG": true, "JSON_AGG": true,
+	"JSONB_AGG": true, "ROW_NUMBER": true, "RANK": true, "DENSE_RANK": true,
+	"LAG": true, "LEAD": true, "NTILE": true,
 }
 
 func IsSQLKeyword(word string) bool {
