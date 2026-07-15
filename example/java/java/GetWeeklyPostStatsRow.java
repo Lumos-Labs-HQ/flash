@@ -5,6 +5,6 @@ package java;
 
 public record GetWeeklyPostStatsRow(
     String week_start,
-    int posts_created,
+    long posts_created,
     Double total_views
 ) {}

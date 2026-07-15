@@ -5,7 +5,6 @@ package flash_gen
 import (
 	"database/sql"
 	"time"
-
 	"github.com/google/uuid"
 )
 
@@ -342,14 +341,14 @@ type GetuserdisplayinfoRow struct {
 type SearchuserswithcoalesceParams struct {
 	Name string `json:"name"`
 	Email string `json:"email"`
-	Age int64 `json:"age"`
+	Name2 string `json:"name2"`
 	Limit int64 `json:"limit"`
 	Offset int64 `json:"offset"`
 }
 
 func (q *Queries) Searchuserswithcoalesce(arg SearchuserswithcoalesceParams) ([]SearchuserswithcoalesceRow, error) {
 	const query = `SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE $1 OR $1 IS NULL) AND (email ILIKE $2 OR $2 IS NULL) AND COALESCE(age, 0) >= $3 ORDER BY name LIMIT $4 OFFSET $5;`
-	args := []interface{}{arg.Name, arg.Email, arg.Age, arg.Limit, arg.Offset}
+	args := []interface{}{arg.Name, arg.Email, arg.Name2, arg.Limit, arg.Offset}
 
 	rows, err := q.db.Query(query, args...)
 	if err != nil {
@@ -1015,7 +1014,7 @@ type GetpostcountbyuserRow struct {
 	CommentCount int64 `json:"comment_count"`
 }
 
-func (q *Queries) Getuserswithmanyposts(min_count int64) ([]GetuserswithmanypostsRow, error) {
+func (q *Queries) Getuserswithmanyposts(count int64) ([]GetuserswithmanypostsRow, error) {
 	const query = `SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;`
 	stmt := q.stmts["Getuserswithmanyposts_stmt"]
 	if stmt == nil {
@@ -1026,7 +1025,7 @@ func (q *Queries) Getuserswithmanyposts(min_count int64) ([]Getuserswithmanypost
 		}
 		q.stmts["Getuserswithmanyposts_stmt"] = stmt
 	}
-	args := []interface{}{min_count}
+	args := []interface{}{count}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {

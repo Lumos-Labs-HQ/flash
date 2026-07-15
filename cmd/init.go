@@ -67,7 +67,7 @@ func runInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	projectTemplate := tmpl.NewProjectTemplateExt(dbType, isNodeProject(), isPythonProject(), isKotlinProject(), isJavaProject())
+	projectTemplate := tmpl.NewProjectTemplateExt(dbType, isNodeProject(), isPythonProject(), isKotlinProject(), isJavaProject(), isRustProject())
 
 	// Auto-detect Java/Kotlin package from build files
 	if projectTemplate.IsJavaProject {
@@ -153,6 +153,20 @@ func isJavaProject() bool {
 		return true
 	}
 	if matches, _ := filepath.Glob("src/*.java"); len(matches) > 0 {
+		return true
+	}
+	return false
+}
+
+// isRustProject detects Rust projects by looking for Cargo.toml or .rs source files.
+func isRustProject() bool {
+	if _, err := os.Stat("Cargo.toml"); err == nil {
+		return true
+	}
+	if matches, _ := filepath.Glob("src/**/*.rs"); len(matches) > 0 {
+		return true
+	}
+	if matches, _ := filepath.Glob("src/*.rs"); len(matches) > 0 {
 		return true
 	}
 	return false

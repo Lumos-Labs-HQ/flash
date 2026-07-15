@@ -1,0 +1,13 @@
+schema_dir = "db/schema"
+queries = "db/queries/"
+migrations_path = "db/migrations"
+export_path = "db/export"
+
+[database]
+provider = "postgres"
+url_env = "DATABASE_URL"
+
+[gen.rust]
+enabled = true
+out = "src/flash_gen"
+driver = "sqlx"

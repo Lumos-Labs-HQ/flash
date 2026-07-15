@@ -38,7 +38,8 @@ export default defineConfig({
             { text: 'TypeScript / JavaScript', link: '/guides/typescript' },
             { text: 'Python', link: '/guides/python' },
             { text: 'Java', link: '/guides/java' },
-            { text: 'Kotlin', link: '/guides/kotlin' }
+            { text: 'Kotlin', link: '/guides/kotlin' },
+            { text: 'Rust', link: '/guides/rust' }
           ]
         }
       ],
@@ -132,7 +133,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/Lumos-Labs-HQ/flash-orm/edit/documentation/docs/:path',
+      pattern: 'https://github.com/Lumos-Labs-HQ/flash/edit/documentation/docs/:path',
       text: 'Edit this page on GitHub'
     },
 

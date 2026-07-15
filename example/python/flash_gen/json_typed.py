@@ -8,19 +8,19 @@ from decimal import Decimal
 @dataclass
 class Preferences:
     """JSON type for column 'preferences'. Parse with: Preferences(**json.loads(row.preferences))"""
+    font_size: Optional[int]
     theme: Optional[str]
     notifications: Optional[bool]
     language: Optional[str]
-    font_size: Optional[int]
 
 @dataclass
 class Metadata:
     """JSON type for column 'metadata'. Parse with: Metadata(**json.loads(row.metadata))"""
-    views: Optional[int]
     shares: Optional[int]
     bookmarks: Optional[int]
     avg_read_time: Optional[float]
     tags_used: Optional[List[str]]
+    views: Optional[int]
 
 @dataclass
 class GetUserPrefsRow:

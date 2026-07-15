@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 public record GetUserAgeStatsRow(
     LocalDateTime first_joined,
     LocalDateTime last_joined,
-    int total,
+    long total,
     Double avg_age,
     Double avg_name_length
 ) {}

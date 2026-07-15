@@ -16,32 +16,32 @@
       "users"
     ],
     "db/queries/users.sql": [
-      "comments",
-      "posts",
-      "active_users",
-      "subscriptions",
+      "post_stats",
       "audit_log",
       "categories",
-      "tags",
-      "p",
-      "user_post_stats",
-      "user_activity_summary",
-      "post_stats",
-      "orders",
-      "notifications",
-      "users",
-      "active_commenters",
-      "users;",
       "post_tags",
       "media",
-      "u"
+      "u",
+      "users",
+      "orders",
+      "tags",
+      "user_post_stats",
+      "users;",
+      "notifications",
+      "active_users",
+      "user_activity_summary",
+      "subscriptions",
+      "comments",
+      "p",
+      "active_commenters",
+      "posts"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/json_typed.go": "62d24021978ae9588d053018f731c8f056502f4461dd2b4ffcc00943d2b6d4a5",
+    "flash_gen/json_typed.go": "cbefe688fcb8118f4cb9ec2aff8a855b65289e940ca434ff3bdcc5c29c5289fd",
     "flash_gen/newss.go": "3a7200b08754cefc2ca1c8cbc07b34b01394fc3f80f06b73db135bcc74bb07b7",
-    "flash_gen/users.go": "90cb9ab0ea240dd570ad2603cd1d01fca5ccb82ed5c9f11e7498261c22872131"
+    "flash_gen/users.go": "f9096cde196c7162ad99960567b40a8207366a18762a00bab18110193a4bc8e6"
   },
-  "last_generation": "2026-07-02T15:11:32.259601558+05:30",
+  "last_generation": "2026-07-16T02:54:15.08662718+05:30",
   "OutDir": "flash_gen"
 }

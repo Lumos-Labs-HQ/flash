@@ -1,69 +1,77 @@
 version: "3"
 
 vars:
-  BINARY: flash
-  BUILD_DIR: build
-  VERSION:
-    sh: grep 'Version = ' cmd/root.go | head -1 | sed 's/.*"\(.*\)".*/\1/'
-  LDFLAGS: -s -w -X 'github.com/Lumos-Labs-HQ/flash/cmd.Version={{.VERSION}}'
+   BINARY: flash
+   BUILD_DIR: build
+   VERSION:
+      sh: grep 'Version = ' cmd/root.go | head -1 | sed 's/.*"\(.*\)".*/\1/'
+   LDFLAGS: -s -w -X 'github.com/Lumos-Labs-HQ/flash/cmd.Version={{.VERSION}}'
 
 tasks:
-  # DEV
+   # DEV
+   test-gen:
+      desc: Run tests with generated code
+      cmds:
+         - task: build
+         - cd example/go && rm -rf flash_gen && ../../flash gen -f
+         - cd example/java && rm -rf kotlin && rm -rf java && ../../flash gen -f
+         - cd example/python && rm -rf flash_gen && ../../flash gen -f
+         - cd example/ts && rm -rf flash_gen && ../../flash gen -f
+         - cd example/rust && rm -rf flash_gen && ../../flash gen -f
 
-  build:
-    desc: Build development binary 
-    cmds:
-      - go build -tags="dev,plugins"
-      - echo "Dev build"
+   build:
+      desc: Build development binary
+      cmds:
+         - go build -tags="dev,plugins"
+         - echo "Dev build"
 
-  install:
-    desc: Build and install dev binary to $GOPATH/bin
-    cmds:
-      - task: build
-      - go install -tags="dev,plugins"
-      - echo "Installed binary"
-  
-  pkg-update:
-    desc: Update all mod files with latest versions
-    cmds:
-      - go get -u ./... && go mod tidy
-      - cd plugins/core && go get -u ./... && go mod tidy
-      - cd plugins/studio && go get -u ./... && go mod tidy
+   install:
+      desc: Build and install dev binary to $GOPATH/bin
+      cmds:
+         - task: build
+         - go install -tags="dev,plugins"
+         - echo "Installed binary"
 
-  test:
-    desc: Run all tests with dev + plugins tags
-    cmds:
-      - go test -tags="dev,plugins" -v ./...
+   pkg-update:
+      desc: Update all mod files with latest versions
+      cmds:
+         - go get -u ./... && go mod tidy
+         - cd plugins/core && go get -u ./... && go mod tidy
+         - cd plugins/studio && go get -u ./... && go mod tidy
 
-  smoke:
-    desc: Run all unit tests (excludes integration tests requiring Docker/DB)
-    cmds:
-      - go test -tags="dev,plugins" -v $(go list -tags="dev,plugins" ./... | grep -v test/integration)
-      - echo "Smoke tests passed"
+   test:
+      desc: Run all tests with dev + plugins tags
+      cmds:
+         - go test -tags="dev,plugins" -v ./...
 
-  test-integration:
-    desc: Run all command integration tests
-    cmds:
-      - task: build
-      - cd test/integration && go test -tags="dev,plugins" -v ./...
-      - rm flash
+   smoke:
+      desc: Run all unit tests (excludes integration tests requiring Docker/DB)
+      cmds:
+         - go test -tags="dev,plugins" -v $(go list -tags="dev,plugins" ./... | grep -v test/integration)
+         - echo "Smoke tests passed"
 
+   test-integration:
+      desc: Run all command integration tests
+      cmds:
+         - task: build
+         - cd test/integration && go test -tags="dev,plugins" -v ./...
+         - rm flash
 
-  # ── Shared ───────────────────────────────────────────────────────────
+   # ── Shared ───────────────────────────────────────────────────────────
 
-  version:
-    desc: Print current version
-    cmds:
-      - echo "v{{.VERSION}}"
+   version:
+      desc: Print current version
+      cmds:
+         - echo "v{{.VERSION}}"
 
-  fmt:
-    desc: Format code
-    cmds:
-      - go fmt ./...
-      - echo "Code formatted"
+   fmt:
+      desc: Format code
+      cmds:
+         - go fmt ./...
+         - echo "Code formatted"
 
-  lint:
-    desc: Run linter
-    cmds:
-      - golangci-lint run
-      - echo "Linting complete"
+   lint:
+      desc: Run linter
+      cmds:
+         - golangci-lint run
+         - echo "Linting complete"

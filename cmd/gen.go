@@ -12,6 +12,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/jsgen"
 	"github.com/Lumos-Labs-HQ/flash/internal/kotlingen"
 	"github.com/Lumos-Labs-HQ/flash/internal/pygen"
+	"github.com/Lumos-Labs-HQ/flash/internal/rustgen"
 	"github.com/spf13/cobra"
 )
 
@@ -26,6 +27,7 @@ Automatically detects project type and generates appropriate code:
 - Python projects: Generate Python code with type hints
 - Kotlin projects: Generate Kotlin code with JDBC/Exposed/R2DBC support
 - Java projects: Generate Java code with JDBC/jOOQ/Hibernate support
+- Rust projects: Generate Rust code with sqlx support
 
 Configuration is read from flash.toml`,
 
@@ -117,6 +119,17 @@ func runGenForConfig(cfg *config.Config) error {
 		}
 		fmt.Println("🎉 Java code generated successfully!")
 		fmt.Printf("   Output: %s\n", cfg.Gen.Java.Out)
+		generated = true
+	}
+
+	if cfg.Gen.Rust.Enabled {
+		fmt.Println("🔨 Generating Rust code...")
+		generator := rustgen.New(cfg)
+		if err := generator.Generate(); err != nil {
+			return fmt.Errorf("failed to generate Rust code: %w", err)
+		}
+		fmt.Println("🎉 Rust code generated successfully!")
+		fmt.Printf("   Output: %s/\n", cfg.Gen.Rust.Out)
 		generated = true
 	}
 

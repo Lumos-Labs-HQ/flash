@@ -55,6 +55,28 @@ func DetectProjectType(dir string) (isNode, isPython, isKotlin, isJava bool) {
 	return
 }
 
+// DetectProjectTypeAll extends DetectProjectType with Rust detection.
+func DetectProjectTypeAll(dir string) (isNode, isPython, isKotlin, isJava, isRust bool) {
+	isNode, isPython, isKotlin, isJava = DetectProjectType(dir)
+
+	stat := func(name string) bool {
+		_, err := os.Stat(filepath.Join(dir, name))
+		return err == nil
+	}
+	glob := func(pattern string) bool {
+		m, _ := filepath.Glob(filepath.Join(dir, pattern))
+		return len(m) > 0
+	}
+
+	switch {
+	case stat("Cargo.toml"):
+		isRust = true
+	case glob("src/**/*.rs"), glob("src/*.rs"):
+		isRust = true
+	}
+	return
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
 		func() bool {

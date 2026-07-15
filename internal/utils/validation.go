@@ -113,6 +113,18 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		}
 	}
 
+	// Detect subquery aliases: words immediately following ") " in FROM/JOIN context
+	// e.g. FROM (SELECT ...) ranked → "ranked" is a subquery alias, not a table
+	subqueryAliasRegex := regexp.MustCompile(`\)\s+(?:AS\s+)?(\w+)`)
+	for _, match := range subqueryAliasRegex.FindAllStringSubmatch(sql, -1) {
+		if len(match) > 1 {
+			alias := match[1]
+			if !IsSQLKeyword(alias) {
+				cteNames[strings.ToLower(alias)] = true
+			}
+		}
+	}
+
 	matches := tablePatternRegex.FindAllStringSubmatch(StripParenthesizedContent(sql), -1)
 
 	foundTableRefs := false

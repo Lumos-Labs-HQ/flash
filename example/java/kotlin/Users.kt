@@ -127,7 +127,7 @@ data class GetPostWithActiveCommentersRow(
 data class GetUserPostRankingsRow(
     val id: Int,
     val name: String,
-    val postCount: Int?,
+    val postCount: Long?,
     val postRank: Int?,
     val densePostRank: Int?,
     val rowNum: Int?
@@ -145,23 +145,23 @@ data class GetUserTrendingPostsRow(
 )
 
 data class GetPostCountByUserRow(
-    val postCount: Int?,
-    val commentCount: Int?
+    val postCount: Long?,
+    val commentCount: Long?
 )
 
 data class GetUsersWithManyPostsRow(
     val id: Int,
     val name: String,
     val email: String,
-    val totalPosts: Int?
+    val totalPosts: Long?
 )
 
 data class GetPostsWithCommentCountRow(
     val id: Int,
     val title: String,
     val createdAt: LocalDateTime,
-    val commentCount: Int?,
-    val uniqueCommenters: Int?,
+    val commentCount: Long?,
+    val uniqueCommenters: Long?,
     val lastCommentAt: LocalDateTime?
 )
 
@@ -197,8 +197,8 @@ data class GetPostDetailsWithAllRelationsRow(
     val authorIsAdmin: Boolean,
     val categoryId: Int,
     val categoryName: String,
-    val commentCount: Int?,
-    val uniqueCommenters: Int?,
+    val commentCount: Long?,
+    val uniqueCommenters: Long?,
     val allComments: String?,
     val commenterNames: List<String>?,
     val lastCommentDate: LocalDateTime?,
@@ -207,27 +207,27 @@ data class GetPostDetailsWithAllRelationsRow(
 )
 
 data class CountUsersRow(
-    val totalUsers: Int?,
-    val adminCount: Int?,
-    val regularCount: Int?
+    val totalUsers: Long?,
+    val adminCount: Long?,
+    val regularCount: Long?
 )
 
 data class GetUserRoleCountRow(
     val role: UserRole,
-    val count: Int?
+    val count: Long?
 )
 
 data class GetUserAgeStatsRow(
     val firstJoined: LocalDateTime?,
     val lastJoined: LocalDateTime?,
-    val total: Int?,
+    val total: Long?,
     val avgAge: Double?,
     val avgNameLength: Double?
 )
 
 data class GetPostsGroupedByStatusRow(
     val status: PostStatus,
-    val count: Int?,
+    val count: Long?,
     val oldest: LocalDateTime?,
     val newest: LocalDateTime?
 )
@@ -268,12 +268,12 @@ data class FullTextSearchPostsRow(
 data class GetUserRegistrationStatsRow(
     val year: Double?,
     val month: Double?,
-    val signups: Int?
+    val signups: Long?
 )
 
 data class GetWeeklyPostStatsRow(
     val weekStart: String?,
-    val postsCreated: Int?,
+    val postsCreated: Long?,
     val totalViews: Double?
 )
 
@@ -348,27 +348,27 @@ data class GetAuditLogForTableRow(
 )
 
 data class GetDashboardStatsRow(
-    val totalUsers: Int?,
-    val totalPosts: Int?,
-    val totalComments: Int?,
-    val publishedPosts: Int?,
-    val postsThisWeek: Int?,
-    val signupsThisWeek: Int?,
-    val commentsLast24h: Int?,
-    val pendingOrders: Int?
+    val totalUsers: Long?,
+    val totalPosts: Long?,
+    val totalComments: Long?,
+    val publishedPosts: Long?,
+    val postsThisWeek: Long?,
+    val signupsThisWeek: Long?,
+    val commentsLast24h: Long?,
+    val pendingOrders: Long?
 )
 
 data class GetTopCommentersRow(
     val id: Int,
     val name: String,
     val email: String,
-    val commentCount: Int?,
+    val commentCount: Long?,
     val rank: Int?
 )
 
 data class GetEngagementTimeSeriesRow(
     val day: String?,
-    val count: Int?,
+    val count: Long?,
     val eventType: String?
 )
 
@@ -387,7 +387,7 @@ data class GetPostsByTagRow(
     val status: PostStatus,
     val createdAt: LocalDateTime,
     val authorName: String,
-    val commentCount: Int?
+    val commentCount: Long?
 )
 
 data class GetTopTagsRow(
@@ -395,7 +395,7 @@ data class GetTopTagsRow(
     val name: String?,
     val slug: String,
     val color: String?,
-    val postCount: Int?
+    val postCount: Long?
 )
 
 data class GetMediaByPostRow(
@@ -429,10 +429,10 @@ data class GetMediaByTypeRow(
 
 data class GetStorageUsedByUserRow(
     val totalBytes: Double?,
-    val totalFiles: Int?,
-    val imageCount: Int?,
-    val videoCount: Int?,
-    val documentCount: Int?
+    val totalFiles: Long?,
+    val imageCount: Long?,
+    val videoCount: Long?,
+    val documentCount: Long?
 )
 
 data class GetLargeMediaFilesRow(
@@ -454,8 +454,8 @@ data class GetUserFeedRow(
     val authorId: Int,
     val authorName: String,
     val avatarHash: UUID?,
-    val commentCount: Int?,
-    val tagCount: Int?
+    val commentCount: Long?,
+    val tagCount: Long?
 )
 
 data class SearchPostsFullTextRow(
@@ -484,9 +484,9 @@ data class GetUserWithStatsRow(
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime,
     val role: UserRole,
-    val publishedPosts: Int?,
-    val totalComments: Int?,
-    val unreadNotifications: Int?,
+    val publishedPosts: Long?,
+    val totalComments: Long?,
+    val unreadNotifications: Long?,
     val storageUsed: Double?
 )
 
@@ -515,7 +515,7 @@ data class UpsertUserWithCOALESCEParams(
 data class SearchUsersWithCOALESCEParams(
     val name: String,
     val email: String,
-    val age: Int,
+    val name2: String,
     val limit: Int,
     val offset: Int
 )
@@ -939,14 +939,14 @@ class UsersQueries(private val conn: Connection) {
     fun searchUsersWithCOALESCE(args: SearchUsersWithCOALESCEParams): List<SearchUsersWithCOALESCERow> {
         val name = args.name
         val email = args.email
-        val age = args.age
+        val name2 = args.name2
         val limit = args.limit
         val offset = args.offset
         val sql = """SELECT id, name, email, COALESCE(bio, 'No bio') AS bio_text FROM users WHERE (name ILIKE ? OR ? IS NULL) AND (email ILIKE ? OR ? IS NULL) AND COALESCE(age, 0) >= ? ORDER BY name LIMIT ? OFFSET ?;"""
         val stmt = stmts.getOrPut("searchUsersWithCOALESCE") { conn.prepareStatement(sql) }
         stmt.setString(1, name)
         stmt.setString(2, email)
-        stmt.setInt(3, age)
+        stmt.setString(3, name2)
         stmt.setInt(4, limit)
         stmt.setInt(5, offset)
         val items = mutableListOf<SearchUsersWithCOALESCERow>()
@@ -1258,7 +1258,7 @@ class UsersQueries(private val conn: Connection) {
                 GetUserPostRankingsRow(
                     rs.getInt("id"),
                     rs.getString("name"),
-                    rs.getInt("post_count"),
+                    rs.getLong("post_count"),
                     rs.getInt("post_rank"),
                     rs.getInt("dense_post_rank"),
                     rs.getInt("row_num")
@@ -1297,16 +1297,16 @@ class UsersQueries(private val conn: Connection) {
         stmt.setInt(1, userId)
         stmt.executeQuery().use { rs ->
             return if (rs.next()) GetPostCountByUserRow(
-                rs.getInt("post_count"),
-                rs.getInt("comment_count")
+                rs.getLong("post_count"),
+                rs.getLong("comment_count")
             ) else null
         }
     }
 
-    fun getUsersWithManyPosts(minCount: Int): List<GetUsersWithManyPostsRow> {
+    fun getUsersWithManyPosts(count: Int): List<GetUsersWithManyPostsRow> {
         val sql = """SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > ? ORDER BY total_posts DESC;"""
         val stmt = stmts.getOrPut("getUsersWithManyPosts") { conn.prepareStatement(sql) }
-        stmt.setInt(1, minCount)
+        stmt.setInt(1, count)
         val items = mutableListOf<GetUsersWithManyPostsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(
@@ -1314,7 +1314,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getInt("total_posts")
+                    rs.getLong("total_posts")
                 )
             )
         }
@@ -1333,8 +1333,8 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("title"),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
-                    rs.getInt("comment_count"),
-                    rs.getInt("unique_commenters"),
+                    rs.getLong("comment_count"),
+                    rs.getLong("unique_commenters"),
                     rs.getTimestamp("last_comment_at")?.toLocalDateTime()
                 )
             )
@@ -1400,8 +1400,8 @@ class UsersQueries(private val conn: Connection) {
                 rs.getBoolean("author_is_admin"),
                 rs.getInt("category_id"),
                 rs.getString("category_name"),
-                rs.getInt("comment_count"),
-                rs.getInt("unique_commenters"),
+                rs.getLong("comment_count"),
+                rs.getLong("unique_commenters"),
                 rs.getString("all_comments"),
                 (rs.getArray("commenter_names")?.array as? Array<*>)?.map { it.toString() },
                 rs.getTimestamp("last_comment_date")?.toLocalDateTime(),
@@ -1411,12 +1411,12 @@ class UsersQueries(private val conn: Connection) {
         }
     }
 
-    fun countUsersByRole(role: UserRole): Int? {
+    fun countUsersByRole(role: UserRole): Long? {
         val sql = """SELECT COUNT(*) FROM users WHERE role = ?;"""
         val stmt = stmts.getOrPut("countUsersByRole") { conn.prepareStatement(sql) }
         stmt.setObject(1, role)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) rs.getInt("COUNT(*)") else null
+            return if (rs.next()) rs.getLong("COUNT(*)") else null
         }
     }
 
@@ -1425,9 +1425,9 @@ class UsersQueries(private val conn: Connection) {
         val stmt = stmts.getOrPut("countUsers") { conn.prepareStatement(sql) }
         stmt.executeQuery().use { rs ->
             return if (rs.next()) CountUsersRow(
-                rs.getInt("total_users"),
-                rs.getInt("admin_count"),
-                rs.getInt("regular_count")
+                rs.getLong("total_users"),
+                rs.getLong("admin_count"),
+                rs.getLong("regular_count")
             ) else null
         }
     }
@@ -1440,7 +1440,7 @@ class UsersQueries(private val conn: Connection) {
             while (rs.next()) items.add(
                 GetUserRoleCountRow(
                     UserRole.valueOf(rs.getString("role")),
-                    rs.getInt("count")
+                    rs.getLong("count")
                 )
             )
         }
@@ -1454,7 +1454,7 @@ class UsersQueries(private val conn: Connection) {
             return if (rs.next()) GetUserAgeStatsRow(
                 rs.getTimestamp("first_joined")?.toLocalDateTime(),
                 rs.getTimestamp("last_joined")?.toLocalDateTime(),
-                rs.getInt("total"),
+                rs.getLong("total"),
                 rs.getDouble("avg_age"),
                 rs.getDouble("avg_name_length")
             ) else null
@@ -1470,7 +1470,7 @@ class UsersQueries(private val conn: Connection) {
             while (rs.next()) items.add(
                 GetPostsGroupedByStatusRow(
                     PostStatus.valueOf(rs.getString("status")),
-                    rs.getInt("count"),
+                    rs.getLong("count"),
                     rs.getTimestamp("oldest")?.toLocalDateTime(),
                     rs.getTimestamp("newest")?.toLocalDateTime()
                 )
@@ -1587,7 +1587,7 @@ class UsersQueries(private val conn: Connection) {
                 GetUserRegistrationStatsRow(
                     rs.getDouble("year"),
                     rs.getDouble("month"),
-                    rs.getInt("signups")
+                    rs.getLong("signups")
                 )
             )
         }
@@ -1603,7 +1603,7 @@ class UsersQueries(private val conn: Connection) {
             while (rs.next()) items.add(
                 GetWeeklyPostStatsRow(
                     rs.getString("week_start"),
-                    rs.getInt("posts_created"),
+                    rs.getLong("posts_created"),
                     rs.getDouble("total_views")
                 )
             )
@@ -1910,14 +1910,14 @@ class UsersQueries(private val conn: Connection) {
         val stmt = stmts.getOrPut("getDashboardStats") { conn.prepareStatement(sql) }
         stmt.executeQuery().use { rs ->
             return if (rs.next()) GetDashboardStatsRow(
-                rs.getInt("total_users"),
-                rs.getInt("total_posts"),
-                rs.getInt("total_comments"),
-                rs.getInt("published_posts"),
-                rs.getInt("posts_this_week"),
-                rs.getInt("signups_this_week"),
-                rs.getInt("comments_last_24h"),
-                rs.getInt("pending_orders")
+                rs.getLong("total_users"),
+                rs.getLong("total_posts"),
+                rs.getLong("total_comments"),
+                rs.getLong("published_posts"),
+                rs.getLong("posts_this_week"),
+                rs.getLong("signups_this_week"),
+                rs.getLong("comments_last_24h"),
+                rs.getLong("pending_orders")
             ) else null
         }
     }
@@ -1933,7 +1933,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getString("email"),
-                    rs.getInt("comment_count"),
+                    rs.getLong("comment_count"),
                     rs.getInt("rank")
                 )
             )
@@ -1950,7 +1950,7 @@ class UsersQueries(private val conn: Connection) {
             while (rs.next()) items.add(
                 GetEngagementTimeSeriesRow(
                     rs.getString("day"),
-                    rs.getInt("count"),
+                    rs.getLong("count"),
                     rs.getString("event_type")
                 )
             )
@@ -2095,12 +2095,12 @@ class UsersQueries(private val conn: Connection) {
         return items
     }
 
-    fun getUnreadCount(userId: Int): Int? {
+    fun getUnreadCount(userId: Int): Long? {
         val sql = """SELECT COUNT(*) AS unread_count FROM notifications WHERE user_id = ? AND is_read = FALSE;"""
         val stmt = stmts.getOrPut("getUnreadCount") { conn.prepareStatement(sql) }
         stmt.setInt(1, userId)
         stmt.executeQuery().use { rs ->
-            return if (rs.next()) rs.getInt("unread_count") else null
+            return if (rs.next()) rs.getLong("unread_count") else null
         }
     }
 
@@ -2254,7 +2254,7 @@ class UsersQueries(private val conn: Connection) {
                     PostStatus.valueOf(rs.getString("status")),
                     rs.getTimestamp("created_at")!!.toLocalDateTime(),
                     rs.getString("author_name"),
-                    rs.getInt("comment_count")
+                    rs.getLong("comment_count")
                 )
             )
         }
@@ -2273,7 +2273,7 @@ class UsersQueries(private val conn: Connection) {
                     rs.getString("name"),
                     rs.getString("slug"),
                     rs.getString("color"),
-                    rs.getInt("post_count")
+                    rs.getLong("post_count")
                 )
             )
         }
@@ -2401,10 +2401,10 @@ class UsersQueries(private val conn: Connection) {
         stmt.executeQuery().use { rs ->
             return if (rs.next()) GetStorageUsedByUserRow(
                 rs.getDouble("total_bytes"),
-                rs.getInt("total_files"),
-                rs.getInt("image_count"),
-                rs.getInt("video_count"),
-                rs.getInt("document_count")
+                rs.getLong("total_files"),
+                rs.getLong("image_count"),
+                rs.getLong("video_count"),
+                rs.getLong("document_count")
             ) else null
         }
     }
@@ -2452,8 +2452,8 @@ class UsersQueries(private val conn: Connection) {
                     rs.getInt("author_id"),
                     rs.getString("author_name"),
                     rs.getObject("avatar_hash", UUID::class.java),
-                    rs.getInt("comment_count"),
-                    rs.getInt("tag_count")
+                    rs.getLong("comment_count"),
+                    rs.getLong("tag_count")
                 )
             )
         }
@@ -2511,9 +2511,9 @@ class UsersQueries(private val conn: Connection) {
                 rs.getTimestamp("created_at")!!.toLocalDateTime(),
                 rs.getTimestamp("updated_at")!!.toLocalDateTime(),
                 UserRole.valueOf(rs.getString("role")),
-                rs.getInt("published_posts"),
-                rs.getInt("total_comments"),
-                rs.getInt("unread_notifications"),
+                rs.getLong("published_posts"),
+                rs.getLong("total_comments"),
+                rs.getLong("unread_notifications"),
                 rs.getDouble("storage_used")
             ) else null
         }

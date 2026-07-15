@@ -123,8 +123,8 @@ class Queries(private val conn: Connection) {
     fun getPostCountByUser(userId: Int): GetPostCountByUserRow? =
         users.getPostCountByUser(userId)
 
-    fun getUsersWithManyPosts(minCount: Int): List<GetUsersWithManyPostsRow> =
-        users.getUsersWithManyPosts(minCount)
+    fun getUsersWithManyPosts(count: Int): List<GetUsersWithManyPostsRow> =
+        users.getUsersWithManyPosts(count)
 
     fun getPostsWithCommentCount(limit: Int, offset: Int): List<GetPostsWithCommentCountRow> =
         users.getPostsWithCommentCount(limit, offset)
@@ -138,7 +138,7 @@ class Queries(private val conn: Connection) {
     fun getPostDetailsWithAllRelations(id: Int): GetPostDetailsWithAllRelationsRow? =
         users.getPostDetailsWithAllRelations(id)
 
-    fun countUsersByRole(role: UserRole): Int? =
+    fun countUsersByRole(role: UserRole): Long? =
         users.countUsersByRole(role)
 
     fun countUsers(): CountUsersRow? =
@@ -249,7 +249,7 @@ class Queries(private val conn: Connection) {
     fun getNotificationsByUser(args: GetNotificationsByUserParams): List<Notifications> =
         users.getNotificationsByUser(args)
 
-    fun getUnreadCount(userId: Int): Int? =
+    fun getUnreadCount(userId: Int): Long? =
         users.getUnreadCount(userId)
 
     fun markNotificationRead(id: Int, userId: Int): Unit =

@@ -6,7 +6,7 @@ package java;
 public record GetUserPostRankingsRow(
     int id,
     String name,
-    int post_count,
+    long post_count,
     int post_rank,
     int dense_post_rank,
     int row_num

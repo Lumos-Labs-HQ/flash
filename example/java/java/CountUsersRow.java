@@ -4,7 +4,7 @@ package java;
 
 
 public record CountUsersRow(
-    int total_users,
-    int admin_count,
-    int regular_count
+    long total_users,
+    long admin_count,
+    long regular_count
 ) {}

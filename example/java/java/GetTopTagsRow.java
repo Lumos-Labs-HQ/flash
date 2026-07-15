@@ -9,5 +9,5 @@ public record GetTopTagsRow(
     String name,
     String slug,
     String color,
-    int post_count
+    long post_count
 ) {}

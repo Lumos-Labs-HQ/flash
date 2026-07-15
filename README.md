@@ -22,6 +22,7 @@
   <a href="docs/USAGE_GO.md">📗 Go Guide</a> •
   <a href="docs/USAGE_TYPESCRIPT.md">📘 TypeScript Guide</a> •
   <a href="docs/USAGE_PYTHON.md">📙 Python Guide</a> •
+  <a href="docs/USAGE_RUST.md">🦀 Rust Guide</a> •
   <a href="docs/notes/RELEASE_NOTES.md">📋 Release Notes</a>
 </p>
 
@@ -29,14 +30,14 @@
 
 ---
 
-A powerful, database-agnostic ORM built in Go with multi-database support and type-safe code generation for **Go, JavaScript/TypeScript, Python, Kotlin, and Java**.
+A powerful, database-agnostic ORM built in Go with multi-database support and type-safe code generation for **Go, JavaScript/TypeScript, Python, Kotlin, Java, and Rust**.
 
 ## ✨ Features
 
 - 🗃️ **Multi-Database Support**: PostgreSQL, MySQL, SQLite, ScyllaDB/Cassandra, ClickHouse (full ORM)
 - 🔄 **Migration Management**: Create, apply, and track migrations with transaction safety
 - 📤 **Smart Export System**: JSON, CSV, SQLite formats
-- 🔧 **Code Generation**: Type-safe code for Go, TypeScript/JavaScript, Python, **Kotlin**, and **Java**
+- 🔧 **Code Generation**: Type-safe code for Go, TypeScript/JavaScript, Python, **Kotlin**, **Java**, and **Rust**
 - 🎯 **Typed JSON Columns**: `@json` annotations generate typed classes for JSONB with auto-serialization
 - 🔄 **Smart Migrations**: Auto-detects column/table renames (preserves data), generates reversible down migrations
 - 🌱 **Database Seeding**: Generate realistic fake data for development
@@ -92,7 +93,7 @@ go install github.com/Lumos-Labs-HQ/flash@latest
 ## 🏁 Quick Start
 
 ```bash
-# 1. Initialize project (auto-detects Go/Node/Python/Kotlin/Java)
+# 1. Initialize project (auto-detects Go/Node/Python/Kotlin/Java/Rust)
 flash init --postgresql  # or --mysql, --sqlite, --scylla, --clickhouse
 
 # 2. Set database URL
@@ -233,6 +234,29 @@ Users user = q.getUser(42);                          // Users
 List<GetPostsByUserRow> posts = q.getPostsByUser(42); // List<GetPostsByUserRow>
 ```
 
+### Rust *(new in 2.7.7)*
+```toml
+[gen.rust]
+enabled = true
+out = "src/flash_gen"
+driver = "sqlx"  # sqlx (default)
+```
+
+Generates: `mod.rs`, `models.rs`, `db.rs`, `users.rs` (per-query-file modules)
+
+```rust
+let queries = Queries::new(pool);
+let user = queries.get_user(1).await?;               // Users
+let posts = queries.list_posts_by_user(1).await?;    // Vec<GetPostsByUserRow>
+```
+
+Features:
+- Async by default using `sqlx`
+- `#[derive(FromRow)]` on all model structs
+- `query_scalar` for single-column results, `query_as` for structs
+- PostgreSQL, MySQL, SQLite support
+- Proper `Option<T>` for nullable columns
+
 ## 🎯 Typed JSON Columns *(new in 2.7.6)*
 
 Generate typed classes for JSONB columns with auto-serialization. No manual JSON parsing needed.
@@ -291,7 +315,7 @@ val theme = user?.settings?.theme           // String?
 val extra = user?.settings?.get("custom")   // access unmentioned fields
 ```
 
-Works with SELECT, INSERT, UPDATE, and RETURNING. All 5 languages supported.
+Works with SELECT, INSERT, UPDATE, and RETURNING. All 6 languages supported.
 
 ## 🔧 Configuration
 
@@ -370,6 +394,7 @@ flash raw db/seed.sql      # Execute SQL file (supports comment blocks)
 - [Go Usage Guide](docs/USAGE_GO.md)
 - [TypeScript Usage Guide](docs/USAGE_TYPESCRIPT.md)
 - [Python Usage Guide](docs/USAGE_PYTHON.md)
+- [Rust Usage Guide](docs/USAGE_RUST.md)
 - [How It Works](docs/HOW_IT_WORKS.md)
 - [Architecture & Internals](ARCHITECTURE.md)
 - [Release Notes](docs/notes/RELEASE_NOTES.md)
@@ -393,3 +418,4 @@ MIT License - see [LICENSE](LICENSE) file for details.
 <p align="center">
   Built with ❤️ by <a href="https://github.com/Lumos-Labs-HQ">Lumos Labs</a>
 </p>
+

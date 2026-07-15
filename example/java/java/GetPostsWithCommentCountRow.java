@@ -8,7 +8,7 @@ public record GetPostsWithCommentCountRow(
     int id,
     String title,
     LocalDateTime created_at,
-    int comment_count,
-    int unique_commenters,
+    long comment_count,
+    long unique_commenters,
     LocalDateTime last_comment_at
 ) {}

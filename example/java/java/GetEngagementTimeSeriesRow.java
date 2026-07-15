@@ -5,6 +5,6 @@ package java;
 
 public record GetEngagementTimeSeriesRow(
     String day,
-    int count,
+    long count,
     String event_type
 ) {}

@@ -149,7 +149,7 @@ func TestGetFlashORMConfig_JavaPackageInToml(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(orig)
 
-	pt := NewProjectTemplateExt(PostgreSQL, false, false, false, true)
+	pt := NewProjectTemplateExt(PostgreSQL, false, false, false, true, false)
 	if pkg := DetectJavaPackage("."); pkg != "" {
 		pt.JavaPackage = pkg
 	}
@@ -171,7 +171,7 @@ func TestGetFlashORMConfig_KotlinPackageInToml(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(orig)
 
-	pt := NewProjectTemplateExt(PostgreSQL, false, false, true, false)
+	pt := NewProjectTemplateExt(PostgreSQL, false, false, true, false, false)
 	if pkg := DetectKotlinPackage("."); pkg != "" {
 		pt.KotlinPackage = pkg
 	}

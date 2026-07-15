@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "query_file_checksums": {
+    "db/queries/posts.sql": "f8c1ae1e1f5f51eaf7f12fd750adf933d9effd5bb661d38e76f6976f6054378f",
+    "db/queries/users.sql": "b8293aa1e66f106312af997d1994cdcb4c072ee5447bbcf5e55d16a03d6b3420"
+  },
+  "schema_checksum": "6ffe4eedff016ea4a4992bbd02cc1ea0c44c495904fc633b964da238a1ca2f73",
+  "config_checksum": "335c5590b487af681c5702a85dc43d3e70c9304e97d68da3a2450e53bde967ab",
+  "query_table_deps": {
+    "db/queries/posts.sql": [
+      "daily",
+      "users",
+      "posts",
+      "posts;",
+      "ranked",
+      "ranked_authors"
+    ],
+    "db/queries/users.sql": [
+      "cohorts",
+      "ranked",
+      "users",
+      "users;"
+    ]
+  },
+  "generated_file_checksums": {},
+  "last_generation": "2026-07-16T02:54:15.438653982+05:30",
+  "OutDir": "src/flash_gen"
+}

@@ -13,7 +13,6 @@ var (
 	parserReferencesRegex = regexp.MustCompile(`(?i)REFERENCES\s+(\w+)\s*\(\s*(\w+)\s*\)`)
 	parserOnDeleteRegex   = regexp.MustCompile(`(?i)ON\s+DELETE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
 	parserOnUpdateRegex   = regexp.MustCompile(`(?i)ON\s+UPDATE\s+(CASCADE|SET\s+NULL|RESTRICT|NO\s+ACTION)`)
-	parserDefaultRegex    = regexp.MustCompile(`(?i)\bDEFAULT\s+('[^']*'|\([^)]*\)|[^,\s]+)`)
 	parserIdentityRegex   = regexp.MustCompile(`(?i)GENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY`)
 )
 
@@ -721,7 +720,88 @@ func (sm *SchemaManager) parseColumnConstraints(column *types.SchemaColumn, colD
 		}
 	}
 
-	if matches := parserDefaultRegex.FindStringSubmatch(colDef); len(matches) > 1 {
-		column.Default = matches[1]
+	if def := extractDefault(colDef); def != "" {
+		column.Default = def
+	}
+}
+
+// extractDefault extracts the DEFAULT value from a column definition, properly
+// handling nested parentheses (e.g. DEFAULT (unixepoch()), DEFAULT (gen_random_uuid())).
+func extractDefault(colDef string) string {
+	upper := strings.ToUpper(colDef)
+	idx := strings.Index(upper, "DEFAULT ")
+	if idx == -1 {
+		// Also try DEFAULT immediately followed by ( or '
+		idx = strings.Index(upper, "DEFAULT(")
+		if idx == -1 {
+			return ""
+		}
+		// Position after "DEFAULT"
+		idx += len("DEFAULT")
+	} else {
+		// Position after "DEFAULT "
+		idx += len("DEFAULT ")
+	}
+
+	rest := strings.TrimSpace(colDef[idx:])
+	if len(rest) == 0 {
+		return ""
+	}
+
+	switch rest[0] {
+	case '\'':
+		// Quoted string: find the matching closing quote (handle '' escapes)
+		end := 1
+		for end < len(rest) {
+			if rest[end] == '\'' {
+				if end+1 < len(rest) && rest[end+1] == '\'' {
+					end += 2 // skip escaped quote
+				} else {
+					end++
+					break
+				}
+			} else {
+				end++
+			}
+		}
+		return rest[:end]
+	case '(':
+		// Parenthesized expression: balance parentheses (handles nesting)
+		depth := 0
+		end := 0
+		inStr := false
+		for end < len(rest) {
+			if inStr {
+				if rest[end] == '\'' {
+					if end+1 < len(rest) && rest[end+1] == '\'' {
+						end++ // skip escaped quote
+					} else {
+						inStr = false
+					}
+				}
+			} else {
+				switch rest[end] {
+				case '\'':
+					inStr = true
+				case '(':
+					depth++
+				case ')':
+					depth--
+					if depth == 0 {
+						return rest[:end+1]
+					}
+				}
+			}
+			end++
+		}
+		// If unbalanced, return what we have
+		return rest[:end]
+	default:
+		// Simple value (number, identifier, keyword): read until comma or whitespace
+		end := 0
+		for end < len(rest) && rest[end] != ',' && rest[end] != ' ' && rest[end] != '\t' && rest[end] != '\n' {
+			end++
+		}
+		return rest[:end]
 	}
 }

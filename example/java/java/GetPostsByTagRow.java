@@ -10,5 +10,5 @@ public record GetPostsByTagRow(
     PostStatus status,
     LocalDateTime created_at,
     String author_name,
-    int comment_count
+    long comment_count
 ) {}

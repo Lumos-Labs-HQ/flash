@@ -1,0 +1,13 @@
+[package]
+name = "RUST"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = { version = "0.4.45", features = ["serde"] }
+dotenvy = "0.15.7"
+rust_decimal = { version = "1.42.1", features = ["serde-with-str"] }
+serde = { version = "1.0.228", features = ["derive"] }
+sqlx = { version = "0.9.0", features = ["postgres", "runtime-tokio", "chrono", "macros", "uuid", "rust_decimal", "tls-rustls"] }
+tokio = { version = "1.52.3", features = ["full"] }
+uuid = { version = "1.23.5", features = ["serde"] }

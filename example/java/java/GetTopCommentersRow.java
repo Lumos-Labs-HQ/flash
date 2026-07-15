@@ -7,6 +7,6 @@ public record GetTopCommentersRow(
     int id,
     String name,
     String email,
-    int comment_count,
+    long comment_count,
     int rank
 ) {}

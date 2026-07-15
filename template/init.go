@@ -21,6 +21,7 @@ type ProjectTemplate struct {
 	IsPythonProject bool
 	IsKotlinProject bool
 	IsJavaProject   bool
+	IsRustProject   bool
 	JavaPackage     string // auto-detected from pom.xml / build.gradle
 	KotlinPackage   string // auto-detected from build.gradle.kts / pom.xml
 }
@@ -109,13 +110,14 @@ func NewProjectTemplate(dbType DatabaseType, isNodeProject bool, isPythonProject
 	}
 }
 
-func NewProjectTemplateExt(dbType DatabaseType, isNode, isPython, isKotlin, isJava bool) *ProjectTemplate {
+func NewProjectTemplateExt(dbType DatabaseType, isNode, isPython, isKotlin, isJava, isRust bool) *ProjectTemplate {
 	return &ProjectTemplate{
 		DatabaseType:    dbType,
 		IsNodeProject:   isNode,
 		IsPythonProject: isPython,
 		IsKotlinProject: isKotlin,
 		IsJavaProject:   isJava,
+		IsRustProject:   isRust,
 	}
 }
 
@@ -275,6 +277,12 @@ enabled = true
 out = "flash_gen"
 async = true`
 	}
+	if pt.IsRustProject {
+		return `[gen.rust]
+enabled = true
+out = "src/flash_gen"
+driver = "sqlx"`
+	}
 	if pt.IsKotlinProject {
 		pkg := pt.KotlinPackage
 		if pkg == "" {
@@ -310,6 +318,7 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Python: "psycopg3" | "asyncpg"
 #   Kotlin: "jdbc" (default) | "exposed" | "r2dbc"
 #   Java:   "jdbc" (default) | "jooq" | "hibernate"
+#   Rust:   "sqlx" (default)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case MySQL:
 		return `# FlashORM — MySQL Drivers
@@ -318,6 +327,7 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Python: "pymysql" (sync) | "asyncmy" (async)
 #   Kotlin: "jdbc" (default) | "exposed" | "r2dbc"
 #   Java:   "jdbc" (default) | "jooq" | "hibernate"
+#   Rust:   "sqlx" (default)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case SQLite:
 		return `# FlashORM — SQLite Drivers
@@ -326,6 +336,7 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Python: "sqlite3" (sync) | "aiosqlite" (async)
 #   Kotlin: "jdbc" (default) | "exposed"
 #   Java:   "jdbc" (default)
+#   Rust:   "sqlx" (default)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case ClickHouse:
 		return `# FlashORM — ClickHouse Drivers
@@ -334,6 +345,7 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Python: "clickhouse-driver" (sync) | "asynch" (async)
 #   Kotlin: "jdbc" (default)
 #   Java:   "jdbc" (default) | "jooq"
+#   Rust:   "sqlx" (default)
 # Add driver = "<name>" inside the [gen.*] block below.`
 	case ScyllaDB:
 		return `# FlashORM — ScyllaDB/Cassandra Drivers
@@ -342,6 +354,7 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Python: "scylla-driver" (sync) | "cassandra-driver" (async)
 #   Kotlin: uses DataStax Java Driver (CqlSession) — no driver key needed
 #   Java:   uses DataStax Java Driver (CqlSession) — no driver key needed
+#   Rust:   "sqlx" (default) — ScyllaDB not yet supported for Rust
 # Add driver = "gocql" inside the [gen.go] block to use gocql/gocql instead.`
 	default:
 		return `# FlashORM — See docs for available drivers per database.`

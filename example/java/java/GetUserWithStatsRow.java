@@ -21,8 +21,8 @@ public record GetUserWithStatsRow(
     LocalDateTime created_at,
     LocalDateTime updated_at,
     UserRole role,
-    int published_posts,
-    int total_comments,
-    int unread_notifications,
+    long published_posts,
+    long total_comments,
+    long unread_notifications,
     Double storage_used
 ) {}

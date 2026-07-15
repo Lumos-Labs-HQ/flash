@@ -65,6 +65,7 @@ type Gen struct {
 	Python PythonGen `toml:"python"`
 	Kotlin KotlinGen `toml:"kotlin"`
 	Java   JavaGen   `toml:"java"`
+	Rust   RustGen   `toml:"rust"`
 }
 
 type GoGen struct {
@@ -100,6 +101,12 @@ type JavaGen struct {
 	Driver  string `toml:"driver"`  // "jdbc" (default), "jooq", "hibernate"
 }
 
+type RustGen struct {
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Driver  string `toml:"driver"` // "sqlx" (default)
+}
+
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
 type rawPythonGen struct {
 	Enabled bool   `toml:"enabled"`
@@ -114,6 +121,7 @@ type rawGen struct {
 	Python rawPythonGen `toml:"python"`
 	Kotlin KotlinGen    `toml:"kotlin"`
 	Java   JavaGen      `toml:"java"`
+	Rust   RustGen      `toml:"rust"`
 }
 
 type rawConfig struct {
@@ -222,6 +230,7 @@ func loadUncached() (*Config, error) {
 		cfg.Gen.Python.Driver = raw.Gen.Python.Driver
 		cfg.Gen.Kotlin = raw.Gen.Kotlin
 		cfg.Gen.Java = raw.Gen.Java
+		cfg.Gen.Rust = raw.Gen.Rust
 		if raw.Gen.Python.Async != nil {
 			cfg.Gen.Python.Async = *raw.Gen.Python.Async
 			pythonAsyncSet = true
@@ -290,6 +299,12 @@ func loadUncached() (*Config, error) {
 	}
 	if cfg.Gen.Python.Enabled && !pythonAsyncSet {
 		cfg.Gen.Python.Async = true
+	}
+	if cfg.Gen.Rust.Out == "" && cfg.Gen.Rust.Enabled {
+		cfg.Gen.Rust.Out = "src/flash_gen"
+	}
+	if cfg.Gen.Rust.Driver == "" && cfg.Gen.Rust.Enabled {
+		cfg.Gen.Rust.Driver = "sqlx"
 	}
 
 	return &cfg, nil

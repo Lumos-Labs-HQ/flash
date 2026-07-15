@@ -7,5 +7,5 @@ public record GetUsersWithManyPostsRow(
     int id,
     String name,
     String email,
-    int total_posts
+    long total_posts
 ) {}
