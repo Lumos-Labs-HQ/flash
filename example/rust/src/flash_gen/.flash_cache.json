@@ -8,21 +8,21 @@
   "config_checksum": "335c5590b487af681c5702a85dc43d3e70c9304e97d68da3a2450e53bde967ab",
   "query_table_deps": {
     "db/queries/posts.sql": [
-      "ranked_authors",
       "daily",
       "users",
       "posts",
       "posts;",
-      "ranked"
+      "ranked",
+      "ranked_authors"
     ],
     "db/queries/users.sql": [
-      "users",
-      "users;",
       "cohorts",
-      "ranked"
+      "ranked",
+      "users",
+      "users;"
     ]
   },
   "generated_file_checksums": {},
-  "last_generation": "2026-07-16T01:39:12.747901734+05:30",
+  "last_generation": "2026-07-16T02:54:15.438653982+05:30",
   "OutDir": "src/flash_gen"
 }

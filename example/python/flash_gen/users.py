@@ -2075,12 +2075,12 @@ class GetComplexUserAnalyticsParams(TypedDict):
         result = await self.db.fetch(stmt, user_id)
         return GetPostCountByUserRow._make_fast(result[0]) if result else None
 
-    async def get_users_with_many_posts(self, min_count: int) -> List[GetUsersWithManyPostsRow]:
+    async def get_users_with_many_posts(self, count: int) -> List[GetUsersWithManyPostsRow]:
         _key = 'get_users_with_many_posts'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;"""
         stmt = self._stmts[_key]
-        result = await self.db.fetch(stmt, min_count)
+        result = await self.db.fetch(stmt, count)
         return [GetUsersWithManyPostsRow._make_fast(row) for row in result]
 
     async def get_posts_with_comment_count(self, limit: int, offset: int) -> List[GetPostsWithCommentCountRow]:

@@ -12,6 +12,7 @@ tasks:
    test-gen:
       desc: Run tests with generated code
       cmds:
+         - task: build
          - cd example/go && rm -rf flash_gen && ../../flash gen -f
          - cd example/java && rm -rf kotlin && rm -rf java && ../../flash gen -f
          - cd example/python && rm -rf flash_gen && ../../flash gen -f

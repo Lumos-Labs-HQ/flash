@@ -8,34 +8,34 @@
   "config_checksum": "706f737467726573716c7c666c6173685f67656e7c747275657c6173796e637067",
   "query_table_deps": {
     "db/queries/json_typed.sql": [
-      "posts",
-      "users"
+      "users",
+      "posts"
     ],
     "db/queries/users.sql": [
+      "posts",
+      "active_users",
       "orders",
-      "notifications",
-      "media",
+      "tags",
+      "user_post_stats",
       "active_commenters",
-      "users;",
-      "subscriptions",
-      "post_tags",
-      "u",
-      "user_activity_summary",
+      "post_stats",
       "audit_log",
       "categories",
       "comments",
-      "tags",
+      "notifications",
+      "post_tags",
       "users",
-      "user_post_stats",
-      "posts",
-      "active_users",
-      "post_stats"
+      "users;",
+      "user_activity_summary",
+      "subscriptions",
+      "u",
+      "media"
     ]
   },
   "generated_file_checksums": {
     "flash_gen/json_typed.py": "c1ef5172fcea6902d7de5fa4a73918e134a25633a8dec497355b05f8bd9f1168",
-    "flash_gen/users.py": "737b0a45033d8a8fcf645f9b091d362c591159985c581e28e3d88f341b6018ce"
+    "flash_gen/users.py": "fae0bb3b66059443820c93ac27966a7936c9a02381aa9dc4ff5201c75474e73e"
   },
-  "last_generation": "2026-07-16T01:39:12.630965613+05:30",
+  "last_generation": "2026-07-16T02:54:15.31196346+05:30",
   "OutDir": "flash_gen"
 }

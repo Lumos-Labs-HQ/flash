@@ -162,8 +162,8 @@ public class Queries {
         return this.users.getPostCountByUser(user_id);
     }
 
-    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int min_count) throws java.sql.SQLException {
-        return this.users.getUsersWithManyPosts(min_count);
+    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int count) throws java.sql.SQLException {
+        return this.users.getUsersWithManyPosts(count);
     }
 
     public java.util.List<GetPostsWithCommentCountRow> getPostsWithCommentCount(int limit, int offset) throws java.sql.SQLException {

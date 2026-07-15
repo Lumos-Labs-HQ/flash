@@ -123,8 +123,8 @@ class Queries(private val conn: Connection) {
     fun getPostCountByUser(userId: Int): GetPostCountByUserRow? =
         users.getPostCountByUser(userId)
 
-    fun getUsersWithManyPosts(minCount: Int): List<GetUsersWithManyPostsRow> =
-        users.getUsersWithManyPosts(minCount)
+    fun getUsersWithManyPosts(count: Int): List<GetUsersWithManyPostsRow> =
+        users.getUsersWithManyPosts(count)
 
     fun getPostsWithCommentCount(limit: Int, offset: Int): List<GetPostsWithCommentCountRow> =
         users.getPostsWithCommentCount(limit, offset)

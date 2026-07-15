@@ -689,13 +689,13 @@ impl Queries {
     pub async fn get_posts_with_all_tags(
         &self,
         name: &str,
-        param2: &str,
+        count: i32,
     ) -> Result<Vec<GetPostsWithAllTagsRow>, sqlx::Error> {
         sqlx::query_as::<_, GetPostsWithAllTagsRow>(
             "SELECT p.id, p.title, p.published, p.created_at FROM posts p WHERE ( SELECT COUNT(DISTINCT t.name) FROM post_tags pt INNER JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id AND t.name = ANY($1::TEXT[]) ) = $2 ORDER BY p.created_at DESC;"
         )
         .bind(name)
-        .bind(param2)
+        .bind(count)
         .fetch_all(&self.pool)
         .await
     }

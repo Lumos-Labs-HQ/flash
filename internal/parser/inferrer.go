@@ -713,9 +713,10 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	// WHERE (subquery) > $N — correlated subquery threshold
-	subqueryThresholdRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+\(SELECT[\s\S]*?\)\s*[><=!]+\s*\$%d`, paramIndex))
+	// Handles: WHERE (SELECT ...) = $N, WHERE ( SELECT ... ) = $N
+	subqueryThresholdRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s+\(\s*SELECT[\s\S]*?\)\s*[><=!]+\s*\$%d`, paramIndex))
 	if subqueryThresholdRe.MatchString(sql) {
-		return "min_count"
+		return "count"
 	}
 
 	// plainto_tsquery(..., $N) or to_tsquery(..., $N) — full-text search

@@ -10,10 +10,10 @@ import (
 // Preferences represents the JSON structure for the 'preferences' column.
 // Unmarshal with: json.Unmarshal([]byte(row.Preferences), &obj)
 type Preferences struct {
-	Notifications *bool `json:"notifications"`
 	Language *string `json:"language"`
 	FontSize *int64 `json:"font_size"`
 	Theme *string `json:"theme"`
+	Notifications *bool `json:"notifications"`
 }
 
 // Metadata represents the JSON structure for the 'metadata' column.

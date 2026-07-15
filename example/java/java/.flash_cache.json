@@ -11,24 +11,24 @@
       "testss"
     ],
     "db/queries/users.sql": [
-      "subscriptions",
-      "notifications",
-      "tags",
-      "post_tags",
-      "media",
+      "user_post_stats",
       "post_stats",
-      "audit_log",
-      "comments",
-      "users",
-      "posts",
-      "users;",
-      "active_users",
-      "u",
-      "active_commenters",
       "orders",
       "categories",
-      "user_post_stats",
-      "user_activity_summary"
+      "u",
+      "active_commenters",
+      "posts",
+      "comments",
+      "tags",
+      "users",
+      "active_users",
+      "user_activity_summary",
+      "audit_log",
+      "post_tags",
+      "media",
+      "users;",
+      "subscriptions",
+      "notifications"
     ]
   },
   "generated_file_checksums": {
@@ -44,7 +44,7 @@
     "java/PostStatus.java": "74279ad9e10f7ab0e2cfcea22f2b54467eac3b59592c2d41c4a8f466b6f8b5d1",
     "java/PostTags.java": "a33271555084f83554e101044843f914e065912556675c09e41821f0f6c0af27",
     "java/Posts.java": "2549971705f3fa9b56aecd74b460863d1506b0ee9c9c36d7e92939c50ef887be",
-    "java/Queries.java": "1aa93beba1cf1452ffd1d3d68b0552c8cf1457c7e0df5a7998fbcc1fff74aac0",
+    "java/Queries.java": "8e7c21acfa38060b951ba853582478a22656407823977ef49d31276a907706b1",
     "java/SubscriptionTier.java": "03b55f5195d6cb896efab5efde50966e87b27037f117cde4c048876a1a6d2ac9",
     "java/Subscriptions.java": "9fa996eb6a8c825fbc245c17deb296a210d64dcf75f8e3c85f3b729ab4a0bff2",
     "java/Tags.java": "7d25859795785c95bebe8419949f7bba0c9f51e6113f162e298e4ed6fb896479",
@@ -54,8 +54,8 @@
     "java/UserRole.java": "3ecf24bcf9ad2f8584d78493f3abb8d73a0d246a577355d17eb14af779fbd6bd",
     "java/UserSessions.java": "27aed63bffd9bcd641a887e129b2e5eb5eeb475e43f9276ba04d954f92e5e877",
     "java/Users.java": "84a111a7c26b9ed90309e9b1b164c6e30c89667a0fd4182d84dd658ac0e23abe",
-    "java/UsersQueries.java": "331fa1595a9fd6c4cad12deb559264a82086c081dabbd00f264c800a848f3d95"
+    "java/UsersQueries.java": "cb770f717ef22be08abb60d566fafe9692505af6ac801ee89c44418d80364b8b"
   },
-  "last_generation": "2026-07-16T01:39:12.556217537+05:30",
+  "last_generation": "2026-07-16T02:54:15.231915261+05:30",
   "OutDir": "java"
 }

@@ -1303,10 +1303,10 @@ class UsersQueries(private val conn: Connection) {
         }
     }
 
-    fun getUsersWithManyPosts(minCount: Int): List<GetUsersWithManyPostsRow> {
+    fun getUsersWithManyPosts(count: Int): List<GetUsersWithManyPostsRow> {
         val sql = """SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > ? ORDER BY total_posts DESC;"""
         val stmt = stmts.getOrPut("getUsersWithManyPosts") { conn.prepareStatement(sql) }
-        stmt.setInt(1, minCount)
+        stmt.setInt(1, count)
         val items = mutableListOf<GetUsersWithManyPostsRow>()
         stmt.executeQuery().use { rs ->
             while (rs.next()) items.add(

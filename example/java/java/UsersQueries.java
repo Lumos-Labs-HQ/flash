@@ -751,12 +751,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int min_count) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int count) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > ? ORDER BY total_posts DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, min_count);
+            stmt.setInt(1, count);
             var items = new java.util.ArrayList<GetUsersWithManyPostsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {

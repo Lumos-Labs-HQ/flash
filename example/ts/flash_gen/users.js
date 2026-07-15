@@ -327,13 +327,13 @@ class Queries {
     return r.rows[0] || null;
   }
 
-  async getUsersWithManyPosts(min_count) {
+  async getUsersWithManyPosts(count) {
     let stmt = this._stmts.get('getUsersWithManyPosts');
     if (!stmt) {
       stmt = `SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;`;
       this._stmts.set('getUsersWithManyPosts', stmt);
     }
-    const r = await this.db.query(stmt, [min_count]);
+    const r = await this.db.query(stmt, [count]);
   }
 
   async getPostsWithCommentCount(limit, offset) {

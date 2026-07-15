@@ -1014,7 +1014,7 @@ type GetpostcountbyuserRow struct {
 	CommentCount int64 `json:"comment_count"`
 }
 
-func (q *Queries) Getuserswithmanyposts(min_count int64) ([]GetuserswithmanypostsRow, error) {
+func (q *Queries) Getuserswithmanyposts(count int64) ([]GetuserswithmanypostsRow, error) {
 	const query = `SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > $1 ORDER BY total_posts DESC;`
 	stmt := q.stmts["Getuserswithmanyposts_stmt"]
 	if stmt == nil {
@@ -1025,7 +1025,7 @@ func (q *Queries) Getuserswithmanyposts(min_count int64) ([]Getuserswithmanypost
 		}
 		q.stmts["Getuserswithmanyposts_stmt"] = stmt
 	}
-	args := []interface{}{min_count}
+	args := []interface{}{count}
 
 	rows, err := stmt.Query(args...)
 	if err != nil {
