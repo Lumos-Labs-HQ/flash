@@ -4,12 +4,12 @@ package java;
 
 
 public record GetDashboardStatsRow(
-    int total_users,
-    int total_posts,
-    int total_comments,
-    int published_posts,
-    int posts_this_week,
-    int signups_this_week,
-    int comments_last_24h,
-    int pending_orders
+    long total_users,
+    long total_posts,
+    long total_comments,
+    long published_posts,
+    long posts_this_week,
+    long signups_this_week,
+    long comments_last_24h,
+    long pending_orders
 ) {}

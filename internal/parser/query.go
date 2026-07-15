@@ -298,6 +298,15 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 		}
 	}
 
+	// Detect subquery aliases: words immediately following ")" in the original SQL
+	// e.g. FROM (SELECT ...) ranked → "ranked" is a subquery alias, not a table
+	subqAliasRe := regexp.MustCompile(`\)\s+(?:AS\s+)?(\w+)`)
+	for _, m := range subqAliasRe.FindAllStringSubmatch(query.SQL, -1) {
+		if len(m) > 1 && !utils.IsSQLKeyword(m[1]) {
+			cteNames[strings.ToLower(m[1])] = true
+		}
+	}
+
 	// If the extracted table name is actually a CTE, skip schema validation
 	if cteNames[strings.ToLower(tableName)] {
 		tableName = ""

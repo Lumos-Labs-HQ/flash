@@ -4,6 +4,6 @@ package java;
 
 
 public record GetPostCountByUserRow(
-    int post_count,
-    int comment_count
+    long post_count,
+    long comment_count
 ) {}

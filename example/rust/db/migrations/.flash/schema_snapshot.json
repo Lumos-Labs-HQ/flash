@@ -1,0 +1,518 @@
+{
+  "version": "2",
+  "generated_at": "2026-07-15T18:16:15.215907307Z",
+  "tables": [
+    {
+      "Name": "tags",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "SERIAL",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": true,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "name",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": true,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [],
+      "CompositePK": "",
+      "Suffix": ""
+    },
+    {
+      "Name": "users",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "SERIAL",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": true,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "name",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "email",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": true,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "age",
+          "Type": "INTEGER",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "is_active",
+          "Type": "BOOLEAN",
+          "Nullable": false,
+          "Default": "TRUE",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "created_at",
+          "Type": "TIMESTAMPTZ",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "updated_at",
+          "Type": "TIMESTAMPTZ",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [],
+      "CompositePK": "",
+      "Suffix": ""
+    },
+    {
+      "Name": "posts",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "UUID",
+          "Nullable": true,
+          "Default": "gen_random_uuid()",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "user_id",
+          "Type": "INTEGER",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "users",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "title",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "body",
+          "Type": "TEXT",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "views",
+          "Type": "INTEGER",
+          "Nullable": false,
+          "Default": "0",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "published",
+          "Type": "BOOLEAN",
+          "Nullable": false,
+          "Default": "FALSE",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "created_at",
+          "Type": "TIMESTAMPTZ",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "updated_at",
+          "Type": "TIMESTAMPTZ",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [],
+      "CompositePK": "",
+      "Suffix": ""
+    },
+    {
+      "Name": "comments",
+      "Columns": [
+        {
+          "Name": "id",
+          "Type": "SERIAL",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": true,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "post_id",
+          "Type": "UUID",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "posts",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "user_id",
+          "Type": "INTEGER",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "users",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "parent_id",
+          "Type": "INTEGER",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "comments",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "body",
+          "Type": "TEXT",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "created_at",
+          "Type": "TIMESTAMPTZ",
+          "Nullable": false,
+          "Default": "NOW()",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [
+        {
+          "Name": "idx_comments_post_id",
+          "Table": "comments",
+          "Columns": [
+            "post_id"
+          ],
+          "Unique": false,
+          "Where": "",
+          "Method": "",
+          "Expr": null
+        },
+        {
+          "Name": "idx_comments_user_id",
+          "Table": "comments",
+          "Columns": [
+            "user_id"
+          ],
+          "Unique": false,
+          "Where": "",
+          "Method": "",
+          "Expr": null
+        }
+      ],
+      "CompositePK": "",
+      "Suffix": ""
+    },
+    {
+      "Name": "post_tags",
+      "Columns": [
+        {
+          "Name": "post_id",
+          "Type": "UUID",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "posts",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "tag_id",
+          "Type": "INTEGER",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "tags",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [],
+      "CompositePK": "(post_id, tag_id)",
+      "Suffix": ""
+    }
+  ],
+  "enums": null,
+  "indexes": [
+    {
+      "Name": "idx_posts_user_id",
+      "Table": "posts",
+      "Columns": [
+        "user_id"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_posts_published",
+      "Table": "posts",
+      "Columns": [
+        "published"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_comments_post_id",
+      "Table": "comments",
+      "Columns": [
+        "post_id"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    },
+    {
+      "Name": "idx_comments_user_id",
+      "Table": "comments",
+      "Columns": [
+        "user_id"
+      ],
+      "Unique": false,
+      "Where": "",
+      "Method": "",
+      "Expr": null
+    }
+  ],
+  "keyspaces": null,
+  "udts": null
+}

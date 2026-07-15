@@ -8,34 +8,34 @@
   "config_checksum": "706f737467726573716c7c666c6173685f67656e7c",
   "query_table_deps": {
     "db/queries/json_typed.sql": [
-      "users",
-      "posts"
+      "posts",
+      "users"
     ],
     "db/queries/users.sql": [
-      "u",
-      "orders",
+      "subscriptions",
       "audit_log",
-      "active_commenters",
+      "categories",
+      "notifications",
+      "user_post_stats",
       "posts",
+      "user_activity_summary",
+      "comments",
+      "users",
       "active_users",
       "post_stats",
-      "subscriptions",
-      "user_activity_summary",
-      "tags",
-      "post_tags",
-      "categories",
-      "comments",
-      "notifications",
-      "users",
-      "user_post_stats",
+      "media",
+      "u",
+      "active_commenters",
       "users;",
-      "media"
+      "orders",
+      "tags",
+      "post_tags"
     ]
   },
   "generated_file_checksums": {
     "flash_gen/json_typed.js": "38418a0f5a5ff78c519b58fa3af6c068142e5848f0a0e74eeee9a0e68f1c7f6d",
     "flash_gen/users.js": "a9d376301cf53b23ff27d2abe604fc47c3787b08a647e81a3edc28c950b7b33e"
   },
-  "last_generation": "2026-07-02T15:11:32.331873136+05:30",
+  "last_generation": "2026-07-16T01:17:05.445530778+05:30",
   "OutDir": "flash_gen"
 }

@@ -5,5 +5,5 @@ package java;
 
 public record GetUserRoleCountRow(
     UserRole role,
-    int count
+    long count
 ) {}

@@ -182,7 +182,7 @@ public class Queries {
         return this.users.getPostDetailsWithAllRelations(id);
     }
 
-    public Integer countUsersByRole(UserRole role) throws java.sql.SQLException {
+    public Long countUsersByRole(UserRole role) throws java.sql.SQLException {
         return this.users.countUsersByRole(role);
     }
 
@@ -330,7 +330,7 @@ public class Queries {
         return this.users.getNotificationsByUser(args);
     }
 
-    public Integer getUnreadCount(int user_id) throws java.sql.SQLException {
+    public Long getUnreadCount(int user_id) throws java.sql.SQLException {
         return this.users.getUnreadCount(user_id);
     }
 

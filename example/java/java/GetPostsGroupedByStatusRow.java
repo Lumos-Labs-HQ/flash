@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 
 public record GetPostsGroupedByStatusRow(
     PostStatus status,
-    int count,
+    long count,
     LocalDateTime oldest,
     LocalDateTime newest
 ) {}

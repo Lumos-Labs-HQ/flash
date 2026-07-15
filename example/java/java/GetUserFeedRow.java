@@ -14,6 +14,6 @@ public record GetUserFeedRow(
     int author_id,
     String author_name,
     UUID avatar_hash,
-    int comment_count,
-    int tag_count
+    long comment_count,
+    long tag_count
 ) {}

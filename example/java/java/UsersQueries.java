@@ -698,7 +698,7 @@ public class UsersQueries {
                     items.add(new GetUserPostRankingsRow(
                         rs.getInt("id"),
                         rs.getString("name"),
-                        rs.getInt("post_count"),
+                        rs.getLong("post_count"),
                         rs.getInt("post_rank"),
                         rs.getInt("dense_post_rank"),
                         rs.getInt("row_num")
@@ -744,8 +744,8 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new GetPostCountByUserRow(
-                    rs.getInt("post_count"),
-                    rs.getInt("comment_count")
+                    rs.getLong("post_count"),
+                    rs.getLong("comment_count")
                 );
             }
         }
@@ -764,7 +764,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("email"),
-                        rs.getInt("total_posts")
+                        rs.getLong("total_posts")
                     ));
                 }
             }
@@ -786,8 +786,8 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("title"),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
-                        rs.getInt("comment_count"),
-                        rs.getInt("unique_commenters"),
+                        rs.getLong("comment_count"),
+                        rs.getLong("unique_commenters"),
                         rs.getTimestamp("last_comment_at") != null ? rs.getTimestamp("last_comment_at").toLocalDateTime() : null
                     ));
                 }
@@ -863,8 +863,8 @@ public class UsersQueries {
                     rs.getBoolean("author_is_admin"),
                     rs.getInt("category_id"),
                     rs.getString("category_name"),
-                    rs.getInt("comment_count"),
-                    rs.getInt("unique_commenters"),
+                    rs.getLong("comment_count"),
+                    rs.getLong("unique_commenters"),
                     rs.getString("all_comments"),
                     rs.getArray("commenter_names") != null ? java.util.Arrays.asList((String[]) rs.getArray("commenter_names").getArray()) : null,
                     rs.getTimestamp("last_comment_date") != null ? rs.getTimestamp("last_comment_date").toLocalDateTime() : null,
@@ -875,14 +875,14 @@ public class UsersQueries {
         }
     }
 
-    public Integer countUsersByRole(UserRole role) throws java.sql.SQLException {
+    public Long countUsersByRole(UserRole role) throws java.sql.SQLException {
         final String sql = """
                 SELECT COUNT(*) FROM users WHERE role = ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setObject(1, role);
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
-                return rs.next() ? rs.getInt("COUNT(*)") : null;
+                return rs.next() ? rs.getLong("COUNT(*)") : null;
             }
         }
     }
@@ -895,9 +895,9 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new CountUsersRow(
-                    rs.getInt("total_users"),
-                    rs.getInt("admin_count"),
-                    rs.getInt("regular_count")
+                    rs.getLong("total_users"),
+                    rs.getLong("admin_count"),
+                    rs.getLong("regular_count")
                 );
             }
         }
@@ -913,7 +913,7 @@ public class UsersQueries {
                 while (rs.next()) {
                     items.add(new GetUserRoleCountRow(
                         UserRole.valueOf(rs.getString("role")),
-                        rs.getInt("count")
+                        rs.getLong("count")
                     ));
                 }
             }
@@ -931,7 +931,7 @@ public class UsersQueries {
                 return new GetUserAgeStatsRow(
                     rs.getTimestamp("first_joined") != null ? rs.getTimestamp("first_joined").toLocalDateTime() : null,
                     rs.getTimestamp("last_joined") != null ? rs.getTimestamp("last_joined").toLocalDateTime() : null,
-                    rs.getInt("total"),
+                    rs.getLong("total"),
                     rs.getDouble("avg_age"),
                     rs.getDouble("avg_name_length")
                 );
@@ -950,7 +950,7 @@ public class UsersQueries {
                 while (rs.next()) {
                     items.add(new GetPostsGroupedByStatusRow(
                         PostStatus.valueOf(rs.getString("status")),
-                        rs.getInt("count"),
+                        rs.getLong("count"),
                         rs.getTimestamp("oldest") != null ? rs.getTimestamp("oldest").toLocalDateTime() : null,
                         rs.getTimestamp("newest") != null ? rs.getTimestamp("newest").toLocalDateTime() : null
                     ));
@@ -1078,7 +1078,7 @@ public class UsersQueries {
                     items.add(new GetUserRegistrationStatsRow(
                         rs.getDouble("year"),
                         rs.getDouble("month"),
-                        rs.getInt("signups")
+                        rs.getLong("signups")
                     ));
                 }
             }
@@ -1097,7 +1097,7 @@ public class UsersQueries {
                 while (rs.next()) {
                     items.add(new GetWeeklyPostStatsRow(
                         rs.getString("week_start"),
-                        rs.getInt("posts_created"),
+                        rs.getLong("posts_created"),
                         rs.getDouble("total_views")
                     ));
                 }
@@ -1447,14 +1447,14 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new GetDashboardStatsRow(
-                    rs.getInt("total_users"),
-                    rs.getInt("total_posts"),
-                    rs.getInt("total_comments"),
-                    rs.getInt("published_posts"),
-                    rs.getInt("posts_this_week"),
-                    rs.getInt("signups_this_week"),
-                    rs.getInt("comments_last_24h"),
-                    rs.getInt("pending_orders")
+                    rs.getLong("total_users"),
+                    rs.getLong("total_posts"),
+                    rs.getLong("total_comments"),
+                    rs.getLong("published_posts"),
+                    rs.getLong("posts_this_week"),
+                    rs.getLong("signups_this_week"),
+                    rs.getLong("comments_last_24h"),
+                    rs.getLong("pending_orders")
                 );
             }
         }
@@ -1473,7 +1473,7 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getString("email"),
-                        rs.getInt("comment_count"),
+                        rs.getLong("comment_count"),
                         rs.getInt("rank")
                     ));
                 }
@@ -1493,7 +1493,7 @@ public class UsersQueries {
                 while (rs.next()) {
                     items.add(new GetEngagementTimeSeriesRow(
                         rs.getString("day"),
-                        rs.getInt("count"),
+                        rs.getLong("count"),
                         rs.getString("event_type")
                     ));
                 }
@@ -1649,14 +1649,14 @@ public class UsersQueries {
         }
     }
 
-    public Integer getUnreadCount(int user_id) throws java.sql.SQLException {
+    public Long getUnreadCount(int user_id) throws java.sql.SQLException {
         final String sql = """
                 SELECT COUNT(*) AS unread_count FROM notifications WHERE user_id = ? AND is_read = FALSE;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, user_id);
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
-                return rs.next() ? rs.getInt("unread_count") : null;
+                return rs.next() ? rs.getLong("unread_count") : null;
             }
         }
     }
@@ -1836,7 +1836,7 @@ public class UsersQueries {
                         PostStatus.valueOf(rs.getString("status")),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                         rs.getString("author_name"),
-                        rs.getInt("comment_count")
+                        rs.getLong("comment_count")
                     ));
                 }
             }
@@ -1858,7 +1858,7 @@ public class UsersQueries {
                         rs.getString("name"),
                         rs.getString("slug"),
                         rs.getString("color"),
-                        rs.getInt("post_count")
+                        rs.getLong("post_count")
                     ));
                 }
             }
@@ -1994,10 +1994,10 @@ public class UsersQueries {
                 if (!rs.next()) return null;
                 return new GetStorageUsedByUserRow(
                     rs.getDouble("total_bytes"),
-                    rs.getInt("total_files"),
-                    rs.getInt("image_count"),
-                    rs.getInt("video_count"),
-                    rs.getInt("document_count")
+                    rs.getLong("total_files"),
+                    rs.getLong("image_count"),
+                    rs.getLong("video_count"),
+                    rs.getLong("document_count")
                 );
             }
         }
@@ -2048,8 +2048,8 @@ public class UsersQueries {
                         rs.getInt("author_id"),
                         rs.getString("author_name"),
                         rs.getObject("avatar_hash", java.util.UUID.class),
-                        rs.getInt("comment_count"),
-                        rs.getInt("tag_count")
+                        rs.getLong("comment_count"),
+                        rs.getLong("tag_count")
                     ));
                 }
             }
@@ -2117,9 +2117,9 @@ public class UsersQueries {
                     rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
                     rs.getTimestamp("updated_at") != null ? rs.getTimestamp("updated_at").toLocalDateTime() : null,
                     UserRole.valueOf(rs.getString("role")),
-                    rs.getInt("published_posts"),
-                    rs.getInt("total_comments"),
-                    rs.getInt("unread_notifications"),
+                    rs.getLong("published_posts"),
+                    rs.getLong("total_comments"),
+                    rs.getLong("unread_notifications"),
                     rs.getDouble("storage_used")
                 );
             }
