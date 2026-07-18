@@ -762,6 +762,38 @@ func (g *Generator) sqlTypeToPython(sqlType string, nullable bool) string {
 		pyType = "dict"
 	case strings.Contains(sqlTypeLower, "uuid"):
 		pyType = "UUID"
+	// ─── PostgreSQL Extension Types ───────────────────────────────────────
+	case sqlTypeLower == "vector" || strings.HasPrefix(sqlTypeLower, "vector(") ||
+		sqlTypeLower == "halfvec" || strings.HasPrefix(sqlTypeLower, "halfvec("):
+		pyType = "List[float]" // pgvector
+	case sqlTypeLower == "hstore":
+		pyType = "Dict[str, str]"
+	case sqlTypeLower == "tsvector", sqlTypeLower == "tsquery":
+		pyType = "str"
+	case sqlTypeLower == "ltree", sqlTypeLower == "lquery", sqlTypeLower == "ltxtquery":
+		pyType = "str"
+	case sqlTypeLower == "money":
+		pyType = "Decimal"
+	case sqlTypeLower == "xml":
+		pyType = "str"
+	case sqlTypeLower == "pg_lsn":
+		pyType = "str"
+	case sqlTypeLower == "bit" || strings.HasPrefix(sqlTypeLower, "bit(") ||
+		sqlTypeLower == "varbit" || strings.HasPrefix(sqlTypeLower, "varbit(") ||
+		strings.HasPrefix(sqlTypeLower, "bit varying"):
+		pyType = "str"
+	case sqlTypeLower == "inet", sqlTypeLower == "cidr":
+		pyType = "str"
+	case sqlTypeLower == "macaddr", sqlTypeLower == "macaddr8":
+		pyType = "str"
+	case sqlTypeLower == "point", sqlTypeLower == "line", sqlTypeLower == "lseg",
+		sqlTypeLower == "box", sqlTypeLower == "path", sqlTypeLower == "polygon", sqlTypeLower == "circle":
+		pyType = "str"
+	case sqlTypeLower == "geometry" || strings.HasPrefix(sqlTypeLower, "geometry(") ||
+		sqlTypeLower == "geography" || strings.HasPrefix(sqlTypeLower, "geography("):
+		pyType = "str" // PostGIS WKT
+	case strings.HasSuffix(sqlTypeLower, "range") || strings.HasSuffix(sqlTypeLower, "multirange"):
+		pyType = "str"
 	// ClickHouse-specific types
 	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64",
 		sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64":

@@ -316,11 +316,84 @@ func (g *Generator) sqlTypeToRust(sqlType string, nullable bool) string {
 	case upper == "JSON" || upper == "JSONB":
 		t = "serde_json::Value"
 
-	// Network types (PostgreSQL)
+	// ─── PostgreSQL Extension Types ───────────────────────────────────────
+
+	// pgvector — vector similarity search
+	case upper == "VECTOR" || strings.HasPrefix(upper, "VECTOR("):
+		t = "pgvector::Vector"
+	case upper == "HALFVEC" || strings.HasPrefix(upper, "HALFVEC("):
+		t = "pgvector::HalfVec"
+	case upper == "SPARSEVEC" || strings.HasPrefix(upper, "SPARSEVEC("):
+		t = "pgvector::SparseVec"
+
+	// Interval
+	case upper == "INTERVAL":
+		t = "sqlx::postgres::types::PgInterval"
+
+	// Bit types
+	case upper == "BIT" || strings.HasPrefix(upper, "BIT(") ||
+		upper == "VARBIT" || strings.HasPrefix(upper, "VARBIT(") || strings.HasPrefix(upper, "BIT VARYING"):
+		t = "sqlx::postgres::types::PgBitVec"
+
+	// Network types
 	case upper == "INET" || upper == "CIDR":
-		t = "String" // ipnetwork crate could be used, but String is safer default
+		t = "ipnetwork::IpNetwork"
 	case upper == "MACADDR" || upper == "MACADDR8":
+		t = "mac_address::MacAddress"
+
+	// PostGIS — geometry/geography
+	case upper == "GEOMETRY" || strings.HasPrefix(upper, "GEOMETRY(") ||
+		upper == "GEOGRAPHY" || strings.HasPrefix(upper, "GEOGRAPHY("):
+		t = "geo_types::Geometry<f64>"
+
+	// PostgreSQL geometric types (built-in)
+	case upper == "POINT":
+		t = "sqlx::postgres::types::PgPoint"
+	case upper == "LINE" || upper == "LSEG" || upper == "BOX" ||
+		upper == "PATH" || upper == "POLYGON" || upper == "CIRCLE":
 		t = "String"
+
+	// Full-text search
+	case upper == "TSVECTOR" || upper == "TSQUERY":
+		t = "String"
+
+	// Range types
+	case upper == "INT4RANGE" || upper == "INT4MULTIRANGE":
+		t = "sqlx::postgres::types::PgRange<i32>"
+	case upper == "INT8RANGE" || upper == "INT8MULTIRANGE":
+		t = "sqlx::postgres::types::PgRange<i64>"
+	case upper == "NUMRANGE" || upper == "NUMMULTIRANGE":
+		t = "sqlx::postgres::types::PgRange<Decimal>"
+	case upper == "TSRANGE" || upper == "TSMULTIRANGE":
+		t = "sqlx::postgres::types::PgRange<NaiveDateTime>"
+	case upper == "TSTZRANGE" || upper == "TSTZMULTIRANGE":
+		t = "sqlx::postgres::types::PgRange<DateTime<Utc>>"
+	case upper == "DATERANGE" || upper == "DATEMULTIRANGE":
+		t = "sqlx::postgres::types::PgRange<chrono::NaiveDate>"
+
+	// hstore — key-value pairs
+	case upper == "HSTORE":
+		t = "sqlx::postgres::types::PgHstore"
+
+	// ltree — hierarchical labels
+	case upper == "LTREE" || upper == "LQUERY" || upper == "LTXTQUERY":
+		t = "sqlx::postgres::types::PgLTree"
+
+	// Money
+	case upper == "MONEY":
+		t = "sqlx::postgres::types::PgMoney"
+
+	// OID
+	case upper == "OID":
+		t = "u32"
+
+	// XML
+	case upper == "XML":
+		t = "String"
+
+	// pg_lsn — Log Sequence Number
+	case upper == "PG_LSN":
+		t = "sqlx::postgres::types::PgLsn"
 
 	default:
 		t = "String" // fallback

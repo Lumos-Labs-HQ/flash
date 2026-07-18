@@ -11,23 +11,23 @@
       "testss"
     ],
     "db/queries/users.sql": [
-      "subscriptions",
-      "media",
-      "user_post_stats",
-      "users;",
-      "orders",
-      "notifications",
-      "tags",
-      "u",
-      "user_activity_summary",
-      "audit_log",
-      "post_tags",
       "categories",
-      "comments",
+      "post_tags",
       "users",
+      "tags",
+      "user_post_stats",
       "active_commenters",
       "posts",
+      "orders",
+      "notifications",
+      "u",
       "active_users",
+      "user_activity_summary",
+      "subscriptions",
+      "audit_log",
+      "comments",
+      "media",
+      "users;",
       "post_stats"
     ]
   },
@@ -37,6 +37,6 @@
     "kotlin/Tests.kt": "1c756749eb2d9d3607cc4a4007d79b61802aa95291ae69d9441f5ec39a13628d",
     "kotlin/Users.kt": "e775ecb25d0d27aa03d2969796ce16415eecc1cf8420cd84657da2c454756808"
   },
-  "last_generation": "2026-07-16T02:54:15.165570299+05:30",
+  "last_generation": "2026-07-18T21:58:44.796201959+05:30",
   "OutDir": "kotlin"
 }

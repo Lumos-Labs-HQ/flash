@@ -765,6 +765,33 @@ func (g *Generator) mapSQLTypeToGo(sqlType string, nullable bool) string {
 		} else {
 			baseType = "[]byte"
 		}
+	// ─── PostgreSQL Extension Types ───────────────────────────────────────
+	case sqlTypeLower == "vector" || strings.HasPrefix(sqlTypeLower, "vector("):
+		baseType = "[]float32" // pgvector
+	case sqlTypeLower == "halfvec" || strings.HasPrefix(sqlTypeLower, "halfvec("):
+		baseType = "[]float32"
+	case sqlTypeLower == "hstore":
+		baseType = "map[string]string"
+	case sqlTypeLower == "tsvector" || sqlTypeLower == "tsquery":
+		baseType = "string"
+	case sqlTypeLower == "ltree" || sqlTypeLower == "lquery" || sqlTypeLower == "ltxtquery":
+		baseType = "string"
+	case sqlTypeLower == "money":
+		baseType = "string"
+	case sqlTypeLower == "xml":
+		baseType = "string"
+	case sqlTypeLower == "pg_lsn":
+		baseType = "string"
+	case sqlTypeLower == "bit" || strings.HasPrefix(sqlTypeLower, "bit(") ||
+		sqlTypeLower == "varbit" || strings.HasPrefix(sqlTypeLower, "varbit(") ||
+		strings.HasPrefix(sqlTypeLower, "bit varying"):
+		baseType = "string"
+	case sqlTypeLower == "point" || sqlTypeLower == "line" || sqlTypeLower == "lseg" ||
+		sqlTypeLower == "box" || sqlTypeLower == "path" || sqlTypeLower == "polygon" || sqlTypeLower == "circle":
+		baseType = "string"
+	case sqlTypeLower == "geometry" || strings.HasPrefix(sqlTypeLower, "geometry(") ||
+		sqlTypeLower == "geography" || strings.HasPrefix(sqlTypeLower, "geography("):
+		baseType = "string" // PostGIS WKT/WKB
 	case strings.HasSuffix(sqlTypeLower, "[]"):
 		// Array types: TEXT[], INTEGER[], etc.
 		elemType := strings.TrimSuffix(sqlTypeLower, "[]")

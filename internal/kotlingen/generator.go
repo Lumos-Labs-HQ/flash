@@ -847,6 +847,40 @@ func (g *Generator) sqlTypeToKotlin(sqlType string, nullable bool) string {
 		kt = "String" // raw JSON string
 	case sqlLower == "bytea" || strings.Contains(sqlLower, "blob"):
 		kt = "ByteArray"
+	// ─── PostgreSQL Extension Types ───────────────────────────────────────
+	case sqlLower == "vector" || strings.HasPrefix(sqlLower, "vector(") ||
+		sqlLower == "halfvec" || strings.HasPrefix(sqlLower, "halfvec("):
+		kt = "List<Float>" // pgvector
+	case sqlLower == "hstore":
+		kt = "Map<String, String>"
+	case sqlLower == "interval":
+		kt = "String"
+	case sqlLower == "tsvector", sqlLower == "tsquery":
+		kt = "String"
+	case sqlLower == "ltree", sqlLower == "lquery", sqlLower == "ltxtquery":
+		kt = "String"
+	case sqlLower == "money":
+		kt = "String"
+	case sqlLower == "xml":
+		kt = "String"
+	case sqlLower == "pg_lsn":
+		kt = "String"
+	case sqlLower == "bit" || strings.HasPrefix(sqlLower, "bit(") ||
+		sqlLower == "varbit" || strings.HasPrefix(sqlLower, "varbit(") ||
+		strings.HasPrefix(sqlLower, "bit varying"):
+		kt = "String"
+	case sqlLower == "inet", sqlLower == "cidr":
+		kt = "String"
+	case sqlLower == "macaddr", sqlLower == "macaddr8":
+		kt = "String"
+	case sqlLower == "point", sqlLower == "line", sqlLower == "lseg",
+		sqlLower == "box", sqlLower == "path", sqlLower == "polygon", sqlLower == "circle":
+		kt = "String"
+	case sqlLower == "geometry" || strings.HasPrefix(sqlLower, "geometry(") ||
+		sqlLower == "geography" || strings.HasPrefix(sqlLower, "geography("):
+		kt = "String" // PostGIS
+	case strings.HasSuffix(sqlLower, "range") || strings.HasSuffix(sqlLower, "multirange"):
+		kt = "String"
 	default:
 		kt = "String"
 	}

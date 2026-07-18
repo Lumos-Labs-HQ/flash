@@ -51,3 +51,32 @@ pub struct Comments {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct Products {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub embedding: pgvector::Vector,
+    pub half_embed: Option<pgvector::HalfVec>,
+    pub price: sqlx::postgres::types::PgMoney,
+    pub metadata: Option<sqlx::postgres::types::PgHstore>,
+    pub tags_path: Option<sqlx::postgres::types::PgLTree>,
+    pub search_vec: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct Locations {
+    pub id: i32,
+    pub name: String,
+    pub coords: geo_types::Geometry<f64>,
+    pub area: Option<geo_types::Geometry<f64>>,
+    pub ip_address: Option<ipnetwork::IpNetwork>,
+    pub mac_addr: Option<mac_address::MacAddress>,
+    pub valid_range: Option<sqlx::postgres::types::PgRange<DateTime<Utc>>>,
+    pub bit_flags: Option<sqlx::postgres::types::PgBitVec>,
+    pub scheduled: Option<sqlx::postgres::types::PgInterval>,
+    pub raw_xml: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+

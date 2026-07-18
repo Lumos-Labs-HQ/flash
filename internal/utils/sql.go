@@ -377,6 +377,25 @@ var sqlKeywords = map[string]bool{
 	"ARRAY": true, "ARRAY_AGG": true, "STRING_AGG": true, "JSON_AGG": true,
 	"JSONB_AGG": true, "ROW_NUMBER": true, "RANK": true, "DENSE_RANK": true,
 	"LAG": true, "LEAD": true, "NTILE": true,
+	// PostgreSQL type names used in casts ($1::TYPE) — not column references
+	"INTEGER": true, "BIGINT": true, "SMALLINT": true, "SERIAL": true,
+	"TEXT": true, "VARCHAR": true, "CHAR": true, "BOOLEAN": true,
+	"NUMERIC": true, "DECIMAL": true, "REAL": true, "FLOAT": true,
+	"UUID": true, "BYTEA": true, "JSONB": true, "JSON": true,
+	"TIMESTAMPTZ": true, "INET": true, "CIDR": true, "MACADDR": true,
+	"GEOMETRY": true, "GEOGRAPHY": true, "VECTOR": true, "HALFVEC": true,
+	"HSTORE": true, "LTREE": true, "LQUERY": true, "LTXTQUERY": true,
+	"TSVECTOR": true, "TSQUERY": true, "MONEY": true, "XML": true,
+	"BIT": true, "VARBIT": true, "OID": true,
+	"INT4RANGE": true, "INT8RANGE": true, "NUMRANGE": true,
+	"TSRANGE": true, "TSTZRANGE": true, "DATERANGE": true,
+	// PostGIS / pgvector functions
+	"ST_DISTANCE": true, "ST_DWITHIN": true, "ST_WITHIN": true,
+	"ST_CONTAINS": true, "ST_INTERSECTS": true, "ST_AREA": true,
+	"ST_GEOMFROMTEXT": true, "ST_ASTEXT": true, "ST_ASGEOJSON": true,
+	"ST_SETSRID": true, "ST_MAKEPOINT": true, "ST_TRANSFORM": true,
+	"TO_TSQUERY": true, "TO_TSVECTOR": true,
+	"TS_RANK_CD": true,
 }
 
 func IsSQLKeyword(word string) bool {

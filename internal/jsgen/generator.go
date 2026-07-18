@@ -563,6 +563,36 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 		return "number" // interval as milliseconds
 	case strings.Contains(sqlTypeLower, "bytea"), strings.Contains(sqlTypeLower, "blob"):
 		return "Uint8Array"
+	// ─── PostgreSQL Extension Types ───────────────────────────────────────
+	case sqlTypeLower == "vector" || strings.HasPrefix(sqlTypeLower, "vector(") ||
+		sqlTypeLower == "halfvec" || strings.HasPrefix(sqlTypeLower, "halfvec("):
+		return "number[]" // pgvector
+	case sqlTypeLower == "hstore":
+		return "Record<string, string>"
+	case sqlTypeLower == "tsvector", sqlTypeLower == "tsquery":
+		return "string"
+	case sqlTypeLower == "ltree", sqlTypeLower == "lquery", sqlTypeLower == "ltxtquery":
+		return "string"
+	case sqlTypeLower == "money":
+		return "string"
+	case sqlTypeLower == "xml":
+		return "string"
+	case sqlTypeLower == "pg_lsn":
+		return "string"
+	case sqlTypeLower == "bit" || strings.HasPrefix(sqlTypeLower, "bit(") ||
+		sqlTypeLower == "varbit" || strings.HasPrefix(sqlTypeLower, "varbit(") ||
+		strings.HasPrefix(sqlTypeLower, "bit varying"):
+		return "string"
+	case sqlTypeLower == "point", sqlTypeLower == "line", sqlTypeLower == "lseg",
+		sqlTypeLower == "box", sqlTypeLower == "path", sqlTypeLower == "polygon", sqlTypeLower == "circle":
+		return "string"
+	case sqlTypeLower == "geometry" || strings.HasPrefix(sqlTypeLower, "geometry(") ||
+		sqlTypeLower == "geography" || strings.HasPrefix(sqlTypeLower, "geography("):
+		return "string" // PostGIS WKT/GeoJSON
+	case sqlTypeLower == "cidr", sqlTypeLower == "macaddr", sqlTypeLower == "macaddr8":
+		return "string"
+	case strings.HasSuffix(sqlTypeLower, "range") || strings.HasSuffix(sqlTypeLower, "multirange"):
+		return "string"
 	// ClickHouse-specific types
 	case sqlTypeLower == "uint8", sqlTypeLower == "uint16", sqlTypeLower == "uint32", sqlTypeLower == "uint64",
 		sqlTypeLower == "int8", sqlTypeLower == "int16", sqlTypeLower == "int32", sqlTypeLower == "int64",

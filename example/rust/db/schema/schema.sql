@@ -58,3 +58,41 @@ CREATE INDEX idx_posts_user_id    ON posts(user_id);
 CREATE INDEX idx_posts_published  ON posts(published);
 CREATE INDEX idx_comments_post_id ON comments(post_id);
 CREATE INDEX idx_comments_user_id ON comments(user_id);
+
+-- ============================================================
+-- PostgreSQL Extensions — pgvector, PostGIS, hstore, ltree
+-- ============================================================
+
+-- Products with vector embeddings (pgvector)
+CREATE TABLE products (
+    id          SERIAL       PRIMARY KEY,
+    name        TEXT         NOT NULL,
+    description TEXT,
+    embedding   VECTOR(1536) NOT NULL,
+    half_embed  HALFVEC(768),
+    price       MONEY        NOT NULL,
+    metadata    HSTORE,
+    tags_path   LTREE,
+    search_vec  TSVECTOR,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+-- Locations with PostGIS geometry
+CREATE TABLE locations (
+    id          SERIAL          PRIMARY KEY,
+    name        TEXT            NOT NULL,
+    coords      GEOMETRY(Point, 4326) NOT NULL,
+    area        GEOGRAPHY(Polygon, 4326),
+    ip_address  INET,
+    mac_addr    MACADDR,
+    valid_range TSTZRANGE,
+    bit_flags   BIT(8),
+    scheduled   INTERVAL,
+    raw_xml     XML,
+    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_products_embedding ON products USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX idx_products_tags ON products USING gist (tags_path);
+CREATE INDEX idx_products_search ON products USING gin (search_vec);
+CREATE INDEX idx_locations_coords ON locations USING gist (coords);

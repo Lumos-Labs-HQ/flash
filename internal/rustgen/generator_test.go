@@ -331,10 +331,10 @@ func TestSQLTypeToRust_NetworkAndBinaryTypes(t *testing.T) {
 		sqlType string
 		want    string
 	}{
-		{"INET", "String"},
-		{"CIDR", "String"},
-		{"MACADDR", "String"},
-		{"MACADDR8", "String"},
+		{"INET", "ipnetwork::IpNetwork"},
+		{"CIDR", "ipnetwork::IpNetwork"},
+		{"MACADDR", "mac_address::MacAddress"},
+		{"MACADDR8", "mac_address::MacAddress"},
 		{"BYTEA", "Vec<u8>"},
 		{"BLOB", "Vec<u8>"},
 		{"BINARY(16)", "Vec<u8>"},

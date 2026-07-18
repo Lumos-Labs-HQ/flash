@@ -821,6 +821,40 @@ func (g *Generator) sqlTypeToJava(sqlType string, nullable bool) string {
 		jt = "java.util.Map<String, Object>"
 	case sqlLower == "bytea" || strings.Contains(sqlLower, "blob"):
 		jt = "byte[]"
+	// ─── PostgreSQL Extension Types ───────────────────────────────────────
+	case sqlLower == "vector" || strings.HasPrefix(sqlLower, "vector(") ||
+		sqlLower == "halfvec" || strings.HasPrefix(sqlLower, "halfvec("):
+		jt = "float[]" // pgvector
+	case sqlLower == "hstore":
+		jt = "java.util.Map<String, String>"
+	case sqlLower == "interval":
+		jt = "java.time.Duration"
+	case sqlLower == "tsvector", sqlLower == "tsquery":
+		jt = "String"
+	case sqlLower == "ltree", sqlLower == "lquery", sqlLower == "ltxtquery":
+		jt = "String"
+	case sqlLower == "money":
+		jt = "java.math.BigDecimal"
+	case sqlLower == "xml":
+		jt = "String"
+	case sqlLower == "pg_lsn":
+		jt = "String"
+	case sqlLower == "bit" || strings.HasPrefix(sqlLower, "bit(") ||
+		sqlLower == "varbit" || strings.HasPrefix(sqlLower, "varbit(") ||
+		strings.HasPrefix(sqlLower, "bit varying"):
+		jt = "String"
+	case sqlLower == "inet", sqlLower == "cidr":
+		jt = "String"
+	case sqlLower == "macaddr", sqlLower == "macaddr8":
+		jt = "String"
+	case sqlLower == "point", sqlLower == "line", sqlLower == "lseg",
+		sqlLower == "box", sqlLower == "path", sqlLower == "polygon", sqlLower == "circle":
+		jt = "String"
+	case sqlLower == "geometry" || strings.HasPrefix(sqlLower, "geometry(") ||
+		sqlLower == "geography" || strings.HasPrefix(sqlLower, "geography("):
+		jt = "String" // PostGIS WKT
+	case strings.HasSuffix(sqlLower, "range") || strings.HasSuffix(sqlLower, "multirange"):
+		jt = "String"
 	default:
 		jt = "String"
 	}
