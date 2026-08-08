@@ -78,11 +78,12 @@ func (g *Generator) Generate() error {
 }
 
 func (g *Generator) computeConfigChecksum() string {
-	configStr := fmt.Sprintf("%s|%s|%s|%s",
+	configStr := fmt.Sprintf("%s|%s|%s|%s|%v",
 		g.Config.SchemaDir,
 		g.Config.Queries,
 		g.Config.Database.Provider,
 		g.Config.Gen.Rust.Driver,
+		g.Config.Gen.Rust.Macros,
 	)
 	hash := sha256.Sum256([]byte(configStr))
 	return fmt.Sprintf("%x", hash)

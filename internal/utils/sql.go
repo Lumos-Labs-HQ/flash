@@ -98,7 +98,8 @@ func RemoveComments(sql string) string {
 // SplitColumns splits a comma-separated column string, respecting parentheses depth.
 // This handles cases like "col1, COALESCE(a, b), col2" correctly.
 // Also handles CQL angle-bracket types like map<text,text> by tracking <> depth
-// only outside parentheses (inside parens, < is a SQL comparison operator).
+// only when they appear to be type annotations (preceded by an identifier char),
+// not SQL comparison operators (preceded by whitespace/digit).
 func SplitColumns(columnsStr string) []string {
 	result := make([]string, 0, 8)
 	var current strings.Builder
@@ -132,9 +133,10 @@ func SplitColumns(columnsStr string) []string {
 			parenDepth--
 			current.WriteByte(ch)
 		case '<':
-			// Only track angle brackets at depth 0 (CQL types: frozen<type>, map<k,v>).
-			// Inside parens, < is a comparison operator (e.g. age < 18, ARRAY[0,10)).
-			if parenDepth == 0 {
+			// Only track angle brackets at depth 0 for CQL types (e.g. map<text,text>).
+			// CQL type brackets are preceded by an identifier char (letter/digit/underscore).
+			// SQL comparison operators are preceded by whitespace or digits in expressions.
+			if parenDepth == 0 && i > 0 && isIdentChar(columnsStr[i-1]) {
 				angleDepth++
 			}
 			current.WriteByte(ch)
@@ -161,6 +163,11 @@ func SplitColumns(columnsStr string) []string {
 	}
 
 	return result
+}
+
+// isIdentChar returns true if the character could be part of an identifier
+func isIdentChar(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
 // SmartSplitColumns is an alias for SplitColumns for backward compatibility.

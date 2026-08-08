@@ -98,6 +98,8 @@ func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, 
 	w.WriteString("use super::models::*;\n")
 	w.WriteString("use super::db::Queries;\n\n")
 
+	useMacros := g.Config.Gen.Rust.Macros
+
 	// Generate row structs for queries returning multiple columns not matching a model
 	for _, q := range queries {
 		cmd := strings.ToLower(q.Cmd)
@@ -126,11 +128,30 @@ func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, 
 		}
 		mu.Unlock()
 
-		w.WriteString("#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]\n")
+		if useMacros {
+			// With macros, FromRow is not needed — the macro handles mapping
+			w.WriteString("#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]\n")
+		} else {
+			w.WriteString("#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]\n")
+		}
 		w.WriteString(fmt.Sprintf("pub struct %s {\n", structName))
 		for _, col := range columns {
 			fieldName := utils.ToSnakeCase(col.Name)
-			rustType := g.sqlTypeToRust(col.Type, col.Nullable)
+			nullable := col.Nullable
+			if useMacros {
+				// sqlx macros always infer computed/aggregate columns as nullable
+				if col.IsComputed {
+					nullable = true
+				}
+				// sqlx macros return Option<i64> for COUNT/SUM/RANK results
+				// even when accessed through CTE aliases or JOINs.
+				// Any BIGINT that isn't an actual table column should be Option.
+				colTypeUpper := strings.ToUpper(col.Type)
+				if colTypeUpper == "BIGINT" && !g.isActualTableColumn(col.Name, col.Table) {
+					nullable = true
+				}
+			}
+			rustType := g.sqlTypeToRust(col.Type, nullable)
 			w.WriteString(fmt.Sprintf("    pub %s: %s,\n", fieldName, rustType))
 		}
 		w.WriteString("}\n\n")
@@ -178,6 +199,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, q *parser.Query) {
 	columns := g.expandWildcardColumns(q)
 
 	cmd := strings.ToLower(q.Cmd)
+	useMacros := g.Config.Gen.Rust.Macros
 
 	// Determine return type
 	var returnType string
@@ -190,9 +212,19 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, q *parser.Query) {
 		returnType = g.getExecResultType()
 		isExec = true
 	case ":one", "one":
-		returnType = g.getOneReturnType(q, columns)
+		if useMacros && len(columns) == 1 {
+			// sqlx::query_scalar! always returns Option<T>
+			returnType = g.getMacroScalarReturnType(columns[0])
+		} else {
+			returnType = g.getOneReturnType(q, columns)
+		}
 	case ":many", "many":
-		returnType = fmt.Sprintf("Vec<%s>", g.getOneReturnType(q, columns))
+		if useMacros && len(columns) == 1 {
+			// sqlx::query_scalar! always returns Option<T> per element
+			returnType = fmt.Sprintf("Vec<%s>", g.getMacroScalarReturnType(columns[0]))
+		} else {
+			returnType = fmt.Sprintf("Vec<%s>", g.getOneReturnType(q, columns))
+		}
 	default:
 		returnType = "()"
 		isExec = true
@@ -215,15 +247,25 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, q *parser.Query) {
 	}
 	w.WriteString(fmt.Sprintf("    ) -> Result<%s, sqlx::Error> {\n", returnType))
 
-	// Generate body using sqlx
+	// Generate body — choose between macros and runtime functions
 	sql := g.convertSQL(q.SQL)
 
-	if isExec {
-		g.writeExecBody(w, q, sql, cmd)
-	} else if cmd == ":one" || cmd == "one" {
-		g.writeOneBody(w, q, sql, columns)
+	if g.Config.Gen.Rust.Macros {
+		if isExec {
+			g.writeMacroExecBody(w, q, sql, cmd)
+		} else if cmd == ":one" || cmd == "one" {
+			g.writeMacroOneBody(w, q, sql, columns)
+		} else {
+			g.writeMacroManyBody(w, q, sql, columns)
+		}
 	} else {
-		g.writeManyBody(w, q, sql, columns)
+		if isExec {
+			g.writeExecBody(w, q, sql, cmd)
+		} else if cmd == ":one" || cmd == "one" {
+			g.writeOneBody(w, q, sql, columns)
+		} else {
+			g.writeManyBody(w, q, sql, columns)
+		}
 	}
 
 	w.WriteString("    }\n\n")
@@ -281,6 +323,108 @@ func (g *Generator) writeBinds(w *strings.Builder, q *parser.Query) {
 			w.WriteString(fmt.Sprintf("        .bind(%s)\n", paramName))
 		}
 	}
+}
+
+// macroArgs builds the comma-separated argument list for sqlx macros
+func (g *Generator) macroArgs(q *parser.Query) string {
+	if len(q.Params) == 0 {
+		return ""
+	}
+	var args []string
+	if len(q.Params) > 2 {
+		for _, p := range q.Params {
+			fieldName := utils.ToSnakeCase(p.Name)
+			args = append(args, fmt.Sprintf("params.%s", fieldName))
+		}
+	} else {
+		for _, p := range q.Params {
+			paramName := utils.ToSnakeCase(p.Name)
+			args = append(args, paramName)
+		}
+	}
+	return ", " + strings.Join(args, ", ")
+}
+
+// writeMacroExecBody generates exec body using sqlx::query! macro (compile-time validated)
+func (g *Generator) writeMacroExecBody(w *strings.Builder, q *parser.Query, sql string, cmd string) {
+	args := g.macroArgs(q)
+	if cmd == ":execresult" || cmd == "execresult" {
+		w.WriteString(fmt.Sprintf("        sqlx::query!(\"%s\"%s)\n", escapeSQLForRust(sql), args))
+		w.WriteString("            .execute(&self.pool)\n            .await\n")
+	} else {
+		w.WriteString(fmt.Sprintf("        sqlx::query!(\"%s\"%s)\n", escapeSQLForRust(sql), args))
+		w.WriteString("            .execute(&self.pool)\n            .await?;\n        Ok(())\n")
+	}
+}
+
+// writeMacroOneBody generates :one body using sqlx::query_as!/query_scalar! macros (compile-time validated)
+func (g *Generator) writeMacroOneBody(w *strings.Builder, q *parser.Query, sql string, columns []*parser.QueryColumn) {
+	args := g.macroArgs(q)
+
+	if len(columns) == 1 {
+		// Single column: use query_scalar! macro
+		// sqlx::query_scalar! always returns Option<T> for the scalar value
+		w.WriteString(fmt.Sprintf("        sqlx::query_scalar!(\"%s\"%s)\n", escapeSQLForRust(sql), args))
+		w.WriteString("            .fetch_one(&self.pool)\n            .await\n")
+	} else {
+		returnType := g.getMacroOneReturnType(q, columns)
+		// Multi column: use query_as! macro with target struct
+		w.WriteString(fmt.Sprintf("        sqlx::query_as!(%s, \"%s\"%s)\n", returnType, escapeSQLForRust(sql), args))
+		w.WriteString("            .fetch_one(&self.pool)\n            .await\n")
+	}
+}
+
+// writeMacroManyBody generates :many body using sqlx::query_as!/query_scalar! macros (compile-time validated)
+func (g *Generator) writeMacroManyBody(w *strings.Builder, q *parser.Query, sql string, columns []*parser.QueryColumn) {
+	args := g.macroArgs(q)
+
+	if len(columns) == 1 {
+		// Single column: use query_scalar! macro
+		// sqlx::query_scalar! always returns Option<T> for the scalar value
+		w.WriteString(fmt.Sprintf("        sqlx::query_scalar!(\"%s\"%s)\n", escapeSQLForRust(sql), args))
+		w.WriteString("            .fetch_all(&self.pool)\n            .await\n")
+	} else {
+		oneType := g.getMacroOneReturnType(q, columns)
+		// Multi column: use query_as! macro with target struct
+		w.WriteString(fmt.Sprintf("        sqlx::query_as!(%s, \"%s\"%s)\n", oneType, escapeSQLForRust(sql), args))
+		w.WriteString("            .fetch_all(&self.pool)\n            .await\n")
+	}
+}
+
+// getMacroScalarReturnType returns the return type for query_scalar! in macros mode.
+// sqlx::query_scalar! always returns Option<T> for the scalar value.
+func (g *Generator) getMacroScalarReturnType(col *parser.QueryColumn) string {
+	baseType := g.sqlTypeToRust(col.Type, false)
+	// query_scalar! always wraps in Option<T>
+	return fmt.Sprintf("Option<%s>", baseType)
+}
+
+// getMacroOneReturnType returns the struct return type for query_as! in macros mode.
+func (g *Generator) getMacroOneReturnType(q *parser.Query, columns []*parser.QueryColumn) string {
+	modelType := g.modelTypeForQuery(q, columns)
+	if modelType != "" {
+		return modelType
+	}
+	return toRustStructName(q.Name) + "Row"
+}
+
+// isActualTableColumn checks if a column name exists as a physical column in the given table.
+// Returns false for computed columns, CTE-derived columns, or columns from JOINed tables.
+func (g *Generator) isActualTableColumn(colName string, tableName string) bool {
+	if g.schema == nil || tableName == "" {
+		return false
+	}
+	for _, table := range g.schema.Tables {
+		if strings.EqualFold(table.Name, tableName) {
+			for _, col := range table.Columns {
+				if strings.EqualFold(col.Name, colName) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return false
 }
 
 func (g *Generator) getOneReturnType(q *parser.Query, columns []*parser.QueryColumn) string {

@@ -42,6 +42,39 @@ func stripPGCast(expr string) string {
 	return pgCastRe.ReplaceAllString(strings.TrimSpace(expr), "")
 }
 
+// extractAggInnerColumn extracts the column reference from an aggregate like MIN(age) or MAX(t.created_at)
+func extractAggInnerColumn(expr string, aggName string) string {
+	re := regexp.MustCompile(`(?i)` + aggName + `\s*\(\s*([^)]+)\s*\)`)
+	if m := re.FindStringSubmatch(expr); len(m) > 1 {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+// resolveColumnType looks up a column reference (e.g. "age" or "t.age") in the schema
+func resolveColumnType(colRef string, schema *Schema) string {
+	if schema == nil {
+		return ""
+	}
+	// Handle qualified ref: table.column or alias.column
+	parts := strings.Split(colRef, ".")
+	var colName string
+	if len(parts) == 2 {
+		colName = strings.TrimSpace(parts[1])
+	} else {
+		colName = strings.TrimSpace(parts[0])
+	}
+	// Search all tables for the column
+	for _, table := range schema.Tables {
+		for _, col := range table.Columns {
+			if strings.EqualFold(col.Name, colName) {
+				return col.Type
+			}
+		}
+	}
+	return ""
+}
+
 type QueryParser struct {
 	Config       *config.Config
 	insertRegex  *regexp.Regexp
@@ -720,6 +753,20 @@ func (p *QueryParser) inferColumnType(colName string, originalExpr string, sql s
 
 // inferTypeFromExpression analyzes SQL expressions to determine types
 func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, schema *Schema) (string, bool, bool) {
+	// Check if there's an explicit PostgreSQL cast (e.g. ::INTEGER, ::TEXT)
+	// If so, the cast determines the final type (nullable stays from the inner expression)
+	castRe := regexp.MustCompile(`(?i)::([a-zA-Z][a-zA-Z0-9_]*)(\([^)]*\))?$`)
+	if castMatch := castRe.FindStringSubmatch(strings.TrimSpace(originalExpr)); len(castMatch) > 1 {
+		castType := strings.ToUpper(castMatch[1])
+		// Determine nullability from the inner expression
+		inner := stripPGCast(originalExpr)
+		innerUpper := strings.ToUpper(inner)
+		nullable := strings.Contains(innerUpper, "AVG(") || strings.Contains(innerUpper, "SUM(") ||
+			strings.Contains(innerUpper, "MAX(") || strings.Contains(innerUpper, "MIN(") ||
+			strings.Contains(innerUpper, "NULLIF(")
+		return castType, nullable, true
+	}
+
 	// Strip PostgreSQL cast suffix (e.g. ::NUMERIC(10,2) or ::TEXT) before analysis
 	expr := stripPGCast(originalExpr)
 	exprUpper := strings.ToUpper(expr)
@@ -754,17 +801,42 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 		if found {
 			return cteType, nullable, true
 		}
+		// Fallback: resolve column name across all tables (handles LATERAL/subquery aliases)
+		// Mark as nullable since unresolved alias likely comes from a LEFT JOIN
+		for _, table := range schema.Tables {
+			for _, col := range table.Columns {
+				if strings.EqualFold(col.Name, columnName) {
+					return col.Type, true, true
+				}
+			}
+		}
 	}
 
-	// Window functions → INTEGER (ROW_NUMBER, RANK, DENSE_RANK, etc.)
+	// Window functions → BIGINT (ROW_NUMBER, RANK, DENSE_RANK return bigint in PostgreSQL)
 	if windowFuncRe.MatchString(exprUpper) {
-		return "INTEGER", false, true
+		return "BIGINT", false, true
+	}
+
+	// EXISTS(...) always returns BOOLEAN
+	if strings.Contains(exprUpper, "EXISTS(") {
+		return "BOOLEAN", false, true
 	}
 
 	if strings.Contains(exprUpper, "COUNT(") {
 		return "BIGINT", false, true
 	}
 	if strings.Contains(exprUpper, "SUM(") {
+		// SUM of integer types returns BIGINT in PostgreSQL, SUM of numeric returns NUMERIC
+		innerCol := extractAggInnerColumn(expr, "SUM")
+		if innerCol != "" {
+			if colType := resolveColumnType(innerCol, schema); colType != "" {
+				colUpper := strings.ToUpper(colType)
+				if colUpper == "INTEGER" || colUpper == "INT" || colUpper == "SMALLINT" || colUpper == "BIGINT" || colUpper == "SERIAL" || colUpper == "BIGSERIAL" {
+					return "BIGINT", true, true
+				}
+			}
+		}
+		// Default: SUM returns NUMERIC (for decimal/float types)
 		return "NUMERIC", true, true
 	}
 	if strings.Contains(exprUpper, "AVG(") {
@@ -773,6 +845,17 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 	if strings.Contains(exprUpper, "MAX(") || strings.Contains(exprUpper, "MIN(") {
 		if strings.Contains(exprUpper, "_AT") || strings.Contains(exprUpper, "_DATE") {
 			return "TIMESTAMP WITH TIME ZONE", true, true
+		}
+		// MIN/MAX preserve the type of the inner column
+		aggName := "MIN"
+		if strings.Contains(exprUpper, "MAX(") {
+			aggName = "MAX"
+		}
+		innerCol := extractAggInnerColumn(expr, aggName)
+		if innerCol != "" {
+			if colType := resolveColumnType(innerCol, schema); colType != "" {
+				return colType, true, true
+			}
 		}
 		return "NUMERIC", true, true
 	}
@@ -816,26 +899,54 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 	// COALESCE(agg, literal) — common pattern: COALESCE(SUM(...), 0)
 	if strings.Contains(exprUpper, "COALESCE(") {
 		// Check if first arg is an aggregate
-		if strings.Contains(exprUpper, "COALESCE(SUM(") || strings.Contains(exprUpper, "COALESCE(AVG(") {
-			return "NUMERIC", true, true
+		if strings.Contains(exprUpper, "COALESCE(SUM(") {
+			// COALESCE(SUM(int_col), 0) → BIGINT in PostgreSQL
+			return "BIGINT", false, true
+		}
+		if strings.Contains(exprUpper, "COALESCE(AVG(") {
+			return "NUMERIC", false, true
 		}
 		if strings.Contains(exprUpper, "COALESCE(COUNT(") {
-			return "INTEGER", true, true
+			return "BIGINT", false, true
 		}
 		if strings.Contains(exprUpper, "COALESCE(MAX(") || strings.Contains(exprUpper, "COALESCE(MIN(") {
 			if strings.Contains(exprUpper, "_AT") || strings.Contains(exprUpper, "_DATE") {
-				return "TIMESTAMP WITH TIME ZONE", true, true
+				return "TIMESTAMP WITH TIME ZONE", false, true
 			}
-			return "NUMERIC", true, true
+			return "NUMERIC", false, true
 		}
 	}
-	// Subquery expression: (SELECT agg(...) FROM ...)
+	// Subquery expression: (SELECT agg(...) FROM ...) or (SELECT col FROM table ...)
 	if strings.HasPrefix(exprTrimmed, "(") && strings.Contains(exprUpper, "SELECT") {
 		if strings.Contains(exprUpper, "COUNT(") {
-			return "INTEGER", true, true
+			return "BIGINT", true, true
 		}
-		if strings.Contains(exprUpper, "SUM(") || strings.Contains(exprUpper, "AVG(") {
+		if strings.Contains(exprUpper, "SUM(") {
+			return "BIGINT", true, true
+		}
+		if strings.Contains(exprUpper, "AVG(") {
 			return "NUMERIC", true, true
+		}
+		if strings.Contains(exprUpper, "EXISTS(") {
+			return "BOOLEAN", true, true
+		}
+		// Try to resolve the selected column type from schema
+		// Pattern: (SELECT col_name FROM table_name WHERE ...)
+		subColRe := regexp.MustCompile(`(?i)\(\s*SELECT\s+(?:\w+\.)?(\w+)\s+FROM\s+(\w+)`)
+		if m := subColRe.FindStringSubmatch(exprTrimmed); len(m) > 2 {
+			colName := m[1]
+			tableName := m[2]
+			if schema != nil {
+				for _, table := range schema.Tables {
+					if strings.EqualFold(table.Name, tableName) {
+						for _, col := range table.Columns {
+							if strings.EqualFold(col.Name, colName) {
+								return col.Type, true, true // nullable because subquery may return no rows
+							}
+						}
+					}
+				}
+			}
 		}
 		return "TEXT", true, true
 	}
@@ -846,9 +957,9 @@ func (p *QueryParser) inferTypeFromExpression(originalExpr string, sql string, s
 			firstArg := strings.TrimSpace(matches[1])
 			firstArgUpper := strings.ToUpper(firstArg)
 
-			// Numeric CTE alias columns
+			// Numeric CTE alias columns (these are typically COUNT/SUM results → BIGINT)
 			if numericCTEColRe.MatchString(firstArgUpper) {
-				return "INTEGER", false, true
+				return "BIGINT", false, true
 			}
 			if strings.Contains(firstArgUpper, ".AVG") || strings.Contains(firstArgUpper, ".SUM") ||
 				strings.Contains(firstArgUpper, ".AVG_") {
@@ -1015,8 +1126,8 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 		sqlType  string
 		nullable bool
 	}{
-		{regexp.MustCompile(fmt.Sprintf(`(?i)COUNT\([^)]*\)(?:\s+FILTER\s*\([^)]*\))?\s+(?:AS\s+)?%s\b`, cteColumn)), "INTEGER", false},
-		{regexp.MustCompile(fmt.Sprintf(`(?i)SUM\([^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", true},
+		{regexp.MustCompile(fmt.Sprintf(`(?i)COUNT\([^)]*\)(?:\s+FILTER\s*\([^)]*\))?\s+(?:AS\s+)?%s\b`, cteColumn)), "BIGINT", false},
+		{regexp.MustCompile(fmt.Sprintf(`(?i)SUM\([^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "BIGINT", true},
 		{regexp.MustCompile(fmt.Sprintf(`(?i)AVG\([^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", true},
 		{regexp.MustCompile(fmt.Sprintf(`(?i)LENGTH\([^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "INTEGER", true},
 		{regexp.MustCompile(fmt.Sprintf(`(?i)EXTRACT\([^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", true},
@@ -1024,9 +1135,9 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 		{regexp.MustCompile(fmt.Sprintf(`(?i)STRING_AGG\b.+?\)\s+(?:AS\s+)?%s\b`, cteColumn)), "TEXT", true},
 		{regexp.MustCompile(fmt.Sprintf(`(?i)ARRAY_AGG\b.+?\)\s+(?:AS\s+)?%s\b`, cteColumn)), "TEXT[]", true},
 		// COALESCE-wrapped aggregates: COALESCE(SUM(...), 0) AS col
-		{regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*SUM\([^)]*\)[^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", true},
-		{regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*AVG\([^)]*\)[^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", true},
-		{regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*COUNT\([^)]*\)[^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "INTEGER", false},
+		{regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*SUM\([^)]*\)[^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "BIGINT", false},
+		{regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*AVG\([^)]*\)[^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", false},
+		{regexp.MustCompile(fmt.Sprintf(`(?i)COALESCE\s*\(\s*COUNT\([^)]*\)[^)]*\)\s+(?:AS\s+)?%s\b`, cteColumn)), "BIGINT", false},
 		// ROUND(x, d) AS col
 		{regexp.MustCompile(fmt.Sprintf(`(?i)ROUND\([^)]+\)\s+(?:AS\s+)?%s\b`, cteColumn)), "NUMERIC", true},
 		// Integer literal: 0 AS depth — simple 0 as depth
@@ -1045,8 +1156,10 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 		agg := strings.ToUpper(m[1])
 		switch agg {
 		case "COUNT":
-			return "INTEGER", false, true
-		case "SUM", "AVG":
+			return "BIGINT", false, true
+		case "SUM":
+			return "BIGINT", true, true
+		case "AVG":
 			return "NUMERIC", true, true
 		}
 	}
@@ -1058,8 +1171,10 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 			agg := strings.ToUpper(sm[1])
 			switch agg {
 			case "COUNT":
-				return "INTEGER", false, true
-			case "SUM", "AVG":
+				return "BIGINT", false, true
+			case "SUM":
+				return "BIGINT", true, true
+			case "AVG":
 				return "NUMERIC", true, true
 			case "MAX", "MIN":
 				return "TIMESTAMP WITH TIME ZONE", true, true
@@ -1120,6 +1235,22 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 			if strings.EqualFold(table.Name, refTable) {
 				for _, col := range table.Columns {
 					if strings.EqualFold(col.Name, refColumn) {
+						return col.Type, col.Nullable, true
+					}
+				}
+			}
+		}
+	}
+
+	// Bare column without table prefix in CTE: SELECT title, created_at FROM posts
+	// The column name matches the cteColumn and we resolve type from the FROM table
+	fromRe := regexp.MustCompile(`(?i)FROM\s+(\w+)`)
+	if fromMatch := fromRe.FindStringSubmatch(cteQuery); len(fromMatch) > 1 {
+		fromTable := fromMatch[1]
+		for _, table := range schema.Tables {
+			if strings.EqualFold(table.Name, fromTable) {
+				for _, col := range table.Columns {
+					if strings.EqualFold(col.Name, cteColumn) {
 						return col.Type, col.Nullable, true
 					}
 				}

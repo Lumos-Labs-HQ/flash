@@ -105,6 +105,7 @@ type RustGen struct {
 	Enabled bool   `toml:"enabled"`
 	Out     string `toml:"out"`
 	Driver  string `toml:"driver"` // "sqlx" (default)
+	Macros  bool   `toml:"macros"` // use sqlx compile-time checked macros (default: false)
 }
 
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
