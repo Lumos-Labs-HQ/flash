@@ -7,128 +7,68 @@ use rust_decimal::Decimal;
 use super::models::*;
 use super::db::Queries;
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ListActiveUsersRow {
+    pub id: i32,
+    pub name: String,
+    pub email: String,
+    pub age: Option<i32>,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SearchUsersByNameRow {
+    pub id: i32,
+    pub name: String,
+    pub email: String,
+    pub age: Option<i32>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ListUsersInAgeRangeRow {
+    pub id: i32,
+    pub name: String,
+    pub email: String,
+    pub age: Option<i32>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ListUsersWithBioRow {
+    pub id: i32,
+    pub name: String,
+    pub bio: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GetUserAgeStatsRow {
-    pub total: i64,
-    pub avg_age: Option<Decimal>,
-    pub min_age: Option<Decimal>,
-    pub max_age: Option<Decimal>,
+    pub avg_age: Option<i32>,
+    pub min_age: Option<i32>,
+    pub max_age: Option<i32>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUserWithPostCountRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub post_count: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct ListUsersWithPostCountRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub is_active: bool,
-    pub post_count: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetActiveUsersByAgeGroupRow {
-    pub age: Option<i32>,
-    pub user_count: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct ListUsersWithActivityLabelRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub status: String,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetTopPostersRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub post_count: i32,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetRecentActiveUsersRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUserActivityReportRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub age: Option<i32>,
-    pub is_active: bool,
-    pub post_count: i32,
-    pub total_views: i32,
-    pub comment_count: i32,
-    pub last_active_at: String,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetDormantUsersRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub created_at: DateTime<Utc>,
-    pub last_action_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUserRetentionCohortsRow {
-    pub cohort_month: String,
-    pub total_users: i64,
-    pub active_users: i64,
-    pub retention_pct: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUsersAboveAvgPostCountRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub post_count: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUsersWithRecentHighViewPostRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUserRankByViewsRow {
-    pub id: i32,
-    pub name: String,
-    pub email: String,
-    pub total_views: String,
-    pub rank: i32,
-    pub percentile: i64,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetUserScoreDistributionRow {
+    pub tier: Option<String>,
+    pub user_count: Option<i64>,
 }
 
 pub struct CreateUserParams {
     pub name: String,
     pub email: String,
     pub age: i32,
+    pub bio: String,
+    pub score: f32,
+    pub balance: Decimal,
 }
 
 pub struct UpdateUserFullParams {
     pub name: String,
     pub email: String,
     pub age: i32,
-    pub is_active: bool,
+    pub bio: String,
+    pub e: f32,
+    pub balance: Decimal,
     pub id: i32,
 }
 
@@ -136,6 +76,8 @@ pub struct UpsertUserParams {
     pub name: String,
     pub email: String,
     pub age: i32,
+    pub bio: String,
+    pub score: f32,
 }
 
 impl Queries {
@@ -144,12 +86,9 @@ impl Queries {
         &self,
         id: i32,
     ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE id = $1 LIMIT 1;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as!(Users, "SELECT id, name, email, age, bio, is_active, score, balance, created_at, updated_at FROM users WHERE id = $1;", id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// GetUserByEmail
@@ -157,62 +96,39 @@ impl Queries {
         &self,
         email: &str,
     ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE email = $1 LIMIT 1;"
-        )
-        .bind(email)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as!(Users, "SELECT id, name, email, age, bio, is_active, score, balance, created_at, updated_at FROM users WHERE email = $1;", email)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// ListUsers
     pub async fn list_users(
         &self,
+        limit: i64,
+        offset: i64,
     ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users ORDER BY created_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_as!(Users, "SELECT id, name, email, age, bio, is_active, score, balance, created_at, updated_at FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2;", limit, offset)
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// ListActiveUsers
     pub async fn list_active_users(
         &self,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE is_active = TRUE ORDER BY name ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<ListActiveUsersRow>, sqlx::Error> {
+        sqlx::query_as!(ListActiveUsersRow, "SELECT id, name, email, age, is_active, created_at FROM users WHERE is_active = TRUE ORDER BY name ASC;")
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// SearchUsersByName
     pub async fn search_users_by_name(
         &self,
         name: &str,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE name ILIKE '%' || $1 || '%' ORDER BY name ASC;"
-        )
-        .bind(name)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// ListUsersPaginated
-    pub async fn list_users_paginated(
-        &self,
-        limit: i32,
-        offset: i32,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users ORDER BY id ASC LIMIT $1 OFFSET $2;"
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<SearchUsersByNameRow>, sqlx::Error> {
+        sqlx::query_as!(SearchUsersByNameRow, "SELECT id, name, email, age FROM users WHERE name ILIKE '%' || $1 || '%' ORDER BY name;", name)
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// ListUsersInAgeRange
@@ -220,148 +136,10 @@ impl Queries {
         &self,
         age_start: i32,
         age_end: i32,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE age BETWEEN $1 AND $2 ORDER BY age ASC;"
-        )
-        .bind(age_start)
-        .bind(age_end)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUsersCreatedAfter
-    pub async fn get_users_created_after(
-        &self,
-        created_at: DateTime<Utc>,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE created_at > $1 ORDER BY created_at ASC;"
-        )
-        .bind(created_at)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// CountUsers
-    pub async fn count_users(
-        &self,
-    ) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, i64>(
-            "SELECT COUNT(*) AS count FROM users;"
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// CountActiveUsers
-    pub async fn count_active_users(
-        &self,
-    ) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, i64>(
-            "SELECT COUNT(*) AS count FROM users WHERE is_active = TRUE;"
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// GetUserAgeStats
-    pub async fn get_user_age_stats(
-        &self,
-    ) -> Result<GetUserAgeStatsRow, sqlx::Error> {
-        sqlx::query_as::<_, GetUserAgeStatsRow>(
-            "SELECT COUNT(*) AS total, AVG(age) AS avg_age, MIN(age) AS min_age, MAX(age) AS max_age FROM users WHERE age IS NOT NULL;"
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// CreateUser
-    pub async fn create_user(
-        &self,
-        params: &CreateUserParams,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "INSERT INTO users (name, email, age) VALUES ($1, $2, $3) RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(&params.name)
-        .bind(&params.email)
-        .bind(&params.age)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// UpdateUserName
-    pub async fn update_user_name(
-        &self,
-        name: &str,
-        id: i32,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(name)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// UpdateUserEmail
-    pub async fn update_user_email(
-        &self,
-        email: &str,
-        id: i32,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "UPDATE users SET email = $1, updated_at = NOW() WHERE id = $2 RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(email)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// UpdateUserFull
-    pub async fn update_user_full(
-        &self,
-        params: &UpdateUserFullParams,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "UPDATE users SET name = $1, email = $2, age = $3, is_active = $4, updated_at = NOW() WHERE id = $5 RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(&params.name)
-        .bind(&params.email)
-        .bind(&params.age)
-        .bind(&params.is_active)
-        .bind(&params.id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// DeactivateUser
-    pub async fn deactivate_user(
-        &self,
-        id: i32,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// ActivateUser
-    pub async fn activate_user(
-        &self,
-        id: i32,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+    ) -> Result<Vec<ListUsersInAgeRangeRow>, sqlx::Error> {
+        sqlx::query_as!(ListUsersInAgeRangeRow, "SELECT id, name, email, age FROM users WHERE age >= $1 AND age <= $2;", age_start, age_end)
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// DeleteUser
@@ -369,12 +147,20 @@ impl Queries {
         &self,
         id: i32,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "DELETE FROM users WHERE id = $1;"
-        )
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query!("DELETE FROM users WHERE id = $1;", id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// DeactivateUser
+    pub async fn deactivate_user(
+        &self,
+        id: i32,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id = $1;", id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -382,134 +168,126 @@ impl Queries {
     pub async fn delete_inactive_users(
         &self,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "DELETE FROM users WHERE is_active = FALSE;"
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query!("DELETE FROM users WHERE is_active = FALSE;")
+            .execute(&self.pool)
+            .await?;
         Ok(())
+    }
+
+    /// UpdateUserName
+    pub async fn update_user_name(
+        &self,
+        name: &str,
+        id: i32,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2;", name, id)
+            .execute(&self.pool)
+            .await
+    }
+
+    /// BulkActivateUsers
+    pub async fn bulk_activate_users(
+        &self,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("UPDATE users SET is_active = TRUE, updated_at = NOW() WHERE is_active = FALSE;")
+            .execute(&self.pool)
+            .await
+    }
+
+    /// CountUsers
+    pub async fn count_users(
+        &self,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT COUNT(*) FROM users;")
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// CountActiveUsers
+    pub async fn count_active_users(
+        &self,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT COUNT(*) FROM users WHERE is_active = TRUE;")
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// UserExists
     pub async fn user_exists(
         &self,
         id: i32,
-    ) -> Result<String, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, String>(
-            "SELECT EXISTS ( SELECT 1 FROM users WHERE id = $1 ) AS exists;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+    ) -> Result<Option<bool>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);", id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// EmailTaken
     pub async fn email_taken(
         &self,
         email: &str,
-    ) -> Result<String, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, String>(
-            "SELECT EXISTS ( SELECT 1 FROM users WHERE email = $1 ) AS exists;"
-        )
-        .bind(email)
-        .fetch_one(&self.pool)
-        .await
+    ) -> Result<Option<bool>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM users WHERE email = $1);", email)
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// GetUsersWithPosts
-    pub async fn get_users_with_posts(
+    /// CreateUser
+    pub async fn create_user(
         &self,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE id IN (SELECT DISTINCT user_id FROM posts) ORDER BY name ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        params: &CreateUserParams,
+    ) -> Result<Users, sqlx::Error> {
+        sqlx::query_as!(Users, "INSERT INTO users (name, email, age, bio, score, balance) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, age, bio, is_active, score, balance, created_at, updated_at;", params.name, params.email, params.age, params.bio, params.score, params.balance)
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// GetUsersWithoutPosts
-    pub async fn get_users_without_posts(
+    /// UpdateUserFull
+    pub async fn update_user_full(
         &self,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE id NOT IN (SELECT DISTINCT user_id FROM posts) ORDER BY name ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        params: &UpdateUserFullParams,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("UPDATE users SET name = $1, email = $2, age = $3, bio = $4, score = $5, balance = $6, updated_at = NOW() WHERE id = $7;", params.name, params.email, params.age, params.bio, params.e, params.balance, params.id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
-    /// GetUserWithPostCount
-    pub async fn get_user_with_post_count(
+    /// GetUserAge
+    pub async fn get_user_age(
         &self,
         id: i32,
-    ) -> Result<GetUserWithPostCountRow, sqlx::Error> {
-        sqlx::query_as::<_, GetUserWithPostCountRow>(
-            "SELECT u.id, u.name, u.email, COUNT(p.id) AS post_count FROM users u LEFT JOIN posts p ON p.user_id = u.id WHERE u.id = $1 GROUP BY u.id, u.name, u.email;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+    ) -> Result<Option<i32>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT age FROM users WHERE id = $1;", id)
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// ListUsersWithPostCount
-    pub async fn list_users_with_post_count(
+    /// ListUsersWithBio
+    pub async fn list_users_with_bio(
         &self,
-    ) -> Result<Vec<ListUsersWithPostCountRow>, sqlx::Error> {
-        sqlx::query_as::<_, ListUsersWithPostCountRow>(
-            "SELECT u.id, u.name, u.email, u.is_active, COUNT(p.id) AS post_count FROM users u LEFT JOIN posts p ON p.user_id = u.id GROUP BY u.id, u.name, u.email, u.is_active ORDER BY post_count DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<ListUsersWithBioRow>, sqlx::Error> {
+        sqlx::query_as!(ListUsersWithBioRow, "SELECT id, name, bio FROM users WHERE bio IS NOT NULL;")
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetActiveUsersByAgeGroup
-    pub async fn get_active_users_by_age_group(
+    /// GetUserAgeStats
+    pub async fn get_user_age_stats(
         &self,
-        count_threshold: i32,
-    ) -> Result<Vec<GetActiveUsersByAgeGroupRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetActiveUsersByAgeGroupRow>(
-            "SELECT age, COUNT(*) AS user_count FROM users WHERE is_active = TRUE AND age IS NOT NULL GROUP BY age HAVING COUNT(*) > $1 ORDER BY age ASC;"
-        )
-        .bind(count_threshold)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<GetUserAgeStatsRow, sqlx::Error> {
+        sqlx::query_as!(GetUserAgeStatsRow, "SELECT AVG(age)::INTEGER AS avg_age, MIN(age) AS min_age, MAX(age) AS max_age FROM users WHERE age IS NOT NULL;")
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// ListUsersWithActivityLabel
-    pub async fn list_users_with_activity_label(
+    /// GetUserScoreDistribution
+    pub async fn get_user_score_distribution(
         &self,
-    ) -> Result<Vec<ListUsersWithActivityLabelRow>, sqlx::Error> {
-        sqlx::query_as::<_, ListUsersWithActivityLabelRow>(
-            "SELECT id, name, email, CASE WHEN is_active = TRUE THEN 'active' ELSE 'inactive' END AS status FROM users ORDER BY name ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetTopPosters
-    pub async fn get_top_posters(
-        &self,
-        limit: i32,
-    ) -> Result<Vec<GetTopPostersRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetTopPostersRow>(
-            "WITH post_counts AS ( SELECT user_id, COUNT(*) AS post_count FROM posts WHERE published = TRUE GROUP BY user_id ) SELECT u.id, u.name, u.email, pc.post_count FROM users u INNER JOIN post_counts pc ON pc.user_id = u.id ORDER BY pc.post_count DESC LIMIT $1;"
-        )
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetRecentActiveUsers
-    pub async fn get_recent_active_users(
-        &self,
-        created_at: DateTime<Utc>,
-    ) -> Result<Vec<GetRecentActiveUsersRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetRecentActiveUsersRow>(
-            "WITH recent AS ( SELECT DISTINCT user_id FROM posts WHERE created_at > $1 ) SELECT u.id, u.name, u.email, u.created_at FROM users u INNER JOIN recent r ON r.user_id = u.id ORDER BY u.name ASC;"
-        )
-        .bind(created_at)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<GetUserScoreDistributionRow>, sqlx::Error> {
+        sqlx::query_as!(GetUserScoreDistributionRow, "SELECT CASE WHEN score < 3.0 THEN 'low' WHEN score < 7.0 THEN 'medium' ELSE 'high' END AS tier, COUNT(*) AS user_count FROM users GROUP BY tier ORDER BY user_count DESC;")
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// UpsertUser
@@ -517,121 +295,9 @@ impl Queries {
         &self,
         params: &UpsertUserParams,
     ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "INSERT INTO users (name, email, age, is_active) VALUES ($1, $2, $3, TRUE) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, age = EXCLUDED.age, is_active = TRUE, updated_at = NOW() RETURNING id, name, email, age, is_active, created_at, updated_at;"
-        )
-        .bind(&params.name)
-        .bind(&params.email)
-        .bind(&params.age)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// ListUsersWithoutAge
-    pub async fn list_users_without_age(
-        &self,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE age IS NULL ORDER BY name ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// ListUsersWithAge
-    pub async fn list_users_with_age(
-        &self,
-    ) -> Result<Vec<Users>, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, age, is_active, created_at, updated_at FROM users WHERE age IS NOT NULL ORDER BY age ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUserAgeOrDefault
-    pub async fn get_user_age_or_default(
-        &self,
-        id: i32,
-    ) -> Result<Users, sqlx::Error> {
-        sqlx::query_as::<_, Users>(
-            "SELECT id, name, email, COALESCE(age, 0) AS age, is_active, created_at, updated_at FROM users WHERE id = $1;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// GetUserActivityReport
-    pub async fn get_user_activity_report(
-        &self,
-    ) -> Result<Vec<GetUserActivityReportRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUserActivityReportRow>(
-            "WITH user_posts AS ( SELECT user_id, COUNT(*) AS post_count, SUM(views) AS total_views, MAX(created_at) AS last_post_at FROM posts WHERE published = TRUE GROUP BY user_id ), user_comments AS ( SELECT user_id, COUNT(*) AS comment_count, MAX(created_at) AS last_comment_at FROM comments GROUP BY user_id ), user_activity AS ( SELECT u.id, GREATEST( COALESCE(up.last_post_at, u.created_at), COALESCE(uc.last_comment_at, u.created_at) ) AS last_active_at FROM users u LEFT JOIN user_posts up ON up.user_id = u.id LEFT JOIN user_comments uc ON uc.user_id = u.id ) SELECT u.id, u.name, u.email, u.age, u.is_active, COALESCE(up.post_count, 0) AS post_count, COALESCE(up.total_views, 0) AS total_views, COALESCE(uc.comment_count, 0) AS comment_count, ua.last_active_at FROM users u LEFT JOIN user_posts up ON up.user_id = u.id LEFT JOIN user_comments uc ON uc.user_id = u.id INNER JOIN user_activity ua ON ua.id = u.id ORDER BY ua.last_active_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetDormantUsers
-    pub async fn get_dormant_users(
-        &self,
-        days: i32,
-    ) -> Result<Vec<GetDormantUsersRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetDormantUsersRow>(
-            "WITH last_action AS ( SELECT user_id, MAX(created_at) AS last_at FROM ( SELECT user_id, created_at FROM posts UNION ALL SELECT user_id, created_at FROM comments ) actions GROUP BY user_id ) SELECT u.id, u.name, u.email, u.created_at, la.last_at AS last_action_at FROM users u INNER JOIN last_action la ON la.user_id = u.id WHERE u.is_active = TRUE AND la.last_at < NOW() - ($1 || ' days')::INTERVAL ORDER BY la.last_at ASC;"
-        )
-        .bind(days)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUserRetentionCohorts
-    pub async fn get_user_retention_cohorts(
-        &self,
-    ) -> Result<Vec<GetUserRetentionCohortsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUserRetentionCohortsRow>(
-            "WITH cohorts AS ( SELECT id, DATE_TRUNC('month', created_at) AS cohort_month FROM users ), cohort_active AS ( SELECT DISTINCT u.id, DATE_TRUNC('month', u.created_at) AS cohort_month FROM users u INNER JOIN posts p ON p.user_id = u.id WHERE p.published = TRUE ) SELECT c.cohort_month, COUNT(c.id) AS total_users, COUNT(ca.id) AS active_users, ROUND(100.0 * COUNT(ca.id) / NULLIF(COUNT(c.id), 0), 2) AS retention_pct FROM cohorts c LEFT JOIN cohort_active ca ON ca.id = c.id AND ca.cohort_month = c.cohort_month GROUP BY c.cohort_month ORDER BY c.cohort_month ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUsersAboveAvgPostCount
-    pub async fn get_users_above_avg_post_count(
-        &self,
-    ) -> Result<Vec<GetUsersAboveAvgPostCountRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUsersAboveAvgPostCountRow>(
-            "SELECT u.id, u.name, u.email, COUNT(p.id) AS post_count FROM users u INNER JOIN posts p ON p.user_id = u.id WHERE p.published = TRUE GROUP BY u.id, u.name, u.email HAVING COUNT(p.id) > ( SELECT AVG(cnt) FROM ( SELECT COUNT(*) AS cnt FROM posts WHERE published = TRUE GROUP BY user_id ) sub ) ORDER BY post_count DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUsersWithRecentHighViewPost
-    pub async fn get_users_with_recent_high_view_post(
-        &self,
-        views: i32,
-        days: i32,
-    ) -> Result<Vec<GetUsersWithRecentHighViewPostRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUsersWithRecentHighViewPostRow>(
-            "SELECT u.id, u.name, u.email, u.created_at FROM users u WHERE EXISTS ( SELECT 1 FROM posts p WHERE p.user_id = u.id AND p.published = TRUE AND p.views > $1 AND p.created_at > NOW() - ($2 || ' days')::INTERVAL ) ORDER BY u.name ASC;"
-        )
-        .bind(views)
-        .bind(days)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUserRankByViews
-    pub async fn get_user_rank_by_views(
-        &self,
-    ) -> Result<Vec<GetUserRankByViewsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUserRankByViewsRow>(
-            "SELECT id, name, email, total_views, RANK() OVER (ORDER BY total_views DESC) AS rank, ROUND( 100.0 * RANK() OVER (ORDER BY total_views DESC) / NULLIF(COUNT(*) OVER (), 0), 2) AS percentile FROM ( SELECT u.id, u.name, u.email, COALESCE(SUM(p.views), 0) AS total_views FROM users u LEFT JOIN posts p ON p.user_id = u.id AND p.published = TRUE GROUP BY u.id, u.name, u.email ) ranked ORDER BY rank ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_as!(Users, "INSERT INTO users (name, email, age, bio, score) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, age = EXCLUDED.age, bio = EXCLUDED.bio, score = EXCLUDED.score, updated_at = NOW() RETURNING id, name, email, age, bio, is_active, score, balance, created_at, updated_at;", params.name, params.email, params.age, params.bio, params.score)
+            .fetch_one(&self.pool)
+            .await
     }
 
 }

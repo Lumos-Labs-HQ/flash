@@ -1,33 +1,28 @@
 {
   "version": "1.0",
   "query_file_checksums": {
-    "db/queries/extensions.sql": "84d228422a809e340f4956f9da78ef8f590d1d934f299f0bd5922b365d67c9a9",
-    "db/queries/posts.sql": "f8c1ae1e1f5f51eaf7f12fd750adf933d9effd5bb661d38e76f6976f6054378f",
-    "db/queries/users.sql": "b8293aa1e66f106312af997d1994cdcb4c072ee5447bbcf5e55d16a03d6b3420"
+    "db/queries/posts.sql": "6dc4e94271fc23f2e9d785c93e8f129d36b62c265974809ed74916ffa03dbcbb",
+    "db/queries/users.sql": "4edcead1459ca973a32bee9fccfcc6291710039bad7c6fe9736d3ec7256be33d"
   },
-  "schema_checksum": "11dedfa819a393e923a3acf9947502a6084c2e333a57abf976ad41281ef247d7",
-  "config_checksum": "335c5590b487af681c5702a85dc43d3e70c9304e97d68da3a2450e53bde967ab",
+  "schema_checksum": "3da06f1d387486e202ea1b00c3c387a0dce5143f503d35270353c378f6b4d9a8",
+  "config_checksum": "53fd6136ebb9604d7b8c84d4eedbdf4ef2f4da6acf7a47f6cf28880c315d7cde",
   "query_table_deps": {
-    "db/queries/extensions.sql": [
-      "products",
-      "locations"
-    ],
     "db/queries/posts.sql": [
-      "daily",
-      "users",
+      "categories",
       "posts",
       "posts;",
-      "ranked",
-      "ranked_authors"
+      "comments",
+      "tags",
+      "post_tags",
+      "post_categories",
+      "users"
     ],
     "db/queries/users.sql": [
       "users",
-      "users;",
-      "cohorts",
-      "ranked"
+      "users;"
     ]
   },
   "generated_file_checksums": {},
-  "last_generation": "2026-07-18T21:58:45.030246788+05:30",
+  "last_generation": "2026-08-08T23:03:19.044209312+05:30",
   "OutDir": "src/flash_gen"
 }

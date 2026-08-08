@@ -2,6 +2,5 @@
 
 pub mod models;
 pub mod db;
-pub mod extensions;
 pub mod users;
 pub mod posts;

@@ -3,199 +3,162 @@
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use rust_decimal::Decimal;
 
 use super::models::*;
 use super::db::Queries;
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostViewStatsRow {
-    pub total_posts: i64,
-    pub total_views: Option<Decimal>,
-    pub avg_views: Option<Decimal>,
-    pub max_views: Option<Decimal>,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ListPublishedPostsRow {
+    pub id: Uuid,
+    pub user_id: i32,
+    pub title: String,
+    pub body: Option<String>,
+    pub views: i32,
+    pub published: bool,
+    pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ListPostsByUserRow {
+    pub id: Uuid,
+    pub title: String,
+    pub body: Option<String>,
+    pub views: i32,
+    pub published: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SearchPostsByTitleRow {
+    pub id: Uuid,
+    pub title: String,
+    pub views: i32,
+    pub published: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetTopPostsByViewsRow {
+    pub id: Uuid,
+    pub title: String,
+    pub views: i32,
+    pub user_id: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ListCommentsByPostRow {
+    pub id: i32,
+    pub user_id: i32,
+    pub parent_id: Option<i32>,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GetPostWithAuthorRow {
     pub id: Uuid,
     pub title: String,
-    pub body: Option<String>,
     pub views: i32,
-    pub published: bool,
     pub created_at: DateTime<Utc>,
-    pub author_id: i32,
     pub author_name: String,
     pub author_email: String,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct ListPublishedPostsWithAuthorRow {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetPostWithTagsRow {
     pub id: Uuid,
     pub title: String,
-    pub body: Option<String>,
-    pub views: i32,
-    pub published: bool,
-    pub created_at: DateTime<Utc>,
-    pub author_id: i32,
-    pub author_name: String,
-    pub author_email: String,
+    pub tag_name: String,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct ListPostsWithTagsRow {
-    pub id: Uuid,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetUserPostsWithTagsRow {
+    pub post_id: Uuid,
     pub title: String,
+    pub views: i32,
     pub published: bool,
     pub tag_name: String,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostCountPerUserRow {
-    pub user_id: i32,
-    pub post_count: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUsersWithMoreThanNPostsRow {
-    pub user_id: i32,
-    pub post_count: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct ListPostsWithStatusRow {
-    pub id: Uuid,
-    pub title: String,
-    pub views: i32,
-    pub status: String,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetTopPostsByViewsRow {
-    pub id: i32,
-    pub user_id: i32,
-    pub title: String,
-    pub views: i32,
-    pub published: bool,
-    pub created_at: DateTime<Utc>,
-    pub rank: String,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostsWithCommentCountRow {
-    pub id: Uuid,
-    pub title: String,
-    pub published: bool,
-    pub created_at: DateTime<Utc>,
-    pub comment_count: i32,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostEngagementSummaryRow {
-    pub id: Uuid,
-    pub title: String,
-    pub views: i32,
-    pub view_quartile: String,
-    pub comment_count: i32,
-    pub tag_count: i32,
-    pub engagement_score: i32,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetAuthorLeaderboardRow {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetActivePostersRow {
     pub id: i32,
     pub name: String,
     pub email: String,
-    pub post_count: i32,
-    pub total_views: Option<Decimal>,
-    pub total_comments: i32,
-    pub avg_comments_per_post: String,
-    pub rank: String,
+    pub post_count: Option<i64>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostTrendByDayRow {
-    pub day: String,
-    pub posts_on_day: i32,
-    pub views_on_day: Option<Decimal>,
-    pub rolling_7d_posts: Option<Decimal>,
-    pub rolling_7d_views: Option<Decimal>,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetPopularTagsRow {
+    pub id: i32,
+    pub name: String,
+    pub usage_count: Option<i64>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetUsersWithPublishedPostsRow {
+    pub id: i32,
+    pub name: String,
+    pub email: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GetPostsAboveAvgViewsRow {
     pub id: Uuid,
-    pub user_id: i32,
-    pub title: String,
-    pub views: i32,
-    pub published: bool,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetMostCommentedPostPerUserRow {
-    pub id: Uuid,
-    pub user_id: i32,
     pub title: String,
     pub views: i32,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostsWithAllTagsRow {
-    pub id: Uuid,
-    pub title: String,
-    pub published: bool,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetUsersWhoCommentedOnOwnPostsRow {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetUsersWithRecentActivityRow {
     pub id: i32,
     pub name: String,
     pub email: String,
+    pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostsNotCommentedByUserRow {
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetUserStatsRow {
+    pub id: i32,
+    pub name: String,
+    pub email: String,
+    pub post_count: Option<i64>,
+    pub total_views: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetPostRanksByViewsRow {
+    pub id: Uuid,
+    pub title: String,
+    pub views: i32,
+    pub view_rank: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetUserPostTimelineRow {
+    pub id: Uuid,
+    pub title: String,
+    pub views: i32,
+    pub created_at: DateTime<Utc>,
+    pub post_number: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetPostsByCategoryRow {
     pub id: Uuid,
     pub title: String,
     pub views: i32,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPostsWithViewRankRow {
-    pub id: Uuid,
-    pub user_id: i32,
-    pub title: String,
-    pub views: i32,
-    pub created_at: DateTime<Utc>,
-    pub view_rank: i32,
-    pub prev_views: i32,
-    pub views_diff: Option<Decimal>,
-    pub views_pct: Option<Decimal>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetPerUserPostRanksRow {
-    pub id: Uuid,
-    pub user_id: i32,
-    pub author_name: String,
-    pub title: String,
-    pub views: i32,
-    pub created_at: DateTime<Utc>,
-    pub rank_within_author: i32,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
-pub struct GetRunningViewTotalByUserRow {
-    pub id: Uuid,
-    pub user_id: i32,
-    pub title: String,
-    pub views: i32,
-    pub created_at: DateTime<Utc>,
-    pub running_views: Option<Decimal>,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GetCategoriesForPostRow {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
 }
 
 pub struct CreatePostParams {
@@ -204,260 +167,114 @@ pub struct CreatePostParams {
     pub body: String,
 }
 
-pub struct UpdatePostFullParams {
+pub struct UpdatePostParams {
     pub title: String,
     pub body: String,
-    pub published: bool,
     pub id: Uuid,
 }
 
-impl Queries {
-    /// CreatePost
-    pub async fn create_post(
-        &self,
-        params: &CreatePostParams,
-    ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "INSERT INTO posts (user_id, title, body) VALUES ($1, $2, $3) RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(&params.user_id)
-        .bind(&params.title)
-        .bind(&params.body)
-        .fetch_one(&self.pool)
-        .await
-    }
+pub struct CreateCommentParams {
+    pub post_id: Uuid,
+    pub user_id: i32,
+    pub parent_id: i32,
+    pub body: String,
+}
 
+pub struct CreatePostWithCategoryParams {
+    pub user_id: i32,
+    pub title: String,
+    pub body: String,
+    pub published: bool,
+}
+
+pub struct CreateCategoryParams {
+    pub name: String,
+    pub description: String,
+    pub parent_id: i32,
+    pub sort_order: i32,
+}
+
+impl Queries {
     /// GetPost
     pub async fn get_post(
         &self,
         id: Uuid,
     ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE id = $1 LIMIT 1;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as!(Posts, "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE id = $1;", id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// ListPosts
     pub async fn list_posts(
         &self,
+        limit: i64,
+        offset: i64,
     ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts ORDER BY created_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_as!(Posts, "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts ORDER BY created_at DESC LIMIT $1 OFFSET $2;", limit, offset)
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// ListPublishedPosts
     pub async fn list_published_posts(
         &self,
-    ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE published = TRUE ORDER BY created_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<ListPublishedPostsRow>, sqlx::Error> {
+        sqlx::query_as!(ListPublishedPostsRow, "SELECT id, user_id, title, body, views, published, created_at FROM posts WHERE published = TRUE ORDER BY created_at DESC;")
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// ListPostsByUser
     pub async fn list_posts_by_user(
         &self,
         user_id: i32,
-    ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE user_id = $1 ORDER BY created_at DESC;"
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// ListPublishedPostsByUser
-    pub async fn list_published_posts_by_user(
-        &self,
-        user_id: i32,
-    ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE user_id = $1 AND published = TRUE ORDER BY created_at DESC;"
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<ListPostsByUserRow>, sqlx::Error> {
+        sqlx::query_as!(ListPostsByUserRow, "SELECT id, title, body, views, published, created_at FROM posts WHERE user_id = $1 ORDER BY created_at DESC;", user_id)
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// SearchPostsByTitle
     pub async fn search_posts_by_title(
         &self,
         title: &str,
-    ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE title ILIKE '%' || $1 || '%' ORDER BY created_at DESC;"
-        )
-        .bind(title)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<SearchPostsByTitleRow>, sqlx::Error> {
+        sqlx::query_as!(SearchPostsByTitleRow, "SELECT id, title, views, published, created_at FROM posts WHERE title ILIKE '%' || $1 || '%' ORDER BY views DESC;", title)
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// ListPostsPaginated
-    pub async fn list_posts_paginated(
+    /// CreatePost
+    pub async fn create_post(
         &self,
-        limit: i32,
-        offset: i32,
-    ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts ORDER BY created_at DESC LIMIT $1 OFFSET $2;"
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// ListPostsCreatedAfter
-    pub async fn list_posts_created_after(
-        &self,
-        created_at: DateTime<Utc>,
-    ) -> Result<Vec<Posts>, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "SELECT id, user_id, title, body, views, published, created_at, updated_at FROM posts WHERE created_at > $1 ORDER BY created_at ASC;"
-        )
-        .bind(created_at)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// CountPosts
-    pub async fn count_posts(
-        &self,
-    ) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, i64>(
-            "SELECT COUNT(*) AS count FROM posts;"
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// CountPublishedPosts
-    pub async fn count_published_posts(
-        &self,
-    ) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, i64>(
-            "SELECT COUNT(*) AS count FROM posts WHERE published = TRUE;"
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// CountPostsByUser
-    pub async fn count_posts_by_user(
-        &self,
-        user_id: i32,
-    ) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, i64>(
-            "SELECT COUNT(*) AS count FROM posts WHERE user_id = $1;"
-        )
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// GetPostViewStats
-    pub async fn get_post_view_stats(
-        &self,
-    ) -> Result<GetPostViewStatsRow, sqlx::Error> {
-        sqlx::query_as::<_, GetPostViewStatsRow>(
-            "SELECT COUNT(*) AS total_posts, SUM(views) AS total_views, AVG(views) AS avg_views, MAX(views) AS max_views FROM posts WHERE published = TRUE;"
-        )
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// UpdatePostTitle
-    pub async fn update_post_title(
-        &self,
-        title: &str,
-        id: Uuid,
+        params: &CreatePostParams,
     ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "UPDATE posts SET title = $1, updated_at = NOW() WHERE id = $2 RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(title)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as!(Posts, "INSERT INTO posts (user_id, title, body) VALUES ($1, $2, $3) RETURNING id, user_id, title, body, views, published, created_at, updated_at;", params.user_id, params.title, params.body)
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// UpdatePostBody
-    pub async fn update_post_body(
+    /// UpdatePost
+    pub async fn update_post(
         &self,
-        body: &str,
-        id: Uuid,
-    ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "UPDATE posts SET body = $1, updated_at = NOW() WHERE id = $2 RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(body)
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// UpdatePostFull
-    pub async fn update_post_full(
-        &self,
-        params: &UpdatePostFullParams,
-    ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "UPDATE posts SET title = $1, body = $2, published = $3, updated_at = NOW() WHERE id = $4 RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(&params.title)
-        .bind(&params.body)
-        .bind(&params.published)
-        .bind(&params.id)
-        .fetch_one(&self.pool)
-        .await
+        params: &UpdatePostParams,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("UPDATE posts SET title = $1, body = $2, updated_at = NOW() WHERE id = $3;", params.title, params.body, params.id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     /// PublishPost
     pub async fn publish_post(
         &self,
         id: Uuid,
-    ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "UPDATE posts SET published = TRUE, updated_at = NOW() WHERE id = $1 RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// UnpublishPost
-    pub async fn unpublish_post(
-        &self,
-        id: Uuid,
-    ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "UPDATE posts SET published = FALSE, updated_at = NOW() WHERE id = $1 RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// IncrementPostViews
-    pub async fn increment_post_views(
-        &self,
-        id: Uuid,
-    ) -> Result<Posts, sqlx::Error> {
-        sqlx::query_as::<_, Posts>(
-            "UPDATE posts SET views = views + 1, updated_at = NOW() WHERE id = $1 RETURNING id, user_id, title, body, views, published, created_at, updated_at;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("UPDATE posts SET published = TRUE, updated_at = NOW() WHERE id = $1;", id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 
     /// DeletePost
@@ -465,298 +282,391 @@ impl Queries {
         &self,
         id: Uuid,
     ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "DELETE FROM posts WHERE id = $1;"
-        )
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query!("DELETE FROM posts WHERE id = $1;", id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
+    }
+
+    /// IncrementPostViews
+    pub async fn increment_post_views(
+        &self,
+        id: Uuid,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("UPDATE posts SET views = views + 1 WHERE id = $1;", id)
+            .execute(&self.pool)
+            .await
     }
 
     /// DeletePostsByUser
     pub async fn delete_posts_by_user(
         &self,
         user_id: i32,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "DELETE FROM posts WHERE user_id = $1;"
-        )
-        .bind(user_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("DELETE FROM posts WHERE user_id = $1;", user_id)
+            .execute(&self.pool)
+            .await
     }
 
-    /// DeleteUnpublishedPosts
-    pub async fn delete_unpublished_posts(
+    /// CountPosts
+    pub async fn count_posts(
         &self,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "DELETE FROM posts WHERE published = FALSE;"
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT COUNT(*) FROM posts;")
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// PostExists
-    pub async fn post_exists(
+    /// CountPublishedPosts
+    pub async fn count_published_posts(
         &self,
-        id: i32,
-    ) -> Result<String, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, String>(
-            "SELECT EXISTS ( SELECT 1 FROM posts WHERE id = $1 ) AS exists;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT COUNT(*) FROM posts WHERE published = TRUE;")
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// UserHasPost
-    pub async fn user_has_post(
+    /// CountPostsByUser
+    pub async fn count_posts_by_user(
         &self,
-        id: i32,
         user_id: i32,
-    ) -> Result<String, sqlx::Error> {
-        sqlx::query_scalar::<sqlx::Postgres, String>(
-            "SELECT EXISTS ( SELECT 1 FROM posts WHERE id = $1 AND user_id = $2 ) AS exists;"
-        )
-        .bind(id)
-        .bind(user_id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// GetPostWithAuthor
-    pub async fn get_post_with_author(
-        &self,
-        id: Uuid,
-    ) -> Result<GetPostWithAuthorRow, sqlx::Error> {
-        sqlx::query_as::<_, GetPostWithAuthorRow>(
-            "SELECT p.id, p.title, p.body, p.views, p.published, p.created_at, u.id AS author_id, u.name AS author_name, u.email AS author_email FROM posts p INNER JOIN users u ON u.id = p.user_id WHERE p.id = $1;"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
-    }
-
-    /// ListPublishedPostsWithAuthor
-    pub async fn list_published_posts_with_author(
-        &self,
-    ) -> Result<Vec<ListPublishedPostsWithAuthorRow>, sqlx::Error> {
-        sqlx::query_as::<_, ListPublishedPostsWithAuthorRow>(
-            "SELECT p.id, p.title, p.body, p.views, p.published, p.created_at, u.id AS author_id, u.name AS author_name, u.email AS author_email FROM posts p INNER JOIN users u ON u.id = p.user_id WHERE p.published = TRUE ORDER BY p.created_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// ListPostsWithTags
-    pub async fn list_posts_with_tags(
-        &self,
-        id: Uuid,
-    ) -> Result<Vec<ListPostsWithTagsRow>, sqlx::Error> {
-        sqlx::query_as::<_, ListPostsWithTagsRow>(
-            "SELECT p.id, p.title, p.published, t.name AS tag_name FROM posts p INNER JOIN post_tags pt ON pt.post_id = p.id INNER JOIN tags t ON t.id = pt.tag_id WHERE p.id = $1 ORDER BY t.name ASC;"
-        )
-        .bind(id)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetPostCountPerUser
-    pub async fn get_post_count_per_user(
-        &self,
-    ) -> Result<Vec<GetPostCountPerUserRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostCountPerUserRow>(
-            "SELECT user_id, COUNT(*) AS post_count FROM posts GROUP BY user_id ORDER BY post_count DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// GetUsersWithMoreThanNPosts
-    pub async fn get_users_with_more_than_n_posts(
-        &self,
-        count_threshold: i32,
-    ) -> Result<Vec<GetUsersWithMoreThanNPostsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUsersWithMoreThanNPostsRow>(
-            "SELECT user_id, COUNT(*) AS post_count FROM posts WHERE published = TRUE GROUP BY user_id HAVING COUNT(*) > $1 ORDER BY post_count DESC;"
-        )
-        .bind(count_threshold)
-        .fetch_all(&self.pool)
-        .await
-    }
-
-    /// ListPostsWithStatus
-    pub async fn list_posts_with_status(
-        &self,
-    ) -> Result<Vec<ListPostsWithStatusRow>, sqlx::Error> {
-        sqlx::query_as::<_, ListPostsWithStatusRow>(
-            "SELECT id, title, views, CASE WHEN published = TRUE AND views > 1000 THEN 'popular' WHEN published = TRUE THEN 'published' ELSE 'draft' END AS status FROM posts ORDER BY created_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT COUNT(*) FROM posts WHERE user_id = $1;", user_id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// GetTopPostsByViews
     pub async fn get_top_posts_by_views(
         &self,
-        rank: &str,
+        limit: i64,
     ) -> Result<Vec<GetTopPostsByViewsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetTopPostsByViewsRow>(
-            "WITH ranked AS ( SELECT id, user_id, title, views, published, created_at, ROW_NUMBER() OVER (ORDER BY views DESC) AS rank FROM posts WHERE published = TRUE ) SELECT id, user_id, title, views, published, created_at, rank FROM ranked WHERE rank <= $1;"
-        )
-        .bind(rank)
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_as!(GetTopPostsByViewsRow, "SELECT id, title, views, user_id, created_at FROM posts WHERE published = TRUE ORDER BY views DESC LIMIT $1;", limit)
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetPostsWithCommentCount
-    pub async fn get_posts_with_comment_count(
+    /// GetComment
+    pub async fn get_comment(
         &self,
-    ) -> Result<Vec<GetPostsWithCommentCountRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostsWithCommentCountRow>(
-            "WITH comment_counts AS ( SELECT post_id, COUNT(*) AS comment_count FROM comments GROUP BY post_id ) SELECT p.id, p.title, p.published, p.created_at, COALESCE(cc.comment_count, 0) AS comment_count FROM posts p LEFT JOIN comment_counts cc ON cc.post_id = p.id ORDER BY comment_count DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        id: i32,
+    ) -> Result<Comments, sqlx::Error> {
+        sqlx::query_as!(Comments, "SELECT id, post_id, user_id, parent_id, body, created_at FROM comments WHERE id = $1;", id)
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// GetPostEngagementSummary
-    pub async fn get_post_engagement_summary(
+    /// ListCommentsByPost
+    pub async fn list_comments_by_post(
         &self,
-        limit: i32,
-    ) -> Result<Vec<GetPostEngagementSummaryRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostEngagementSummaryRow>(
-            "WITH view_scores AS ( SELECT id, views, NTILE(4) OVER (ORDER BY views DESC) AS view_quartile FROM posts WHERE published = TRUE ), comment_counts AS ( SELECT post_id, COUNT(*) AS comment_count FROM comments GROUP BY post_id ), tag_counts AS ( SELECT post_id, COUNT(*) AS tag_count FROM post_tags GROUP BY post_id ) SELECT p.id, p.title, p.views, vs.view_quartile, COALESCE(cc.comment_count, 0) AS comment_count, COALESCE(tc.tag_count, 0) AS tag_count, COALESCE(cc.comment_count, 0) + p.views AS engagement_score FROM posts p INNER JOIN view_scores vs ON vs.id = p.id LEFT JOIN comment_counts cc ON cc.post_id = p.id LEFT JOIN tag_counts tc ON tc.post_id = p.id ORDER BY engagement_score DESC LIMIT $1;"
-        )
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
+        post_id: Uuid,
+    ) -> Result<Vec<ListCommentsByPostRow>, sqlx::Error> {
+        sqlx::query_as!(ListCommentsByPostRow, "SELECT id, user_id, parent_id, body, created_at FROM comments WHERE post_id = $1 ORDER BY created_at ASC;", post_id)
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetAuthorLeaderboard
-    pub async fn get_author_leaderboard(
+    /// CreateComment
+    pub async fn create_comment(
         &self,
-        limit: i32,
-    ) -> Result<Vec<GetAuthorLeaderboardRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetAuthorLeaderboardRow>(
-            "WITH author_posts AS ( SELECT user_id, COUNT(*) AS post_count, SUM(views) AS total_views FROM posts WHERE published = TRUE GROUP BY user_id ), author_comments AS ( SELECT p.user_id, COUNT(c.id) AS total_comments FROM comments c INNER JOIN posts p ON p.id = c.post_id GROUP BY p.user_id ), ranked_authors AS ( SELECT ap.user_id, ap.post_count, ap.total_views, COALESCE(ac.total_comments, 0) AS total_comments, ROUND(COALESCE(ac.total_comments, 0)::NUMERIC / NULLIF(ap.post_count, 0), 2) AS avg_comments_per_post, RANK() OVER (ORDER BY ap.total_views DESC, ap.post_count DESC) AS rank FROM author_posts ap LEFT JOIN author_comments ac ON ac.user_id = ap.user_id ) SELECT u.id, u.name, u.email, ra.post_count, ra.total_views, ra.total_comments, ra.avg_comments_per_post, ra.rank FROM ranked_authors ra INNER JOIN users u ON u.id = ra.user_id ORDER BY ra.rank ASC LIMIT $1;"
-        )
-        .bind(limit)
-        .fetch_all(&self.pool)
-        .await
+        params: &CreateCommentParams,
+    ) -> Result<Comments, sqlx::Error> {
+        sqlx::query_as!(Comments, "INSERT INTO comments (post_id, user_id, parent_id, body) VALUES ($1, $2, $3, $4) RETURNING id, post_id, user_id, parent_id, body, created_at;", params.post_id, params.user_id, params.parent_id, params.body)
+            .fetch_one(&self.pool)
+            .await
     }
 
-    /// GetPostTrendByDay
-    pub async fn get_post_trend_by_day(
+    /// DeleteComment
+    pub async fn delete_comment(
         &self,
-        created_at: &str,
-    ) -> Result<Vec<GetPostTrendByDayRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostTrendByDayRow>(
-            "WITH daily AS ( SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*) AS posts_on_day, SUM(views) AS views_on_day FROM posts WHERE published = TRUE AND created_at >= $1 GROUP BY DATE_TRUNC('day', created_at) ) SELECT day, posts_on_day, views_on_day, SUM(posts_on_day) OVER ( ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW ) AS rolling_7d_posts, SUM(views_on_day) OVER ( ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW ) AS rolling_7d_views FROM daily ORDER BY day ASC;"
-        )
-        .bind(created_at)
-        .fetch_all(&self.pool)
-        .await
+        id: i32,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("DELETE FROM comments WHERE id = $1;", id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// CountCommentsByPost
+    pub async fn count_comments_by_post(
+        &self,
+        post_id: Uuid,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        sqlx::query_scalar!("SELECT COUNT(*) FROM comments WHERE post_id = $1;", post_id)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// ListTags
+    pub async fn list_tags(
+        &self,
+    ) -> Result<Vec<Tags>, sqlx::Error> {
+        sqlx::query_as!(Tags, "SELECT id, name FROM tags ORDER BY name;")
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// CreateTag
+    pub async fn create_tag(
+        &self,
+        name: &str,
+    ) -> Result<Tags, sqlx::Error> {
+        sqlx::query_as!(Tags, "INSERT INTO tags (name) VALUES ($1) RETURNING id, name;", name)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// AddTagToPost
+    pub async fn add_tag_to_post(
+        &self,
+        post_id: Uuid,
+        tag_id: i32,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;", post_id, tag_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// RemoveTagFromPost
+    pub async fn remove_tag_from_post(
+        &self,
+        post_id: Uuid,
+        tag_id: i32,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("DELETE FROM post_tags WHERE post_id = $1 AND tag_id = $2;", post_id, tag_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// ListTagsForPost
+    pub async fn list_tags_for_post(
+        &self,
+        post_id: Uuid,
+    ) -> Result<Vec<Tags>, sqlx::Error> {
+        sqlx::query_as!(Tags, "SELECT t.id, t.name FROM tags t JOIN post_tags pt ON pt.tag_id = t.id WHERE pt.post_id = $1 ORDER BY t.name;", post_id)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetPostWithAuthor
+    pub async fn get_post_with_author(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<GetPostWithAuthorRow>, sqlx::Error> {
+        sqlx::query_as!(GetPostWithAuthorRow, "SELECT p.id, p.title, p.views, p.created_at, u.name AS author_name, u.email AS author_email FROM posts p JOIN users u ON u.id = p.user_id WHERE p.published = TRUE ORDER BY p.created_at DESC LIMIT $1 OFFSET $2;", limit, offset)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetPostWithTags
+    pub async fn get_post_with_tags(
+        &self,
+        id: Uuid,
+    ) -> Result<Vec<GetPostWithTagsRow>, sqlx::Error> {
+        sqlx::query_as!(GetPostWithTagsRow, "SELECT p.id, p.title, t.name AS tag_name FROM posts p JOIN post_tags pt ON pt.post_id = p.id JOIN tags t ON t.id = pt.tag_id WHERE p.id = $1 ORDER BY t.name;", id)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetUserPostsWithTags
+    pub async fn get_user_posts_with_tags(
+        &self,
+        user_id: i32,
+    ) -> Result<Vec<GetUserPostsWithTagsRow>, sqlx::Error> {
+        sqlx::query_as!(GetUserPostsWithTagsRow, "SELECT p.id AS post_id, p.title, p.views, p.published, t.name AS tag_name FROM posts p JOIN post_tags pt ON pt.post_id = p.id JOIN tags t ON t.id = pt.tag_id WHERE p.user_id = $1 ORDER BY p.created_at DESC;", user_id)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetActivePosters
+    pub async fn get_active_posters(
+        &self,
+        count_threshold: i64,
+    ) -> Result<Vec<GetActivePostersRow>, sqlx::Error> {
+        sqlx::query_as!(GetActivePostersRow, "SELECT u.id, u.name, u.email, COUNT(p.id) AS post_count FROM users u JOIN posts p ON p.user_id = u.id WHERE p.published = TRUE GROUP BY u.id, u.name, u.email HAVING COUNT(p.id) >= $1 ORDER BY post_count DESC;", count_threshold)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetPopularTags
+    pub async fn get_popular_tags(
+        &self,
+        count_threshold: i64,
+    ) -> Result<Vec<GetPopularTagsRow>, sqlx::Error> {
+        sqlx::query_as!(GetPopularTagsRow, "SELECT t.id, t.name, COUNT(pt.post_id) AS usage_count FROM tags t JOIN post_tags pt ON pt.tag_id = t.id GROUP BY t.id, t.name HAVING COUNT(pt.post_id) >= $1 ORDER BY usage_count DESC;", count_threshold)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetUsersWithPublishedPosts
+    pub async fn get_users_with_published_posts(
+        &self,
+    ) -> Result<Vec<GetUsersWithPublishedPostsRow>, sqlx::Error> {
+        sqlx::query_as!(GetUsersWithPublishedPostsRow, "SELECT id, name, email, created_at FROM users WHERE id IN (SELECT DISTINCT user_id FROM posts WHERE published = TRUE) ORDER BY name;")
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// GetPostsAboveAvgViews
     pub async fn get_posts_above_avg_views(
         &self,
     ) -> Result<Vec<GetPostsAboveAvgViewsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostsAboveAvgViewsRow>(
-            "SELECT id, user_id, title, views, published, created_at FROM posts WHERE published = TRUE AND views > ( SELECT AVG(views) FROM posts WHERE published = TRUE ) ORDER BY views DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_as!(GetPostsAboveAvgViewsRow, "SELECT id, title, views, created_at FROM posts WHERE published = TRUE AND views > (SELECT AVG(views) FROM posts WHERE published = TRUE) ORDER BY views DESC;")
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetMostCommentedPostPerUser
-    pub async fn get_most_commented_post_per_user(
+    /// GetUsersWithRecentActivity
+    pub async fn get_users_with_recent_activity(
         &self,
-    ) -> Result<Vec<GetMostCommentedPostPerUserRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetMostCommentedPostPerUserRow>(
-            "SELECT p.id, p.user_id, p.title, p.views, p.created_at FROM posts p WHERE ( SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id ) = ( SELECT MAX(sub.cnt) FROM ( SELECT COUNT(*) AS cnt FROM comments c2 INNER JOIN posts p2 ON p2.id = c2.post_id WHERE p2.user_id = p.user_id GROUP BY c2.post_id ) sub ) ORDER BY p.user_id, p.created_at DESC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<GetUsersWithRecentActivityRow>, sqlx::Error> {
+        sqlx::query_as!(GetUsersWithRecentActivityRow, "SELECT id, name, email, created_at FROM users WHERE id IN ( SELECT DISTINCT user_id FROM posts WHERE created_at > NOW() - INTERVAL '30 days' UNION SELECT DISTINCT user_id FROM comments WHERE created_at > NOW() - INTERVAL '30 days' ) ORDER BY name;")
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetPostsWithAllTags
-    pub async fn get_posts_with_all_tags(
+    /// DeactivateUsersWithNoPosts
+    pub async fn deactivate_users_with_no_posts(
         &self,
-        name: &str,
-        count: i32,
-    ) -> Result<Vec<GetPostsWithAllTagsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostsWithAllTagsRow>(
-            "SELECT p.id, p.title, p.published, p.created_at FROM posts p WHERE ( SELECT COUNT(DISTINCT t.name) FROM post_tags pt INNER JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id AND t.name = ANY($1::TEXT[]) ) = $2 ORDER BY p.created_at DESC;"
-        )
-        .bind(name)
-        .bind(count)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("UPDATE users SET is_active = FALSE, updated_at = NOW() WHERE id NOT IN (SELECT DISTINCT user_id FROM posts);")
+            .execute(&self.pool)
+            .await
     }
 
-    /// GetUsersWhoCommentedOnOwnPosts
-    pub async fn get_users_who_commented_on_own_posts(
+    /// DeleteUnpublishedPostsOlderThan
+    pub async fn delete_unpublished_posts_older_than(
         &self,
-    ) -> Result<Vec<GetUsersWhoCommentedOnOwnPostsRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetUsersWhoCommentedOnOwnPostsRow>(
-            "SELECT DISTINCT u.id, u.name, u.email FROM users u WHERE EXISTS ( SELECT 1 FROM comments c INNER JOIN posts p ON p.id = c.post_id WHERE c.user_id = u.id AND p.user_id = u.id ) ORDER BY u.name ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("DELETE FROM posts WHERE published = FALSE AND created_at < NOW() - INTERVAL '90 days';")
+            .execute(&self.pool)
+            .await
     }
 
-    /// GetPostsNotCommentedByUser
-    pub async fn get_posts_not_commented_by_user(
+    /// BoostPopularPosts
+    pub async fn boost_popular_posts(
         &self,
-        user_id: i32,
-    ) -> Result<Vec<GetPostsNotCommentedByUserRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostsNotCommentedByUserRow>(
-            "SELECT p.id, p.title, p.views, p.created_at FROM posts p WHERE p.published = TRUE AND NOT EXISTS ( SELECT 1 FROM comments c WHERE c.post_id = p.id AND c.user_id = $1 ) ORDER BY p.created_at DESC;"
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await
+        limit: i64,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("UPDATE posts SET views = views + 100 WHERE id IN ( SELECT id FROM posts WHERE published = TRUE ORDER BY views DESC LIMIT $1 );", limit)
+            .execute(&self.pool)
+            .await
     }
 
-    /// GetPostsWithViewRank
-    pub async fn get_posts_with_view_rank(
+    /// GetUserStats
+    pub async fn get_user_stats(
         &self,
-    ) -> Result<Vec<GetPostsWithViewRankRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPostsWithViewRankRow>(
-            "SELECT id, user_id, title, views, created_at, RANK() OVER (ORDER BY views DESC) AS view_rank, LAG(views, 1) OVER (ORDER BY views DESC) AS prev_views, views - LAG(views, 1, views) OVER (ORDER BY views DESC) AS views_diff, ROUND(100.0 * views / NULLIF(SUM(views) OVER (), 0), 2) AS views_pct FROM posts WHERE published = TRUE ORDER BY view_rank ASC;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        limit: i64,
+    ) -> Result<Vec<GetUserStatsRow>, sqlx::Error> {
+        sqlx::query_as!(GetUserStatsRow, "WITH user_post_counts AS ( SELECT user_id, COUNT(*) AS post_count, SUM(views) AS total_views FROM posts WHERE published = TRUE GROUP BY user_id ) SELECT u.id, u.name, u.email, upc.post_count, upc.total_views FROM users u JOIN user_post_counts upc ON upc.user_id = u.id ORDER BY upc.total_views DESC LIMIT $1;", limit)
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetPerUserPostRanks
-    pub async fn get_per_user_post_ranks(
+    /// GetPostRanksByViews
+    pub async fn get_post_ranks_by_views(
         &self,
-    ) -> Result<Vec<GetPerUserPostRanksRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetPerUserPostRanksRow>(
-            "SELECT p.id, p.user_id, u.name AS author_name, p.title, p.views, p.created_at, RANK() OVER ( PARTITION BY p.user_id ORDER BY p.views DESC ) AS rank_within_author FROM posts p INNER JOIN users u ON u.id = p.user_id WHERE p.published = TRUE ORDER BY p.user_id, rank_within_author;"
-        )
-        .fetch_all(&self.pool)
-        .await
+        limit: i64,
+    ) -> Result<Vec<GetPostRanksByViewsRow>, sqlx::Error> {
+        sqlx::query_as!(GetPostRanksByViewsRow, "SELECT id, title, views, RANK() OVER (ORDER BY views DESC) AS view_rank FROM posts WHERE published = TRUE ORDER BY view_rank LIMIT $1;", limit)
+            .fetch_all(&self.pool)
+            .await
     }
 
-    /// GetRunningViewTotalByUser
-    pub async fn get_running_view_total_by_user(
+    /// GetUserPostTimeline
+    pub async fn get_user_post_timeline(
         &self,
         user_id: i32,
-    ) -> Result<Vec<GetRunningViewTotalByUserRow>, sqlx::Error> {
-        sqlx::query_as::<_, GetRunningViewTotalByUserRow>(
-            "SELECT p.id, p.user_id, p.title, p.views, p.created_at, SUM(p.views) OVER ( PARTITION BY p.user_id ORDER BY p.created_at ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ) AS running_views FROM posts p WHERE p.user_id = $1 ORDER BY p.created_at ASC;"
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await
+    ) -> Result<Vec<GetUserPostTimelineRow>, sqlx::Error> {
+        sqlx::query_as!(GetUserPostTimelineRow, "SELECT id, title, views, created_at, ROW_NUMBER() OVER (ORDER BY created_at) AS post_number FROM posts WHERE user_id = $1 AND published = TRUE ORDER BY created_at;", user_id)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// CreatePostWithCategory
+    pub async fn create_post_with_category(
+        &self,
+        params: &CreatePostWithCategoryParams,
+    ) -> Result<Posts, sqlx::Error> {
+        sqlx::query_as!(Posts, "INSERT INTO posts (user_id, title, body, published) VALUES ($1, $2, $3, $4) RETURNING id, user_id, title, body, views, published, created_at, updated_at;", params.user_id, params.title, params.body, params.published)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// BulkPublishUserPosts
+    pub async fn bulk_publish_user_posts(
+        &self,
+        user_id: i32,
+    ) -> Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+        sqlx::query!("UPDATE posts SET published = TRUE, updated_at = NOW() WHERE user_id = $1 AND published = FALSE;", user_id)
+            .execute(&self.pool)
+            .await
+    }
+
+    /// ListCategories
+    pub async fn list_categories(
+        &self,
+    ) -> Result<Vec<Categories>, sqlx::Error> {
+        sqlx::query_as!(Categories, "SELECT id, name, description, parent_id, sort_order, created_at FROM categories ORDER BY sort_order, name;")
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// CreateCategory
+    pub async fn create_category(
+        &self,
+        params: &CreateCategoryParams,
+    ) -> Result<Categories, sqlx::Error> {
+        sqlx::query_as!(Categories, "INSERT INTO categories (name, description, parent_id, sort_order) VALUES ($1, $2, $3, $4) RETURNING id, name, description, parent_id, sort_order, created_at;", params.name, params.description, params.parent_id, params.sort_order)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    /// AddPostToCategory
+    pub async fn add_post_to_category(
+        &self,
+        post_id: Uuid,
+        category_id: i32,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("INSERT INTO post_categories (post_id, category_id) VALUES ($1, $2) ON CONFLICT DO NOTHING;", post_id, category_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// RemovePostFromCategory
+    pub async fn remove_post_from_category(
+        &self,
+        post_id: Uuid,
+        category_id: i32,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query!("DELETE FROM post_categories WHERE post_id = $1 AND category_id = $2;", post_id, category_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// GetPostsByCategory
+    pub async fn get_posts_by_category(
+        &self,
+        category_id: i32,
+    ) -> Result<Vec<GetPostsByCategoryRow>, sqlx::Error> {
+        sqlx::query_as!(GetPostsByCategoryRow, "SELECT p.id, p.title, p.views, p.created_at FROM posts p JOIN post_categories pc ON pc.post_id = p.id WHERE pc.category_id = $1 AND p.published = TRUE ORDER BY p.created_at DESC;", category_id)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    /// GetCategoriesForPost
+    pub async fn get_categories_for_post(
+        &self,
+        post_id: Uuid,
+    ) -> Result<Vec<GetCategoriesForPostRow>, sqlx::Error> {
+        sqlx::query_as!(GetCategoriesForPostRow, "SELECT c.id, c.name, c.description FROM categories c JOIN post_categories pc ON pc.category_id = c.id WHERE pc.post_id = $1 ORDER BY c.name;", post_id)
+            .fetch_all(&self.pool)
+            .await
     }
 
 }

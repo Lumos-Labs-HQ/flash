@@ -1,9 +1,9 @@
 {
   "version": "2",
-  "generated_at": "2026-07-18T20:24:29.843252542Z",
+  "generated_at": "2026-08-08T17:21:50.772926297Z",
   "tables": [
     {
-      "Name": "locations",
+      "Name": "categories",
       "Columns": [
         {
           "Name": "id",
@@ -27,203 +27,7 @@
           "Nullable": false,
           "Default": "",
           "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "coords",
-          "Type": "GEOMETRY(Point, 4326)",
-          "Nullable": false,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "area",
-          "Type": "GEOGRAPHY(Polygon, 4326)",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "ip_address",
-          "Type": "INET",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "mac_addr",
-          "Type": "MACADDR",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "valid_range",
-          "Type": "TSTZRANGE",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "bit_flags",
-          "Type": "BIT(8)",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "scheduled",
-          "Type": "INTERVAL",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "raw_xml",
-          "Type": "XML",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "created_at",
-          "Type": "TIMESTAMPTZ",
-          "Nullable": false,
-          "Default": "NOW()",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        }
-      ],
-      "Indexes": [
-        {
-          "Name": "idx_locations_coords",
-          "Table": "locations",
-          "Columns": [
-            "coords"
-          ],
-          "Unique": false,
-          "Where": "",
-          "Method": "gist",
-          "Expr": null
-        }
-      ],
-      "CompositePK": "",
-      "Suffix": ""
-    },
-    {
-      "Name": "products",
-      "Columns": [
-        {
-          "Name": "id",
-          "Type": "SERIAL",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": true,
-          "IsUnique": false,
-          "IsAutoIncrement": true,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "name",
-          "Type": "TEXT",
-          "Nullable": false,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
+          "IsUnique": true,
           "IsAutoIncrement": false,
           "ForeignKeyTable": "",
           "ForeignKeyColumn": "",
@@ -250,90 +54,26 @@
           "IsIdentity": false
         },
         {
-          "Name": "embedding",
-          "Type": "VECTOR(1536)",
+          "Name": "parent_id",
+          "Type": "INTEGER",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "categories",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "sort_order",
+          "Type": "INTEGER",
           "Nullable": false,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "half_embed",
-          "Type": "HALFVEC(768)",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "price",
-          "Type": "MONEY",
-          "Nullable": false,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "metadata",
-          "Type": "HSTORE",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "tags_path",
-          "Type": "LTREE",
-          "Nullable": true,
-          "Default": "",
-          "IsPrimary": false,
-          "IsUnique": false,
-          "IsAutoIncrement": false,
-          "ForeignKeyTable": "",
-          "ForeignKeyColumn": "",
-          "OnDeleteAction": "",
-          "OnUpdateAction": "",
-          "Check": "",
-          "Generated": "",
-          "IsIdentity": false
-        },
-        {
-          "Name": "search_vec",
-          "Type": "TSVECTOR",
-          "Nullable": true,
-          "Default": "",
+          "Default": "0",
           "IsPrimary": false,
           "IsUnique": false,
           "IsAutoIncrement": false,
@@ -362,41 +102,7 @@
           "IsIdentity": false
         }
       ],
-      "Indexes": [
-        {
-          "Name": "idx_products_embedding",
-          "Table": "products",
-          "Columns": [
-            "embedding vector_cosine_ops"
-          ],
-          "Unique": false,
-          "Where": "",
-          "Method": "ivfflat",
-          "Expr": null
-        },
-        {
-          "Name": "idx_products_tags",
-          "Table": "products",
-          "Columns": [
-            "tags_path"
-          ],
-          "Unique": false,
-          "Where": "",
-          "Method": "gist",
-          "Expr": null
-        },
-        {
-          "Name": "idx_products_search",
-          "Table": "products",
-          "Columns": [
-            "search_vec"
-          ],
-          "Unique": false,
-          "Where": "",
-          "Method": "gin",
-          "Expr": null
-        }
-      ],
+      "Indexes": [],
       "CompositePK": "",
       "Suffix": ""
     },
@@ -508,10 +214,58 @@
           "IsIdentity": false
         },
         {
+          "Name": "bio",
+          "Type": "TEXT",
+          "Nullable": true,
+          "Default": "",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
           "Name": "is_active",
           "Type": "BOOLEAN",
           "Nullable": false,
           "Default": "TRUE",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "score",
+          "Type": "REAL",
+          "Nullable": false,
+          "Default": "0.0",
+          "IsPrimary": false,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "",
+          "ForeignKeyColumn": "",
+          "OnDeleteAction": "",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "balance",
+          "Type": "NUMERIC(12,2)",
+          "Nullable": false,
+          "Default": "0.00",
           "IsPrimary": false,
           "IsUnique": false,
           "IsAutoIncrement": false,
@@ -824,6 +578,46 @@
       "Suffix": ""
     },
     {
+      "Name": "post_categories",
+      "Columns": [
+        {
+          "Name": "post_id",
+          "Type": "UUID",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "posts",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        },
+        {
+          "Name": "category_id",
+          "Type": "INTEGER",
+          "Nullable": false,
+          "Default": "",
+          "IsPrimary": true,
+          "IsUnique": false,
+          "IsAutoIncrement": false,
+          "ForeignKeyTable": "categories",
+          "ForeignKeyColumn": "id",
+          "OnDeleteAction": "CASCADE",
+          "OnUpdateAction": "",
+          "Check": "",
+          "Generated": "",
+          "IsIdentity": false
+        }
+      ],
+      "Indexes": [],
+      "CompositePK": "(post_id, category_id)",
+      "Suffix": ""
+    },
+    {
       "Name": "post_tags",
       "Columns": [
         {
@@ -908,50 +702,6 @@
       "Unique": false,
       "Where": "",
       "Method": "",
-      "Expr": null
-    },
-    {
-      "Name": "idx_products_embedding",
-      "Table": "products",
-      "Columns": [
-        "embedding vector_cosine_ops"
-      ],
-      "Unique": false,
-      "Where": "",
-      "Method": "ivfflat",
-      "Expr": null
-    },
-    {
-      "Name": "idx_products_tags",
-      "Table": "products",
-      "Columns": [
-        "tags_path"
-      ],
-      "Unique": false,
-      "Where": "",
-      "Method": "gist",
-      "Expr": null
-    },
-    {
-      "Name": "idx_products_search",
-      "Table": "products",
-      "Columns": [
-        "search_vec"
-      ],
-      "Unique": false,
-      "Where": "",
-      "Method": "gin",
-      "Expr": null
-    },
-    {
-      "Name": "idx_locations_coords",
-      "Table": "locations",
-      "Columns": [
-        "coords"
-      ],
-      "Unique": false,
-      "Where": "",
-      "Method": "gist",
       "Expr": null
     }
   ],

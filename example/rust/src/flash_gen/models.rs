@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use rust_decimal::Decimal;
 use sqlx::FromRow;
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
@@ -12,7 +13,10 @@ pub struct Users {
     pub name: String,
     pub email: String,
     pub age: Option<i32>,
+    pub bio: Option<String>,
     pub is_active: bool,
+    pub score: f32,
+    pub balance: Decimal,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -52,31 +56,18 @@ pub struct Comments {
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct Products {
+pub struct Categories {
     pub id: i32,
     pub name: String,
     pub description: Option<String>,
-    pub embedding: pgvector::Vector,
-    pub half_embed: Option<pgvector::HalfVec>,
-    pub price: sqlx::postgres::types::PgMoney,
-    pub metadata: Option<sqlx::postgres::types::PgHstore>,
-    pub tags_path: Option<sqlx::postgres::types::PgLTree>,
-    pub search_vec: Option<String>,
+    pub parent_id: Option<i32>,
+    pub sort_order: i32,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct Locations {
-    pub id: i32,
-    pub name: String,
-    pub coords: geo_types::Geometry<f64>,
-    pub area: Option<geo_types::Geometry<f64>>,
-    pub ip_address: Option<ipnetwork::IpNetwork>,
-    pub mac_addr: Option<mac_address::MacAddress>,
-    pub valid_range: Option<sqlx::postgres::types::PgRange<DateTime<Utc>>>,
-    pub bit_flags: Option<sqlx::postgres::types::PgBitVec>,
-    pub scheduled: Option<sqlx::postgres::types::PgInterval>,
-    pub raw_xml: Option<String>,
-    pub created_at: DateTime<Utc>,
+pub struct PostCategories {
+    pub post_id: Uuid,
+    pub category_id: i32,
 }
 
