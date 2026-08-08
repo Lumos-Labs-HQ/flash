@@ -43,6 +43,15 @@ type Query struct {
 	SourceFile   string
 	RequiredCols []string    // from -- @required: col1, col2 or * for all
 	JsonTypes    []*JsonType // from -- @json annotations
+	CacheDef     *CacheDef  // from -- @cache annotation
+}
+
+// CacheDef holds the parsed @cache annotation for a query
+type CacheDef struct {
+	TTL  string   // e.g. "30s", "5m", "1h"
+	Name string   // custom cache accessor name (default: QueryName + "Cache")
+	Tags []string // tags for bulk purging
+	Dep  []string // query names that invalidate this cache
 }
 
 type Param struct {

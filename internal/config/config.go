@@ -23,18 +23,19 @@ var (
 )
 
 type Config struct {
-	Version        string   `toml:"version"`
-	SchemaPath     string   `toml:"schema_path"`
-	SchemaDir      string   `toml:"schema_dir"`
-	Queries        string   `toml:"queries"`
-	MigrationsPath string   `toml:"migrations_path"`
-	ExportPath     string   `toml:"export_path"`
-	Default        bool     `toml:"default"`
-	EnvPath        string   `toml:"env_path"`
-	Database       Database `toml:"database"`
-	Gen            Gen      `toml:"gen"`
-	JsonPath       string   `toml:"json_path"` // directory for JSON type definition files
-	ForceRegen     bool     `toml:"-"`
+	Version        string      `toml:"version"`
+	SchemaPath     string      `toml:"schema_path"`
+	SchemaDir      string      `toml:"schema_dir"`
+	Queries        string      `toml:"queries"`
+	MigrationsPath string      `toml:"migrations_path"`
+	ExportPath     string      `toml:"export_path"`
+	Default        bool        `toml:"default"`
+	EnvPath        string      `toml:"env_path"`
+	Database       Database    `toml:"database"`
+	Gen            Gen         `toml:"gen"`
+	Cache          CacheConfig `toml:"cache"`
+	JsonPath       string      `toml:"json_path"` // directory for JSON type definition files
+	ForceRegen     bool        `toml:"-"`
 	// Multi-database support
 	Databases []DatabaseConfig `toml:"databases"`
 	// ActiveDB is the database selected by --db flag (runtime only)
@@ -102,9 +103,18 @@ type JavaGen struct {
 }
 
 type RustGen struct {
-	Enabled bool   `toml:"enabled"`
-	Out     string `toml:"out"`
-	Driver  string `toml:"driver"` // "sqlx" (default)
+	Enabled          bool   `toml:"enabled"`
+	Out              string `toml:"out"`
+	Driver           string `toml:"driver"`             // "sqlx" (default)
+	CompileTimeCheck bool   `toml:"compile_time_check"` // false (default) — when true, uses sqlx query macros (requires direct DB, no pooler)
+}
+
+// CacheConfig controls Redis-based query caching via @cache annotations
+type CacheConfig struct {
+	Enabled     bool   `toml:"enabled"`       // false by default — no cache code generated
+	RedisURLEnv string `toml:"redis_url_env"` // env var name, default "REDIS_URL"
+	DefaultTTL  string `toml:"default_ttl"`   // default TTL, e.g. "5m"
+	Prefix      string `toml:"prefix"`        // key prefix, default "flash"
 }
 
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
@@ -305,6 +315,19 @@ func loadUncached() (*Config, error) {
 	}
 	if cfg.Gen.Rust.Driver == "" && cfg.Gen.Rust.Enabled {
 		cfg.Gen.Rust.Driver = "sqlx"
+	}
+
+	// Cache defaults
+	if cfg.Cache.Enabled {
+		if cfg.Cache.RedisURLEnv == "" {
+			cfg.Cache.RedisURLEnv = "REDIS_URL"
+		}
+		if cfg.Cache.DefaultTTL == "" {
+			cfg.Cache.DefaultTTL = "5m"
+		}
+		if cfg.Cache.Prefix == "" {
+			cfg.Cache.Prefix = "flash"
+		}
 	}
 
 	return &cfg, nil

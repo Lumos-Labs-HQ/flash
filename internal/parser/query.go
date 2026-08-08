@@ -168,6 +168,7 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 	var comment string
 	var pendingRequired []string
 	var pendingJsonTypes []*JsonType
+	var pendingCache *CacheDef
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -203,11 +204,13 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 					Cmd:          parts[1],
 					RequiredCols: pendingRequired,
 					JsonTypes:    pendingJsonTypes,
+					CacheDef:     pendingCache,
 				}
 				sqlLines = []string{}
 				comment = ""
 				pendingRequired = nil
 				pendingJsonTypes = nil
+				pendingCache = nil
 			}
 		} else if strings.HasPrefix(line, "-- @required:") {
 			val := strings.TrimPrefix(line, "-- @required:")
@@ -244,6 +247,17 @@ func (p *QueryParser) parseQueryFile(filename string, schema *Schema) ([]*Query,
 				currentQuery.JsonTypes = append(currentQuery.JsonTypes, jt)
 			} else {
 				pendingJsonTypes = append(pendingJsonTypes, jt)
+			}
+		} else if strings.HasPrefix(line, "-- @cache") {
+			// Parse @cache annotation: -- @cache {"ttl": "30s", "name": "UserCache", "tags": [...], "dep": [...]}
+			cd, err := parseCacheAnnotation(line)
+			if err != nil {
+				return nil, fmt.Errorf("in file %s: %w", filename, err)
+			}
+			if currentQuery != nil && len(sqlLines) == 0 {
+				currentQuery.CacheDef = cd
+			} else {
+				pendingCache = cd
 			}
 		} else if strings.HasPrefix(line, "--") {
 			comment = strings.TrimPrefix(line, "--")

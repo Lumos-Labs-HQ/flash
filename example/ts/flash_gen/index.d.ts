@@ -2,10 +2,10 @@
 
 /** JSON type for column 'preferences'. Parse with: JSON.parse(row.preferences) as Preferences */
 export interface Preferences {
-  theme: string | null;
-  notifications: boolean | null;
   language: string | null;
   font_size: number | null;
+  theme: string | null;
+  notifications: boolean | null;
 }
 
 /** JSON type for column 'metadata'. Parse with: JSON.parse(row.metadata) as Metadata */
@@ -175,307 +175,11 @@ export interface PostStats {
   last_comment_at: string | null;
 }
 
-export interface GetUserTrendingPostsResult {
-  id: number;
-  title: string;
-  user_id: number;
-  view_count: number;
-  created_at: Date;
-  prev_view_count: number;
-  next_view_count: number;
-  view_delta: number | null;
-}
-
-export interface GetUsersWithNullAddressResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetUsersWithTagResult {
-  id: number;
-  name: string;
-  email: string;
-  tags: string[] | null;
-}
-
-export interface GetUserPostRankingsResult {
-  id: number;
-  name: string;
-  post_count: number;
-  post_rank: number;
-  dense_post_rank: number;
-  row_num: number;
-}
-
-export interface GetLatestPostPerUserResult {
-  user_id: number;
-  post_id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-}
-
-export interface GetUserSubscriptionsResult {
-  id: number;
-  tier: 'free' | 'pro' | 'enterprise';
-  started_at: Date;
-  expires_at: Date | null;
-  auto_renew: boolean;
-}
-
-export interface GetMediaByPostResult {
-  id: string;
-  type: string;
-  url: string;
-  size_bytes: number;
-  mime_type: string;
-  width: number | null;
-  height: number | null;
-  created_at: Date;
-}
-
 export interface SetUserPrefsResult {
   id: number;
   name: string;
   preferences: Preferences | null;
   updated_at: Date;
-}
-
-export interface GetUsersByGeneratedRangeResult {
-  id: number;
-  name: string;
-  age: number | null;
-  age_range: number | null;
-}
-
-export interface GetOrdersInStateResult {
-  id: string;
-  user_id: number;
-  user_name: string;
-  total_amount: number;
-  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
-  placed_at: Date;
-}
-
-export interface GetPostWithCommentsResult {
-  post_id: number;
-  title: string;
-  content: string;
-  author: string;
-  comment_text: string;
-  commenter: string;
-}
-
-export interface GetNotificationsByTypeResult {
-  id: number;
-  type: string;
-  title: string;
-  body: string;
-  is_read: boolean;
-  created_at: Date;
-}
-
-export interface GetMediaByTypeResult {
-  id: string;
-  user_id: number;
-  url: string;
-  size_bytes: number;
-  mime_type: string;
-  created_at: Date;
-}
-
-export interface GetUserShippingAddressResult {
-  id: number;
-  name: string;
-  shipping: string | null;
-  shipping_city: string;
-  shipping_country: string;
-}
-
-export interface FullTextSearchPostsResult {
-  id: number;
-  title: string;
-  rank: number | null;
-}
-
-export interface GetEngagementTimeSeriesResult {
-  day: string;
-  count: number;
-  event_type: string;
-}
-
-export interface GetStorageUsedByUserResult {
-  total_bytes: number | null;
-  total_files: number;
-  image_count: number;
-  video_count: number;
-  document_count: number;
-}
-
-export interface FindUsersByJsonContainsResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetUserRoleCountResult {
-  role: 'admin' | 'moderator' | 'user' | 'guest';
-  count: number;
-}
-
-export interface GetUserAgeStatsResult {
-  first_joined: Date | null;
-  last_joined: Date | null;
-  total: number;
-  avg_age: number | null;
-  avg_name_length: number | null;
-}
-
-export interface GetPostsGroupedByStatusResult {
-  status: 'draft' | 'published' | 'archived';
-  count: number;
-  oldest: Date | null;
-  newest: Date | null;
-}
-
-export interface GetUsersByNamesResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetUserWithStatsResult {
-  published_posts: number;
-  total_comments: number;
-  unread_notifications: number;
-  storage_used: number | null;
-}
-
-export interface GetUserPrefsResult {
-  id: number;
-  name: string;
-  email: string;
-  preferences: Preferences | null;
-}
-
-export interface GetUsersWithManyPostsResult {
-  id: number;
-  name: string;
-  email: string;
-  total_posts: number;
-}
-
-export interface GetUserRegistrationStatsResult {
-  year: number | null;
-  month: number | null;
-  signups: number;
-}
-
-export interface GetPostCountByUserResult {
-  post_count: number;
-  comment_count: number;
-}
-
-export interface GetUsersWhoCommentedResult {
-  id: number;
-  name: string;
-  email: string;
-}
-
-export interface GetPostWithActiveCommentersResult {
-  commenter_name: string;
-  last_comment_at: string | null;
-}
-
-export interface CountUsersResult {
-  total_users: number;
-  admin_count: number;
-  regular_count: number;
-}
-
-export interface GetAllContentByUserResult {
-  content_type: string;
-  content_id: string;
-  content_summary: string;
-  created_at: Date;
-}
-
-export interface GetOrdersByUserResult {
-  id: string;
-  total_amount: number;
-  discount_pct: string | null;
-  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
-  shipping_addr: string;
-  placed_at: Date;
-}
-
-export interface ListUsersWithPrefsResult {
-  id: number;
-  name: string;
-  email: string;
-  preferences: Preferences | null;
-  created_at: Date;
-}
-
-export interface GetUsersWithBioResult {
-  id: number;
-  name: string;
-  email: string;
-  bio: string;
-}
-
-export interface SearchUsersWithCOALESCEResult {
-  id: number;
-  name: string;
-  email: string;
-  bio_text: string;
-}
-
-export interface GetUsersCreatedBetweenResult {
-  id: number;
-  name: string;
-  email: string;
-  created_at: Date;
-}
-
-export interface GetDashboardStatsResult {
-  total_users: number;
-  total_posts: number;
-  total_comments: number;
-  published_posts: number;
-  posts_this_week: number;
-  signups_this_week: number;
-  comments_last_24h: number;
-  pending_orders: number;
-}
-
-export interface GetUserFeedResult {
-  id: number;
-  title: string;
-  excerpt: string | null;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-  author_id: number;
-  author_name: string;
-  avatar_hash: string | null;
-  comment_count: number;
-  tag_count: number;
-}
-
-export interface GetUserDisplayInfoResult {
-  id: number;
-  name: string;
-  email: string;
-  display_address: string;
-  age: string;
-  bio: string;
-}
-
-export interface GetUserPreferencesResult {
-  id: number;
-  name: string;
-  preferences: Object | null;
 }
 
 export interface GetUsersWithAnyTagResult {
@@ -506,14 +210,164 @@ export interface GetComplexUserAnalyticsResult {
   engagement_score: number;
 }
 
-export interface GetAuditLogForUserResult {
+export interface GetNotificationsByTypeResult {
   id: number;
-  table_name: string;
-  record_id: string;
-  action: string;
-  old_data: Object | null;
-  new_data: Object | null;
-  changed_at: Date;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: Date;
+}
+
+export interface ListUsersWithPrefsResult {
+  id: number;
+  name: string;
+  email: string;
+  preferences: Preferences | null;
+  created_at: Date;
+}
+
+export interface FindUsersByJsonKeyResult {
+  id: number;
+  name: string;
+  email: string;
+  preferences: Object | null;
+}
+
+export interface GetTagsForPostResult {
+  id: number;
+  name: string;
+  slug: string;
+  color: string | null;
+}
+
+export interface GetUsersByAgeRangeResult {
+  id: number;
+  name: string;
+  age: number | null;
+  age_range: number | null;
+}
+
+export interface GetUserTrendingPostsResult {
+  id: number;
+  title: string;
+  user_id: number;
+  view_count: number;
+  created_at: Date;
+  prev_view_count: number;
+  next_view_count: number;
+  view_delta: number | null;
+}
+
+export interface SearchPostsByTitleResult {
+  id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+}
+
+export interface GetEngagementTimeSeriesResult {
+  day: string;
+  count: number;
+  event_type: string;
+}
+
+export interface SearchPostsFullTextResult {
+  id: number;
+  title: string;
+  excerpt: string | null;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+  author_name: string;
+  rank: number | null;
+}
+
+export interface GetUserPostRankingsResult {
+  id: number;
+  name: string;
+  post_count: number;
+  post_rank: number;
+  dense_post_rank: number;
+  row_num: number;
+}
+
+export interface GetDashboardStatsResult {
+  total_users: number;
+  total_posts: number;
+  total_comments: number;
+  published_posts: number;
+  posts_this_week: number;
+  signups_this_week: number;
+  comments_last_24h: number;
+  pending_orders: number;
+}
+
+export interface GetMediaByUserResult {
+  id: string;
+  type: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  created_at: Date;
+}
+
+export interface GetStorageUsedByUserResult {
+  total_bytes: number | null;
+  total_files: number;
+  image_count: number;
+  video_count: number;
+  document_count: number;
+}
+
+export interface GetUsersWhoCommentedResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetUsersWithNoPostsResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetMediaByTypeResult {
+  id: string;
+  user_id: number;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  created_at: Date;
+}
+
+export interface GetUsersWithActivityLevelResult {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date;
+  account_age_category: string;
+  effective_role: string;
+}
+
+export interface GetUserRegistrationStatsResult {
+  year: number | null;
+  month: number | null;
+  signups: number;
+}
+
+export interface GetUsersByNamesResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetOrdersInStateResult {
+  id: string;
+  user_id: number;
+  user_name: string;
+  total_amount: number;
+  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  placed_at: Date;
 }
 
 export interface GetTopCommentersResult {
@@ -524,13 +378,201 @@ export interface GetTopCommentersResult {
   rank: number;
 }
 
-export interface GetLargeMediaFilesResult {
+export interface GetUserPrefsResult {
+  id: number;
+  name: string;
+  email: string;
+  preferences: Preferences | null;
+}
+
+export interface GetPostWithActiveCommentersResult {
+  commenter_name: string;
+  last_comment_at: string | null;
+}
+
+export interface GetUsersByGeneratedRangeResult {
+  id: number;
+  name: string;
+  age: number | null;
+  age_range: number | null;
+}
+
+export interface CountUsersResult {
+  total_users: number;
+  admin_count: number;
+  regular_count: number;
+}
+
+export interface GetOrdersByUserResult {
   id: string;
+  total_amount: number;
+  discount_pct: string | null;
+  state: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  shipping_addr: string;
+  placed_at: Date;
+}
+
+export interface GetUsersWithNullAddressResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface GetUserShippingAddressResult {
+  id: number;
+  name: string;
+  shipping: string | null;
+  shipping_city: string;
+  shipping_country: string;
+}
+
+export interface GetPostsGroupedByStatusResult {
+  status: 'draft' | 'published' | 'archived';
+  count: number;
+  oldest: Date | null;
+  newest: Date | null;
+}
+
+export interface GetAuditLogForUserResult {
+  id: number;
+  table_name: string;
+  record_id: string;
+  action: string;
+  old_data: Object | null;
+  new_data: Object | null;
+  changed_at: Date;
+}
+
+export interface GetUserAgeStatsResult {
+  first_joined: Date | null;
+  last_joined: Date | null;
+  total: number;
+  avg_age: number | null;
+  avg_name_length: number | null;
+}
+
+export interface GetUserFeedResult {
+  id: number;
+  title: string;
+  excerpt: string | null;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+  author_id: number;
+  author_name: string;
+  avatar_hash: string | null;
+  comment_count: number;
+  tag_count: number;
+}
+
+export interface GetPostMetaResult {
+  id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  metadata: Metadata | null;
   user_id: number;
+  created_at: Date;
+}
+
+export interface GetPostCountByUserResult {
+  post_count: number;
+  comment_count: number;
+}
+
+export interface FullTextSearchPostsResult {
+  id: number;
+  title: string;
+  rank: number | null;
+}
+
+export interface GetPostsByTagResult {
+  id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+  author_name: string;
+  comment_count: number;
+}
+
+export interface GetUserWithStatsResult {
+  published_posts: number;
+  total_comments: number;
+  unread_notifications: number;
+  storage_used: number | null;
+}
+
+export interface GetUsersWithBioResult {
+  id: number;
+  name: string;
+  email: string;
+  bio: string;
+}
+
+export interface GetUsersCreatedBetweenResult {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date;
+}
+
+export interface GetAllContentByUserResult {
+  content_type: string;
+  content_id: string;
+  content_summary: string;
+  created_at: Date;
+}
+
+export interface GetUserSubscriptionsResult {
+  id: number;
+  tier: 'free' | 'pro' | 'enterprise';
+  started_at: Date;
+  expires_at: Date | null;
+  auto_renew: boolean;
+}
+
+export interface GetTopTagsResult {
+  id: number;
+  name: string;
+  slug: string;
+  color: string | null;
+  post_count: number;
+}
+
+export interface GetUserPreferencesResult {
+  id: number;
+  name: string;
+  preferences: Object | null;
+}
+
+export interface GetUsersWithTagResult {
+  id: number;
+  name: string;
+  email: string;
+  tags: string[] | null;
+}
+
+export interface GetUsersWithManyPostsResult {
+  id: number;
+  name: string;
+  email: string;
+  total_posts: number;
+}
+
+export interface GetLatestPostPerUserResult {
+  user_id: number;
+  post_id: number;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  created_at: Date;
+}
+
+export interface GetMediaByPostResult {
+  id: string;
   type: string;
   url: string;
   size_bytes: number;
   mime_type: string;
+  width: number | null;
+  height: number | null;
   created_at: Date;
 }
 
@@ -543,32 +585,10 @@ export interface ListPostsWithMetaResult {
   created_at: Date;
 }
 
-export interface GetUsersWithNoPostsResult {
+export interface FindUsersByJsonContainsResult {
   id: number;
   name: string;
   email: string;
-}
-
-export interface GetTagsForPostResult {
-  id: number;
-  name: string;
-  slug: string;
-  color: string | null;
-}
-
-export interface GetTopTagsResult {
-  id: number;
-  name: string;
-  slug: string;
-  color: string | null;
-  post_count: number;
-}
-
-export interface GetUsersByAgeRangeResult {
-  id: number;
-  name: string;
-  age: number | null;
-  age_range: number | null;
 }
 
 export interface GetPostsWithCommentCountResult {
@@ -586,13 +606,6 @@ export interface GetDistinctCommentersResult {
   email: string;
 }
 
-export interface SearchPostsByTitleResult {
-  id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-}
-
 export interface GetAuditLogForTableResult {
   id: number;
   table_name: string;
@@ -600,6 +613,41 @@ export interface GetAuditLogForTableResult {
   action: string;
   changed_by: number | null;
   changed_at: Date;
+}
+
+export interface GetLargeMediaFilesResult {
+  id: string;
+  user_id: number;
+  type: string;
+  url: string;
+  size_bytes: number;
+  mime_type: string;
+  created_at: Date;
+}
+
+export interface GetUserDisplayInfoResult {
+  id: number;
+  name: string;
+  email: string;
+  display_address: string;
+  age: string;
+  bio: string;
+}
+
+export interface SearchUsersWithCOALESCEResult {
+  id: number;
+  name: string;
+  email: string;
+  bio_text: string;
+}
+
+export interface GetPostWithCommentsResult {
+  post_id: number;
+  title: string;
+  content: string;
+  author: string;
+  comment_text: string;
+  commenter: string;
 }
 
 export interface GetPostDetailsWithAllRelationsResult {
@@ -625,69 +673,21 @@ export interface GetPostDetailsWithAllRelationsResult {
   hours_since_created: number | null;
 }
 
-export interface GetWeeklyPostStatsResult {
-  week_start: string;
-  posts_created: number;
-  total_views: number | null;
-}
-
-export interface GetMediaByUserResult {
-  id: string;
-  type: string;
-  url: string;
-  size_bytes: number;
-  mime_type: string;
-  created_at: Date;
-}
-
-export interface GetPostMetaResult {
-  id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  metadata: Metadata | null;
-  user_id: number;
-  created_at: Date;
-}
-
-export interface FindUsersByJsonKeyResult {
-  id: number;
-  name: string;
-  email: string;
-  preferences: Object | null;
-}
-
-export interface GetUsersWithActivityLevelResult {
-  id: number;
-  name: string;
-  email: string;
-  created_at: Date;
-  account_age_category: string;
-  effective_role: string;
-}
-
-export interface GetPostsByTagResult {
-  id: number;
-  title: string;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-  author_name: string;
-  comment_count: number;
-}
-
-export interface SearchPostsFullTextResult {
-  id: number;
-  title: string;
-  excerpt: string | null;
-  status: 'draft' | 'published' | 'archived';
-  created_at: Date;
-  author_name: string;
-  rank: number | null;
+export interface GetUserRoleCountResult {
+  role: 'admin' | 'moderator' | 'user' | 'guest';
+  count: number;
 }
 
 export interface SearchUsersResult {
   id: number;
   name: string;
   email: string;
+}
+
+export interface GetWeeklyPostStatsResult {
+  week_start: string;
+  posts_created: number;
+  total_views: number | null;
 }
 
 export interface CreateUserFullParams {
