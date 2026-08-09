@@ -103,10 +103,10 @@ type JavaGen struct {
 }
 
 type RustGen struct {
-	Enabled          bool   `toml:"enabled"`
-	Out              string `toml:"out"`
-	Driver           string `toml:"driver"`             // "sqlx" (default)
-	CompileTimeCheck bool   `toml:"compile_time_check"` // false (default) — when true, uses sqlx query macros (requires direct DB, no pooler)
+	Enabled bool   `toml:"enabled"`
+	Out     string `toml:"out"`
+	Driver  string `toml:"driver"` // "sqlx" (default)
+	Macros  bool   `toml:"macros"` // use sqlx compile-time checked macros (default: false)
 }
 
 // CacheConfig controls Redis-based query caching via @cache annotations
@@ -146,6 +146,7 @@ type rawConfig struct {
 	JsonPath       string           `toml:"json_path"`
 	Database       Database         `toml:"database"`
 	Gen            rawGen           `toml:"gen"`
+	Cache          CacheConfig      `toml:"cache"`
 	Databases      []DatabaseConfig `toml:"databases"`
 }
 
@@ -241,6 +242,7 @@ func loadUncached() (*Config, error) {
 		cfg.Gen.Kotlin = raw.Gen.Kotlin
 		cfg.Gen.Java = raw.Gen.Java
 		cfg.Gen.Rust = raw.Gen.Rust
+		cfg.Cache = raw.Cache
 		if raw.Gen.Python.Async != nil {
 			cfg.Gen.Python.Async = *raw.Gen.Python.Async
 			pythonAsyncSet = true

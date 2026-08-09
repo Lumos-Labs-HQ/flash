@@ -51,6 +51,7 @@ export default defineConfig({
             { text: 'Migrations', link: '/concepts/migrations' },
             { text: 'Code Generation', link: '/concepts/code-generation' },
             { text: 'Typed JSON Columns', link: '/concepts/json-types' },
+            { text: 'Query Caching', link: '/concepts/caching' },
             { text: 'Database Seeding', link: '/concepts/seeding' },
             { text: 'Data Export', link: '/concepts/export' },
             { text: 'Branching', link: '/concepts/branching' }

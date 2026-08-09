@@ -117,6 +117,45 @@ func ResolveDependencyPurges(mutationName string, caches []*CacheInfo, mutationP
 	return purges
 }
 
+// IsCachedQuery returns true if the query has a @cache annotation
+func IsCachedQuery(q *parser.Query) bool {
+	return q.CacheDef != nil
+}
+
+// IsMutationQuery returns true if the query is an :exec or :execresult
+func IsMutationQuery(q *parser.Query) bool {
+	cmd := strings.ToLower(q.Cmd)
+	return cmd == ":exec" || cmd == "exec" || cmd == ":execresult" || cmd == "execresult"
+}
+
+// ValidateDeps checks that all dep references point to actual query names
+func ValidateDeps(caches []*CacheInfo, queries []*parser.Query) []string {
+	queryNames := make(map[string]bool)
+	for _, q := range queries {
+		queryNames[strings.ToLower(q.Name)] = true
+	}
+
+	var warnings []string
+	for _, cache := range caches {
+		for _, dep := range cache.Dep {
+			if !queryNames[strings.ToLower(dep)] {
+				warnings = append(warnings, fmt.Sprintf("@cache on %s: dep \"%s\" does not match any query name", cache.QueryName, dep))
+			}
+		}
+	}
+	return warnings
+}
+
+// GetCacheInfoForQuery returns the CacheInfo for a given query, or nil
+func GetCacheInfoForQuery(queryName string, caches []*CacheInfo) *CacheInfo {
+	for _, c := range caches {
+		if strings.EqualFold(c.QueryName, queryName) {
+			return c
+		}
+	}
+	return nil
+}
+
 // BuildCacheKey generates the cache key format string for a given cache
 func BuildCacheKey(prefix string, cacheName string, params []string) string {
 	if len(params) == 0 {
@@ -127,7 +166,7 @@ func BuildCacheKey(prefix string, cacheName string, params []string) string {
 	return strings.Join(parts, ":")
 }
 
-// ParseTTL converts a TTL string to language-specific duration expressions
+// ParseTTL converts a TTL string to seconds
 func ParseTTL(ttl string) (seconds int64) {
 	ttl = strings.TrimSpace(strings.ToLower(ttl))
 	var value int64
@@ -145,4 +184,27 @@ func ParseTTL(ttl string) (seconds int64) {
 	default:
 		return value // assume seconds
 	}
+}
+
+// collectUniqueTags extracts all unique tag names from cache definitions, sorted.
+func collectUniqueTags(caches []*CacheInfo) []string {
+	seen := make(map[string]bool)
+	for _, c := range caches {
+		for _, t := range c.Tags {
+			seen[t] = true
+		}
+	}
+	tags := make([]string, 0, len(seen))
+	for t := range seen {
+		tags = append(tags, t)
+	}
+	// Sort for deterministic output
+	for i := 0; i < len(tags); i++ {
+		for j := i + 1; j < len(tags); j++ {
+			if tags[i] > tags[j] {
+				tags[i], tags[j] = tags[j], tags[i]
+			}
+		}
+	}
+	return tags
 }

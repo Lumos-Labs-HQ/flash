@@ -26,14 +26,22 @@ func NewTypeInferrerWithSchema(schema *Schema) *TypeInferrer {
 func (ti *TypeInferrer) InferParamTypeByName(paramName string) string {
 	n := strings.ToLower(paramName)
 	switch n {
-	case "limit", "offset", "count", "min_count", "count_threshold", "id", "age":
+	case "limit", "offset":
+		return "BIGINT"
+	case "count", "min_count", "count_threshold":
+		return "BIGINT"
+	case "id", "age":
 		return "INTEGER"
 	}
 	if strings.HasSuffix(n, "_count") || strings.HasSuffix(n, "_sum") ||
-		strings.HasSuffix(n, "_total") || strings.HasSuffix(n, "_num") ||
-		strings.HasSuffix(n, "_id") || strings.HasSuffix(n, "_age") {
+		strings.HasSuffix(n, "_total") || strings.HasSuffix(n, "_num") {
+		return "BIGINT"
+	}
+	if strings.HasSuffix(n, "_age") {
 		return "INTEGER"
 	}
+	// NOTE: _id suffix is NOT assumed INTEGER here — it could be UUID.
+	// The schema-based lookup in inferParamTypeInternal handles _id columns.
 	if strings.Contains(n, "score") || strings.Contains(n, "rating") || strings.Contains(n, "avg") {
 		return "DOUBLE PRECISION"
 	}
@@ -65,16 +73,19 @@ func (ti *TypeInferrer) InferParamType(sql string, paramIndex int, table *Table,
 }
 
 func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table *Table, paramName string) string {
-	// Well-known param names that always have fixed types
+	// Well-known param names that always have fixed types (non-column names)
 	nameLower := strings.ToLower(paramName)
 	switch nameLower {
-	case "limit", "offset", "count", "min_count", "count_threshold":
-		return "INTEGER"
+	case "limit", "offset":
+		return "BIGINT"
+	case "count", "min_count", "count_threshold":
+		return "BIGINT"
 	}
-	// Any param named *_count, *_sum, *_total is numeric
+	// Any param named *_count, *_sum, *_total — these are typically compared to
+	// COUNT/SUM results which return BIGINT in PostgreSQL
 	if strings.HasSuffix(nameLower, "_count") || strings.HasSuffix(nameLower, "_sum") ||
 		strings.HasSuffix(nameLower, "_total") || strings.HasSuffix(nameLower, "_num") {
-		return "INTEGER"
+		return "BIGINT"
 	}
 
 	// col = ANY($N) must be checked before name-based lookup, as the param name
@@ -168,6 +179,16 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 				return col.Type
 			}
 		}
+		// Cross-table lookup for CTE/subquery contexts where the column belongs to another table
+		if ti.schema != nil {
+			for _, t := range ti.schema.Tables {
+				for _, col := range t.Columns {
+					if strings.EqualFold(col.Name, match[1]) {
+						return col.Type
+					}
+				}
+			}
+		}
 	}
 
 	// func(col) = $N pattern
@@ -257,12 +278,12 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 
 	limitPattern := fmt.Sprintf(`(?i)LIMIT\s+\$%d`, paramIndex)
 	if matched, _ := regexp.MatchString(limitPattern, sql); matched {
-		return "INTEGER"
+		return "BIGINT"
 	}
 
 	offsetPattern := fmt.Sprintf(`(?i)OFFSET\s+\$%d`, paramIndex)
 	if matched, _ := regexp.MatchString(offsetPattern, sql); matched {
-		return "INTEGER"
+		return "BIGINT"
 	}
 
 	betweenPattern := fmt.Sprintf(`(?i)(\w+)\s+BETWEEN\s+\$%d`, paramIndex)

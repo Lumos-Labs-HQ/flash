@@ -1,12 +1,17 @@
 package rustgen
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 )
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
 
 func newGen(provider string) *Generator {
 	cfg := &config.Config{
@@ -640,5 +645,168 @@ func TestGetOneReturnType_CustomRow(t *testing.T) {
 	got := g.getOneReturnType(q, columns)
 	if got != "GetUserWithPostCountRow" {
 		t.Errorf("getOneReturnType (custom) = %q, want GetUserWithPostCountRow", got)
+	}
+}
+
+func TestMacroArgs_NoParams(t *testing.T) {
+	g := newGen("postgresql")
+	q := &parser.Query{
+		Name:   "ListUsers",
+		SQL:    "SELECT * FROM users",
+		Params: []*parser.Param{},
+	}
+	got := g.macroArgs(q)
+	if got != "" {
+		t.Errorf("macroArgs (no params) = %q, want empty string", got)
+	}
+}
+
+func TestMacroArgs_TwoParams(t *testing.T) {
+	g := newGen("postgresql")
+	q := &parser.Query{
+		Name: "GetUser",
+		SQL:  "SELECT * FROM users WHERE id = $1 AND name = $2",
+		Params: []*parser.Param{
+			{Name: "id", Type: "INTEGER"},
+			{Name: "name", Type: "VARCHAR"},
+		},
+	}
+	got := g.macroArgs(q)
+	if got != ", id, name" {
+		t.Errorf("macroArgs (two params) = %q, want %q", got, ", id, name")
+	}
+}
+
+func TestMacroArgs_ManyParams_UsesParamsStruct(t *testing.T) {
+	g := newGen("postgresql")
+	q := &parser.Query{
+		Name: "CreateUser",
+		SQL:  "INSERT INTO users (name, email, age) VALUES ($1, $2, $3)",
+		Params: []*parser.Param{
+			{Name: "name", Type: "VARCHAR"},
+			{Name: "email", Type: "VARCHAR"},
+			{Name: "age", Type: "INTEGER"},
+		},
+	}
+	got := g.macroArgs(q)
+	if got != ", params.name, params.email, params.age" {
+		t.Errorf("macroArgs (3 params) = %q, want %q", got, ", params.name, params.email, params.age")
+	}
+}
+
+func TestWriteMacroExecBody_Exec(t *testing.T) {
+	g := newGen("postgresql")
+	g.Config.Gen.Rust.Macros = true
+
+	q := &parser.Query{
+		Name: "DeleteUser",
+		SQL:  "DELETE FROM users WHERE id = $1",
+		Params: []*parser.Param{
+			{Name: "id", Type: "INTEGER"},
+		},
+	}
+	w := gencommon.GetBuilder()
+	defer gencommon.PutBuilder(w)
+	g.writeMacroExecBody(w, q, "DELETE FROM users WHERE id = $1", ":exec")
+	output := w.String()
+	if !contains(output, "sqlx::query!") {
+		t.Errorf("macro exec body should contain sqlx::query!, got:\n%s", output)
+	}
+	if !contains(output, "Ok(())") {
+		t.Errorf("macro exec body should contain Ok(()), got:\n%s", output)
+	}
+}
+
+func TestWriteMacroOneBody_MultiColumn(t *testing.T) {
+	g := newGen("postgresql")
+	g.Config.Gen.Rust.Macros = true
+	g.expander = gencommon.NewSchemaExpander(g.schema)
+
+	q := &parser.Query{
+		Name: "GetUserStats",
+		SQL:  "SELECT id, name FROM users WHERE id = $1",
+		Params: []*parser.Param{
+			{Name: "id", Type: "INTEGER"},
+		},
+		Columns: []*parser.QueryColumn{
+			{Name: "id", Type: "INTEGER", Nullable: false},
+			{Name: "name", Type: "VARCHAR(255)", Nullable: false},
+		},
+	}
+	columns := q.Columns
+	w := gencommon.GetBuilder()
+	defer gencommon.PutBuilder(w)
+	g.writeMacroOneBody(w, q, "SELECT id, name FROM users WHERE id = $1", columns)
+	output := w.String()
+	if !contains(output, "sqlx::query_as!") {
+		t.Errorf("macro one body (multi col) should contain sqlx::query_as!, got:\n%s", output)
+	}
+	if !contains(output, "GetUserStatsRow") {
+		t.Errorf("macro one body should reference row struct, got:\n%s", output)
+	}
+	if !contains(output, "fetch_one") {
+		t.Errorf("macro one body should use fetch_one, got:\n%s", output)
+	}
+}
+
+func TestWriteMacroOneBody_SingleColumn(t *testing.T) {
+	g := newGen("postgresql")
+	g.Config.Gen.Rust.Macros = true
+	g.expander = gencommon.NewSchemaExpander(g.schema)
+
+	q := &parser.Query{
+		Name: "CountUsers",
+		SQL:  "SELECT COUNT(*) FROM users",
+		Columns: []*parser.QueryColumn{
+			{Name: "count", Type: "BIGINT", Nullable: false},
+		},
+	}
+	columns := q.Columns
+	w := gencommon.GetBuilder()
+	defer gencommon.PutBuilder(w)
+	g.writeMacroOneBody(w, q, "SELECT COUNT(*) FROM users", columns)
+	output := w.String()
+	if !contains(output, "sqlx::query_scalar!") {
+		t.Errorf("macro one body (single col) should contain sqlx::query_scalar!, got:\n%s", output)
+	}
+}
+
+func TestWriteMacroManyBody_MultiColumn(t *testing.T) {
+	g := newGen("postgresql")
+	g.Config.Gen.Rust.Macros = true
+	g.expander = gencommon.NewSchemaExpander(g.schema)
+
+	q := &parser.Query{
+		Name: "ListUserStats",
+		SQL:  "SELECT id, name FROM users",
+		Columns: []*parser.QueryColumn{
+			{Name: "id", Type: "INTEGER", Nullable: false},
+			{Name: "name", Type: "VARCHAR(255)", Nullable: false},
+		},
+	}
+	columns := q.Columns
+	w := gencommon.GetBuilder()
+	defer gencommon.PutBuilder(w)
+	g.writeMacroManyBody(w, q, "SELECT id, name FROM users", columns)
+	output := w.String()
+	if !contains(output, "sqlx::query_as!") {
+		t.Errorf("macro many body (multi col) should contain sqlx::query_as!, got:\n%s", output)
+	}
+	if !contains(output, "fetch_all") {
+		t.Errorf("macro many body should use fetch_all, got:\n%s", output)
+	}
+}
+
+func TestComputeConfigChecksum_MacrosChangesChecksum(t *testing.T) {
+	g1 := newGen("postgresql")
+	g1.Config.Gen.Rust.Macros = false
+	hash1 := g1.computeConfigChecksum()
+
+	g2 := newGen("postgresql")
+	g2.Config.Gen.Rust.Macros = true
+	hash2 := g2.computeConfigChecksum()
+
+	if hash1 == hash2 {
+		t.Error("changing macros flag should produce different config checksum")
 	}
 }

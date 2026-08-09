@@ -1,5 +1,5 @@
 -- Migration: init
--- Created: 2026-07-15T23:46:15Z
+-- Created: 2026-08-08T21:01:17Z
 
 -- +migrate Up
 CREATE TABLE IF NOT EXISTS "tags" (
@@ -12,7 +12,10 @@ CREATE TABLE IF NOT EXISTS "users" (
   "name" TEXT NOT NULL,
   "email" TEXT UNIQUE NOT NULL,
   "age" INTEGER,
+  "bio" TEXT,
   "is_active" BOOLEAN NOT NULL DEFAULT TRUE,
+  "score" REAL NOT NULL DEFAULT 0.0,
+  "balance" NUMERIC(12,2) NOT NULL DEFAULT 0.00,
   "created_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updated_at" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

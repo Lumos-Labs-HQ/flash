@@ -109,6 +109,25 @@ func GenerateGoCacheAccessors(caches []*CacheInfo, packageName string, prefix st
 	w.WriteString(fmt.Sprintf("package %s\n\n", packageName))
 	w.WriteString("import (\n\t\"fmt\"\n\t\"time\"\n)\n\n")
 
+	// Generate typed CacheTag constants
+	allTags := collectUniqueTags(caches)
+	if len(allTags) > 0 {
+		w.WriteString("// CacheTag represents a cache tag for type-safe purging.\n")
+		w.WriteString("type CacheTag string\n\n")
+		w.WriteString("// Available cache tags — use with Cache.PurgeTag()\n")
+		w.WriteString("const (\n")
+		for _, tag := range allTags {
+			constName := "Tag" + utils.ToPascalCase(tag)
+			w.WriteString(fmt.Sprintf("\t%s CacheTag = \"%s\"\n", constName, tag))
+		}
+		w.WriteString(")\n\n")
+		w.WriteString("// PurgeTag purges all cache entries associated with the given tag.\n")
+		w.WriteString("// Use the typed Tag* constants for safety.\n")
+		w.WriteString("func (c *FlashCache) PurgeTag(tag CacheTag) {\n")
+		w.WriteString("\tc.PurgeByTag(string(tag))\n")
+		w.WriteString("}\n\n")
+	}
+
 	for _, cache := range caches {
 		accessorName := cache.CacheName
 		ttlSec := ParseTTL(cache.TTL)
@@ -156,7 +175,11 @@ func GenerateGoCacheAccessors(caches []*CacheInfo, packageName string, prefix st
 		w.WriteString("}\n\n")
 
 		// Set
-		w.WriteString(fmt.Sprintf("func (a *%sAccessor) Set(%s, value interface{}) {\n", utils.Uncapitalize(accessorName), paramStr))
+		setParamStr := paramStr
+		if setParamStr != "" {
+			setParamStr += ", "
+		}
+		w.WriteString(fmt.Sprintf("func (a *%sAccessor) Set(%svalue interface{}) {\n", utils.Uncapitalize(accessorName), setParamStr))
 		w.WriteString(fmt.Sprintf("\tkey := %s\n", keyExpr))
 		w.WriteString(fmt.Sprintf("\tCache.Set(key, value, %d*time.Second, %s...)\n", ttlSec, tagsLiteral))
 		w.WriteString("}\n\n")

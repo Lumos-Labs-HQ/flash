@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
+	"github.com/Lumos-Labs-HQ/flash/internal/utils"
 )
 
 // GenerateRustCache generates cache.rs using the redis crate
@@ -101,6 +102,31 @@ func GenerateRustCacheAccessors(caches []*CacheInfo) string {
 	w.WriteString("use super::cache::CACHE;\n")
 	w.WriteString("use serde::{Serialize, de::DeserializeOwned};\n")
 	w.WriteString("use std::time::Duration;\n\n")
+
+	// Generate typed CacheTag enum
+	allTags := collectUniqueTags(caches)
+	if len(allTags) > 0 {
+		w.WriteString("/// Cache tags for type-safe purging. Use with `CACHE.purge_tag()`.\n")
+		w.WriteString("#[derive(Debug, Clone, Copy, PartialEq, Eq)]\n")
+		w.WriteString("pub enum CacheTag {\n")
+		for _, tag := range allTags {
+			w.WriteString(fmt.Sprintf("    %s,\n", utils.ToPascalCase(tag)))
+		}
+		w.WriteString("}\n\n")
+		w.WriteString("impl CacheTag {\n")
+		w.WriteString("    pub fn as_str(&self) -> &'static str {\n")
+		w.WriteString("        match self {\n")
+		for _, tag := range allTags {
+			w.WriteString(fmt.Sprintf("            CacheTag::%s => \"%s\",\n", utils.ToPascalCase(tag), tag))
+		}
+		w.WriteString("        }\n")
+		w.WriteString("    }\n\n")
+		w.WriteString("    /// Purge all cache entries associated with this tag.\n")
+		w.WriteString("    pub fn purge(&self) {\n")
+		w.WriteString("        CACHE.purge_by_tag(self.as_str());\n")
+		w.WriteString("    }\n")
+		w.WriteString("}\n\n")
+	}
 
 	for _, c := range caches {
 		ttlSec := ParseTTL(c.TTL)

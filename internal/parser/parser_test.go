@@ -213,8 +213,8 @@ func TestTypeInferrer_InferParamType_Limit(t *testing.T) {
 	ti := NewTypeInferrer()
 	table := &Table{Name: "users", Columns: []*Column{}}
 	got := ti.InferParamType(`SELECT * FROM users LIMIT $1`, 1, table, "limit")
-	if got != "INTEGER" {
-		t.Errorf("type = %q, want INTEGER", got)
+	if got != "BIGINT" {
+		t.Errorf("type = %q, want BIGINT", got)
 	}
 }
 
@@ -256,11 +256,11 @@ func TestTypeInferrer_LimitOffset(t *testing.T) {
 	ti := NewTypeInferrer()
 	table := &Table{Name: "users", Columns: []*Column{}}
 	sql := `SELECT * FROM users LIMIT $1 OFFSET $2`
-	if typ := ti.InferParamType(sql, 1, table, "limit"); typ != "INTEGER" {
-		t.Errorf("limit type = %q, want INTEGER", typ)
+	if typ := ti.InferParamType(sql, 1, table, "limit"); typ != "BIGINT" {
+		t.Errorf("limit type = %q, want BIGINT", typ)
 	}
-	if typ := ti.InferParamType(sql, 2, table, "offset"); typ != "INTEGER" {
-		t.Errorf("offset type = %q, want INTEGER", typ)
+	if typ := ti.InferParamType(sql, 2, table, "offset"); typ != "BIGINT" {
+		t.Errorf("offset type = %q, want BIGINT", typ)
 	}
 }
 

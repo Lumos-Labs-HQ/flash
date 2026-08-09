@@ -92,6 +92,26 @@ func GenerateJavaCacheAccessors(caches []*CacheInfo, packageName string) string 
 	}
 	w.WriteString("import java.util.List;\n\n")
 
+	// Generate typed CacheTag enum
+	allTags := collectUniqueTags(caches)
+	if len(allTags) > 0 {
+		w.WriteString("/** Available cache tags for type-safe purging. */\n")
+		w.WriteString("public enum CacheTag {\n")
+		for i, tag := range allTags {
+			suffix := ","
+			if i == len(allTags)-1 {
+				suffix = ";"
+			}
+			w.WriteString(fmt.Sprintf("    %s(\"%s\")%s\n", strings.ToUpper(tag), tag, suffix))
+		}
+		w.WriteString("\n    private final String value;\n")
+		w.WriteString("    CacheTag(String value) { this.value = value; }\n")
+		w.WriteString("    public String getValue() { return value; }\n\n")
+		w.WriteString("    /** Purge all cache entries associated with this tag. */\n")
+		w.WriteString("    public void purge() { FlashCache.purgeByTag(value); }\n")
+		w.WriteString("}\n\n")
+	}
+
 	for _, c := range caches {
 		ttlSec := ParseTTL(c.TTL)
 

@@ -84,6 +84,23 @@ func GenerateKotlinCacheAccessors(caches []*CacheInfo, packageName string) strin
 		w.WriteString(fmt.Sprintf("package %s\n\n", packageName))
 	}
 
+	// Generate typed CacheTag enum
+	allTags := collectUniqueTags(caches)
+	if len(allTags) > 0 {
+		w.WriteString("/** Available cache tags for type-safe purging. */\n")
+		w.WriteString("enum class CacheTag(val value: String) {\n")
+		for i, tag := range allTags {
+			suffix := ","
+			if i == len(allTags)-1 {
+				suffix = ";"
+			}
+			w.WriteString(fmt.Sprintf("    %s(\"%s\")%s\n", strings.ToUpper(tag), tag, suffix))
+		}
+		w.WriteString("\n    /** Purge all cache entries associated with this tag. */\n")
+		w.WriteString("    fun purge() = FlashCache.purgeByTag(value)\n")
+		w.WriteString("}\n\n")
+	}
+
 	for _, c := range caches {
 		ttlSec := ParseTTL(c.TTL)
 
