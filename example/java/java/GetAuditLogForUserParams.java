@@ -5,6 +5,6 @@ package java;
 
 public record GetAuditLogForUserParams(
     int changed_by,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

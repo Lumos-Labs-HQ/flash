@@ -6,5 +6,5 @@ package java;
 public record GetNotificationsByTypeParams(
     int user_id,
     String type,
-    int limit
+    long limit
 ) {}

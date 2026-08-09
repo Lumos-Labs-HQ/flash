@@ -9,13 +9,13 @@
   "query_table_deps": {
     "db/queries/posts.sql": [
       "categories",
+      "post_categories",
+      "users",
       "posts",
       "posts;",
       "comments",
       "tags",
-      "post_tags",
-      "post_categories",
-      "users"
+      "post_tags"
     ],
     "db/queries/users.sql": [
       "users",
@@ -23,6 +23,6 @@
     ]
   },
   "generated_file_checksums": {},
-  "last_generation": "2026-08-08T23:03:19.044209312+05:30",
+  "last_generation": "2026-08-09T23:41:43.230736319+05:30",
   "OutDir": "src/flash_gen"
 }

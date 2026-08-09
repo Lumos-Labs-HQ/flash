@@ -7,6 +7,6 @@ public record SearchUsersWithCOALESCEParams(
     String name,
     String email,
     String name2,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

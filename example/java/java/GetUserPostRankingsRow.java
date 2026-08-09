@@ -7,7 +7,7 @@ public record GetUserPostRankingsRow(
     int id,
     String name,
     long post_count,
-    int post_rank,
-    int dense_post_rank,
-    int row_num
+    long post_rank,
+    long dense_post_rank,
+    long row_num
 ) {}

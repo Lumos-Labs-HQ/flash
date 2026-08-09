@@ -865,7 +865,7 @@ type GetcomplexuseranalyticsRow struct {
 	EngagementScore int64 `json:"engagement_score"`
 }
 
-func (q *Queries) Getpostwithactivecommenters(rn string, post_id int64) ([]GetpostwithactivecommentersRow, error) {
+func (q *Queries) Getpostwithactivecommenters(rn string, post_id string) ([]GetpostwithactivecommentersRow, error) {
 	const query = `WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;`
 	stmt := q.stmts["Getpostwithactivecommenters_stmt"]
 	if stmt == nil {
@@ -980,7 +980,7 @@ type GetusertrendingpostsRow struct {
 	ViewDelta float64 `json:"view_delta"`
 }
 
-func (q *Queries) Getpostcountbyuser(user_id int64) (GetpostcountbyuserRow, error) {
+func (q *Queries) Getpostcountbyuser(user_id string) (GetpostcountbyuserRow, error) {
 	const query = `SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;`
 	stmt := q.stmts["Getpostcountbyuser_stmt"]
 	if stmt == nil {
@@ -1604,8 +1604,8 @@ func (q *Queries) Getuserregistrationstats() ([]GetuserregistrationstatsRow, err
 }
 
 type GetuserregistrationstatsRow struct {
-	Year float64 `json:"year"`
-	Month float64 `json:"month"`
+	Year int64 `json:"year"`
+	Month int64 `json:"month"`
 	Signups int64 `json:"signups"`
 }
 
@@ -1642,7 +1642,7 @@ func (q *Queries) Getweeklypoststats(created_at time.Time) ([]Getweeklypoststats
 type GetweeklypoststatsRow struct {
 	WeekStart string `json:"week_start"`
 	PostsCreated int64 `json:"posts_created"`
-	TotalViews float64 `json:"total_views"`
+	TotalViews int64 `json:"total_views"`
 }
 
 func (q *Queries) Getusersinids(id int64) ([]Users, error) {
@@ -3005,7 +3005,7 @@ func (q *Queries) Getstorageusedbyuser(user_id int64) (GetstorageusedbyuserRow, 
 }
 
 type GetstorageusedbyuserRow struct {
-	TotalBytes float64 `json:"total_bytes"`
+	TotalBytes int64 `json:"total_bytes"`
 	TotalFiles int64 `json:"total_files"`
 	ImageCount int64 `json:"image_count"`
 	VideoCount int64 `json:"video_count"`
@@ -3206,7 +3206,7 @@ type GetuserwithstatsRow struct {
 	PublishedPosts int64 `json:"published_posts"`
 	TotalComments int64 `json:"total_comments"`
 	UnreadNotifications int64 `json:"unread_notifications"`
-	StorageUsed float64 `json:"storage_used"`
+	StorageUsed int64 `json:"storage_used"`
 }
 
 func (q *Queries) Getpostswithauthors(limit int64) ([]GetpostswithauthorsRow, error) {

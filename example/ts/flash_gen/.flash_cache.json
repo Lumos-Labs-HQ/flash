@@ -12,30 +12,30 @@
       "posts"
     ],
     "db/queries/users.sql": [
-      "subscriptions",
-      "categories",
-      "notifications",
-      "tags",
-      "user_post_stats",
-      "user_activity_summary",
       "orders",
-      "audit_log",
-      "media",
-      "users",
+      "tags",
+      "post_tags",
+      "u",
+      "user_post_stats",
       "active_commenters",
-      "posts",
       "users;",
+      "user_activity_summary",
+      "audit_log",
+      "categories",
+      "comments",
+      "media",
       "active_users",
       "post_stats",
-      "comments",
-      "post_tags",
-      "u"
+      "notifications",
+      "users",
+      "posts",
+      "subscriptions"
     ]
   },
   "generated_file_checksums": {
     "flash_gen/json_typed.js": "38418a0f5a5ff78c519b58fa3af6c068142e5848f0a0e74eeee9a0e68f1c7f6d",
     "flash_gen/users.js": "6b740983263d0968d1a612bd19662e0ba336abe5eca5cc2d221d1c37afc9e164"
   },
-  "last_generation": "2026-07-19T03:47:28.889896488+05:30",
+  "last_generation": "2026-08-09T23:41:43.205829504+05:30",
   "OutDir": "flash_gen"
 }

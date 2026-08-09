@@ -5,6 +5,6 @@ package java;
 
 public record GetNotificationsByUserParams(
     int user_id,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

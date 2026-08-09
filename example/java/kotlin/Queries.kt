@@ -45,7 +45,7 @@ class Queries(private val conn: Connection) {
     fun deleteUser(id: Int): Unit =
         users.deleteUser(id)
 
-    fun listUsers(limit: Int, offset: Int): List<Users> =
+    fun listUsers(limit: Long, offset: Long): List<Users> =
         users.listUsers(limit, offset)
 
     fun upsertUser(args: UpsertUserParams): Users? =
@@ -111,22 +111,22 @@ class Queries(private val conn: Connection) {
     fun getComplexUserAnalytics(args: GetComplexUserAnalyticsParams): List<GetComplexUserAnalyticsRow> =
         users.getComplexUserAnalytics(args)
 
-    fun getPostWithActiveCommenters(rn: String, postId: Int): List<GetPostWithActiveCommentersRow> =
+    fun getPostWithActiveCommenters(rn: String, postId: String): List<GetPostWithActiveCommentersRow> =
         users.getPostWithActiveCommenters(rn, postId)
 
-    fun getUserPostRankings(limit: Int): List<GetUserPostRankingsRow> =
+    fun getUserPostRankings(limit: Long): List<GetUserPostRankingsRow> =
         users.getUserPostRankings(limit)
 
-    fun getUserTrendingPosts(userId: Int, limit: Int): List<GetUserTrendingPostsRow> =
+    fun getUserTrendingPosts(userId: Int, limit: Long): List<GetUserTrendingPostsRow> =
         users.getUserTrendingPosts(userId, limit)
 
-    fun getPostCountByUser(userId: Int): GetPostCountByUserRow? =
+    fun getPostCountByUser(userId: String): GetPostCountByUserRow? =
         users.getPostCountByUser(userId)
 
-    fun getUsersWithManyPosts(count: Int): List<GetUsersWithManyPostsRow> =
+    fun getUsersWithManyPosts(count: Long): List<GetUsersWithManyPostsRow> =
         users.getUsersWithManyPosts(count)
 
-    fun getPostsWithCommentCount(limit: Int, offset: Int): List<GetPostsWithCommentCountRow> =
+    fun getPostsWithCommentCount(limit: Long, offset: Long): List<GetPostsWithCommentCountRow> =
         users.getPostsWithCommentCount(limit, offset)
 
     fun getUsersWithActivityLevel(): List<GetUsersWithActivityLevelRow> =
@@ -150,7 +150,7 @@ class Queries(private val conn: Connection) {
     fun getUserAgeStats(): GetUserAgeStatsRow? =
         users.getUserAgeStats()
 
-    fun getPostsGroupedByStatus(countThreshold: Int): List<GetPostsGroupedByStatusRow> =
+    fun getPostsGroupedByStatus(countThreshold: Long): List<GetPostsGroupedByStatusRow> =
         users.getPostsGroupedByStatus(countThreshold)
 
     fun getDistinctCommenters(): List<GetDistinctCommentersRow> =
@@ -165,7 +165,7 @@ class Queries(private val conn: Connection) {
     fun searchPostsByTitle(args: SearchPostsByTitleParams): List<SearchPostsByTitleRow> =
         users.searchPostsByTitle(args)
 
-    fun fullTextSearchPosts(searchQuery: String, limit: Int): List<FullTextSearchPostsRow> =
+    fun fullTextSearchPosts(searchQuery: String, limit: Long): List<FullTextSearchPostsRow> =
         users.fullTextSearchPosts(searchQuery, limit)
 
     fun getUserRegistrationStats(): List<GetUserRegistrationStatsRow> =
@@ -186,19 +186,19 @@ class Queries(private val conn: Connection) {
     fun getUsersWithNoPosts(): List<GetUsersWithNoPostsRow> =
         users.getUsersWithNoPosts()
 
-    fun getAllContentByUser(userId: Int, limit: Int): List<GetAllContentByUserRow> =
+    fun getAllContentByUser(userId: Int, limit: Long): List<GetAllContentByUserRow> =
         users.getAllContentByUser(userId, limit)
 
-    fun getActiveUsers(limit: Int): List<ActiveUsers> =
+    fun getActiveUsers(limit: Long): List<ActiveUsers> =
         users.getActiveUsers(limit)
 
-    fun getUserActivitySummary(postCount: Int, commentCount: Int): List<UserActivitySummary> =
+    fun getUserActivitySummary(postCount: Long, commentCount: Long): List<UserActivitySummary> =
         users.getUserActivitySummary(postCount, commentCount)
 
     fun refreshPostStats(): Unit =
         users.refreshPostStats()
 
-    fun getPostStats(limit: Int): List<PostStats> =
+    fun getPostStats(limit: Long): List<PostStats> =
         users.getPostStats(limit)
 
     fun getUserSubscriptions(userId: Int): List<GetUserSubscriptionsRow> =
@@ -207,22 +207,22 @@ class Queries(private val conn: Connection) {
     fun createSubscription(args: CreateSubscriptionParams): Subscriptions? =
         users.createSubscription(args)
 
-    fun getOrdersByUser(userId: Int, limit: Int): List<GetOrdersByUserRow> =
+    fun getOrdersByUser(userId: Int, limit: Long): List<GetOrdersByUserRow> =
         users.getOrdersByUser(userId, limit)
 
-    fun getOrdersInState(state: OrderState, limit: Int): List<GetOrdersInStateRow> =
+    fun getOrdersInState(state: OrderState, limit: Long): List<GetOrdersInStateRow> =
         users.getOrdersInState(state, limit)
 
     fun getAuditLogForUser(args: GetAuditLogForUserParams): List<GetAuditLogForUserRow> =
         users.getAuditLogForUser(args)
 
-    fun getAuditLogForTable(tableName: String, limit: Int): List<GetAuditLogForTableRow> =
+    fun getAuditLogForTable(tableName: String, limit: Long): List<GetAuditLogForTableRow> =
         users.getAuditLogForTable(tableName, limit)
 
     fun getDashboardStats(): GetDashboardStatsRow? =
         users.getDashboardStats()
 
-    fun getTopCommenters(limit: Int): List<GetTopCommentersRow> =
+    fun getTopCommenters(limit: Long): List<GetTopCommentersRow> =
         users.getTopCommenters(limit)
 
     fun getEngagementTimeSeries(createdAtStart: LocalDateTime): List<GetEngagementTimeSeriesRow> =
@@ -285,7 +285,7 @@ class Queries(private val conn: Connection) {
     fun getPostsByTag(args: GetPostsByTagParams): List<GetPostsByTagRow> =
         users.getPostsByTag(args)
 
-    fun getTopTags(limit: Int): List<GetTopTagsRow> =
+    fun getTopTags(limit: Long): List<GetTopTagsRow> =
         users.getTopTags(limit)
 
     fun uploadMedia(args: UploadMediaParams): Media? =
@@ -306,13 +306,13 @@ class Queries(private val conn: Connection) {
     fun getStorageUsedByUser(userId: Int): GetStorageUsedByUserRow? =
         users.getStorageUsedByUser(userId)
 
-    fun getLargeMediaFiles(sizeBytes: Long, limit: Int): List<GetLargeMediaFilesRow> =
+    fun getLargeMediaFiles(sizeBytes: Long, limit: Long): List<GetLargeMediaFilesRow> =
         users.getLargeMediaFiles(sizeBytes, limit)
 
     fun getUserFeed(args: GetUserFeedParams): List<GetUserFeedRow> =
         users.getUserFeed(args)
 
-    fun searchPostsFullText(searchQuery: String, limit: Int): List<SearchPostsFullTextRow> =
+    fun searchPostsFullText(searchQuery: String, limit: Long): List<SearchPostsFullTextRow> =
         users.searchPostsFullText(searchQuery, limit)
 
     fun bulkMarkNotificationsRead(userId: Int, id: List<Int>): Unit =

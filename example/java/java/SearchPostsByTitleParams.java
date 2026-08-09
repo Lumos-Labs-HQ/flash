@@ -5,6 +5,6 @@ package java;
 
 public record SearchPostsByTitleParams(
     String title,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

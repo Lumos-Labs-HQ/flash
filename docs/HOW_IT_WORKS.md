@@ -570,11 +570,11 @@ The parser validates SQL queries against the schema:
 
 ```go
 // Validate table exists
-if err := utils.ValidateTableReferences(query.SQL, schema, sourceFile); err != nil     return err
+if err := validation.ValidateTableReferences(query.SQL, schema, sourceFile); err != nil     return err
 }
 
 // Validate columns exist in table
-if err := utils.ValidateColumnReferences(query.SQL, schema, sourceFile); err != nil     return err
+if err := validation.ValidateColumnReferences(query.SQL, schema, sourceFile); err != nil     return err
 }
 
 // Error format: "db\queries\users.sql:5:12: column "invalid" does not exist in table "users""

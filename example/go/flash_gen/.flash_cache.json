@@ -16,32 +16,32 @@
       "users"
     ],
     "db/queries/users.sql": [
-      "comments",
-      "post_tags",
-      "active_commenters",
-      "p",
-      "user_post_stats",
-      "users;",
-      "orders",
-      "tags",
-      "media",
-      "users",
-      "post_stats",
-      "audit_log",
-      "notifications",
-      "u",
       "posts",
       "active_users",
-      "user_activity_summary",
       "subscriptions",
-      "categories"
+      "categories",
+      "post_tags",
+      "u",
+      "user_post_stats",
+      "users;",
+      "user_activity_summary",
+      "comments",
+      "notifications",
+      "tags",
+      "media",
+      "p",
+      "audit_log",
+      "users",
+      "active_commenters",
+      "post_stats",
+      "orders"
     ]
   },
   "generated_file_checksums": {
     "flash_gen/json_typed.go": "d6cacc69ca379a2fc90282cea75fa39f548ce652f04203e18d821a798c8dc502",
     "flash_gen/newss.go": "3a7200b08754cefc2ca1c8cbc07b34b01394fc3f80f06b73db135bcc74bb07b7",
-    "flash_gen/users.go": "f9096cde196c7162ad99960567b40a8207366a18762a00bab18110193a4bc8e6"
+    "flash_gen/users.go": "e509ddc9379004527fe4d553f8184163177db780c202108ef15e8149e2c700c5"
   },
-  "last_generation": "2026-07-19T03:47:28.561752652+05:30",
+  "last_generation": "2026-08-09T23:41:42.940001996+05:30",
   "OutDir": "flash_gen"
 }

@@ -8,5 +8,5 @@ public record GetTopCommentersRow(
     String name,
     String email,
     long comment_count,
-    int rank
+    long rank
 ) {}
