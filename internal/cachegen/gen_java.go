@@ -97,12 +97,19 @@ func GenerateJavaCacheAccessors(caches []*CacheInfo, packageName string) string 
 	if len(allTags) > 0 {
 		w.WriteString("/** Available cache tags for type-safe purging. */\n")
 		w.WriteString("public enum CacheTag {\n")
+		// A hyphenated tag uppercases to an illegal constant ("USER-POSTS");
+		// sanitize to UPPER_SNAKE and dedupe any resulting collisions.
+		constNames := make([]string, len(allTags))
+		for i, tag := range allTags {
+			constNames[i] = sanitizeUpperConst(tag)
+		}
+		constNames = dedupeNames(constNames)
 		for i, tag := range allTags {
 			suffix := ","
 			if i == len(allTags)-1 {
 				suffix = ";"
 			}
-			w.WriteString(fmt.Sprintf("    %s(\"%s\")%s\n", strings.ToUpper(tag), tag, suffix))
+			w.WriteString(fmt.Sprintf("    %s(\"%s\")%s\n", constNames[i], tag, suffix))
 		}
 		w.WriteString("\n    private final String value;\n")
 		w.WriteString("    CacheTag(String value) { this.value = value; }\n")
@@ -117,9 +124,10 @@ func GenerateJavaCacheAccessors(caches []*CacheInfo, packageName string) string 
 
 		var paramList, keyParts, paramNames []string
 		for _, p := range c.KeyParams {
-			paramList = append(paramList, fmt.Sprintf("Object %s", p))
-			keyParts = append(keyParts, fmt.Sprintf("\" + %s + \"", p))
-			paramNames = append(paramNames, p)
+			sp := safeParam(p, javaReserved)
+			paramList = append(paramList, fmt.Sprintf("Object %s", sp))
+			keyParts = append(keyParts, fmt.Sprintf("\" + %s + \"", sp))
+			paramNames = append(paramNames, sp)
 		}
 		paramStr := strings.Join(paramList, ", ")
 		keyExpr := fmt.Sprintf(`"%s:%s"`, c.CacheName, strings.Join(keyParts, ":"))

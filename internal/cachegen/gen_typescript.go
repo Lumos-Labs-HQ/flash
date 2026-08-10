@@ -77,8 +77,15 @@ func GenerateTypeScriptCacheAccessors(caches []*CacheInfo) string {
 	if len(allTags) > 0 {
 		w.WriteString("/** Available cache tags for type-safe purging. */\n")
 		w.WriteString("export enum CacheTag {\n")
-		for _, tag := range allTags {
-			w.WriteString(fmt.Sprintf("  %s = \"%s\",\n", utils.ToPascalCase(tag), tag))
+		// Distinct tags can PascalCase to the same member name ("user-posts" and
+		// "user_posts" -> "UserPosts"); dedupe so the enum has no duplicate member.
+		memberNames := make([]string, len(allTags))
+		for i, tag := range allTags {
+			memberNames[i] = utils.ToPascalCase(tag)
+		}
+		memberNames = dedupeNames(memberNames)
+		for i, tag := range allTags {
+			w.WriteString(fmt.Sprintf("  %s = \"%s\",\n", memberNames[i], tag))
 		}
 		w.WriteString("}\n\n")
 		w.WriteString("/** Purge all cache entries associated with a tag. */\n")
@@ -92,8 +99,9 @@ func GenerateTypeScriptCacheAccessors(caches []*CacheInfo) string {
 
 		var paramList, keyParts []string
 		for _, p := range c.KeyParams {
-			paramList = append(paramList, fmt.Sprintf("%s: string | number", p))
-			keyParts = append(keyParts, fmt.Sprintf("${%s}", p))
+			sp := safeParam(p, tsReserved)
+			paramList = append(paramList, fmt.Sprintf("%s: string | number", sp))
+			keyParts = append(keyParts, fmt.Sprintf("${%s}", sp))
 		}
 		paramStr := strings.Join(paramList, ", ")
 		keyExpr := fmt.Sprintf("`%s:%s`", c.CacheName, strings.Join(keyParts, ":"))

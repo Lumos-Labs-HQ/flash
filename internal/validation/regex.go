@@ -24,7 +24,7 @@ var (
 
 func init() {
 	ctePatternRegex = regexp.MustCompile(`(?i)(\w+)\s+AS\s*\(`)
-	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([^\s;]+)`)
+	tablePatternRegex = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([^\s;,]+)`)
 	tableAliasPatternRegex = regexp.MustCompile(`(?i)FROM\s+([^\s;]+)\s+(\w+)`)
 	joinPatternRegex = regexp.MustCompile(`(?i)JOIN\s+([^\s;]+)\s+(\w+)`)
 	columnRefPatternRegex = regexp.MustCompile(`(?i)(\w+)\.(\w+)`)
@@ -32,7 +32,7 @@ func init() {
 	fromPatternRegex = regexp.MustCompile(`(?i)\bFROM\s+([^\s;]+)`)
 	insertPatternRegex = regexp.MustCompile(`(?i)\b(?:INSERT\s+INTO|UPDATE)\s+([^\s;]+)`)
 	joinCheckRegex = regexp.MustCompile(`(?i)\bJOIN\b`)
-	whereClauseRegex = regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING|;|$))`)
+	whereClauseRegex = regexp.MustCompile(`(?i)\bWHERE\s+(.*?)(?:\s+(?:LIMIT|ORDER|GROUP|HAVING)\b|\s*;|\s*$)`)
 	setClauseRegex = regexp.MustCompile(`(?i)\bSET\s+(.*?)(?:\s+(?:WHERE|;|$))`)
 	orderByClauseRegex = regexp.MustCompile(`(?i)\bORDER\s+BY\s+(.*?)(?:\s+(?:LIMIT|;|$))`)
 	groupByClauseRegex = regexp.MustCompile(`(?i)\bGROUP\s+BY\s+(.*?)(?:\s+(?:HAVING|ORDER|LIMIT|;|$))`)

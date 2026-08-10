@@ -158,23 +158,26 @@ func rewriteINListToANY(sql string) string {
 		return orig - shift
 	}
 
-	// Replace spans in reverse order (to preserve offsets)
+	// Replace spans in reverse order (to preserve offsets). Keep each IN list's
+	// ORIGINAL first param number here; the single renumber pass below remaps
+	// every surviving $N — including these — to its final sequential value.
 	for i := len(spans) - 1; i >= 0; i-- {
 		s := spans[i]
-		replacement := fmt.Sprintf("%s = ANY($%d)", s.col, newNum(s.nums[0]))
+		replacement := fmt.Sprintf("%s = ANY($%d)", s.col, s.nums[0])
 		sql = sql[:s.start] + replacement + sql[s.end:]
 	}
 
-	// Renumber all remaining $N params (high-to-low to avoid collisions)
-	for n := 100; n >= 1; n-- {
-		if removed[n] {
-			continue
+	// Renumber every remaining $N in a single pass. Doing this with per-number
+	// ReplaceAll calls is unsafe: remapping $4->$3 and then $3->$2 also rewrites
+	// the $3 the first step just produced. ReplaceAllStringFunc visits each
+	// original token exactly once, so newNum is applied to originals only.
+	sql = numRe.ReplaceAllStringFunc(sql, func(m string) string {
+		var n int
+		if _, err := fmt.Sscanf(m[1:], "%d", &n); err != nil {
+			return m
 		}
-		nn := newNum(n)
-		if nn != n {
-			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", n), fmt.Sprintf("$%d", nn))
-		}
-	}
+		return fmt.Sprintf("$%d", newNum(n))
+	})
 
 	return sql
 }

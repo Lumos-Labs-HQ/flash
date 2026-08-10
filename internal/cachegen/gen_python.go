@@ -79,8 +79,15 @@ func GeneratePythonCacheAccessors(caches []*CacheInfo) string {
 	if len(allTags) > 0 {
 		w.WriteString("class CacheTag(str, Enum):\n")
 		w.WriteString("    \"\"\"Available cache tags for type-safe purging.\"\"\"\n")
-		for _, tag := range allTags {
-			w.WriteString(fmt.Sprintf("    %s = \"%s\"\n", strings.ToUpper(tag), tag))
+		// Uppercasing a hyphenated tag ("user-posts") yields an illegal member
+		// name ("USER-POSTS"); sanitize to UPPER_SNAKE and dedupe collisions.
+		memberNames := make([]string, len(allTags))
+		for i, tag := range allTags {
+			memberNames[i] = sanitizeUpperConst(tag)
+		}
+		memberNames = dedupeNames(memberNames)
+		for i, tag := range allTags {
+			w.WriteString(fmt.Sprintf("    %s = \"%s\"\n", memberNames[i], tag))
 		}
 		w.WriteString("\n\n")
 		w.WriteString("def purge_tag(tag: CacheTag) -> None:\n")
@@ -94,8 +101,9 @@ func GeneratePythonCacheAccessors(caches []*CacheInfo) string {
 
 		var paramList, keyParts []string
 		for _, p := range c.KeyParams {
-			paramList = append(paramList, p)
-			keyParts = append(keyParts, fmt.Sprintf("{%s}", p))
+			sp := safeParam(p, pyReserved)
+			paramList = append(paramList, sp)
+			keyParts = append(keyParts, fmt.Sprintf("{%s}", sp))
 		}
 		paramStr := strings.Join(paramList, ", ")
 		keyExpr := fmt.Sprintf(`f"%s:%s"`, className, strings.Join(keyParts, ":"))

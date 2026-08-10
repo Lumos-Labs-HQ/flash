@@ -116,9 +116,16 @@ func GenerateGoCacheAccessors(caches []*CacheInfo, packageName string, prefix st
 		w.WriteString("type CacheTag string\n\n")
 		w.WriteString("// Available cache tags — use with Cache.PurgeTag()\n")
 		w.WriteString("const (\n")
-		for _, tag := range allTags {
-			constName := "Tag" + utils.ToPascalCase(tag)
-			w.WriteString(fmt.Sprintf("\t%s CacheTag = \"%s\"\n", constName, tag))
+		tagConstNames := make([]string, len(allTags))
+		for i, tag := range allTags {
+			tagConstNames[i] = "Tag" + utils.ToPascalCase(tag)
+		}
+		// Two distinct tags can PascalCase to the same identifier (e.g.
+		// "user-posts" and "user_posts" -> "UserPosts"); dedupe so we never
+		// emit two constants with the same name (which would not compile).
+		tagConstNames = dedupeNames(tagConstNames)
+		for i, tag := range allTags {
+			w.WriteString(fmt.Sprintf("\t%s CacheTag = \"%s\"\n", tagConstNames[i], tag))
 		}
 		w.WriteString(")\n\n")
 		w.WriteString("// PurgeTag purges all cache entries associated with the given tag.\n")
@@ -139,12 +146,14 @@ func GenerateGoCacheAccessors(caches []*CacheInfo, packageName string, prefix st
 			if i < len(cache.KeyTypes) {
 				goType = sqlTypeToGoSimple(cache.KeyTypes[i])
 			}
-			paramName := utils.ToSnakeCase(p)
+			// SafeGoIdent escapes Go keywords ("type" -> "type_") so the
+			// generated accessor signature and key expression both compile.
+			paramName := utils.SafeGoIdent(utils.ToSnakeCase(p))
 			paramList = append(paramList, fmt.Sprintf("%s %s", paramName, goType))
 			keyParts = append(keyParts, paramName)
 		}
 		paramStr := strings.Join(paramList, ", ")
-		keyExpr := fmt.Sprintf(`fmt.Sprintf("%s:%s", %s)`, accessorName, strings.Repeat(":%v", len(keyParts)), strings.Join(keyParts, ", "))
+		keyExpr := fmt.Sprintf(`fmt.Sprintf("%s%s", %s)`, accessorName, strings.Repeat(":%v", len(keyParts)), strings.Join(keyParts, ", "))
 		if len(keyParts) == 0 {
 			keyExpr = fmt.Sprintf(`"%s"`, accessorName)
 		} else if len(keyParts) == 1 {

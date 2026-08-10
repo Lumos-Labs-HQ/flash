@@ -89,12 +89,19 @@ func GenerateKotlinCacheAccessors(caches []*CacheInfo, packageName string) strin
 	if len(allTags) > 0 {
 		w.WriteString("/** Available cache tags for type-safe purging. */\n")
 		w.WriteString("enum class CacheTag(val value: String) {\n")
+		// A hyphenated tag uppercases to an illegal entry name ("USER-POSTS");
+		// sanitize to UPPER_SNAKE and dedupe any resulting collisions.
+		entryNames := make([]string, len(allTags))
+		for i, tag := range allTags {
+			entryNames[i] = sanitizeUpperConst(tag)
+		}
+		entryNames = dedupeNames(entryNames)
 		for i, tag := range allTags {
 			suffix := ","
 			if i == len(allTags)-1 {
 				suffix = ";"
 			}
-			w.WriteString(fmt.Sprintf("    %s(\"%s\")%s\n", strings.ToUpper(tag), tag, suffix))
+			w.WriteString(fmt.Sprintf("    %s(\"%s\")%s\n", entryNames[i], tag, suffix))
 		}
 		w.WriteString("\n    /** Purge all cache entries associated with this tag. */\n")
 		w.WriteString("    fun purge() = FlashCache.purgeByTag(value)\n")
@@ -106,8 +113,9 @@ func GenerateKotlinCacheAccessors(caches []*CacheInfo, packageName string) strin
 
 		var paramList, keyParts []string
 		for _, p := range c.KeyParams {
-			paramList = append(paramList, fmt.Sprintf("%s: Any", p))
-			keyParts = append(keyParts, fmt.Sprintf("$%s", p))
+			sp := safeParam(p, kotlinReserved)
+			paramList = append(paramList, fmt.Sprintf("%s: Any", sp))
+			keyParts = append(keyParts, fmt.Sprintf("$%s", sp))
 		}
 		paramStr := strings.Join(paramList, ", ")
 		keyExpr := fmt.Sprintf(`"%s:%s"`, c.CacheName, strings.Join(keyParts, ":"))

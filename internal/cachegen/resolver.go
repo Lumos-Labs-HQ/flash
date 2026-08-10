@@ -2,6 +2,8 @@ package cachegen
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
@@ -86,27 +88,29 @@ func ResolveDependencyPurges(mutationName string, caches []*CacheInfo, mutationP
 			continue
 		}
 
-		// Try to match cache key params with mutation params
-		matched := false
-		for _, cacheKeyParam := range cache.KeyParams {
+		// A single-colon cache key is CacheName[:p1[:p2...]]. To target an exact
+		// entry every key param must be reconstructable from the mutation's
+		// params. If the cache key is composite (>=2 params) we cannot form it
+		// from one param, so fall back to a prefix purge. Only a single-param
+		// key supports an exact delete keyed on that one param.
+		var matchedParam string
+		if len(cache.KeyParams) == 1 {
 			for _, mutParam := range mutationParams {
-				if strings.EqualFold(cacheKeyParam, mutParam.Name) {
-					purges = append(purges, DependencyPurge{
-						CacheName:   cache.CacheName,
-						KeyParam:    mutParam.Name,
-						PurgePrefix: false,
-					})
-					matched = true
+				if strings.EqualFold(cache.KeyParams[0], mutParam.Name) {
+					matchedParam = mutParam.Name
 					break
 				}
 			}
-			if matched {
-				break
-			}
 		}
 
-		// If no exact param match, purge by prefix (wildcard)
-		if !matched {
+		if matchedParam != "" {
+			purges = append(purges, DependencyPurge{
+				CacheName:   cache.CacheName,
+				KeyParam:    matchedParam,
+				PurgePrefix: false,
+			})
+		} else {
+			// Composite key, or no exact single-param match: purge by prefix.
 			purges = append(purges, DependencyPurge{
 				CacheName:   cache.CacheName,
 				KeyParam:    "",
@@ -166,24 +170,78 @@ func BuildCacheKey(prefix string, cacheName string, params []string) string {
 	return strings.Join(parts, ":")
 }
 
-// ParseTTL converts a TTL string to seconds
-func ParseTTL(ttl string) (seconds int64) {
-	ttl = strings.TrimSpace(strings.ToLower(ttl))
-	var value int64
-	var unit string
-	fmt.Sscanf(ttl, "%d%s", &value, &unit)
+// ttlTokenRegex matches one "<number><unit>" segment, e.g. "5m", "1h", "1.5h".
+var ttlTokenRegex = regexp.MustCompile(`([0-9]+\.?[0-9]*)([a-z]+)`)
+
+func ttlUnitSeconds(unit string) (float64, bool) {
 	switch unit {
 	case "s", "sec", "second", "seconds":
-		return value
+		return 1, true
 	case "m", "min", "minute", "minutes":
-		return value * 60
+		return 60, true
 	case "h", "hr", "hour", "hours":
-		return value * 3600
+		return 3600, true
 	case "d", "day", "days":
-		return value * 86400
-	default:
-		return value // assume seconds
+		return 86400, true
 	}
+	return 0, false
+}
+
+// ParseTTL converts a TTL string to seconds. It supports:
+//   - a bare number ("90"), interpreted as seconds
+//   - a single unit ("30s", "5m", "1h", "2d"), case-insensitively
+//   - decimals ("1.5h" -> 5400)
+//   - compound durations ("1h30m" -> 5400, "1m30s" -> 90)
+//
+// Unparseable input ("abc"), unknown units ("5x"), and negative values ("-5m")
+// return 0 rather than a silently-truncated or negative TTL.
+func ParseTTL(ttl string) (seconds int64) {
+	ttl = strings.TrimSpace(strings.ToLower(ttl))
+	if ttl == "" {
+		return 0
+	}
+
+	// A bare number is a count of seconds.
+	if n, err := strconv.ParseInt(ttl, 10, 64); err == nil {
+		if n < 0 {
+			return 0
+		}
+		return n
+	}
+
+	// Otherwise parse a sequence of <number><unit> segments. Whitespace between
+	// segments is ignored; anything else (a leading '-', stray letters) makes
+	// the whole value invalid.
+	stripped := strings.ReplaceAll(ttl, " ", "")
+	segments := ttlTokenRegex.FindAllStringSubmatch(stripped, -1)
+	if len(segments) == 0 {
+		return 0
+	}
+
+	var total float64
+	var rebuilt strings.Builder
+	for _, seg := range segments {
+		mult, ok := ttlUnitSeconds(seg[2])
+		if !ok {
+			return 0 // unknown unit, e.g. "5x"
+		}
+		val, err := strconv.ParseFloat(seg[1], 64)
+		if err != nil {
+			return 0
+		}
+		total += val * mult
+		rebuilt.WriteString(seg[1])
+		rebuilt.WriteString(seg[2])
+	}
+	// If the matched segments don't account for the entire (space-stripped)
+	// input, there was garbage between/around them — reject.
+	if rebuilt.String() != stripped {
+		return 0
+	}
+	if total < 0 {
+		return 0
+	}
+	return int64(total)
 }
 
 // collectUniqueTags extracts all unique tag names from cache definitions, sorted.

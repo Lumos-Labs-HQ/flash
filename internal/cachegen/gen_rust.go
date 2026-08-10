@@ -109,15 +109,23 @@ func GenerateRustCacheAccessors(caches []*CacheInfo) string {
 		w.WriteString("/// Cache tags for type-safe purging. Use with `CACHE.purge_tag()`.\n")
 		w.WriteString("#[derive(Debug, Clone, Copy, PartialEq, Eq)]\n")
 		w.WriteString("pub enum CacheTag {\n")
-		for _, tag := range allTags {
-			w.WriteString(fmt.Sprintf("    %s,\n", utils.ToPascalCase(tag)))
+		// Two tags can PascalCase to the same variant ("user-posts"/"user_posts"
+		// -> "UserPosts"); dedupe once and reuse for both the variant list and
+		// the as_str() arms so the two always agree.
+		variantNames := make([]string, len(allTags))
+		for i, tag := range allTags {
+			variantNames[i] = utils.ToPascalCase(tag)
+		}
+		variantNames = dedupeNames(variantNames)
+		for _, v := range variantNames {
+			w.WriteString(fmt.Sprintf("    %s,\n", v))
 		}
 		w.WriteString("}\n\n")
 		w.WriteString("impl CacheTag {\n")
 		w.WriteString("    pub fn as_str(&self) -> &'static str {\n")
 		w.WriteString("        match self {\n")
-		for _, tag := range allTags {
-			w.WriteString(fmt.Sprintf("            CacheTag::%s => \"%s\",\n", utils.ToPascalCase(tag), tag))
+		for i, tag := range allTags {
+			w.WriteString(fmt.Sprintf("            CacheTag::%s => \"%s\",\n", variantNames[i], tag))
 		}
 		w.WriteString("        }\n")
 		w.WriteString("    }\n\n")
@@ -132,9 +140,11 @@ func GenerateRustCacheAccessors(caches []*CacheInfo) string {
 		ttlSec := ParseTTL(c.TTL)
 		structName := c.CacheName
 
-		var paramList, keyParts []string
+		var paramList, keyParts, safeParams []string
 		for _, p := range c.KeyParams {
-			paramList = append(paramList, fmt.Sprintf("%s: impl std::fmt::Display", p))
+			sp := safeParam(p, rustReserved)
+			safeParams = append(safeParams, sp)
+			paramList = append(paramList, fmt.Sprintf("%s: impl std::fmt::Display", sp))
 			keyParts = append(keyParts, "{}")
 		}
 		paramStr := strings.Join(paramList, ", ")
@@ -145,8 +155,8 @@ func GenerateRustCacheAccessors(caches []*CacheInfo) string {
 
 		// Build format args
 		var formatArgs string
-		if len(c.KeyParams) > 0 {
-			formatArgs = ", " + strings.Join(c.KeyParams, ", ")
+		if len(safeParams) > 0 {
+			formatArgs = ", " + strings.Join(safeParams, ", ")
 		}
 
 		tagsLiteral := "&[]"
