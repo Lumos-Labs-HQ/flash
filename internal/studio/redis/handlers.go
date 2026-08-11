@@ -10,11 +10,7 @@ import (
 
 func (s *Server) handleGetInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := s.service.GetInfo()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, info)
+	common.Result(w, info, err)
 }
 
 func (s *Server) handleGetDBSize(w http.ResponseWriter, r *http.Request) {
@@ -32,11 +28,7 @@ func (s *Server) handleGetKeys(w http.ResponseWriter, r *http.Request) {
 	count, _ := strconv.ParseInt(common.Query(r, "count", "100"), 10, 64)
 
 	result, err := s.service.GetKeys(pattern, cursor, count)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, result)
+	common.Result(w, result, err)
 }
 
 func (s *Server) handleGetKey(w http.ResponseWriter, r *http.Request) {
@@ -76,12 +68,7 @@ func (s *Server) handleSetKey(w http.ResponseWriter, r *http.Request) {
 		body.Type = "string"
 	}
 
-	if err := s.service.SetKey(body.Key, body.Value, body.Type, body.TTL); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	common.JSONMessage(w, "key created successfully")
+	common.ResultMessage(w, "key created successfully", s.service.SetKey(body.Key, body.Value, body.Type, body.TTL))
 }
 
 func (s *Server) handleUpdateKey(w http.ResponseWriter, r *http.Request) {
@@ -111,12 +98,7 @@ func (s *Server) handleUpdateKey(w http.ResponseWriter, r *http.Request) {
 		body.Type = existingKey.Type
 	}
 
-	if err := s.service.SetKey(key, body.Value, body.Type, body.TTL); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	common.JSONMessage(w, "key updated successfully")
+	common.ResultMessage(w, "key updated successfully", s.service.SetKey(key, body.Value, body.Type, body.TTL))
 }
 
 func (s *Server) handleDeleteKey(w http.ResponseWriter, r *http.Request) {
@@ -183,11 +165,7 @@ func (s *Server) handleCLI(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetDatabases(w http.ResponseWriter, r *http.Request) {
 	databases, err := s.service.GetDatabases()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, databases)
+	common.Result(w, databases, err)
 }
 
 func (s *Server) handleSelectDatabase(w http.ResponseWriter, r *http.Request) {
@@ -198,20 +176,11 @@ func (s *Server) handleSelectDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.SelectDatabase(db); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	common.JSONMessage(w, "database selected successfully")
+	common.ResultMessage(w, "database selected successfully", s.service.SelectDatabase(db))
 }
 
 func (s *Server) handleFlushDB(w http.ResponseWriter, r *http.Request) {
-	if err := s.service.FlushDB(); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "database flushed successfully")
+	common.ResultMessage(w, "database flushed successfully", s.service.FlushDB())
 }
 
 func (s *Server) handleExportKeys(w http.ResponseWriter, r *http.Request) {
@@ -271,11 +240,7 @@ func (s *Server) handleGetMemoryStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetMemoryOverview(w http.ResponseWriter, r *http.Request) {
 	overview, err := s.service.GetMemoryOverview()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, overview)
+	common.Result(w, overview, err)
 }
 
 func (s *Server) handleGetKeyMemory(w http.ResponseWriter, r *http.Request) {
@@ -286,30 +251,18 @@ func (s *Server) handleGetKeyMemory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	info, err := s.service.GetKeyMemory(key)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, info)
+	common.Result(w, info, err)
 }
 
 func (s *Server) handleGetSlowLog(w http.ResponseWriter, r *http.Request) {
 	count, _ := strconv.Atoi(common.Query(r, "count", "50"))
 
 	entries, err := s.service.GetSlowLog(count)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, entries)
+	common.Result(w, entries, err)
 }
 
 func (s *Server) handleResetSlowLog(w http.ResponseWriter, r *http.Request) {
-	if err := s.service.ResetSlowLog(); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "slow log reset successfully")
+	common.ResultMessage(w, "slow log reset successfully", s.service.ResetSlowLog())
 }
 
 func (s *Server) handleGetSlowLogLen(w http.ResponseWriter, r *http.Request) {
@@ -397,11 +350,7 @@ func (s *Server) handleExecuteScriptBySHA(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleFlushScripts(w http.ResponseWriter, r *http.Request) {
-	if err := s.service.FlushScripts(); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "scripts flushed successfully")
+	common.ResultMessage(w, "scripts flushed successfully", s.service.FlushScripts())
 }
 
 func (s *Server) handleBulkSetTTL(w http.ResponseWriter, r *http.Request) {
@@ -436,11 +385,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	pattern := common.Query(r, "pattern", "*")
 
 	config, err := s.service.GetConfig(pattern)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, config)
+	common.Result(w, config, err)
 }
 
 func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
@@ -459,55 +404,30 @@ func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.SetConfig(body.Key, body.Value); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	common.JSONMessage(w, "configuration updated successfully")
+	common.ResultMessage(w, "configuration updated successfully", s.service.SetConfig(body.Key, body.Value))
 }
 
 func (s *Server) handleRewriteConfig(w http.ResponseWriter, r *http.Request) {
-	if err := s.service.RewriteConfig(); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "configuration rewritten successfully")
+	common.ResultMessage(w, "configuration rewritten successfully", s.service.RewriteConfig())
 }
 
 func (s *Server) handleResetConfigStats(w http.ResponseWriter, r *http.Request) {
-	if err := s.service.ResetConfigStats(); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "statistics reset successfully")
+	common.ResultMessage(w, "statistics reset successfully", s.service.ResetConfigStats())
 }
 
 func (s *Server) handleGetReplicationInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := s.service.GetReplicationInfo()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, info)
+	common.Result(w, info, err)
 }
 
 func (s *Server) handleGetClusterInfo(w http.ResponseWriter, r *http.Request) {
 	info, err := s.service.GetClusterInfo()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, info)
+	common.Result(w, info, err)
 }
 
 func (s *Server) handleGetACLUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := s.service.GetACLUsers()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, users)
+	common.Result(w, users, err)
 }
 
 func (s *Server) handleGetACLUser(w http.ResponseWriter, r *http.Request) {
@@ -518,11 +438,7 @@ func (s *Server) handleGetACLUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := s.service.GetACLUser(username)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, user)
+	common.Result(w, user, err)
 }
 
 func (s *Server) handleCreateACLUser(w http.ResponseWriter, r *http.Request) {
@@ -541,12 +457,7 @@ func (s *Server) handleCreateACLUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.CreateACLUser(body.Username, body.Rules); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	common.JSONMessage(w, "user created successfully")
+	common.ResultMessage(w, "user created successfully", s.service.CreateACLUser(body.Username, body.Rules))
 }
 
 func (s *Server) handleDeleteACLUser(w http.ResponseWriter, r *http.Request) {
@@ -556,31 +467,18 @@ func (s *Server) handleDeleteACLUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.DeleteACLUser(username); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	common.JSONMessage(w, "user deleted successfully")
+	common.ResultMessage(w, "user deleted successfully", s.service.DeleteACLUser(username))
 }
 
 func (s *Server) handleGetACLLog(w http.ResponseWriter, r *http.Request) {
 	count, _ := strconv.Atoi(common.Query(r, "count", "10"))
 
 	logs, err := s.service.GetACLLog(count)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, logs)
+	common.Result(w, logs, err)
 }
 
 func (s *Server) handleResetACLLog(w http.ResponseWriter, r *http.Request) {
-	if err := s.service.ResetACLLog(); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "ACL log reset successfully")
+	common.ResultMessage(w, "ACL log reset successfully", s.service.ResetACLLog())
 }
 
 func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) {

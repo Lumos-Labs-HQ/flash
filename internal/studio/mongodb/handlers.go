@@ -13,11 +13,7 @@ import (
 // Database Handlers
 func (s *Server) handleGetDatabases(w http.ResponseWriter, r *http.Request) {
 	databases, err := s.service.GetDatabases()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, databases)
+	common.Result(w, databases, err)
 }
 
 func (s *Server) handleSelectDatabase(w http.ResponseWriter, r *http.Request) {
@@ -27,11 +23,7 @@ func (s *Server) handleSelectDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.SwitchDatabase(dbName); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Database switched successfully")
+	common.ResultMessage(w, "Database switched successfully", s.service.SwitchDatabase(dbName))
 }
 
 func (s *Server) handleDropDatabase(w http.ResponseWriter, r *http.Request) {
@@ -41,11 +33,7 @@ func (s *Server) handleDropDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.DropDatabase(dbName); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Database dropped successfully")
+	common.ResultMessage(w, "Database dropped successfully", s.service.DropDatabase(dbName))
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -61,11 +49,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.CreateDatabase(req.Name); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Database created successfully")
+	common.ResultMessage(w, "Database created successfully", s.service.CreateDatabase(req.Name))
 }
 
 // Collection Handlers
@@ -77,11 +61,7 @@ func (s *Server) handleGetCollections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collections, err := s.service.GetCollections(dbName)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, collections)
+	common.Result(w, collections, err)
 }
 
 func (s *Server) handleGetCollectionData(w http.ResponseWriter, r *http.Request) {
@@ -110,11 +90,7 @@ func (s *Server) handleGetCollectionData(w http.ResponseWriter, r *http.Request)
 	}
 
 	result, err := s.service.GetDocuments(dbName, name, page, limit)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, result)
+	common.Result(w, result, err)
 }
 
 func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) {
@@ -135,11 +111,7 @@ func (s *Server) handleCreateCollection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := s.service.CreateCollection(req.Name, req.Options); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Collection created successfully")
+	common.ResultMessage(w, "Collection created successfully", s.service.CreateCollection(req.Name, req.Options))
 }
 
 func (s *Server) handleDropCollection(w http.ResponseWriter, r *http.Request) {
@@ -153,11 +125,7 @@ func (s *Server) handleDropCollection(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.service.DropCollection(name); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Collection dropped successfully")
+	common.ResultMessage(w, "Collection dropped successfully", s.service.DropCollection(name))
 }
 
 // Document Handlers
@@ -191,11 +159,7 @@ func (s *Server) handleGetDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := s.service.GetDocumentsWithFilter(dbName, name, page, limit, filter)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, result)
+	common.Result(w, result, err)
 }
 
 func (s *Server) handleInsertDocument(w http.ResponseWriter, r *http.Request) {
@@ -242,11 +206,7 @@ func (s *Server) handleUpdateDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.UpdateDocument(name, id, document); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Document updated successfully")
+	common.ResultMessage(w, "Document updated successfully", s.service.UpdateDocument(name, id, document))
 }
 
 func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
@@ -261,11 +221,7 @@ func (s *Server) handleDeleteDocument(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.service.DeleteDocument(name, id); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Document deleted successfully")
+	common.ResultMessage(w, "Document deleted successfully", s.service.DeleteDocument(name, id))
 }
 
 func (s *Server) handleBulkDeleteDocuments(w http.ResponseWriter, r *http.Request) {
@@ -287,11 +243,7 @@ func (s *Server) handleBulkDeleteDocuments(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := s.service.BulkDeleteDocuments(name, req.IDs); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Documents deleted successfully")
+	common.ResultMessage(w, "Documents deleted successfully", s.service.BulkDeleteDocuments(name, req.IDs))
 }
 
 // Aggregation Handler
@@ -320,11 +272,7 @@ func (s *Server) handleAggregate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := s.service.Aggregate(name, pipeline)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, result)
+	common.Result(w, result, err)
 }
 
 // Index Handlers
@@ -340,11 +288,7 @@ func (s *Server) handleGetIndexes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	indexes, err := s.service.GetIndexes(name)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, indexes)
+	common.Result(w, indexes, err)
 }
 
 func (s *Server) handleCreateIndex(w http.ResponseWriter, r *http.Request) {
@@ -367,11 +311,7 @@ func (s *Server) handleCreateIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.service.CreateIndex(name, req.Keys, req.Unique); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Index created successfully")
+	common.ResultMessage(w, "Index created successfully", s.service.CreateIndex(name, req.Keys, req.Unique))
 }
 
 func (s *Server) handleDropIndex(w http.ResponseWriter, r *http.Request) {
@@ -386,11 +326,7 @@ func (s *Server) handleDropIndex(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.service.DropIndex(name, indexName); err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSONMessage(w, "Index dropped successfully")
+	common.ResultMessage(w, "Index dropped successfully", s.service.DropIndex(name, indexName))
 }
 
 // Schema Handler
@@ -403,11 +339,7 @@ func (s *Server) handleGetSchema(w http.ResponseWriter, r *http.Request) {
 	}
 
 	schema, err := s.service.GetCollectionSchema(dbName, name)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, schema)
+	common.Result(w, schema, err)
 }
 
 // Query Handler
@@ -437,30 +369,18 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := s.service.Query(name, filter, req.Limit)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, result)
+	common.Result(w, result, err)
 }
 
 // Stats Handlers
 func (s *Server) handleGetStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := s.service.GetStats()
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, stats)
+	common.Result(w, stats, err)
 }
 
 func (s *Server) handleGetCollectionStats(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
 	stats, err := s.service.GetCollectionStats(name)
-	if err != nil {
-		common.JSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	common.JSON(w, stats)
+	common.Result(w, stats, err)
 }

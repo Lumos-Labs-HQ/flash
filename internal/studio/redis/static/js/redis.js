@@ -13,6 +13,7 @@ const RedisStudio = {
     currentTab: 'browser',
     terminalInput: null,
     searchDebounceTimer: null,
+    ttlCountdownTimer: null,  // Interval handle for the live TTL countdown
 
     // Save state to sessionStorage
     saveState() {
@@ -366,6 +367,7 @@ const RedisStudio = {
     },
 
     async selectKey(key) {
+        this.stopTTLCountdown();
         this.currentKey = key;
         this.renderKeys();
 
@@ -393,19 +395,54 @@ const RedisStudio = {
         const container = document.getElementById('keyDetail');
         if (!container) return;
 
-        const ttlText = data.ttl === -1 ? 'No expiry' : data.ttl + 's';
         const ttlClass = data.ttl === -1 ? 'no-expiry' : '';
 
         container.innerHTML = '<div class="key-header">' +
             '<div class="key-info"><span class="key-type ' + data.type + '">' + data.type + '</span>' +
             '<h2>' + escapeHtml(data.key) + '</h2>' +
-            '<span class="ttl-badge ' + ttlClass + '">' + ttlText + '</span></div>' +
+            '<span class="ttl-badge ' + ttlClass + '" id="ttlBadge">' + this.formatCountdown(data.ttl) + '</span></div>' +
             '<div class="key-actions">' +
             '<button class="btn btn-sm" onclick="RedisStudio.copyKey()">Copy Key</button>' +
             '<button class="btn btn-sm" onclick="RedisStudio.promptTTL()">Set TTL</button>' +
             '<button class="btn btn-sm btn-danger" onclick="RedisStudio.deleteCurrentKey()">Delete</button>' +
             '</div></div>' +
             '<div class="key-value-container">' + this.renderValue(data) + '</div>';
+
+        this.startTTLCountdown(data.ttl);
+    },
+
+    // Start a live per-second countdown of the detail-panel TTL badge.
+    // `remaining` is a local closure var so we never mutate currentKeyTTL
+    // (saveValue relies on that field to preserve the key's TTL).
+    startTTLCountdown(seconds) {
+        this.stopTTLCountdown();
+        if (seconds === undefined || seconds === null || seconds < 0) return; // no expiry
+
+        let remaining = seconds;
+        this.ttlCountdownTimer = setInterval(() => {
+            const badge = document.getElementById('ttlBadge');
+            if (!badge) { this.stopTTLCountdown(); return; } // detail panel gone
+
+            remaining -= 1;
+            if (remaining <= 0) {
+                this.stopTTLCountdown();
+                badge.textContent = 'expired';
+                badge.classList.remove('no-expiry');
+                badge.classList.add('expired');
+                // Key has expired in Redis — refresh the list and detail view.
+                this.loadKeys();
+                if (this.currentKey) this.selectKey(this.currentKey);
+                return;
+            }
+            badge.textContent = this.formatCountdown(remaining);
+        }, 1000);
+    },
+
+    stopTTLCountdown() {
+        if (this.ttlCountdownTimer) {
+            clearInterval(this.ttlCountdownTimer);
+            this.ttlCountdownTimer = null;
+        }
     },
 
     renderValue(data) {
@@ -695,6 +732,20 @@ const RedisStudio = {
         if (s < 3600) return Math.floor(s / 60) + 'm';
         if (s < 86400) return Math.floor(s / 3600) + 'h';
         return Math.floor(s / 86400) + 'd';
+    },
+
+    // formatCountdown renders a precise, ticking clock for the detail TTL badge.
+    // No expiry -> 'No expiry'; 0 -> 'expired'; >=1h -> H:MM:SS; else MM:SS.
+    formatCountdown(s) {
+        if (s === undefined || s === null || s < 0) return 'No expiry';
+        if (s === 0) return 'expired';
+        const pad = (n) => String(n).padStart(2, '0');
+        if (s >= 3600) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            return h + ':' + pad(m) + ':' + pad(s % 60);
+        }
+        return pad(Math.floor(s / 60)) + ':' + pad(s % 60);
     },
 
     formatUptime(s) {
