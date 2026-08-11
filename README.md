@@ -46,12 +46,12 @@ A powerful, database-agnostic ORM built in Go with multi-database support and ty
 
 ## 📊 Performance
 
-| Operation | FlashORM | Drizzle | Prisma |
-|-----------|----------|---------|--------|
-| Insert 1000 Users | **149ms** | 224ms | 230ms |
-| Complex Query x500 | **3156ms** | 12500ms | 56322ms |
-| Mixed Workload x1000 | **186ms** | 1174ms | 10863ms |
-| **TOTAL** | **5980ms** | **17149ms** | **71510ms** |
+| Operation            | FlashORM   | Drizzle     | Prisma      |
+| -------------------- | ---------- | ----------- | ----------- |
+| Insert 1000 Users    | **149ms**  | 224ms       | 230ms       |
+| Complex Query x500   | **3156ms** | 12500ms     | 56322ms     |
+| Mixed Workload x1000 | **186ms**  | 1174ms      | 10863ms     |
+| **TOTAL**            | **5980ms** | **17149ms** | **71510ms** |
 
 **2.8x faster** than Drizzle, **11.9x faster** than Prisma
 
@@ -109,30 +109,31 @@ flash gen
 
 ## 📋 Commands
 
-| Command | Description |
-|---------|-------------|
-| `flash init` | Initialize project |
-| `flash migrate <name>` | Create migration |
-| `flash apply` | Apply migrations |
-| `flash down` | Rollback migration |
-| `flash status` | Show status |
-| `flash pull` | Extract schema from database |
-| `flash studio` | Launch visual editor |
-| `flash export` | Export database |
-| `flash seed` | Seed with fake data |
-| `flash gen` | Generate type-safe code |
-| `flash gen -f` | Force regenerate (skip cache) |
-| `flash gen --db <name>` | Generate for specific database |
-| `flash dblist` | List all configured databases |
-| `flash issues` | File a validated bug/feature report to the Flash repo |
-| `flash update` | Update plugins and flash binary |
-| `flash uninstall` | Remove flash and ~/.flash |
+| Command                 | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `flash init`            | Initialize project                                    |
+| `flash migrate <name>`  | Create migration                                      |
+| `flash apply`           | Apply migrations                                      |
+| `flash down`            | Rollback migration                                    |
+| `flash status`          | Show status                                           |
+| `flash pull`            | Extract schema from database                          |
+| `flash studio`          | Launch visual editor                                  |
+| `flash export`          | Export database                                       |
+| `flash seed`            | Seed with fake data                                   |
+| `flash gen`             | Generate type-safe code                               |
+| `flash gen -f`          | Force regenerate (skip cache)                         |
+| `flash gen --db <name>` | Generate for specific database                        |
+| `flash dblist`          | List all configured databases                         |
+| `flash issues`          | File a validated bug/feature report to the Flash repo |
+| `flash update`          | Update plugins and flash binary                       |
+| `flash uninstall`       | Remove flash and ~/.flash                             |
 
 ## 🤖 AI Agent Support (FLASH.md)
 
 When you run `flash init`, FlashORM generates a **FLASH.md** file in your project root. This file is a complete, self-contained reference designed for AI coding agents (Cursor, Copilot, Kiro, etc.) — so they can drive FlashORM correctly without guessing.
 
 FLASH.md contains:
+
 - The exact database/provider for this project
 - Query parameter style (`$1` vs `?`) for your database
 - Complete schema and query examples from your scaffolding
@@ -170,16 +171,16 @@ flash issues -k bug -t "..." -b "..." --print
 flash issues -k bug -t "..." -b "..." --repro "..." -y
 ```
 
-| Flag | Description |
-|------|-------------|
-| `-k` | Kind: `bug` (default), `feature`, `question`, `docs` |
-| `-t` | Title (required, must be descriptive) |
-| `-b` | Body (required) |
-| `--repro` | Reproduction steps (required for bugs) |
-| `--expected` | Expected behavior |
-| `--actual` | Actual behavior / error text |
-| `--print` | Compose and print without submitting |
-| `-y` | Skip confirmation prompt |
+| Flag         | Description                                          |
+| ------------ | ---------------------------------------------------- |
+| `-k`         | Kind: `bug` (default), `feature`, `question`, `docs` |
+| `-t`         | Title (required, must be descriptive)                |
+| `-b`         | Body (required)                                      |
+| `--repro`    | Reproduction steps (required for bugs)               |
+| `--expected` | Expected behavior                                    |
+| `--actual`   | Actual behavior / error text                         |
+| `--print`    | Compose and print without submitting                 |
+| `-y`         | Skip confirmation prompt                             |
 
 The command validates the report before filing — it rejects empty titles, vague bodies, and bug reports missing reproduction steps.
 
@@ -217,21 +218,22 @@ All commands support `--db <name>`: `flash gen --db main`, `flash apply --db ana
 
 ## 🗄️ Database Support
 
-| Database | ORM Support | Studio |
-|----------|-------------|--------|
-| PostgreSQL | ✅ Full | ✅ SQL Studio |
-| MySQL | ✅ Full | ✅ SQL Studio |
-| SQLite | ✅ Full | ✅ SQL Studio |
-| ScyllaDB / Cassandra | ✅ Beta | ✅ SQL Studio |
-| ClickHouse | ✅ Beta | ✅ SQL Studio |
-| MongoDB | ❌ | ✅ Visual Management |
-| Redis | ❌ | ✅ Visual Management |
+| Database             | ORM Support                | Studio               |
+| -------------------- | -------------------------- | -------------------- |
+| PostgreSQL           | ✅ Full                    | ✅ SQL Studio        |
+| MySQL                | ✅ Full                    | ✅ SQL Studio        |
+| SQLite               | ✅ Full                    | ✅ SQL Studio        |
+| ScyllaDB / Cassandra | ✅ Full(not yet for Rust ) | ✅ SQL Studio        |
+| ClickHouse           | ✅ Beta                    | ✅ SQL Studio        |
+| MongoDB              | ❌                         | ✅ Visual Management |
+| Redis                | ❌                         | ✅ Visual Management |
 
 ## 🔧 Code Generation
 
 FlashORM generates type-safe query code from your SQL files. Auto-detects project type on `flash init`.
 
 ### Go
+
 ```toml
 [gen.go]
 enabled = true
@@ -240,6 +242,7 @@ driver = "pgx"  # or "database/sql" (default)
 ```
 
 ### TypeScript / JavaScript
+
 ```toml
 [gen.js]
 enabled = true
@@ -248,6 +251,7 @@ driver = "pg"  # pg | postgres | mysql2 | better-sqlite3 | bun:sqlite
 ```
 
 ### Python
+
 ```toml
 [gen.python]
 enabled = true
@@ -256,7 +260,8 @@ async = true
 driver = "asyncpg"  # asyncpg | psycopg3 | pymysql | aiosqlite | sqlite3
 ```
 
-### Kotlin *(new in 2.6.0)*
+### Kotlin
+
 ```toml
 [gen.kotlin]
 enabled = true
@@ -273,7 +278,8 @@ val user = q.getUser(42)           // Users?
 val posts = q.getPostsByUser(42)   // List<GetPostsByUserRow>
 ```
 
-### Java *(new in 2.6.0)*
+### Java
+
 ```toml
 [gen.java]
 enabled = true
@@ -290,7 +296,8 @@ Users user = q.getUser(42);                          // Users
 List<GetPostsByUserRow> posts = q.getPostsByUser(42); // List<GetPostsByUserRow>
 ```
 
-### Rust *(new in 2.7.7)*
+### Rust
+
 ```toml
 [gen.rust]
 enabled = true
@@ -307,13 +314,14 @@ let posts = queries.list_posts_by_user(1).await?;    // Vec<GetPostsByUserRow>
 ```
 
 Features:
+
 - Async by default using `sqlx`
 - `#[derive(FromRow)]` on all model structs
 - `query_scalar` for single-column results, `query_as` for structs
 - PostgreSQL, MySQL, SQLite support
 - Proper `Option<T>` for nullable columns
 
-## 🎯 Typed JSON Columns *(new in 2.7.6)*
+## 🎯 Typed JSON Columns 
 
 Generate typed classes for JSONB columns with auto-serialization. No manual JSON parsing needed.
 
@@ -335,11 +343,18 @@ SELECT id, name, settings FROM users WHERE id = $1;
 ```
 
 **`db/json/user_settings.json`:**
+
 ```json
-{"theme": "string", "language": "string", "font_size": "int", "notifications": "boolean"}
+{
+   "theme": "string",
+   "language": "string",
+   "font_size": "int",
+   "notifications": "boolean"
+}
 ```
 
 **Config:**
+
 ```toml
 json_path = "db/json"
 ```
@@ -474,4 +489,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 <p align="center">
   Built with ❤️ by <a href="https://github.com/Lumos-Labs-HQ">Lumos Labs</a>
 </p>
-

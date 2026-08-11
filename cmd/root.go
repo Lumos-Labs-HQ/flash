@@ -18,7 +18,7 @@ import (
 var (
 	cfgFile string
 	envName string
-	Version = "2.7.8"
+	Version = "2.8.0"
 )
 
 func showBanner() {
@@ -37,7 +37,7 @@ func showBanner() {
 		"║                                                              ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓            ║",
 		"║     ▓                                                ▓       ║",
-		"║     ▓   Go • TS • JS • Python • Kotlin • Java        ▓       ║",
+		"║     ▓ Go • TS/JS • Python • Kotlin • Java • Rust     ▓       ║",
 		"║     ▓                                                ▓       ║",
 		"║     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓              ║",
 		"╚══════════════════════════════════════════════════════════════╝",
