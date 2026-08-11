@@ -188,6 +188,7 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 
 	files := map[string]string{
 		"flash.toml":             projectTemplate.GetFlashORMConfig(),
+		"FLASH.md":               projectTemplate.GetAgentGuide(),
 		"db/schema/schema" + ext: projectTemplate.GetSchema(),
 		"db/queries/users" + ext: projectTemplate.GetQueries(),
 	}
@@ -225,6 +226,7 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 	fmt.Println()
 	fmt.Println("Created files and directories:")
 	fmt.Println("  flash.toml")
+	fmt.Println("  FLASH.md")
 	fmt.Printf("  db/schema/schema%s\n", ext)
 	fmt.Printf("  db/queries/users%s\n", ext)
 	if _, err := os.Stat(".env"); os.IsNotExist(err) {
@@ -241,6 +243,7 @@ func initializeProject(projectName string, projectTemplate *tmpl.ProjectTemplate
 	fmt.Println("  2. Run 'flash apply' to create the database tables")
 	fmt.Println("  3. Run 'flash generate' to generate the code")
 	fmt.Println("  4. Run 'flash studio' to open the database studio")
+	fmt.Println("\nRead FLASH.md for a complete guide to using FlashORM (great for AI agents).")
 
 	// Reset config cache so subsequent commands pick up the new config
 	config.ResetConfigCache()

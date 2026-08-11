@@ -32,6 +32,7 @@ func ExecuteCorePlugin() error {
 	coreRoot.AddCommand(genCmd)
 	coreRoot.AddCommand(exportCmd)
 	coreRoot.AddCommand(seedCmd)
+	coreRoot.AddCommand(issuesCmd)
 
 	return coreRoot.Execute()
 }

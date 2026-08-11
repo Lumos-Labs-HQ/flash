@@ -31,6 +31,9 @@ func RegisterBaseCommands() {
 	rootCmd.AddCommand(addPluginCmd)
 	rootCmd.AddCommand(removePluginCmd)
 
+	// Issue reporting
+	rootCmd.AddCommand(issuesCmd)
+
 	// Uninstall
 	rootCmd.AddCommand(uninstallCmd)
 
