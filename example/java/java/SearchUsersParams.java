@@ -6,6 +6,6 @@ package java;
 public record SearchUsersParams(
     String name,
     String email,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

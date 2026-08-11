@@ -4,12 +4,14 @@ import "strings"
 
 // ExtractEnumValues extracts values from a MySQL inline ENUM column type like "enum('a','b')".
 func ExtractEnumValues(columnType string) []string {
-	lower := strings.ToLower(columnType)
-	if !strings.HasPrefix(lower, "enum(") {
+	// Test the "enum(" prefix case-insensitively, but slice the values out of the
+	// ORIGINAL string so their case is preserved — a column declared
+	// enum('Active','Pending') must yield 'Active'/'Pending', not 'active'/'pending'.
+	if !strings.HasPrefix(strings.ToLower(columnType), "enum(") {
 		return nil
 	}
 
-	values := lower[5 : len(lower)-1]
+	values := columnType[5 : len(columnType)-1]
 
 	var result []string
 	parts := strings.Split(values, ",")

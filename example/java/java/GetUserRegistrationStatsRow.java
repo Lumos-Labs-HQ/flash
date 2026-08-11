@@ -4,7 +4,7 @@ package java;
 
 
 public record GetUserRegistrationStatsRow(
-    Double year,
-    Double month,
+    int year,
+    int month,
     long signups
 ) {}

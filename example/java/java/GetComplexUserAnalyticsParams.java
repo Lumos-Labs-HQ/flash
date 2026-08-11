@@ -6,5 +6,5 @@ package java;
 public record GetComplexUserAnalyticsParams(
     String total_posts,
     String total_comments,
-    int limit
+    long limit
 ) {}

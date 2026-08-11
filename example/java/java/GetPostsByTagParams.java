@@ -5,6 +5,6 @@ package java;
 
 public record GetPostsByTagParams(
     String slug,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

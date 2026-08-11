@@ -12,30 +12,30 @@
       "posts"
     ],
     "db/queries/users.sql": [
-      "active_commenters",
-      "subscriptions",
-      "audit_log",
-      "u",
-      "users;",
-      "post_stats",
-      "comments",
-      "post_tags",
-      "media",
       "users",
       "user_post_stats",
-      "posts",
+      "notifications",
+      "active_commenters",
       "active_users",
+      "post_stats",
       "categories",
       "tags",
+      "media",
+      "posts",
+      "users;",
       "user_activity_summary",
       "orders",
-      "notifications"
+      "comments",
+      "post_tags",
+      "subscriptions",
+      "audit_log",
+      "u"
     ]
   },
   "generated_file_checksums": {
-    "flash_gen/json_typed.py": "664696e9081f853992b0ed4a63536185e13a58b93ddd50a6a3ae64aa74b77258",
-    "flash_gen/users.py": "fae0bb3b66059443820c93ac27966a7936c9a02381aa9dc4ff5201c75474e73e"
+    "flash_gen/json_typed.py": "20ead0be16917756e42688de0a000309c85008c61ffbe20ac343d13c8e69cdd4",
+    "flash_gen/users.py": "e244ab9e24fad122f89aaafff568b6f93409e9fd2a2c731f245c76b2b8692aea"
   },
-  "last_generation": "2026-07-18T21:58:44.924794589+05:30",
+  "last_generation": "2026-08-11T16:30:58.201659412+05:30",
   "OutDir": "flash_gen"
 }

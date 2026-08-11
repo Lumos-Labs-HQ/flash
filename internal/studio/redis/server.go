@@ -3,7 +3,6 @@ package redis
 import (
 	"context"
 	"fmt"
-	"html/template"
 	"net/http"
 
 	"github.com/redis/go-redis/v9"
@@ -12,13 +11,8 @@ import (
 )
 
 type Server struct {
-	mux           *http.ServeMux
-	tmpl          *template.Template
-	service       *Service
-	port          int
-	host          string
-	authToken     string
-	connectionURL string
+	*common.BaseServer
+	service *Service
 }
 
 func NewServer(connectionURL string, port int, host, authToken string) *Server {
@@ -35,16 +29,18 @@ func NewServer(connectionURL string, port int, host, authToken string) *Server {
 	}
 
 	mux := http.NewServeMux()
-	tmpl := common.ParseTemplates(TemplatesFS)
 
 	server := &Server{
-		mux:           mux,
-		tmpl:          tmpl,
-		service:       NewService(client),
-		port:          port,
-		host:          host,
-		authToken:     authToken,
-		connectionURL: connectionURL,
+		BaseServer: &common.BaseServer{
+			Mux:           mux,
+			Tmpl:          common.ParseTemplates(TemplatesFS),
+			Port:          port,
+			Host:          host,
+			AuthToken:     authToken,
+			ConnectionURL: connectionURL,
+			Name:          "Redis Studio",
+		},
+		service: NewService(client),
 	}
 
 	server.setupRoutes()
@@ -52,86 +48,76 @@ func NewServer(connectionURL string, port int, host, authToken string) *Server {
 }
 
 func (s *Server) setupRoutes() {
-	common.SetupStaticFS(s.mux, StaticFS)
+	common.SetupStaticFS(s.Mux, StaticFS)
 
 	// UI Routes
-	s.mux.HandleFunc("GET /{$}", s.handleIndex)
+	s.Mux.HandleFunc("GET /{$}", s.handleIndex)
 
 	// API Routes - Server info
-	s.mux.HandleFunc("GET /api/info", s.handleGetInfo)
-	s.mux.HandleFunc("GET /api/info/extended", s.handleGetExtendedInfo)
-	s.mux.HandleFunc("GET /api/dbsize", s.handleGetDBSize)
+	s.Mux.HandleFunc("GET /api/info", s.handleGetInfo)
+	s.Mux.HandleFunc("GET /api/info/extended", s.handleGetExtendedInfo)
+	s.Mux.HandleFunc("GET /api/dbsize", s.handleGetDBSize)
 
 	// Key operations
-	s.mux.HandleFunc("GET /api/keys", s.handleGetKeys)
-	s.mux.HandleFunc("POST /api/keys", s.handleSetKey)
-	s.mux.HandleFunc("POST /api/keys/bulk-delete", s.handleBulkDeleteKeys)
-	s.mux.HandleFunc("GET /api/key", s.handleGetKey)
-	s.mux.HandleFunc("PUT /api/key", s.handleUpdateKey)
-	s.mux.HandleFunc("DELETE /api/key", s.handleDeleteKey)
-	s.mux.HandleFunc("POST /api/flush", s.handleFlushDB)
+	s.Mux.HandleFunc("GET /api/keys", s.handleGetKeys)
+	s.Mux.HandleFunc("POST /api/keys", s.handleSetKey)
+	s.Mux.HandleFunc("POST /api/keys/bulk-delete", s.handleBulkDeleteKeys)
+	s.Mux.HandleFunc("GET /api/key", s.handleGetKey)
+	s.Mux.HandleFunc("PUT /api/key", s.handleUpdateKey)
+	s.Mux.HandleFunc("DELETE /api/key", s.handleDeleteKey)
+	s.Mux.HandleFunc("POST /api/flush", s.handleFlushDB)
 
 	// CLI
-	s.mux.HandleFunc("POST /api/cli", s.handleCLI)
+	s.Mux.HandleFunc("POST /api/cli", s.handleCLI)
 
 	// Database selection
-	s.mux.HandleFunc("GET /api/databases", s.handleGetDatabases)
-	s.mux.HandleFunc("POST /api/databases/{db}", s.handleSelectDatabase)
+	s.Mux.HandleFunc("GET /api/databases", s.handleGetDatabases)
+	s.Mux.HandleFunc("POST /api/databases/{db}", s.handleSelectDatabase)
 
 	// Export/Import
-	s.mux.HandleFunc("GET /api/export", s.handleExportKeys)
-	s.mux.HandleFunc("POST /api/import", s.handleImportKeys)
+	s.Mux.HandleFunc("GET /api/export", s.handleExportKeys)
+	s.Mux.HandleFunc("POST /api/import", s.handleImportKeys)
 
 	// Memory Analysis
-	s.mux.HandleFunc("GET /api/memory/stats", s.handleGetMemoryStats)
-	s.mux.HandleFunc("GET /api/memory/overview", s.handleGetMemoryOverview)
-	s.mux.HandleFunc("GET /api/memory/key", s.handleGetKeyMemory)
+	s.Mux.HandleFunc("GET /api/memory/stats", s.handleGetMemoryStats)
+	s.Mux.HandleFunc("GET /api/memory/overview", s.handleGetMemoryOverview)
+	s.Mux.HandleFunc("GET /api/memory/key", s.handleGetKeyMemory)
 
 	// Slow Log
-	s.mux.HandleFunc("GET /api/slowlog", s.handleGetSlowLog)
-	s.mux.HandleFunc("DELETE /api/slowlog", s.handleResetSlowLog)
-	s.mux.HandleFunc("GET /api/slowlog/len", s.handleGetSlowLogLen)
+	s.Mux.HandleFunc("GET /api/slowlog", s.handleGetSlowLog)
+	s.Mux.HandleFunc("DELETE /api/slowlog", s.handleResetSlowLog)
+	s.Mux.HandleFunc("GET /api/slowlog/len", s.handleGetSlowLogLen)
 
 	// Lua Scripting
-	s.mux.HandleFunc("POST /api/script/eval", s.handleExecuteScript)
-	s.mux.HandleFunc("POST /api/script/load", s.handleLoadScript)
-	s.mux.HandleFunc("POST /api/script/evalsha", s.handleExecuteScriptBySHA)
-	s.mux.HandleFunc("DELETE /api/scripts", s.handleFlushScripts)
+	s.Mux.HandleFunc("POST /api/script/eval", s.handleExecuteScript)
+	s.Mux.HandleFunc("POST /api/script/load", s.handleLoadScript)
+	s.Mux.HandleFunc("POST /api/script/evalsha", s.handleExecuteScriptBySHA)
+	s.Mux.HandleFunc("DELETE /api/scripts", s.handleFlushScripts)
 
 	// Bulk TTL
-	s.mux.HandleFunc("POST /api/bulk-ttl", s.handleBulkSetTTL)
+	s.Mux.HandleFunc("POST /api/bulk-ttl", s.handleBulkSetTTL)
 
 	// Config Management
-	s.mux.HandleFunc("GET /api/config", s.handleGetConfig)
-	s.mux.HandleFunc("PUT /api/config", s.handleSetConfig)
-	s.mux.HandleFunc("POST /api/config/rewrite", s.handleRewriteConfig)
-	s.mux.HandleFunc("POST /api/config/resetstat", s.handleResetConfigStats)
+	s.Mux.HandleFunc("GET /api/config", s.handleGetConfig)
+	s.Mux.HandleFunc("PUT /api/config", s.handleSetConfig)
+	s.Mux.HandleFunc("POST /api/config/rewrite", s.handleRewriteConfig)
+	s.Mux.HandleFunc("POST /api/config/resetstat", s.handleResetConfigStats)
 
 	// Cluster/Replication
-	s.mux.HandleFunc("GET /api/replication", s.handleGetReplicationInfo)
-	s.mux.HandleFunc("GET /api/cluster", s.handleGetClusterInfo)
+	s.Mux.HandleFunc("GET /api/replication", s.handleGetReplicationInfo)
+	s.Mux.HandleFunc("GET /api/cluster", s.handleGetClusterInfo)
 
 	// ACL Management
-	s.mux.HandleFunc("GET /api/acl/users", s.handleGetACLUsers)
-	s.mux.HandleFunc("GET /api/acl/users/{username}", s.handleGetACLUser)
-	s.mux.HandleFunc("POST /api/acl/users", s.handleCreateACLUser)
-	s.mux.HandleFunc("DELETE /api/acl/users/{username}", s.handleDeleteACLUser)
-	s.mux.HandleFunc("GET /api/acl/log", s.handleGetACLLog)
-	s.mux.HandleFunc("DELETE /api/acl/log", s.handleResetACLLog)
+	s.Mux.HandleFunc("GET /api/acl/users", s.handleGetACLUsers)
+	s.Mux.HandleFunc("GET /api/acl/users/{username}", s.handleGetACLUser)
+	s.Mux.HandleFunc("POST /api/acl/users", s.handleCreateACLUser)
+	s.Mux.HandleFunc("DELETE /api/acl/users/{username}", s.handleDeleteACLUser)
+	s.Mux.HandleFunc("GET /api/acl/log", s.handleGetACLLog)
+	s.Mux.HandleFunc("DELETE /api/acl/log", s.handleResetACLLog)
 
 	// Pub/Sub
-	s.mux.HandleFunc("POST /api/pubsub/publish", s.handlePublish)
-	s.mux.HandleFunc("GET /api/pubsub/channels", s.handleGetChannels)
-}
-
-func (s *Server) Start(openBrowser bool) error {
-	return common.StartServer(s.mux, common.StartServerConfig{
-		Host:        s.host,
-		Port:        s.port,
-		Name:        "Redis Studio",
-		OpenBrowser: openBrowser,
-		AuthToken:   s.authToken,
-	})
+	s.Mux.HandleFunc("POST /api/pubsub/publish", s.handlePublish)
+	s.Mux.HandleFunc("GET /api/pubsub/channels", s.handleGetChannels)
 }
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -139,9 +125,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 16; i++ {
 		databases[i] = i
 	}
-	_ = s.tmpl.ExecuteTemplate(w, "index.html", common.Map{
+	s.Render(w, "index.html", common.Map{
 		"Title":     "FlashORM Redis Studio",
-		"Host":      maskRedisURL(s.connectionURL),
+		"Host":      maskRedisURL(s.ConnectionURL),
 		"Databases": databases,
 	})
 }

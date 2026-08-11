@@ -10,7 +10,7 @@ public record GetUserTrendingPostsRow(
     int user_id,
     long view_count,
     LocalDateTime created_at,
-    int prev_view_count,
-    int next_view_count,
+    long prev_view_count,
+    long next_view_count,
     Double view_delta
 ) {}

@@ -8,14 +8,14 @@
   "config_checksum": "53fd6136ebb9604d7b8c84d4eedbdf4ef2f4da6acf7a47f6cf28880c315d7cde",
   "query_table_deps": {
     "db/queries/posts.sql": [
-      "categories",
       "posts",
       "posts;",
       "comments",
+      "users",
+      "post_categories",
       "tags",
       "post_tags",
-      "post_categories",
-      "users"
+      "categories"
     ],
     "db/queries/users.sql": [
       "users",
@@ -23,6 +23,6 @@
     ]
   },
   "generated_file_checksums": {},
-  "last_generation": "2026-08-08T23:03:19.044209312+05:30",
+  "last_generation": "2026-08-11T16:30:58.297798988+05:30",
   "OutDir": "src/flash_gen"
 }

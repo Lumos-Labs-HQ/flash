@@ -731,7 +731,7 @@ class GetPostWithCommentsRow:
     content: str
     author: str
     comment_text: str
-    commenter: str
+    commenter: Optional[str]
 
     @classmethod
     def _make_fast(cls, record):
@@ -930,8 +930,8 @@ class FullTextSearchPostsRow:
 
 @dataclass
 class GetUserRegistrationStatsRow:
-    year: Optional[Decimal]
-    month: Optional[Decimal]
+    year: int
+    month: int
     signups: int
 
     @classmethod
@@ -946,7 +946,7 @@ class GetUserRegistrationStatsRow:
 class GetWeeklyPostStatsRow:
     week_start: str
     posts_created: int
-    total_views: Optional[Decimal]
+    total_views: Optional[int]
 
     @classmethod
     def _make_fast(cls, record):
@@ -1628,7 +1628,7 @@ class GetMediaByTypeRow:
 
 @dataclass
 class GetStorageUsedByUserRow:
-    total_bytes: Optional[Decimal]
+    total_bytes: Optional[int]
     total_files: int
     image_count: int
     video_count: int
@@ -1736,7 +1736,7 @@ class GetUserWithStatsRow:
     published_posts: int
     total_comments: int
     unread_notifications: int
-    storage_used: Optional[Decimal]
+    storage_used: Optional[int]
 
     @classmethod
     def _make_fast(cls, record):
@@ -2043,7 +2043,7 @@ class GetComplexUserAnalyticsParams(TypedDict):
         result = await self.db.fetch(stmt, args["total_posts"], args["total_comments"], args["limit"])
         return [GetComplexUserAnalyticsRow._make_fast(row) for row in result]
 
-    async def get_post_with_active_commenters(self, rn: str, post_id: int) -> List[GetPostWithActiveCommentersRow]:
+    async def get_post_with_active_commenters(self, rn: str, post_id: str) -> List[GetPostWithActiveCommentersRow]:
         _key = 'get_post_with_active_commenters'
         if _key not in self._stmts:
             self._stmts[_key] = """WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= $1 AND ac.post_id = $2 ORDER BY ac.created_at DESC;"""
@@ -2067,7 +2067,7 @@ class GetComplexUserAnalyticsParams(TypedDict):
         result = await self.db.fetch(stmt, user_id, limit)
         return [GetUserTrendingPostsRow._make_fast(row) for row in result]
 
-    async def get_post_count_by_user(self, user_id: int) -> Optional[GetPostCountByUserRow]:
+    async def get_post_count_by_user(self, user_id: str) -> Optional[GetPostCountByUserRow]:
         _key = 'get_post_count_by_user'
         if _key not in self._stmts:
             self._stmts[_key] = """SELECT (SELECT COUNT(*) FROM posts WHERE user_id = $1) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = $1) AS comment_count;"""

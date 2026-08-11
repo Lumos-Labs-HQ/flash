@@ -58,7 +58,7 @@ public class Queries {
         this.users.deleteUser(id);
     }
 
-    public java.util.List<Users> listUsers(int limit, int offset) throws java.sql.SQLException {
+    public java.util.List<Users> listUsers(long limit, long offset) throws java.sql.SQLException {
         return this.users.listUsers(limit, offset);
     }
 
@@ -146,27 +146,27 @@ public class Queries {
         return this.users.getComplexUserAnalytics(args);
     }
 
-    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, int post_id) throws java.sql.SQLException {
+    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, String post_id) throws java.sql.SQLException {
         return this.users.getPostWithActiveCommenters(rn, post_id);
     }
 
-    public java.util.List<GetUserPostRankingsRow> getUserPostRankings(int limit) throws java.sql.SQLException {
+    public java.util.List<GetUserPostRankingsRow> getUserPostRankings(long limit) throws java.sql.SQLException {
         return this.users.getUserPostRankings(limit);
     }
 
-    public java.util.List<GetUserTrendingPostsRow> getUserTrendingPosts(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetUserTrendingPostsRow> getUserTrendingPosts(int user_id, long limit) throws java.sql.SQLException {
         return this.users.getUserTrendingPosts(user_id, limit);
     }
 
-    public GetPostCountByUserRow getPostCountByUser(int user_id) throws java.sql.SQLException {
+    public GetPostCountByUserRow getPostCountByUser(String user_id) throws java.sql.SQLException {
         return this.users.getPostCountByUser(user_id);
     }
 
-    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int count) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(long count) throws java.sql.SQLException {
         return this.users.getUsersWithManyPosts(count);
     }
 
-    public java.util.List<GetPostsWithCommentCountRow> getPostsWithCommentCount(int limit, int offset) throws java.sql.SQLException {
+    public java.util.List<GetPostsWithCommentCountRow> getPostsWithCommentCount(long limit, long offset) throws java.sql.SQLException {
         return this.users.getPostsWithCommentCount(limit, offset);
     }
 
@@ -198,7 +198,7 @@ public class Queries {
         return this.users.getUserAgeStats();
     }
 
-    public java.util.List<GetPostsGroupedByStatusRow> getPostsGroupedByStatus(int count_threshold) throws java.sql.SQLException {
+    public java.util.List<GetPostsGroupedByStatusRow> getPostsGroupedByStatus(long count_threshold) throws java.sql.SQLException {
         return this.users.getPostsGroupedByStatus(count_threshold);
     }
 
@@ -218,7 +218,7 @@ public class Queries {
         return this.users.searchPostsByTitle(args);
     }
 
-    public java.util.List<FullTextSearchPostsRow> fullTextSearchPosts(String search_query, int limit) throws java.sql.SQLException {
+    public java.util.List<FullTextSearchPostsRow> fullTextSearchPosts(String search_query, long limit) throws java.sql.SQLException {
         return this.users.fullTextSearchPosts(search_query, limit);
     }
 
@@ -246,15 +246,15 @@ public class Queries {
         return this.users.getUsersWithNoPosts();
     }
 
-    public java.util.List<GetAllContentByUserRow> getAllContentByUser(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetAllContentByUserRow> getAllContentByUser(int user_id, long limit) throws java.sql.SQLException {
         return this.users.getAllContentByUser(user_id, limit);
     }
 
-    public java.util.List<ActiveUsers> getActiveUsers(int limit) throws java.sql.SQLException {
+    public java.util.List<ActiveUsers> getActiveUsers(long limit) throws java.sql.SQLException {
         return this.users.getActiveUsers(limit);
     }
 
-    public java.util.List<UserActivitySummary> getUserActivitySummary(int post_count, int comment_count) throws java.sql.SQLException {
+    public java.util.List<UserActivitySummary> getUserActivitySummary(long post_count, long comment_count) throws java.sql.SQLException {
         return this.users.getUserActivitySummary(post_count, comment_count);
     }
 
@@ -262,7 +262,7 @@ public class Queries {
         this.users.refreshPostStats();
     }
 
-    public java.util.List<PostStats> getPostStats(int limit) throws java.sql.SQLException {
+    public java.util.List<PostStats> getPostStats(long limit) throws java.sql.SQLException {
         return this.users.getPostStats(limit);
     }
 
@@ -274,11 +274,11 @@ public class Queries {
         return this.users.createSubscription(args);
     }
 
-    public java.util.List<GetOrdersByUserRow> getOrdersByUser(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetOrdersByUserRow> getOrdersByUser(int user_id, long limit) throws java.sql.SQLException {
         return this.users.getOrdersByUser(user_id, limit);
     }
 
-    public java.util.List<GetOrdersInStateRow> getOrdersInState(OrderState state, int limit) throws java.sql.SQLException {
+    public java.util.List<GetOrdersInStateRow> getOrdersInState(OrderState state, long limit) throws java.sql.SQLException {
         return this.users.getOrdersInState(state, limit);
     }
 
@@ -286,7 +286,7 @@ public class Queries {
         return this.users.getAuditLogForUser(args);
     }
 
-    public java.util.List<GetAuditLogForTableRow> getAuditLogForTable(String table_name, int limit) throws java.sql.SQLException {
+    public java.util.List<GetAuditLogForTableRow> getAuditLogForTable(String table_name, long limit) throws java.sql.SQLException {
         return this.users.getAuditLogForTable(table_name, limit);
     }
 
@@ -294,7 +294,7 @@ public class Queries {
         return this.users.getDashboardStats();
     }
 
-    public java.util.List<GetTopCommentersRow> getTopCommenters(int limit) throws java.sql.SQLException {
+    public java.util.List<GetTopCommentersRow> getTopCommenters(long limit) throws java.sql.SQLException {
         return this.users.getTopCommenters(limit);
     }
 
@@ -378,7 +378,7 @@ public class Queries {
         return this.users.getPostsByTag(args);
     }
 
-    public java.util.List<GetTopTagsRow> getTopTags(int limit) throws java.sql.SQLException {
+    public java.util.List<GetTopTagsRow> getTopTags(long limit) throws java.sql.SQLException {
         return this.users.getTopTags(limit);
     }
 
@@ -406,7 +406,7 @@ public class Queries {
         return this.users.getStorageUsedByUser(user_id);
     }
 
-    public java.util.List<GetLargeMediaFilesRow> getLargeMediaFiles(long size_bytes, int limit) throws java.sql.SQLException {
+    public java.util.List<GetLargeMediaFilesRow> getLargeMediaFiles(long size_bytes, long limit) throws java.sql.SQLException {
         return this.users.getLargeMediaFiles(size_bytes, limit);
     }
 
@@ -414,7 +414,7 @@ public class Queries {
         return this.users.getUserFeed(args);
     }
 
-    public java.util.List<SearchPostsFullTextRow> searchPostsFullText(String search_query, int limit) throws java.sql.SQLException {
+    public java.util.List<SearchPostsFullTextRow> searchPostsFullText(String search_query, long limit) throws java.sql.SQLException {
         return this.users.searchPostsFullText(search_query, limit);
     }
 

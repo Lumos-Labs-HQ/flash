@@ -4,7 +4,7 @@ package java;
 
 
 public record GetStorageUsedByUserRow(
-    Double total_bytes,
+    Long total_bytes,
     long total_files,
     long image_count,
     long video_count,

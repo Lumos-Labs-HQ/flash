@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -17,12 +16,8 @@ import (
 )
 
 type Server struct {
-	mux       *http.ServeMux
-	tmpl      *template.Template
-	service   *Service
-	port      int
-	host      string
-	authToken string
+	*common.BaseServer
+	service *Service
 }
 
 func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
@@ -51,84 +46,76 @@ func NewServer(cfg *config.Config, port int, host, authToken string) *Server {
 	}
 
 	mux := http.NewServeMux()
-	tmpl := common.ParseTemplates(TemplatesFS)
 
 	server := &Server{
-		mux:       mux,
-		tmpl:      tmpl,
-		service:   NewService(adapter, cfg),
-		port:      port,
-		host:      host,
-		authToken: authToken,
+		BaseServer: &common.BaseServer{
+			Mux:       mux,
+			Tmpl:      common.ParseTemplates(TemplatesFS),
+			Port:      port,
+			Host:      host,
+			AuthToken: authToken,
+			Name:      "Studio",
+		},
+		service: NewService(adapter, cfg),
 	}
 	server.setupRoutes()
 	return server
 }
 
 func (s *Server) setupRoutes() {
-	common.SetupStaticFS(s.mux, StaticFS)
+	common.SetupStaticFS(s.Mux, StaticFS)
 
-	s.mux.HandleFunc("GET /{$}", s.handleIndex)
-	s.mux.HandleFunc("GET /schema", s.handleSchema)
-	s.mux.HandleFunc("GET /sql", s.handleSQL)
-	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
+	s.Mux.HandleFunc("GET /{$}", s.handleIndex)
+	s.Mux.HandleFunc("GET /schema", s.handleSchema)
+	s.Mux.HandleFunc("GET /sql", s.handleSQL)
+	s.Mux.HandleFunc("GET /metrics", s.handleMetrics)
 
-	s.mux.HandleFunc("GET /api/tables", s.handleGetTables)
-	s.mux.HandleFunc("GET /api/tables/{name}", s.handleGetTableData)
-	s.mux.HandleFunc("GET /api/schema", s.handleGetSchema)
-	s.mux.HandleFunc("POST /api/tables/{name}/save", s.handleSaveChanges)
-	s.mux.HandleFunc("POST /api/tables/{name}/add", s.handleAddRow)
-	s.mux.HandleFunc("POST /api/tables/{name}/delete", s.handleDeleteRows)
-	s.mux.HandleFunc("DELETE /api/tables/{name}/rows/{id}", s.handleDeleteRow)
-	s.mux.HandleFunc("POST /api/sql", s.handleExecuteSQL)
+	s.Mux.HandleFunc("GET /api/tables", s.handleGetTables)
+	s.Mux.HandleFunc("GET /api/tables/{name}", s.handleGetTableData)
+	s.Mux.HandleFunc("GET /api/schema", s.handleGetSchema)
+	s.Mux.HandleFunc("POST /api/tables/{name}/save", s.handleSaveChanges)
+	s.Mux.HandleFunc("POST /api/tables/{name}/add", s.handleAddRow)
+	s.Mux.HandleFunc("POST /api/tables/{name}/delete", s.handleDeleteRows)
+	s.Mux.HandleFunc("DELETE /api/tables/{name}/rows/{id}", s.handleDeleteRow)
+	s.Mux.HandleFunc("POST /api/sql", s.handleExecuteSQL)
 
 	// Schema Editor API
-	s.mux.HandleFunc("POST /api/schema/preview", s.handlePreviewSchemaChange)
-	s.mux.HandleFunc("POST /api/schema/apply", s.handleApplySchemaChange)
-	s.mux.HandleFunc("GET /api/config/check", s.handleCheckConfig)
-	s.mux.HandleFunc("PUT /api/tables/{name}/rows/{id}", s.handleUpdateRow)
-	s.mux.HandleFunc("POST /api/tables/{name}/rows", s.handleInsertRow)
+	s.Mux.HandleFunc("POST /api/schema/preview", s.handlePreviewSchemaChange)
+	s.Mux.HandleFunc("POST /api/schema/apply", s.handleApplySchemaChange)
+	s.Mux.HandleFunc("GET /api/config/check", s.handleCheckConfig)
+	s.Mux.HandleFunc("PUT /api/tables/{name}/rows/{id}", s.handleUpdateRow)
+	s.Mux.HandleFunc("POST /api/tables/{name}/rows", s.handleInsertRow)
 
 	// Branch API
-	s.mux.HandleFunc("GET /api/branches", s.handleGetBranches)
-	s.mux.HandleFunc("POST /api/branches/switch", s.handleSwitchBranch)
+	s.Mux.HandleFunc("GET /api/branches", s.handleGetBranches)
+	s.Mux.HandleFunc("POST /api/branches/switch", s.handleSwitchBranch)
 
 	// Editor hints API (cached on client-side)
-	s.mux.HandleFunc("GET /api/editor/hints", s.handleGetEditorHints)
+	s.Mux.HandleFunc("GET /api/editor/hints", s.handleGetEditorHints)
 
 	// Metrics API
-	s.mux.HandleFunc("GET /api/metrics", s.handleGetMetrics)
+	s.Mux.HandleFunc("GET /api/metrics", s.handleGetMetrics)
 
 	// Export/Import API
-	s.mux.HandleFunc("GET /api/export/{type}", s.handleExport)
-	s.mux.HandleFunc("POST /api/import", s.handleImport)
-}
-
-func (s *Server) Start(openBrowser bool) error {
-	return common.StartServer(s.mux, common.StartServerConfig{
-		Host:        s.host,
-		Port:        s.port,
-		Name:        "Studio",
-		OpenBrowser: openBrowser,
-		AuthToken:   s.authToken,
-	})
+	s.Mux.HandleFunc("GET /api/export/{type}", s.handleExport)
+	s.Mux.HandleFunc("POST /api/import", s.handleImport)
 }
 
 // UI Handlers
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	_ = s.tmpl.ExecuteTemplate(w, "index.html", common.Map{"Title": "FlashORM Studio"})
+	s.Render(w, "index.html", common.Map{"Title": "FlashORM Studio"})
 }
 
 func (s *Server) handleSchema(w http.ResponseWriter, r *http.Request) {
-	_ = s.tmpl.ExecuteTemplate(w, "schema.html", common.Map{"Title": "FlashORM Studio"})
+	s.Render(w, "schema.html", common.Map{"Title": "FlashORM Studio"})
 }
 
 func (s *Server) handleSQL(w http.ResponseWriter, r *http.Request) {
-	_ = s.tmpl.ExecuteTemplate(w, "sql.html", common.Map{"Title": "SQL Editor - FlashORM Studio"})
+	s.Render(w, "sql.html", common.Map{"Title": "SQL Editor - FlashORM Studio"})
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	_ = s.tmpl.ExecuteTemplate(w, "metrics.html", common.Map{"Title": "Metrics - FlashORM Studio"})
+	s.Render(w, "metrics.html", common.Map{"Title": "Metrics - FlashORM Studio"})
 }
 
 // API Handlers

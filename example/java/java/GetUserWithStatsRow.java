@@ -24,5 +24,5 @@ public record GetUserWithStatsRow(
     long published_posts,
     long total_comments,
     long unread_notifications,
-    Double storage_used
+    Long storage_used
 ) {}

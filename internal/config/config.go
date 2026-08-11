@@ -23,18 +23,19 @@ var (
 )
 
 type Config struct {
-	Version        string   `toml:"version"`
-	SchemaPath     string   `toml:"schema_path"`
-	SchemaDir      string   `toml:"schema_dir"`
-	Queries        string   `toml:"queries"`
-	MigrationsPath string   `toml:"migrations_path"`
-	ExportPath     string   `toml:"export_path"`
-	Default        bool     `toml:"default"`
-	EnvPath        string   `toml:"env_path"`
-	Database       Database `toml:"database"`
-	Gen            Gen      `toml:"gen"`
-	JsonPath       string   `toml:"json_path"` // directory for JSON type definition files
-	ForceRegen     bool     `toml:"-"`
+	Version        string      `toml:"version"`
+	SchemaPath     string      `toml:"schema_path"`
+	SchemaDir      string      `toml:"schema_dir"`
+	Queries        string      `toml:"queries"`
+	MigrationsPath string      `toml:"migrations_path"`
+	ExportPath     string      `toml:"export_path"`
+	Default        bool        `toml:"default"`
+	EnvPath        string      `toml:"env_path"`
+	Database       Database    `toml:"database"`
+	Gen            Gen         `toml:"gen"`
+	Cache          CacheConfig `toml:"cache"`
+	JsonPath       string      `toml:"json_path"` // directory for JSON type definition files
+	ForceRegen     bool        `toml:"-"`
 	// Multi-database support
 	Databases []DatabaseConfig `toml:"databases"`
 	// ActiveDB is the database selected by --db flag (runtime only)
@@ -108,6 +109,14 @@ type RustGen struct {
 	Macros  bool   `toml:"macros"` // use sqlx compile-time checked macros (default: false)
 }
 
+// CacheConfig controls Redis-based query caching via @cache annotations
+type CacheConfig struct {
+	Enabled     bool   `toml:"enabled"`       // false by default — no cache code generated
+	RedisURLEnv string `toml:"redis_url_env"` // env var name, default "REDIS_URL"
+	DefaultTTL  string `toml:"default_ttl"`   // default TTL, e.g. "5m"
+	Prefix      string `toml:"prefix"`        // key prefix, default "flash"
+}
+
 // rawPythonGen uses a pointer so we can detect whether "async" was explicitly set.
 type rawPythonGen struct {
 	Enabled bool   `toml:"enabled"`
@@ -137,6 +146,7 @@ type rawConfig struct {
 	JsonPath       string           `toml:"json_path"`
 	Database       Database         `toml:"database"`
 	Gen            rawGen           `toml:"gen"`
+	Cache          CacheConfig      `toml:"cache"`
 	Databases      []DatabaseConfig `toml:"databases"`
 }
 
@@ -232,6 +242,7 @@ func loadUncached() (*Config, error) {
 		cfg.Gen.Kotlin = raw.Gen.Kotlin
 		cfg.Gen.Java = raw.Gen.Java
 		cfg.Gen.Rust = raw.Gen.Rust
+		cfg.Cache = raw.Cache
 		if raw.Gen.Python.Async != nil {
 			cfg.Gen.Python.Async = *raw.Gen.Python.Async
 			pythonAsyncSet = true
@@ -306,6 +317,19 @@ func loadUncached() (*Config, error) {
 	}
 	if cfg.Gen.Rust.Driver == "" && cfg.Gen.Rust.Enabled {
 		cfg.Gen.Rust.Driver = "sqlx"
+	}
+
+	// Cache defaults
+	if cfg.Cache.Enabled {
+		if cfg.Cache.RedisURLEnv == "" {
+			cfg.Cache.RedisURLEnv = "REDIS_URL"
+		}
+		if cfg.Cache.DefaultTTL == "" {
+			cfg.Cache.DefaultTTL = "5m"
+		}
+		if cfg.Cache.Prefix == "" {
+			cfg.Cache.Prefix = "flash"
+		}
 	}
 
 	return &cfg, nil

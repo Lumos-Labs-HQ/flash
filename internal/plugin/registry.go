@@ -19,6 +19,9 @@ var CommandPluginMap = map[string]string{
 	// Seed (part of core)
 	"seed": "core",
 
+	// Issue reporting (part of core)
+	"issues": "core",
+
 	// Studio commands (separate optional plugin)
 	"studio": "studio",
 }
@@ -31,7 +34,7 @@ var PluginDescriptions = map[string]string{
 
 // PluginCommands lists all commands provided by each plugin
 var PluginCommands = map[string][]string{
-	"core":   {"init", "migrate", "apply", "down", "status", "pull", "reset", "raw", "branch", "checkout", "gen", "export", "seed"},
+	"core":   {"init", "migrate", "apply", "down", "status", "pull", "reset", "raw", "branch", "checkout", "gen", "export", "seed", "issues"},
 	"studio": {"studio"},
 }
 

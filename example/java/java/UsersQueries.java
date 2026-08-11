@@ -184,13 +184,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<Users> listUsers(int limit, int offset) throws java.sql.SQLException {
+    public java.util.List<Users> listUsers(long limit, long offset) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
-            stmt.setInt(2, offset);
+            stmt.setLong(1, limit);
+            stmt.setLong(2, offset);
             var items = new java.util.ArrayList<Users>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -346,8 +346,8 @@ public class UsersQueries {
             stmt.setString(1, args.name());
             stmt.setString(2, args.email());
             stmt.setString(3, args.name2());
-            stmt.setInt(4, args.limit());
-            stmt.setInt(5, args.offset());
+            stmt.setLong(4, args.limit());
+            stmt.setLong(5, args.offset());
             var items = new java.util.ArrayList<SearchUsersWithCOALESCERow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -434,8 +434,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setObject(1, java.sql.Timestamp.valueOf(args.created_at()));
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<Users>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -636,7 +636,7 @@ public class UsersQueries {
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, args.total_posts());
             stmt.setString(2, args.total_comments());
-            stmt.setInt(3, args.limit());
+            stmt.setLong(3, args.limit());
             var items = new java.util.ArrayList<GetComplexUserAnalyticsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -647,18 +647,18 @@ public class UsersQueries {
                         UserRole.valueOf(rs.getString("role")),
                         rs.getBoolean("isadmin"),
                         rs.getTimestamp("user_created_at") != null ? rs.getTimestamp("user_created_at").toLocalDateTime() : null,
-                        rs.getInt("total_posts"),
-                        rs.getInt("published_posts"),
-                        rs.getInt("draft_posts"),
-                        rs.getInt("total_comments"),
-                        rs.getInt("posts_commented_on"),
-                        rs.getInt("categories_used"),
+                        rs.getLong("total_posts"),
+                        rs.getLong("published_posts"),
+                        rs.getLong("draft_posts"),
+                        rs.getLong("total_comments"),
+                        rs.getLong("posts_commented_on"),
+                        rs.getLong("categories_used"),
                         rs.getString("category_names"),
                         rs.getTimestamp("last_post_date") != null ? rs.getTimestamp("last_post_date").toLocalDateTime() : null,
                         rs.getTimestamp("last_comment_date") != null ? rs.getTimestamp("last_comment_date").toLocalDateTime() : null,
                         rs.getDouble("avg_post_length"),
                         rs.getString("activity_level"),
-                        rs.getInt("engagement_score")
+                        rs.getLong("engagement_score")
                     ));
                 }
             }
@@ -666,13 +666,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, int post_id) throws java.sql.SQLException {
+    public java.util.List<GetPostWithActiveCommentersRow> getPostWithActiveCommenters(String rn, String post_id) throws java.sql.SQLException {
         final String sql = """
                 WITH active_commenters AS ( SELECT c.post_id, c.user_id, u.name AS commenter_name, c.created_at, ROW_NUMBER() OVER (PARTITION BY c.post_id ORDER BY c.created_at DESC) AS rn FROM comments c JOIN users u ON c.user_id = u.id ) SELECT ac.commenter_name, ac.created_at AS last_comment_at FROM active_commenters ac WHERE ac.rn <= ? AND ac.post_id = ? ORDER BY ac.created_at DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, rn);
-            stmt.setInt(2, post_id);
+            stmt.setString(2, post_id);
             var items = new java.util.ArrayList<GetPostWithActiveCommentersRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -686,12 +686,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUserPostRankingsRow> getUserPostRankings(int limit) throws java.sql.SQLException {
+    public java.util.List<GetUserPostRankingsRow> getUserPostRankings(long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT u.id, u.name, COUNT(p.id) AS post_count, RANK() OVER (ORDER BY COUNT(p.id) DESC) AS post_rank, DENSE_RANK() OVER (ORDER BY COUNT(p.id) DESC) AS dense_post_rank, ROW_NUMBER() OVER (ORDER BY COUNT(p.id) DESC, u.name ASC) AS row_num FROM users u LEFT JOIN posts p ON u.id = p.user_id GROUP BY u.id, u.name ORDER BY post_count DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
+            stmt.setLong(1, limit);
             var items = new java.util.ArrayList<GetUserPostRankingsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -699,9 +699,9 @@ public class UsersQueries {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getLong("post_count"),
-                        rs.getInt("post_rank"),
-                        rs.getInt("dense_post_rank"),
-                        rs.getInt("row_num")
+                        rs.getLong("post_rank"),
+                        rs.getLong("dense_post_rank"),
+                        rs.getLong("row_num")
                     ));
                 }
             }
@@ -709,13 +709,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUserTrendingPostsRow> getUserTrendingPosts(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetUserTrendingPostsRow> getUserTrendingPosts(int user_id, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT p.id, p.title, p.user_id, p.view_count, p.created_at, LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS prev_view_count, LEAD(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS next_view_count, p.view_count - LAG(p.view_count) OVER (PARTITION BY p.user_id ORDER BY p.created_at) AS view_delta FROM posts p WHERE p.user_id = ? ORDER BY p.created_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, user_id);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<GetUserTrendingPostsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -725,8 +725,8 @@ public class UsersQueries {
                         rs.getInt("user_id"),
                         rs.getLong("view_count"),
                         rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
-                        rs.getInt("prev_view_count"),
-                        rs.getInt("next_view_count"),
+                        rs.getLong("prev_view_count"),
+                        rs.getLong("next_view_count"),
                         rs.getDouble("view_delta")
                     ));
                 }
@@ -735,12 +735,12 @@ public class UsersQueries {
         }
     }
 
-    public GetPostCountByUserRow getPostCountByUser(int user_id) throws java.sql.SQLException {
+    public GetPostCountByUserRow getPostCountByUser(String user_id) throws java.sql.SQLException {
         final String sql = """
                 SELECT (SELECT COUNT(*) FROM posts WHERE user_id = ?) AS post_count, (SELECT COUNT(*) FROM comments WHERE user_id = ?) AS comment_count;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, user_id);
+            stmt.setString(1, user_id);
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new GetPostCountByUserRow(
@@ -751,12 +751,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(int count) throws java.sql.SQLException {
+    public java.util.List<GetUsersWithManyPostsRow> getUsersWithManyPosts(long count) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, name, email, (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.id) AS total_posts FROM users u WHERE (SELECT COUNT(*) FROM posts WHERE user_id = u.id) > ? ORDER BY total_posts DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, count);
+            stmt.setLong(1, count);
             var items = new java.util.ArrayList<GetUsersWithManyPostsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -772,13 +772,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetPostsWithCommentCountRow> getPostsWithCommentCount(int limit, int offset) throws java.sql.SQLException {
+    public java.util.List<GetPostsWithCommentCountRow> getPostsWithCommentCount(long limit, long offset) throws java.sql.SQLException {
         final String sql = """
                 SELECT p.id, p.title, p.created_at, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count, (SELECT COUNT(DISTINCT c2.user_id) FROM comments c2 WHERE c2.post_id = p.id) AS unique_commenters, (SELECT MAX(c3.created_at) FROM comments c3 WHERE c3.post_id = p.id) AS last_comment_at FROM posts p WHERE p.status = 'published' ORDER BY comment_count DESC LIMIT ? OFFSET ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
-            stmt.setInt(2, offset);
+            stmt.setLong(1, limit);
+            stmt.setLong(2, offset);
             var items = new java.util.ArrayList<GetPostsWithCommentCountRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -939,12 +939,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetPostsGroupedByStatusRow> getPostsGroupedByStatus(int count_threshold) throws java.sql.SQLException {
+    public java.util.List<GetPostsGroupedByStatusRow> getPostsGroupedByStatus(long count_threshold) throws java.sql.SQLException {
         final String sql = """
                 SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest, MAX(created_at) AS newest FROM posts GROUP BY status HAVING COUNT(*) > ? ORDER BY count DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, count_threshold);
+            stmt.setLong(1, count_threshold);
             var items = new java.util.ArrayList<GetPostsGroupedByStatusRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1007,8 +1007,8 @@ public class UsersQueries {
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, args.name());
             stmt.setString(2, args.email());
-            stmt.setInt(3, args.limit());
-            stmt.setInt(4, args.offset());
+            stmt.setLong(3, args.limit());
+            stmt.setLong(4, args.offset());
             var items = new java.util.ArrayList<SearchUsersRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1029,8 +1029,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, args.title());
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<SearchPostsByTitleRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1046,13 +1046,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<FullTextSearchPostsRow> fullTextSearchPosts(String search_query, int limit) throws java.sql.SQLException {
+    public java.util.List<FullTextSearchPostsRow> fullTextSearchPosts(String search_query, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, title, ts_rank(to_tsvector('english', title || ' ' || content), plainto_tsquery('english', ?)) AS rank FROM posts WHERE to_tsvector('english', title || ' ' || content) @@ plainto_tsquery('english', ?) ORDER BY rank DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, search_query);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<FullTextSearchPostsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1076,8 +1076,8 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     items.add(new GetUserRegistrationStatsRow(
-                        rs.getDouble("year"),
-                        rs.getDouble("month"),
+                        rs.getInt("year"),
+                        rs.getInt("month"),
                         rs.getLong("signups")
                     ));
                 }
@@ -1098,7 +1098,7 @@ public class UsersQueries {
                     items.add(new GetWeeklyPostStatsRow(
                         rs.getString("week_start"),
                         rs.getLong("posts_created"),
-                        rs.getDouble("total_views")
+                        rs.getLong("total_views")
                     ));
                 }
             }
@@ -1196,13 +1196,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetAllContentByUserRow> getAllContentByUser(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetAllContentByUserRow> getAllContentByUser(int user_id, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT 'post' AS content_type, id::TEXT AS content_id, title AS content_summary, created_at FROM posts WHERE user_id = ? UNION ALL SELECT 'comment' AS content_type, id::TEXT AS content_id, LEFT(content, 100) AS content_summary, created_at FROM comments WHERE user_id = ? ORDER BY created_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, user_id);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<GetAllContentByUserRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1218,12 +1218,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<ActiveUsers> getActiveUsers(int limit) throws java.sql.SQLException {
+    public java.util.List<ActiveUsers> getActiveUsers(long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM active_users ORDER BY created_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
+            stmt.setLong(1, limit);
             var items = new java.util.ArrayList<ActiveUsers>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1240,13 +1240,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<UserActivitySummary> getUserActivitySummary(int post_count, int comment_count) throws java.sql.SQLException {
+    public java.util.List<UserActivitySummary> getUserActivitySummary(long post_count, long comment_count) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM user_activity_summary WHERE post_count > ? OR comment_count > ? ORDER BY post_count DESC;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, post_count);
-            stmt.setInt(2, comment_count);
+            stmt.setLong(1, post_count);
+            stmt.setLong(2, comment_count);
             var items = new java.util.ArrayList<UserActivitySummary>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1274,12 +1274,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<PostStats> getPostStats(int limit) throws java.sql.SQLException {
+    public java.util.List<PostStats> getPostStats(long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT * FROM post_stats ORDER BY comment_count DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
+            stmt.setLong(1, limit);
             var items = new java.util.ArrayList<PostStats>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1341,13 +1341,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetOrdersByUserRow> getOrdersByUser(int user_id, int limit) throws java.sql.SQLException {
+    public java.util.List<GetOrdersByUserRow> getOrdersByUser(int user_id, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, total_amount, discount_pct, state, shipping_addr, placed_at FROM orders WHERE user_id = ? ORDER BY placed_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, user_id);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<GetOrdersByUserRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1365,13 +1365,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetOrdersInStateRow> getOrdersInState(OrderState state, int limit) throws java.sql.SQLException {
+    public java.util.List<GetOrdersInStateRow> getOrdersInState(OrderState state, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT o.id, o.user_id, u.name AS user_name, o.total_amount, o.state, o.placed_at FROM orders o JOIN users u ON o.user_id = u.id WHERE o.state = ? ORDER BY o.placed_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setObject(1, state);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<GetOrdersInStateRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1395,8 +1395,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, args.changed_by());
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<GetAuditLogForUserRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1415,13 +1415,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetAuditLogForTableRow> getAuditLogForTable(String table_name, int limit) throws java.sql.SQLException {
+    public java.util.List<GetAuditLogForTableRow> getAuditLogForTable(String table_name, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, table_name, record_id, action, changed_by, changed_at FROM audit_log WHERE table_name = ? ORDER BY changed_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, table_name);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<GetAuditLogForTableRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1460,12 +1460,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetTopCommentersRow> getTopCommenters(int limit) throws java.sql.SQLException {
+    public java.util.List<GetTopCommentersRow> getTopCommenters(long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT u.id, u.name, u.email, COUNT(c.id) AS comment_count, RANK() OVER (ORDER BY COUNT(c.id) DESC) AS rank FROM users u JOIN comments c ON u.id = c.user_id GROUP BY u.id, u.name, u.email ORDER BY comment_count DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
+            stmt.setLong(1, limit);
             var items = new java.util.ArrayList<GetTopCommentersRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1474,7 +1474,7 @@ public class UsersQueries {
                         rs.getString("name"),
                         rs.getString("email"),
                         rs.getLong("comment_count"),
-                        rs.getInt("rank")
+                        rs.getLong("rank")
                     ));
                 }
             }
@@ -1628,8 +1628,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, args.user_id());
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<Notifications>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1700,7 +1700,7 @@ public class UsersQueries {
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, args.user_id());
             stmt.setString(2, args.type());
-            stmt.setInt(3, args.limit());
+            stmt.setLong(3, args.limit());
             var items = new java.util.ArrayList<GetNotificationsByTypeRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1825,8 +1825,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, args.slug());
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<GetPostsByTagRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1844,12 +1844,12 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetTopTagsRow> getTopTags(int limit) throws java.sql.SQLException {
+    public java.util.List<GetTopTagsRow> getTopTags(long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT t.id, t.name, t.slug, t.color, COUNT(pt.post_id) AS post_count FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON pt.post_id = p.id WHERE p.status = 'published' GROUP BY t.id, t.name, t.slug, t.color ORDER BY post_count DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, limit);
+            stmt.setLong(1, limit);
             var items = new java.util.ArrayList<GetTopTagsRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1930,8 +1930,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, args.user_id());
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<GetMediaByUserRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -1993,7 +1993,7 @@ public class UsersQueries {
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 if (!rs.next()) return null;
                 return new GetStorageUsedByUserRow(
-                    rs.getDouble("total_bytes"),
+                    rs.getLong("total_bytes"),
                     rs.getLong("total_files"),
                     rs.getLong("image_count"),
                     rs.getLong("video_count"),
@@ -2003,13 +2003,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<GetLargeMediaFilesRow> getLargeMediaFiles(long size_bytes, int limit) throws java.sql.SQLException {
+    public java.util.List<GetLargeMediaFilesRow> getLargeMediaFiles(long size_bytes, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT id, user_id, type, url, size_bytes, mime_type, created_at FROM media WHERE size_bytes > ? ORDER BY size_bytes DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setLong(1, size_bytes);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<GetLargeMediaFilesRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -2034,8 +2034,8 @@ public class UsersQueries {
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, args.user_id());
-            stmt.setInt(2, args.limit());
-            stmt.setInt(3, args.offset());
+            stmt.setLong(2, args.limit());
+            stmt.setLong(3, args.offset());
             var items = new java.util.ArrayList<GetUserFeedRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -2057,13 +2057,13 @@ public class UsersQueries {
         }
     }
 
-    public java.util.List<SearchPostsFullTextRow> searchPostsFullText(String search_query, int limit) throws java.sql.SQLException {
+    public java.util.List<SearchPostsFullTextRow> searchPostsFullText(String search_query, long limit) throws java.sql.SQLException {
         final String sql = """
                 SELECT p.id, p.title, p.excerpt, p.status, p.created_at, u.name AS author_name, ts_rank(to_tsvector('english', p.title || ' ' || p.content), plainto_tsquery('english', ?)) AS rank FROM posts p JOIN users u ON p.user_id = u.id WHERE to_tsvector('english', p.title || ' ' || p.content) @@ plainto_tsquery('english', ?) AND p.status = 'published' ORDER BY rank DESC, p.created_at DESC LIMIT ?;
                 """;
         try (java.sql.PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, search_query);
-            stmt.setInt(2, limit);
+            stmt.setLong(2, limit);
             var items = new java.util.ArrayList<SearchPostsFullTextRow>();
             try (java.sql.ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
@@ -2120,7 +2120,7 @@ public class UsersQueries {
                     rs.getLong("published_posts"),
                     rs.getLong("total_comments"),
                     rs.getLong("unread_notifications"),
-                    rs.getDouble("storage_used")
+                    rs.getLong("storage_used")
                 );
             }
         }

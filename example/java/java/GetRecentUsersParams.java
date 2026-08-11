@@ -6,6 +6,6 @@ import java.time.LocalDateTime;
 
 public record GetRecentUsersParams(
     LocalDateTime created_at,
-    int limit,
-    int offset
+    long limit,
+    long offset
 ) {}

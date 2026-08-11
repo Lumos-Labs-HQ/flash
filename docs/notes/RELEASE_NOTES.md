@@ -1,84 +1,224 @@
-# flash 2.7.7
+# Flash ORM Release Notes
 
-**Release Date:** 2026-07-16
+---
+
+# flash 2.8.0
+
+**Release Date:** 2026-08-11
 
 ## 🚀 New Features
 
-### 🦀 Rust Code Generation (sqlx)
+### ⚡ sqlx Compile-Time Query Validation (Rust)
 
-FlashORM now generates type-safe, async Rust code using **sqlx**. Full support for PostgreSQL, MySQL, and SQLite.
+Added `macros = true` to `[gen.rust]` config. When enabled, FlashORM generates
+`sqlx::query!`, `sqlx::query_as!`, and `sqlx::query_scalar!` macros instead of
+runtime functions. SQL is validated against the live database at **compile time**,
+catching typos, missing columns, and type mismatches before you run the program.
 
-**Configuration:**
 ```toml
 [gen.rust]
 enabled = true
 out = "src/flash_gen"
 driver = "sqlx"
+macros = true   # new — requires DATABASE_URL at compile time
 ```
 
-**Generated output:**
-```
-src/flash_gen/
-├── mod.rs          # Module re-exports
-├── models.rs       # Table structs with #[derive(FromRow)]
-├── db.rs           # Queries struct (pool wrapper)
-└── users.rs        # Per-query-file async methods
-```
+Generated code switches from:
 
-**Usage:**
 ```rust
-let queries = Queries::new(pool);
-
-// :one → fetch_one
-let user = queries.get_user(1).await?;
-
-// :many → fetch_all
-let users = queries.list_users().await?;
-
-// :exec → execute
-queries.delete_user(1).await?;
-
-// Single-column queries use query_scalar
-let count = queries.count_users().await?;  // i64
+// Before (macros = false — runtime):
+sqlx::query_as::<_, Users>("SELECT id, name FROM users WHERE id = $1")
+    .bind(id)
+    .fetch_one(&self.pool)
+    .await
 ```
 
-**Key features:**
-- Async by default — all methods are `pub async fn`
-- `#[derive(FromRow, Serialize, Deserialize)]` on all structs
-- `sqlx::query_scalar` for single-column results (COUNT, EXISTS, etc.)
-- `sqlx::query_as` for multi-column struct results
-- `Option<T>` for nullable columns
-- PostgreSQL enums → `#[derive(sqlx::Type)]` enums
-- Params struct auto-generated for queries with >2 parameters
-- `&str` and `&[u8]` references for string/binary params (zero-copy)
-- Proper type mapping: UUID, DateTime, Decimal, serde_json::Value
-- Incremental generation — only changed files are regenerated
+to:
 
-**Supported databases:**
+```rust
+// After (macros = true — compile-time validated):
+sqlx::query_as!(Users, "SELECT id, name FROM users WHERE id = $1", id)
+    .fetch_one(&self.pool)
+    .await
+```
 
-| Database | Pool Type | Param Style |
-|----------|-----------|-------------|
-| PostgreSQL | `sqlx::PgPool` | `$1, $2, ...` |
-| MySQL | `sqlx::MySqlPool` | `?` |
-| SQLite | `sqlx::SqlitePool` | `?` |
-
-**Auto-detection:** Projects with `Cargo.toml` are automatically detected as Rust on `flash init`.
-
-### Improved SQL Keyword Recognition
-
-Added `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_TIME`, `COALESCE`, `NULLIF`, `NOW`, window functions (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LAG`, `LEAD`), and common SQL functions to the keyword list. This fixes false "column does not exist" errors when using these in SET/WHERE clauses.
-
-### COUNT() Returns BIGINT
-
-`COUNT(*)` expressions are now correctly typed as `BIGINT` (i64/Long) instead of `INTEGER`. This matches the actual return type of COUNT in PostgreSQL, MySQL, and SQLite, preventing runtime type mismatch errors.
+Requires `DATABASE_URL` pointing to a running database with the current schema when running `cargo build`.
 
 ---
 
-## 🔧 Improvements
+### 🗃️ Redis-Backed Query Caching (`@cache` annotation)
 
-- Rust project detection via `Cargo.toml` or `.rs` source files in `flash init`
-- Driver header comments updated with Rust driver info for all database types
-- `flash gen` command description updated to include Rust
+Add `-- @cache` to any read query and FlashORM generates complete Redis caching
+infrastructure: cache-first query wrappers, auto-purge mutation wrappers, named
+accessors, and typed tag constants. Works in all 6 languages.
+
+**Enable in `flash.toml`:**
+
+```toml
+[cache]
+enabled       = true
+redis_url_env = "REDIS_URL"
+default_ttl   = "5m"
+prefix        = "flash"
+```
+
+**Annotate queries:**
+
+```sql
+-- name: GetUser :one
+-- @cache {"ttl": "60s", "name": "UserCache", "tags": ["users"], "dep": ["UpdateUser", "DeleteUser"]}
+SELECT id, name, email FROM users WHERE id = $1;
+
+-- name: UpdateUser :exec
+UPDATE users SET name = $2, email = $3 WHERE id = $1;
+```
+
+**Generated files (per language):**
+
+| File                    | Purpose                                     |
+| ----------------------- | ------------------------------------------- |
+| `cache.{ext}`           | Redis client wrapper (`FlashCache`)         |
+| `cache_accessors.{ext}` | Named accessors + typed tag constants       |
+| `cached_queries.{ext}`  | Cache-first wrappers + auto-purge mutations |
+
+**Cache-first query wrapper (Go):**
+
+```go
+// Checks Redis first, falls back to DB, stores result automatically
+user, err := q.GetUserCached(42)
+```
+
+**Auto-purge mutation wrapper (Go):**
+
+```go
+// Runs UPDATE, then auto-purges UserCache:{id} and any other dep caches
+err = q.UpdateUserAndPurge(arg)
+```
+
+**Named accessor for manual control:**
+
+```go
+flash_gen.UserCache.Get(42)      // read
+flash_gen.UserCache.Set(42, u)   // write
+flash_gen.UserCache.Del(42)      // delete one key
+flash_gen.UserCache.Purge()      // purge all UserCache:* entries
+```
+
+**Typed tag purging — bulk invalidation with compile-time safety:**
+
+```go
+// Go — tag constants generated from your @cache "tags" arrays
+flash_gen.Cache.PurgeTag(flash_gen.TagUsers)   // purges all caches tagged "users"
+flash_gen.Cache.PurgeTag(flash_gen.TagPosts)
+```
+
+```rust
+CacheTag::Users.purge();     // Rust — enum variant, compiler catches typos
+```
+
+```typescript
+await purgeTag(CacheTag.Users); // TypeScript — enum
+```
+
+Supported in: **Go, TypeScript, Python, Kotlin, Java, Rust**
 
 ---
 
+### 📄 Improved FLASH.md Agent Guide
+
+The `FLASH.md` file generated by `flash init` has been significantly improved for AI coding agents:
+
+- **Output path guidance** — explicitly documents that `gen.*.out` is user-configurable and should be read from `flash.toml`, not assumed to be `flash_gen/`
+- **Supported databases table** — ORM support, migrations, Studio availability, and parameter style per database
+- **`@json` annotation examples** — typed JSON column usage in all 6 languages
+- **`@cache` annotation examples** — caching setup, query wrappers, auto-purge mutations, and typed tag purging in all 6 languages
+- **17 sections** (up from 14) covering all features including Rust macros
+- Split into `template/flash_md.go` for easier maintenance
+
+---
+
+## 🔧 Type Inference Improvements
+
+Several type inference bugs fixed that caused compile errors in generated code,
+particularly when using sqlx macros mode:
+
+| Expression                               | Before            | After                     |
+| ---------------------------------------- | ----------------- | ------------------------- |
+| `COUNT(*)`, `COUNT(DISTINCT x)`          | `INTEGER`         | `BIGINT`                  |
+| `SUM(int_col)`                           | `NUMERIC`         | `BIGINT`                  |
+| `RANK()`, `ROW_NUMBER()`, `DENSE_RANK()` | `INTEGER`         | `BIGINT`                  |
+| `EXISTS(SELECT ...)`                     | `TEXT`            | `BOOLEAN`                 |
+| `LIMIT $1`, `OFFSET $1` params           | `INTEGER` (`i32`) | `BIGINT` (`i64`)          |
+| `count`, `count_threshold` params        | `INTEGER`         | `BIGINT`                  |
+| `AVG(age)::INTEGER` (explicit cast)      | `NUMERIC`         | `INTEGER` (respects cast) |
+| `MIN(age)`, `MAX(age)`                   | `NUMERIC`         | Column's actual type      |
+| `COALESCE(COUNT(*), 0)`                  | `INTEGER`         | `BIGINT`                  |
+| `COALESCE(SUM(x), 0)`                    | `NUMERIC`         | `BIGINT`                  |
+| CTE `COUNT(*)` columns                   | `INTEGER`         | `BIGINT`                  |
+| Subquery `(SELECT COUNT(*) ...)`         | `INTEGER`         | `BIGINT`                  |
+
+**`SplitColumns` bug fix** — `CASE WHEN score < 3.0 THEN ...` was incorrectly
+treating `<` as an angle bracket (for CQL types like `map<text,text>`), causing
+multi-column SELECT with CASE expressions to be treated as single-column. Fixed
+by only tracking angle brackets when preceded by an identifier character.
+
+**WHERE clause cross-table lookup** — params in CTEs and subqueries where the
+column belongs to a joined table (e.g. `post_id UUID` from `comments`) now
+correctly resolve the UUID type instead of falling back to INTEGER from the
+`_id` suffix heuristic.
+
+**`_id` suffix heuristic removed** — column params named `*_id` no longer
+unconditionally map to `INTEGER`. The schema lookup now takes precedence so
+UUID primary keys (e.g. `posts.id UUID`) are correctly typed.
+
+---
+
+## 🏗️ Codebase Structure Improvements
+
+Large files split into focused, single-responsibility modules:
+
+**`internal/parser/`** — split from 2 large files into 12 focused files:
+
+- `types.go` — schema types (`Schema`, `Table`, `Column`)
+- `query_types.go` — query types (`Query`, `Param`, `QueryColumn`)
+- `query.go` — core query parsing
+- `column_inferrer.go` — column type inference from SQL expressions
+- `param_name.go` — parameter name resolution
+- `inferrer.go` — parameter type inference
+- `cte_resolver.go` — CTE column type resolution
+- `query_rewrite.go` — SQL rewriting utilities
+- `query_validate.go` — insert/update column validation
+
+**`internal/migrator/`** — split from 2 files into 5:
+
+- `migrator.go` — setup and connection
+- `generate.go` — migration SQL generation
+- `apply.go` — apply migrations
+- `rollback.go` — down/reset
+- `status.go` — status display
+
+**`internal/validation/`** — new package (moved from `internal/utils/`):
+
+- `types.go` — schema interfaces
+- `regex.go` — compiled regex patterns
+- `table_refs.go` — `ValidateTableReferences`
+- `column_refs.go` — `ValidateColumnReferences`
+- `sql_strip.go` — SQL preprocessing utilities
+
+**`template/flash_md.go`** — extracted from `template/init.go`, contains the
+FLASH.md template and `GetAgentGuide()` method.
+
+---
+
+## 📝 Documentation Updates
+
+- **README.md** — added full `flash issues` usage reference with all flags and examples; added `## 🤖 AI Agent Support` section documenting FLASH.md
+- **`docs/reference/cli.md`** — added `flash issues` command reference and `flash init generates FLASH.md` section
+- **`docs/concepts/caching.md`** — new page covering full caching setup, annotation syntax, generated files, usage in all 6 languages, typed tag purging, and best practices
+
+---
+
+## 🔴 Breaking Changes
+
+None. The `macros` option defaults to `false` and `[cache]` defaults to
+`enabled = false`, so all existing projects are unaffected.

@@ -27,6 +27,38 @@ func ParseTemplates(templatesFS fs.FS) *template.Template {
 	return template.Must(template.ParseFS(templatesFS, "templates/*.html"))
 }
 
+// BaseServer holds the infrastructure shared by every studio (redis, mongodb,
+// sql). Each concrete studio embeds it and keeps only its own typed `service`
+// field. It provides the common Start and template-render behaviour so those
+// don't have to be duplicated per studio.
+type BaseServer struct {
+	Mux           *http.ServeMux
+	Tmpl          *template.Template
+	Port          int
+	Host          string
+	AuthToken     string
+	ConnectionURL string
+	Name          string // e.g. "Redis Studio", "MongoDB Studio", "Studio"
+}
+
+// Start finds an available port and starts the studio HTTP server.
+func (b *BaseServer) Start(openBrowser bool) error {
+	return StartServer(b.Mux, StartServerConfig{
+		Host:        b.Host,
+		Port:        b.Port,
+		Name:        b.Name,
+		OpenBrowser: openBrowser,
+		AuthToken:   b.AuthToken,
+	})
+}
+
+// Render executes a named template with the given data. The write error is
+// intentionally ignored — the response headers are already committed by the
+// time templating fails, so there is nothing actionable to return.
+func (b *BaseServer) Render(w http.ResponseWriter, name string, data Map) {
+	_ = b.Tmpl.ExecuteTemplate(w, name, data)
+}
+
 // SetupStaticFS mounts studio-specific and common static files on the mux
 func SetupStaticFS(mux *http.ServeMux, studioStaticFS embed.FS) {
 	staticFS, _ := fs.Sub(studioStaticFS, "static")

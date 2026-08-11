@@ -11,16 +11,16 @@ public record GetComplexUserAnalyticsRow(
     UserRole role,
     boolean isadmin,
     LocalDateTime user_created_at,
-    int total_posts,
-    int published_posts,
-    int draft_posts,
-    int total_comments,
-    int posts_commented_on,
-    int categories_used,
+    long total_posts,
+    long published_posts,
+    long draft_posts,
+    long total_comments,
+    long posts_commented_on,
+    long categories_used,
     String category_names,
     LocalDateTime last_post_date,
     LocalDateTime last_comment_date,
     double avg_post_length,
     String activity_level,
-    int engagement_score
+    long engagement_score
 ) {}

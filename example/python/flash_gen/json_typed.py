@@ -8,10 +8,10 @@ from decimal import Decimal
 @dataclass
 class Preferences:
     """JSON type for column 'preferences'. Parse with: Preferences(**json.loads(row.preferences))"""
+    notifications: Optional[bool]
     language: Optional[str]
     font_size: Optional[int]
     theme: Optional[str]
-    notifications: Optional[bool]
 
 @dataclass
 class Metadata:
