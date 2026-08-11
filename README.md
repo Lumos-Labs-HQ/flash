@@ -124,8 +124,64 @@ flash gen
 | `flash gen -f` | Force regenerate (skip cache) |
 | `flash gen --db <name>` | Generate for specific database |
 | `flash dblist` | List all configured databases |
+| `flash issues` | File a validated bug/feature report to the Flash repo |
 | `flash update` | Update plugins and flash binary |
 | `flash uninstall` | Remove flash and ~/.flash |
+
+## 🤖 AI Agent Support (FLASH.md)
+
+When you run `flash init`, FlashORM generates a **FLASH.md** file in your project root. This file is a complete, self-contained reference designed for AI coding agents (Cursor, Copilot, Kiro, etc.) — so they can drive FlashORM correctly without guessing.
+
+FLASH.md contains:
+- The exact database/provider for this project
+- Query parameter style (`$1` vs `?`) for your database
+- Complete schema and query examples from your scaffolding
+- All annotations: `@cache`, `@json`, `@required`
+- Supported databases table with parameter styles
+- Caching annotation syntax with examples in all 6 languages
+- Typed JSON column examples in all 6 languages
+- How to file bugs via `flash issues`
+
+Keep FLASH.md committed — agents on any machine can read it.
+
+---
+
+## 🐛 `flash issues`
+
+File a structured bug report or feature request directly to the Flash GitHub repo:
+
+```bash
+# Bug report
+flash issues \
+  -k bug \
+  -t "gen: short description of the problem" \
+  -b "What were you doing and what did Flash do" \
+  --repro "1. flash init --postgresql  2. flash gen  3. ..." \
+  --expected "What should have happened" \
+  --actual "What happened, including the exact error"
+
+# Feature request
+flash issues -k feature -t "codegen: add X support" -b "Description"
+
+# Preview without submitting
+flash issues -k bug -t "..." -b "..." --print
+
+# Submit without confirm prompt
+flash issues -k bug -t "..." -b "..." --repro "..." -y
+```
+
+| Flag | Description |
+|------|-------------|
+| `-k` | Kind: `bug` (default), `feature`, `question`, `docs` |
+| `-t` | Title (required, must be descriptive) |
+| `-b` | Body (required) |
+| `--repro` | Reproduction steps (required for bugs) |
+| `--expected` | Expected behavior |
+| `--actual` | Actual behavior / error text |
+| `--print` | Compose and print without submitting |
+| `-y` | Skip confirmation prompt |
+
+The command validates the report before filing — it rejects empty titles, vague bodies, and bug reports missing reproduction steps.
 
 ## 🗄️ Multi-Database Support
 

@@ -420,6 +420,81 @@ flash update --self-only
 
 ---
 
+### `flash issues`
+
+File a structured bug report or feature request directly to the Flash GitHub repository. The command validates the report before submitting — it rejects empty titles, vague bodies, and bug reports without reproduction steps.
+
+```bash
+flash issues [flags]
+```
+
+**Flags:**
+- `-k, --kind`: Report kind: `bug` (default), `feature`, `question`, `docs`
+- `-t, --title`: Title (required, must be descriptive)
+- `-b, --body`: Body text (required)
+- `--repro`: Reproduction steps (required for bugs)
+- `--expected`: Expected behavior
+- `--actual`: Actual behavior or exact error text
+- `--print`: Compose and print the report without submitting
+- `-y`: Skip confirmation prompt and submit directly
+
+**Examples:**
+```bash
+# File a bug report
+flash issues \
+  -k bug \
+  -t "gen: TypeScript output missing nullable types" \
+  -b "When a column is nullable in schema, generated TS type omits | null" \
+  --repro "1. Create table with nullable column  2. Run flash gen  3. Check output" \
+  --expected "Type includes | null" \
+  --actual "Type is non-nullable"
+
+# Preview without submitting
+flash issues -k bug -t "..." -b "..." --repro "..." --print
+
+# Submit non-interactively
+flash issues -k feature -t "Add X" -b "Description" -y
+
+# Feature request
+flash issues -k feature -t "codegen: Rust async support" -b "Add async/await to Rust generated code"
+```
+
+Version, OS, Go version, and database provider are attached to the report automatically.
+
+---
+
+### `flash init` generates FLASH.md
+
+Every `flash init` creates a **FLASH.md** file in the project root. This file is a complete reference guide for AI coding agents — it contains everything needed to use FlashORM correctly in that project without guessing.
+
+**What FLASH.md contains:**
+- Project database/provider and query parameter style
+- Scaffolded schema and query examples
+- Full `flash.toml` field reference
+- How to locate the generated code directory (reads `gen.*.out` — not assumed `flash_gen/`)
+- Supported databases table
+- Annotation reference with examples (`@cache`, `@json`, `@required`)
+- Caching annotation usage in all 6 languages (Go, TypeScript, Python, Kotlin, Java, Rust)
+- Typed JSON column usage in all 6 languages
+- CLI command reference
+- How to file bugs via `flash issues`
+- Golden rules for agents
+
+Keep FLASH.md committed to source control so any agent on any machine has the full context.
+
+```bash
+# FLASH.md is auto-generated on init:
+flash init --postgresql   # creates FLASH.md, flash.toml, db/schema/, etc.
+
+# The guide is database-specific:
+flash init --mysql        # FLASH.md uses ? params, MySQL examples
+flash init --postgresql   # FLASH.md uses $1/$2 params, PostgreSQL examples
+```
+
+**Why this matters:** Without FLASH.md, an agent may assume `flash_gen/` is always the output directory (it's configurable), use `$1` params on MySQL (wrong), or not know about `@cache`/`@json` annotations. FLASH.md eliminates all these failure modes.
+
+---
+
 ## Configuration
 
 FlashORM uses `flash.toml` for configuration:
