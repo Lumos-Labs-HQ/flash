@@ -209,6 +209,11 @@ func ValidateColumnReferences(sql string, schema interface{}, sourceFile string)
 						continue
 					}
 
+					// A bare table name is not a column reference — skip it.
+					if tables[colLower] != nil {
+						continue
+					}
+
 					if !primaryTable.columns[colLower] {
 						lines := strings.Split(sql, "\n")
 						lineNum := 1

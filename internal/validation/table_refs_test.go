@@ -7,8 +7,7 @@ import (
 
 // ValidateTableReferences reads the schema by reflection (same vSchema/vTable
 // mirror used by column_refs_test.go, reused here) and flags FROM/JOIN tables
-// that don't exist. These tests cover both the cases it handles correctly
-// (guards) and a false-positive it produces on valid SQL (bug).
+// that don't exist.
 
 func TestValidateTableReferences_ValidSingleTable(t *testing.T) {
 	if err := ValidateTableReferences("SELECT id, email FROM users", usersSchema(), "q"); err != nil {
@@ -79,11 +78,6 @@ func TestValidateTableReferences_TrailingSemicolonKnown(t *testing.T) {
 	}
 }
 
-// BUG: the FROM/JOIN capture is `[^\s;]+`, which includes a comma. In a
-// comma-separated (old-style) join the first table is captured WITH its
-// trailing comma ("users,"), which is not in the schema, so the validator
-// reports a relation-does-not-exist error for a table that DOES exist —
-// a false positive on valid SQL.
 func TestValidateTableReferences_CommaJoinFalsePositive(t *testing.T) {
 	err := ValidateTableReferences("SELECT u.id FROM users, posts", twoTableSchema(), "q")
 	if err != nil {

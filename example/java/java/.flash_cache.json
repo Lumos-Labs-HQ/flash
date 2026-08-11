@@ -11,24 +11,24 @@
       "testss"
     ],
     "db/queries/users.sql": [
-      "posts",
-      "users;",
-      "subscriptions",
-      "categories",
-      "comments",
       "media",
       "user_post_stats",
+      "subscriptions",
+      "active_commenters",
+      "comments",
+      "notifications",
+      "users",
+      "users;",
+      "active_users",
       "post_stats",
       "audit_log",
+      "categories",
+      "post_tags",
       "u",
-      "users",
+      "posts",
       "user_activity_summary",
       "orders",
-      "notifications",
-      "active_commenters",
-      "active_users",
-      "tags",
-      "post_tags"
+      "tags"
     ]
   },
   "generated_file_checksums": {
@@ -56,6 +56,6 @@
     "java/Users.java": "84a111a7c26b9ed90309e9b1b164c6e30c89667a0fd4182d84dd658ac0e23abe",
     "java/UsersQueries.java": "3a41db6053092992d444da430e3c672ff7f85b3f5fd0906c7e44a00890149d57"
   },
-  "last_generation": "2026-08-09T23:41:43.077719954+05:30",
+  "last_generation": "2026-08-11T16:30:58.133945128+05:30",
   "OutDir": "java"
 }

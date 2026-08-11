@@ -10,7 +10,7 @@ type Query struct {
 	SourceFile   string
 	RequiredCols []string    // from -- @required: col1, col2 or * for all
 	JsonTypes    []*JsonType // from -- @json annotations
-	CacheDef     *CacheDef  // from -- @cache annotation
+	CacheDef     *CacheDef   // from -- @cache annotation
 }
 
 // CacheDef holds the parsed @cache annotation for a query

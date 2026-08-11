@@ -371,7 +371,7 @@ func (g *Generator) writeCachedQueryMethod(w *strings.Builder, q *parser.Query, 
 	w.WriteString(fmt.Sprintf("        let cache_key = %s;\n\n", keyExpr))
 
 	// Check cache first
-	w.WriteString(fmt.Sprintf("        // Check cache first\n"))
+	w.WriteString("        // Check cache first\n")
 	w.WriteString(fmt.Sprintf("        if let Some(cached) = CACHE.get::<%s>(&cache_key) {\n", returnType))
 	w.WriteString("            return Ok(cached);\n")
 	w.WriteString("        }\n\n")

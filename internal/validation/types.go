@@ -1,7 +1,9 @@
 package validation
 
-import "reflect"
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 // SchemaColumn represents a column that can be validated
 type SchemaColumn interface {

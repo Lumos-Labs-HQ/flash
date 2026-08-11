@@ -40,7 +40,7 @@ func (ti *TypeInferrer) InferParamTypeByName(paramName string) string {
 	if strings.HasSuffix(n, "_age") {
 		return "INTEGER"
 	}
-	// NOTE: _id suffix is NOT assumed INTEGER here — it could be UUID.
+	// _id suffix is not assumed INTEGER — it could be UUID.
 	// The schema-based lookup in inferParamTypeInternal handles _id columns.
 	if strings.Contains(n, "score") || strings.Contains(n, "rating") || strings.Contains(n, "avg") {
 		return "DOUBLE PRECISION"

@@ -900,13 +900,17 @@ func (g *Generator) generateCachedQueries(queries []*parser.Query, caches []*cac
 	first := true
 	for _, q := range queries {
 		if cachegen.IsCachedQuery(q) && !cachegen.IsMutationQuery(q) {
-			if !first { w.WriteString(", ") }
+			if !first {
+				w.WriteString(", ")
+			}
 			w.WriteString(q.Name + "Cached")
 			first = false
 		} else if cachegen.IsMutationQuery(q) {
 			purges := cachegen.ResolveDependencyPurges(q.Name, caches, q.Params)
 			if len(purges) > 0 {
-				if !first { w.WriteString(", ") }
+				if !first {
+					w.WriteString(", ")
+				}
 				w.WriteString(q.Name + "AndPurge")
 				first = false
 			}
@@ -933,7 +937,7 @@ func (g *Generator) writeJSCachedQuery(w *strings.Builder, q *parser.Query, cach
 	if len(params) == 0 {
 		keyExpr = fmt.Sprintf("`%s`", cacheInfo.CacheName)
 	} else {
-		keyExpr = fmt.Sprintf("`%s:${%s}`", cacheInfo.CacheName, strings.Join(params, "}:${" ))
+		keyExpr = fmt.Sprintf("`%s:${%s}`", cacheInfo.CacheName, strings.Join(params, "}:${"))
 	}
 
 	tagsLiteral := "[]"

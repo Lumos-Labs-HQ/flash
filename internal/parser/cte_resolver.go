@@ -209,7 +209,6 @@ func (p *QueryParser) inferTypeFromCTEBody(sql string, cteName string, cteColumn
 
 // resolveCTEColumn resolves the type of a CTE column (e.g. "ct" → "depth")
 // by scanning the SQL for "ct AS (" and finding "0 as depth" or "ct.depth + 1" inside.
-// NOTE: This is a method on *TypeInferrer, not *QueryParser.
 func (ti *TypeInferrer) resolveCTEColumn(sql string, cteAlias string, colName string) (string, bool, bool) {
 	if ti.schema == nil {
 		return "", false, false

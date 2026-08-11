@@ -130,20 +130,10 @@ func GenerateJavaCacheAccessors(caches []*CacheInfo, packageName string) string 
 			paramNames = append(paramNames, sp)
 		}
 		paramStr := strings.Join(paramList, ", ")
-		keyExpr := fmt.Sprintf(`"%s:%s"`, c.CacheName, strings.Join(keyParts, ":"))
+		var keyExpr string
 		if len(keyParts) == 0 {
 			keyExpr = fmt.Sprintf(`"%s"`, c.CacheName)
 		} else {
-			// Build proper Java string concat
-			parts := []string{fmt.Sprintf(`"%s:`, c.CacheName)}
-			for i, p := range paramNames {
-				if i > 0 {
-					parts = append(parts, `":"`)
-				}
-				parts = append(parts, fmt.Sprintf(`" + %s + "`, p))
-			}
-			parts = append(parts, `"`)
-			keyExpr = strings.Join(parts, "")
 			keyExpr = fmt.Sprintf(`"%s:" + %s`, c.CacheName, strings.Join(paramNames, ` + ":" + `))
 		}
 

@@ -18,9 +18,7 @@ func mkParams(names ...string) []*parser.Param {
 	return ps
 }
 
-// ---------------------------------------------------------------------------
 // ParseTTL
-// ---------------------------------------------------------------------------
 
 func TestParseTTL_SingleUnits(t *testing.T) {
 	tests := []struct {
@@ -89,9 +87,7 @@ func TestParseTTL_RejectsBadInput(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // BuildCacheKey
-// ---------------------------------------------------------------------------
 
 func TestBuildCacheKey(t *testing.T) {
 	tests := []struct {
@@ -113,9 +109,7 @@ func TestBuildCacheKey(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // collectUniqueTags
-// ---------------------------------------------------------------------------
 
 func TestCollectUniqueTags(t *testing.T) {
 	caches := []*CacheInfo{
@@ -137,9 +131,7 @@ func TestCollectUniqueTags_Empty(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // GetCacheInfoForQuery / IsMutationQuery / IsCachedQuery
-// ---------------------------------------------------------------------------
 
 func TestGetCacheInfoForQuery(t *testing.T) {
 	caches := []*CacheInfo{
@@ -184,9 +176,7 @@ func TestIsCachedQuery(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // ValidateDeps
-// ---------------------------------------------------------------------------
 
 func TestValidateDeps(t *testing.T) {
 	queries := []*parser.Query{{Name: "GetUser"}, {Name: "UpdateUser"}}
@@ -211,9 +201,7 @@ func TestValidateDeps_AllValid(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // ResolveCacheQueries
-// ---------------------------------------------------------------------------
 
 func TestResolveCacheQueries_Defaults(t *testing.T) {
 	cfg := &config.CacheConfig{Enabled: true, DefaultTTL: "5m"}
@@ -277,9 +265,7 @@ func TestResolveCacheQueries_DisabledReturnsNil(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // ResolveDependencyPurges
-// ---------------------------------------------------------------------------
 
 func TestResolveDependencyPurges_SingleKeyExactDelete(t *testing.T) {
 	caches := []*CacheInfo{{

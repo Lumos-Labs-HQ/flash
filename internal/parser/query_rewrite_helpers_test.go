@@ -33,9 +33,9 @@ func TestMatchesTableName(t *testing.T) {
 		want          bool
 	}{
 		{"users", "users", true},
-		{"Users", "users", true},          // case-insensitive
-		{"users", "public.users", true},   // query keyspace-qualified
-		{"public.users", "users", true},   // schema keyspace-qualified
+		{"Users", "users", true},        // case-insensitive
+		{"users", "public.users", true}, // query keyspace-qualified
+		{"public.users", "users", true}, // schema keyspace-qualified
 		{"public.users", "public.users", true},
 		{"users", "posts", false},
 		{"users", "public.posts", false},
@@ -59,11 +59,11 @@ func TestExtractBalancedParens(t *testing.T) {
 		want  string
 	}{
 		{"foo(a, b)", 3, "a, b"},
-		{"f(a(b)c)", 1, "a(b)c"},   // nested parens balanced
-		{"()", 0, ""},              // empty
-		{"no paren", 0, ""},        // not a paren at start
-		{"foo(unclosed", 3, ""},    // unbalanced -> ""
-		{"a(b)(c)", 1, "b"},        // stops at first matching close
+		{"f(a(b)c)", 1, "a(b)c"}, // nested parens balanced
+		{"()", 0, ""},            // empty
+		{"no paren", 0, ""},      // not a paren at start
+		{"foo(unclosed", 3, ""},  // unbalanced -> ""
+		{"a(b)(c)", 1, "b"},      // stops at first matching close
 	}
 	for _, tt := range tests {
 		if got := extractBalancedParens(tt.in, tt.start); got != tt.want {

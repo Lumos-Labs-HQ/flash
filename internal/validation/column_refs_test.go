@@ -37,9 +37,7 @@ func twoTableSchema() *vSchema {
 	}}
 }
 
-// ---------------------------------------------------------------------------
 // ValidateColumnReferences — qualified (alias.column) refs
-// ---------------------------------------------------------------------------
 
 func TestValidateColumnReferences_QualifiedValid(t *testing.T) {
 	if err := ValidateColumnReferences("SELECT u.id, u.email FROM users u", usersSchema(), "q"); err != nil {
@@ -71,9 +69,7 @@ func TestValidateColumnReferences_JoinBadColumn(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
 // ValidateColumnReferences — unqualified refs in clauses
-// ---------------------------------------------------------------------------
 
 // PASSES today: WHERE is followed by LIMIT so the clause regex matches.
 func TestValidateColumnReferences_UnqualifiedInvalid_WithLimit(t *testing.T) {
@@ -107,9 +103,7 @@ func TestValidateColumnReferences_UnqualifiedInvalid_TrailingSemicolon(t *testin
 	}
 }
 
-// ---------------------------------------------------------------------------
 // ValidateColumnReferences — things that must NOT be flagged
-// ---------------------------------------------------------------------------
 
 func TestValidateColumnReferences_NilSchemaSkips(t *testing.T) {
 	if err := ValidateColumnReferences("SELECT anything FROM nowhere WHERE x = 1", nil, "q"); err != nil {

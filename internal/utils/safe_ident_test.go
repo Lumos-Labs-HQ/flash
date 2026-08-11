@@ -2,13 +2,7 @@ package utils
 
 import "testing"
 
-// SafeGoIdent is a real safety helper that escapes Go keywords so generated
-// identifiers compile. It had no direct test. These guards pin its behavior.
-//
-// NOTE: the cachegen accessor emitters do NOT call this function, which is why
-// a key param named `type` produces uncompilable Go (see
-// internal/cachegen/gen_go_test.go TestGenerateGoCacheAccessors_KeywordParamIsSafe).
-// The fix exists here; it just isn't wired into the generators.
+// SafeGoIdent escapes Go keywords so generated identifiers compile.
 
 func TestSafeGoIdent_EscapesAllKeywords(t *testing.T) {
 	// The complete set of Go reserved keywords.

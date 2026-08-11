@@ -29,11 +29,6 @@ func TestExtractEnumValues_Guards(t *testing.T) {
 	}
 }
 
-// BUG: the function lowercases the ENTIRE type string just to case-insensitively
-// test the "enum(" prefix, which also lowercases the quoted VALUES. A MySQL enum
-// declared enum('Active','Pending') stores literally 'Active'/'Pending'; emitting
-// 'active'/'pending' changes the data contract and breaks equality against the DB.
-// The values must be extracted with their original case preserved.
 func TestExtractEnumValues_PreservesValueCase(t *testing.T) {
 	got := ExtractEnumValues("enum('Active','Inactive','PENDING')")
 	want := []string{"Active", "Inactive", "PENDING"}
@@ -48,17 +43,17 @@ func TestExtractEnumValues_PreservesValueCase(t *testing.T) {
 
 func TestParseCQLInner(t *testing.T) {
 	tests := []struct {
-		in         string
-		wantK      string
-		wantV      string
+		in    string
+		wantK string
+		wantV string
 	}{
 		{"set<uuid>", "uuid", ""},
 		{"list<text>", "text", ""},
 		{"frozen<address>", "address", ""},
 		{"map<text,int>", "text", "int"},
-		{"map<text, int>", "text", "int"},                       // space after comma trimmed
+		{"map<text, int>", "text", "int"},                          // space after comma trimmed
 		{"map<uuid,frozen<set<int>>>", "uuid", "frozen<set<int>>"}, // nested value type
-		{"int", "text", ""},                                     // non-collection fallback
+		{"int", "text", ""},                                        // non-collection fallback
 	}
 	for _, tt := range tests {
 		k, v := ParseCQLInner(tt.in)

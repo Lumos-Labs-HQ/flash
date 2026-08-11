@@ -13,13 +13,13 @@ import (
 
 // CacheInfo holds resolved cache metadata for a query
 type CacheInfo struct {
-	QueryName  string
-	CacheName  string   // accessor name (e.g. "UserCache")
-	TTL        string   // e.g. "30s", "5m"
-	Tags       []string // for bulk purge
-	Dep        []string // queries that invalidate this cache
-	KeyParams  []string // param names that form the cache key
-	KeyTypes   []string // param types (for function signatures)
+	QueryName string
+	CacheName string   // accessor name (e.g. "UserCache")
+	TTL       string   // e.g. "30s", "5m"
+	Tags      []string // for bulk purge
+	Dep       []string // queries that invalidate this cache
+	KeyParams []string // param names that form the cache key
+	KeyTypes  []string // param types (for function signatures)
 }
 
 // DependencyPurge holds info about what to purge after a mutation runs
