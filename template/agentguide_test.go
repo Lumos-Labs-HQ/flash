@@ -122,12 +122,13 @@ func TestGetAgentGuide_DocumentsGrammarAndCache(t *testing.T) {
 		"-- @cache",   // caching annotation
 		"-- @required:",
 		"-- @json",
-		"default_ttl",    // config knob
-		"flash issues",   // ties into the reporting command
-		"macros = false", // Rust runtime-checked mode
-		"macros = true",  // Rust compile-time macro mode
-		"sqlx::query_as", // Rust runtime API
-		"cargo check",    // Rust compile-time verification workflow
+		"default_ttl",      // config knob
+		"flash issues",     // ties into the reporting command
+		"macros = false",   // Rust runtime-checked mode
+		"macros = true",    // Rust compile-time macro mode
+		"sqlx::query_as",   // Rust runtime API
+		"cargo check",      // Rust compile-time verification workflow
+		"FlashInitMigrate", // binary-independent startup migration helper
 	}
 	for _, n := range needles {
 		if !strings.Contains(guide, n) {

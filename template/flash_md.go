@@ -142,6 +142,28 @@ Fast iteration on a fresh dev DB: §flash apply§ creates tables directly from
 schema without migrations. For tracked incremental changes always use
 §flash migrate "<msg>"§ + §flash apply§.
 
+### Applying migrations from the deployed application
+
+Every generated language receives a generated §FlashInitMigrate§ helper. It embeds the
+migration SQL at §flash gen§ time and applies pending migrations through the
+application's existing database connection, so a server can migrate during
+startup without invoking or shipping the Flash CLI binary:
+
+§§§go
+if err := flash_gen.FlashInitMigrate(ctx, db); err != nil {
+    return fmt.Errorf("database migration: %w", err)
+}
+§§§
+
+The same function is generated in the language-specific migrations module for
+JavaScript/TypeScript, Python, Kotlin, Java, and Rust. Use the connection or
+pool object already owned by your application. The helper verifies migration
+checksums and refuses to run when an applied migration was changed.
+
+Run §flash gen§ whenever migration files change so the embedded migration set
+is refreshed. The helper verifies checksums and rejects changed migrations that
+were already applied.
+
 Re-run §flash gen§ after every §@@EXT@@§ file change.
 
 ---
@@ -689,16 +711,16 @@ automatically.
 func (pt *ProjectTemplate) agentLanguageGuide() (string, string) {
 	switch {
 	case pt.IsRustProject:
-		return "Rust", "" + "§§§toml\n# Cargo.toml\nsqlx = { version = \"0.9\", features = [\"runtime-tokio\", \"postgres\", \"macros\"] }\n§§§\n\nGenerated files are Rust modules under §[gen.rust].out§. Include the module\nwith `mod flash_gen;`, create a `sqlx::PgPool`, then call async methods on\n`flash_gen::db::Queries`; results are `Result<T, sqlx::Error>` and nullable SQL\ncolumns are `Option<T>`.\n\n§§§rust\nmod flash_gen;\nuse flash_gen::db::Queries;\nlet pool = sqlx::PgPool::connect(&std::env::var(\"DATABASE_URL\")?).await?;\nlet queries = Queries::new(pool);\nlet user = queries.get_user(1).await?;\nlet users = queries.list_users(20, 0).await?;\n§§§\n\nSet `macros = true` only when a live database is available at compile time;\nFlash then emits `sqlx::query!` macros for schema validation."
+		return "Rust", "" + "§§§toml\n# Cargo.toml\nsqlx = { version = \"0.9\", features = [\"runtime-tokio\", \"postgres\", \"macros\"] }\n§§§\n\nGenerated files are Rust modules under §[gen.rust].out§. Include the module\nwith `mod flash_gen;`, create a `sqlx::PgPool`, then call async methods on\n`flash_gen::db::Queries`; results are `Result<T, sqlx::Error>` and nullable SQL\ncolumns are `Option<T>`.\n\n§§§rust\nmod flash_gen;\nuse flash_gen::db::Queries;\nlet pool = sqlx::PgPool::connect(&std::env::var(\"DATABASE_URL\")?).await?;\nflash_gen::migrations::FlashInitMigrate(&pool).await?;\nlet queries = Queries::new(pool);\nlet user = queries.get_user(1).await?;\n§§§\n\nSet `macros = true` only when a live database is available at compile time;\nFlash then emits `sqlx::query!` macros for schema validation."
 	case pt.IsPythonProject:
-		return "Python", "" + "§§§toml\n[gen.python]\nenabled = true\nasync = true\n§§§\n\nGenerated modules are importable from §[gen.python].out§. Async mode uses\n`asyncio` and the configured driver (normally `asyncpg` for PostgreSQL); set\n`async = false` for synchronous code. Pass an asyncpg/psycopg/SQLite connection\nor pool to `newq`; Flash does not create the connection for you.\n\n§§§python\nfrom flash_gen.database import newq\nqueries = newq(db_connection)\nuser = await queries.get_user(1)\nusers = await queries.list_users(20, 0)\n§§§"
+		return "Python", "" + "§§§toml\n[gen.python]\nenabled = true\nasync = true\n§§§\n\nGenerated modules are importable from §[gen.python].out§. Async mode uses\n`asyncio` and the configured driver (normally `asyncpg` for PostgreSQL); set\n`async = false` for synchronous code. Pass an asyncpg/psycopg/SQLite connection\nor pool to `newq`; Flash does not create the connection for you.\n\n§§§python\nfrom flash_gen import FlashInitMigrate, newq\nawait FlashInitMigrate(db_connection)\nqueries = newq(db_connection)\nuser = await queries.get_user(1)\n§§§"
 	case pt.IsKotlinProject:
-		return "Kotlin", "" + "§§§kotlin\n// Generated package is the value of [gen.kotlin].package\nval queries = Queries.newq(connection)\nval user = queries.getUser(1)\nval users = queries.listUsers(20, 0)\n§§§\n\nKotlin generation targets JDBC by default; set `driver = \"exposed\"` or\n`driver = \"r2dbc\"` when your project uses those runtimes."
+		return "Kotlin", "" + "§§§kotlin\n// Generated package is the value of [gen.kotlin].package\nFlashMigrations.FlashInitMigrate(connection)\nval queries = Queries.newq(connection)\nval user = queries.getUser(1)\n§§§\n\nKotlin generation targets JDBC by default; set `driver = \"exposed\"` or\n`driver = \"r2dbc\"` when your project uses those runtimes."
 	case pt.IsJavaProject:
-		return "Java", "" + "§§§java\n// Generated package is the value of [gen.java].package\nQueries queries = Queries.newq(connection);\nUsers user = queries.getUser(1);\njava.util.List<Users> users = queries.listUsers(20, 0);\n§§§\n\nJava generation targets JDBC by default; `jooq` and `hibernate` are available\nthrough the `driver` setting."
+		return "Java", "" + "§§§java\n// Generated package is the value of [gen.java].package\nFlashMigrations.FlashInitMigrate(connection);\nQueries queries = Queries.newq(connection);\nUsers user = queries.getUser(1);\n§§§\n\nJava generation targets JDBC by default; `jooq` and `hibernate` are available\nthrough the `driver` setting."
 	case pt.IsNodeProject:
-		return "JavaScript/TypeScript", "" + "§§§typescript\nimport { Newq } from './flash_gen';\nconst queries = Newq(db); // db is a pg/mysql2/bun:sqlite client\nconst user = await queries.getUser(1);\nconst users = await queries.listUsers(20, 0);\n§§§\n\nThe JS generator emits JavaScript plus `.d.ts` declarations. Set `driver` in\n§[gen.js]§ to `pg`, `postgres`, `mysql2`, or the provider's supported driver."
+		return "JavaScript/TypeScript", "" + "§§§typescript\nimport { FlashInitMigrate, Newq } from './flash_gen';\nawait FlashInitMigrate(db);\nconst queries = Newq(db); // db is a pg/mysql2/bun:sqlite client\nconst user = await queries.getUser(1);\n§§§\n\nThe JS generator emits JavaScript plus `.d.ts` declarations. Set `driver` in\n§[gen.js]§ to `pg`, `postgres`, `mysql2`, or the provider's supported driver."
 	default:
-		return "Go", "" + "§§§go\nimport \"your/module/flash_gen\"\nqueries := flash_gen.Newq(db)\nuser, err := queries.GetUser(1)\nusers, err := queries.ListUsers(20, 0)\n§§§\n\nGo generation uses `database/sql` by default; set `driver = \"pgx\"` for the\npgx-native path. pgx and Scylla methods also accept `context.Context`."
+		return "Go", "" + "§§§go\nimport \"your/module/flash_gen\"\nif err := flash_gen.FlashInitMigrate(ctx, db); err != nil { return err }\nqueries := flash_gen.Newq(db)\nuser, err := queries.GetUser(1)\nusers, err := queries.ListUsers(20, 0)\n§§§\n\nGo generation uses `database/sql` by default; set `driver = \"pgx\"` for the\npgx-native path. `FlashInitMigrate` embeds the migration SQL at generation time\nand applies pending migrations through the supplied database connection; it\ndoes not invoke or require the Flash binary. pgx and Scylla methods also accept\n`context.Context`."
 	}
 }

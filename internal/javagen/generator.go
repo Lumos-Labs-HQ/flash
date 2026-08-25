@@ -65,6 +65,9 @@ func (g *Generator) Generate() error {
 	if err := g.generateQueriesIncremental(queries, fullRegen); err != nil {
 		return err
 	}
+	if err := g.generateMigrations(); err != nil {
+		return err
+	}
 
 	// Generate cache layer if enabled
 	if g.Config.Cache.Enabled {

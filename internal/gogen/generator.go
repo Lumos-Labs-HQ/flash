@@ -84,6 +84,12 @@ func (g *Generator) Generate() error {
 		return err
 	}
 
+	// Always regenerate the embedded migration runner because migration files
+	// can change independently of the schema and query generation cache.
+	if err := g.generateMigrations(); err != nil {
+		return err
+	}
+
 	// Generate cache layer if enabled
 	if g.Config.Cache.Enabled {
 		if err := g.generateCacheFiles(queries); err != nil {
