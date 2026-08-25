@@ -114,20 +114,52 @@ func TestGetAgentGuide_DocumentsGrammarAndCache(t *testing.T) {
 	pt := NewProjectTemplate(PostgreSQL, false, false)
 	guide := pt.GetAgentGuide()
 	needles := []string{
-		"-- name:",   // query grammar
-		":one",       // result modes
-		":many",      //
-		":exec",      //
+		"-- name:",    // query grammar
+		":one",        // result modes
+		":many",       //
+		":exec",       //
 		":execresult", //
-		"-- @cache",  // caching annotation
+		"-- @cache",   // caching annotation
 		"-- @required:",
 		"-- @json",
-		"default_ttl", // config knob
-		"flash issues", // ties into the reporting command
+		"default_ttl",    // config knob
+		"flash issues",   // ties into the reporting command
+		"macros = false", // Rust runtime-checked mode
+		"macros = true",  // Rust compile-time macro mode
+		"sqlx::query_as", // Rust runtime API
+		"cargo check",    // Rust compile-time verification workflow
 	}
 	for _, n := range needles {
 		if !strings.Contains(guide, n) {
 			t.Errorf("GetAgentGuide missing expected content %q", n)
+		}
+	}
+}
+
+func TestGetAgentGuide_NamesDetectedLanguageAndProvidesExample(t *testing.T) {
+	cases := []struct {
+		name string
+		pt   *ProjectTemplate
+		lang string
+		code string
+	}{
+		{"go", NewProjectTemplateExt(PostgreSQL, false, false, false, false, false), "Go", "Newq"},
+		{"node", NewProjectTemplateExt(PostgreSQL, true, false, false, false, false), "JavaScript/TypeScript", "Newq"},
+		{"python", NewProjectTemplateExt(PostgreSQL, false, true, false, false, false), "Python", "asyncpg"},
+		{"kotlin", NewProjectTemplateExt(PostgreSQL, false, false, true, false, false), "Kotlin", "getUser"},
+		{"java", NewProjectTemplateExt(PostgreSQL, false, false, false, true, false), "Java", "Queries.newq"},
+		{"rust", NewProjectTemplateExt(PostgreSQL, false, false, false, false, true), "Rust", "sqlx::PgPool"},
+	}
+	for _, tc := range cases {
+		guide := tc.pt.GetAgentGuide()
+		if !strings.Contains(guide, "This project was initialized for **"+tc.lang+"**") {
+			t.Errorf("%s guide does not identify detected language", tc.name)
+		}
+		if !strings.Contains(guide, tc.code) {
+			t.Errorf("%s guide does not contain language-specific example %q", tc.name, tc.code)
+		}
+		if strings.Contains(guide, "@@") || strings.Contains(guide, "§") {
+			t.Errorf("%s guide has unreplaced template markers", tc.name)
 		}
 	}
 }

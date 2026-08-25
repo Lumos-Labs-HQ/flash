@@ -23,6 +23,7 @@ func (pt *ProjectTemplate) GetAgentGuide() string {
 	}
 
 	guide := agentGuideTemplate
+	language, languageGuide := pt.agentLanguageGuide()
 
 	replacements := []struct{ from, to string }{
 		{"@@PROVIDER@@", cfg.provider},
@@ -34,6 +35,8 @@ func (pt *ProjectTemplate) GetAgentGuide() string {
 		{"@@SCHEMA@@", strings.TrimRight(pt.GetSchema(), "\n")},
 		{"@@QUERIES@@", strings.TrimRight(pt.GetQueries(), "\n")},
 		{"@@DRIVERS@@", pt.getDriverHeaderComment()},
+		{"@@LANGUAGE@@", language},
+		{"@@LANGGUIDE@@", languageGuide},
 	}
 	for _, r := range replacements {
 		guide = strings.ReplaceAll(guide, r.from, r.to)
@@ -575,12 +578,60 @@ Drivers for §@@PROVIDER@@§:
 
 Set with §driver = "<name>"§ inside the §[gen.*]§ block.
 
-### Rust macros
+### Generator selected by §flash init§
 
-For Rust, §macros = true§ in §[gen.rust]§ switches from runtime functions to
-§sqlx::query!§ / §sqlx::query_as!§ / §sqlx::query_scalar!§ macros which
-validate SQL against the live database at **compile time**. Requires §DATABASE_URL§
-to point to a running database with the current schema when compiling.
+This project was initialized for **@@LANGUAGE@@**. The enabled block in
+§flash.toml§ is the source of truth; do not use examples for another language
+unless you explicitly enable that additional §[gen.*]§ target.
+
+@@LANGGUIDE@@
+
+### Rust validation modes
+
+Rust generation supports two §sqlx§ modes. Choose one in §flash.toml§:
+
+§§§toml
+[gen.rust]
+enabled = true
+out = "src/flash_gen"
+driver = "sqlx"
+macros = false  # runtime-checked; this is the default
+§§§
+
+With §macros = false§, Flash emits §sqlx::query§, §sqlx::query_as§, and
+§sqlx::query_scalar§ plus §.bind(...)§ calls. Generation and compilation do
+not need a live database. SQL syntax, parameter types, and result decoding are
+checked when the generated async method executes:
+
+§§§bash
+flash gen
+cargo build
+DATABASE_URL="postgres://..." cargo run
+§§§
+
+The generated methods still return §Result<T, sqlx::Error>§, so handle runtime
+database errors with §?§, §match§, or your application's error type.
+
+Set §macros = true§ to emit §sqlx::query!§, §sqlx::query_as!§, and
+§sqlx::query_scalar!§ instead. These validate SQL against the database at
+**compile time**. §DATABASE_URL§ must point to a running database whose schema
+matches the Flash schema whenever §cargo check§ or §cargo build§ compiles the
+generated code:
+
+§§§toml
+[gen.rust]
+enabled = true
+out = "src/flash_gen"
+driver = "sqlx"
+macros = true
+§§§
+
+§§§bash
+flash migrate "sync schema"
+flash apply
+flash gen -f
+DATABASE_URL="postgres://..." cargo check
+§§§
 
 ---
 
@@ -632,3 +683,22 @@ automatically.
 10. **Rust macros need a live DB at compile time** when §macros = true§.
 11. **Broken generation? Run §flash issues§** with real reproduction steps.
 `
+
+// agentLanguageGuide returns the language selected by init and a minimal,
+// copy/paste usage example that matches that generator's API.
+func (pt *ProjectTemplate) agentLanguageGuide() (string, string) {
+	switch {
+	case pt.IsRustProject:
+		return "Rust", "" + "§§§toml\n# Cargo.toml\nsqlx = { version = \"0.9\", features = [\"runtime-tokio\", \"postgres\", \"macros\"] }\n§§§\n\nGenerated files are Rust modules under §[gen.rust].out§. Include the module\nwith `mod flash_gen;`, create a `sqlx::PgPool`, then call async methods on\n`flash_gen::db::Queries`; results are `Result<T, sqlx::Error>` and nullable SQL\ncolumns are `Option<T>`.\n\n§§§rust\nmod flash_gen;\nuse flash_gen::db::Queries;\nlet pool = sqlx::PgPool::connect(&std::env::var(\"DATABASE_URL\")?).await?;\nlet queries = Queries::new(pool);\nlet user = queries.get_user(1).await?;\nlet users = queries.list_users(20, 0).await?;\n§§§\n\nSet `macros = true` only when a live database is available at compile time;\nFlash then emits `sqlx::query!` macros for schema validation."
+	case pt.IsPythonProject:
+		return "Python", "" + "§§§toml\n[gen.python]\nenabled = true\nasync = true\n§§§\n\nGenerated modules are importable from §[gen.python].out§. Async mode uses\n`asyncio` and the configured driver (normally `asyncpg` for PostgreSQL); set\n`async = false` for synchronous code. Pass an asyncpg/psycopg/SQLite connection\nor pool to `newq`; Flash does not create the connection for you.\n\n§§§python\nfrom flash_gen.database import newq\nqueries = newq(db_connection)\nuser = await queries.get_user(1)\nusers = await queries.list_users(20, 0)\n§§§"
+	case pt.IsKotlinProject:
+		return "Kotlin", "" + "§§§kotlin\n// Generated package is the value of [gen.kotlin].package\nval queries = Queries.newq(connection)\nval user = queries.getUser(1)\nval users = queries.listUsers(20, 0)\n§§§\n\nKotlin generation targets JDBC by default; set `driver = \"exposed\"` or\n`driver = \"r2dbc\"` when your project uses those runtimes."
+	case pt.IsJavaProject:
+		return "Java", "" + "§§§java\n// Generated package is the value of [gen.java].package\nQueries queries = Queries.newq(connection);\nUsers user = queries.getUser(1);\njava.util.List<Users> users = queries.listUsers(20, 0);\n§§§\n\nJava generation targets JDBC by default; `jooq` and `hibernate` are available\nthrough the `driver` setting."
+	case pt.IsNodeProject:
+		return "JavaScript/TypeScript", "" + "§§§typescript\nimport { Newq } from './flash_gen';\nconst queries = Newq(db); // db is a pg/mysql2/bun:sqlite client\nconst user = await queries.getUser(1);\nconst users = await queries.listUsers(20, 0);\n§§§\n\nThe JS generator emits JavaScript plus `.d.ts` declarations. Set `driver` in\n§[gen.js]§ to `pg`, `postgres`, `mysql2`, or the provider's supported driver."
+	default:
+		return "Go", "" + "§§§go\nimport \"your/module/flash_gen\"\nqueries := flash_gen.Newq(db)\nuser, err := queries.GetUser(1)\nusers, err := queries.ListUsers(20, 0)\n§§§\n\nGo generation uses `database/sql` by default; set `driver = \"pgx\"` for the\npgx-native path. pgx and Scylla methods also accept `context.Context`."
+	}
+}
