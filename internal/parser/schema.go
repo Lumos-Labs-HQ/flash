@@ -196,7 +196,7 @@ func (p *SchemaParser) parseCreateTables(sql string) []*Table {
 				continue
 			}
 
-			colName = line[:spaceIdx]
+			colName = stripIdentifierQuotes(line[:spaceIdx])
 			rest := strings.TrimSpace(line[spaceIdx+1:])
 
 			// Extract type (handle parens + angle brackets for CQL types)
@@ -432,8 +432,24 @@ func (p *SchemaParser) parseCreateKeyspace(sql string) string {
 
 func stripTableNameQuotes(name string) string {
 	name = strings.TrimSpace(name)
-	if len(name) >= 2 && name[0] == '"' && name[len(name)-1] == '"' {
-		return name[1 : len(name)-1]
+	parts := strings.Split(name, ".")
+	for i, part := range parts {
+		parts[i] = stripIdentifierQuotes(part)
+	}
+	return strings.Join(parts, ".")
+}
+
+func stripIdentifierQuotes(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) >= 2 {
+		switch {
+		case name[0] == '"' && name[len(name)-1] == '"':
+			return strings.ReplaceAll(name[1:len(name)-1], `""`, `"`)
+		case name[0] == '`' && name[len(name)-1] == '`':
+			return strings.ReplaceAll(name[1:len(name)-1], "``", "`")
+		case name[0] == '[' && name[len(name)-1] == ']':
+			return name[1 : len(name)-1]
+		}
 	}
 	return name
 }

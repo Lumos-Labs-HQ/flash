@@ -38,6 +38,43 @@ func TestParseCreateTables_Basic(t *testing.T) {
 	}
 }
 
+func TestParseCreateTables_SQLiteQuotedColumns(t *testing.T) {
+	p := newSchemaParser(t, t.TempDir())
+	sql := `CREATE TABLE "postgres_dbs" (
+        "id" INTEGER PRIMARY KEY,
+        "primary_host" TEXT,
+        "primary_port" INTEGER,
+        "replication_user" TEXT,
+        "replication_password" TEXT
+    );`
+	tables := p.parseCreateTables(sql)
+	if len(tables) != 1 || tables[0].Name != "postgres_dbs" {
+		t.Fatalf("unexpected tables: %#v", tables)
+	}
+	got := map[string]bool{}
+	for _, col := range tables[0].Columns {
+		got[col.Name] = true
+	}
+	for _, name := range []string{"primary_host", "primary_port", "replication_user", "replication_password"} {
+		if !got[name] {
+			t.Errorf("missing SQLite column %q; got %v", name, got)
+		}
+	}
+}
+
+func TestAnalyzeQuery_SQLiteDynamicAndJSONSources(t *testing.T) {
+	p := NewQueryParser(&config.Config{Database: config.Database{Provider: "sqlite"}})
+	schema := &Schema{Tables: []*Table{{Name: "postgres_dbs", Columns: []*Column{{Name: "primary_host", Type: "TEXT"}, {Name: "preferences", Type: "JSON"}}}}}
+	for _, query := range []*Query{
+		{Name: "UpdateDynamic", SQL: "UPDATE {} SET primary_host = ?"},
+		{Name: "JsonEach", SQL: "SELECT value FROM json_each(postgres_dbs.preferences)"},
+	} {
+		if err := p.analyzeQuery(query, schema); err != nil {
+			t.Errorf("%s should parse for SQLite: %v", query.Name, err)
+		}
+	}
+}
+
 func TestParseCreateTables_Multiple(t *testing.T) {
 	p := newSchemaParser(t, t.TempDir())
 	sql := `

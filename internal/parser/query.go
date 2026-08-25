@@ -276,6 +276,11 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 			tableName = stripIdentQuotes(match[1])
 		}
 	}
+	// Runtime-selected table placeholders and SQLite virtual table functions
+	// are resolved by the database/application, not by the schema catalog.
+	if isDynamicOrVirtualTableName(tableName) {
+		tableName = ""
+	}
 
 	// Build CTE name set — CTEs are query-local, not tables in schema
 	cteNames := make(map[string]bool)
@@ -648,6 +653,19 @@ func (p *QueryParser) analyzeQuery(query *Query, schema *Schema) error {
 	}
 
 	return nil
+}
+
+func isDynamicOrVirtualTableName(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if strings.ContainsAny(name, "{}") {
+		return true
+	}
+	for _, fn := range []string{"json_each", "json_tree", "json_each_text", "json_tree_text"} {
+		if strings.HasPrefix(name, fn) {
+			return true
+		}
+	}
+	return false
 }
 
 // isParamNullable checks if a param's corresponding schema column is nullable.
