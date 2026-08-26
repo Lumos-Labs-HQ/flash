@@ -18,7 +18,7 @@ import (
 var (
 	cfgFile string
 	envName string
-	Version = "2.8.2"
+	Version = "2.8.21"
 )
 
 func showBanner() {
@@ -56,7 +56,7 @@ var rootCmd = &cobra.Command{
 	Use:   "flash",
 	Short: "A type-safe ORM with code generation for Go, TypeScript, and JavaScript",
 	Long: `
-FlashORM is a powerful ORM and database toolkit that generates type-safe code 
+FlashORM is a powerful ORM and database toolkit that generates type-safe code
 from your SQL schemas and queries for multiple programming languages.
 
 Supported Languages:
