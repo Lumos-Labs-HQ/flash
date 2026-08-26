@@ -26,6 +26,35 @@ The generated guide now includes:
 - Supported databases, drivers, connection strings, and generated-code rules.
 - A clear warning not to edit generated files directly.
 
+## Binary-Independent Startup Migrations for All Generated Languages
+
+Every generator now creates a `FlashInitMigrate` function in a generated
+`migrations` module. Applications can call it during server startup, or from
+any explicit initialization workflow, to apply pending migrations without
+running or shipping the Flash CLI binary.
+
+```go
+if err := flash_gen.FlashInitMigrate(ctx, db); err != nil {
+    return fmt.Errorf("database migration: %w", err)
+}
+```
+
+`flash gen` reads the configured `migrations_path`, embeds each migration's UP
+statements in generated code, and records successful migrations in
+`_flash_migrations`. The generated runtime:
+
+- Uses the application's existing database connection.
+- Applies migrations in filename order.
+- Skips migrations already recorded as completed.
+- Verifies the checksum of every previously applied migration.
+- Rejects modified migration files instead of silently accepting drift.
+- Uses a transaction where the selected database driver supports one.
+- Supports Go, JavaScript/TypeScript, Python, Kotlin, Java, and Rust generated
+  clients with their native database connection styles.
+
+Run `flash gen` after creating or changing migration files so the deployed
+application contains the current migration set.
+
 ## Language-Specific Examples
 
 The generated `FLASH.md` now detects which code generator was selected by

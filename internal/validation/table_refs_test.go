@@ -78,6 +78,19 @@ func TestValidateTableReferences_TrailingSemicolonKnown(t *testing.T) {
 	}
 }
 
+func TestValidateTableReferences_SQLiteVirtualJSONTable(t *testing.T) {
+	sql := `SELECT value FROM json_each(users.preferences) WHERE type = 'text'`
+	if err := ValidateTableReferences(sql, usersSchema(), "q"); err != nil {
+		t.Fatalf("json_each should be accepted as SQLite virtual table: %v", err)
+	}
+}
+
+func TestValidateTableReferences_DynamicTablePlaceholder(t *testing.T) {
+	if err := ValidateTableReferences("UPDATE {} SET name = ?", usersSchema(), "q"); err != nil {
+		t.Fatalf("dynamic table placeholder should be accepted: %v", err)
+	}
+}
+
 func TestValidateTableReferences_CommaJoinFalsePositive(t *testing.T) {
 	err := ValidateTableReferences("SELECT u.id FROM users, posts", twoTableSchema(), "q")
 	if err != nil {

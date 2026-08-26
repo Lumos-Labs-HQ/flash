@@ -1,6 +1,10 @@
 package gogen
 
 import (
+	stdparser "go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -8,6 +12,71 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 )
+
+func TestGenerateMigrationsProducesValidGo(t *testing.T) {
+	root := t.TempDir()
+	outDir := filepath.Join(root, "flash_gen")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	migrationsDir := filepath.Join(root, "db", "migrations")
+	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	content := "-- +migrate Up\nCREATE TABLE users (id INTEGER);\n-- +migrate Down\nDROP TABLE users;\n"
+	if err := os.WriteFile(filepath.Join(migrationsDir, "20260825010101_init.sql"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	g := New(&config.Config{
+		MigrationsPath: migrationsDir,
+		Database:       config.Database{Provider: "postgresql"},
+		Gen:            config.Gen{Go: config.GoGen{Out: outDir}},
+	})
+	if err := g.generateMigrations(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stdparser.ParseFile(token.NewFileSet(), filepath.Join(outDir, "migrations.go"), nil, stdparser.AllErrors); err != nil {
+		t.Fatalf("generated migrations.go is invalid Go: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(outDir, "migrations.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := string(data)
+	for _, expected := range []string{"func FlashInitMigrate", "CREATE TABLE users", "checksum mismatch", "BeginTx"} {
+		if !strings.Contains(generated, expected) {
+			t.Errorf("generated migrations.go missing %q", expected)
+		}
+	}
+}
+
+func TestGenerateMigrationsProducesValidPGXGo(t *testing.T) {
+	root := t.TempDir()
+	outDir := filepath.Join(root, "flash_gen")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	g := New(&config.Config{
+		MigrationsPath: filepath.Join(root, "missing"),
+		Database:       config.Database{Provider: "postgresql"},
+		Gen:            config.Gen{Go: config.GoGen{Out: outDir, Driver: "pgx"}},
+	})
+	if err := g.generateMigrations(); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(outDir, "migrations.go")
+	if _, err := stdparser.ParseFile(token.NewFileSet(), path, nil, stdparser.AllErrors); err != nil {
+		t.Fatalf("generated pgx migrations.go is invalid Go: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "*pgxpool.Pool") {
+		t.Fatal("pgx migration helper should accept *pgxpool.Pool")
+	}
+}
 
 func newGen() *Generator {
 	return New(&config.Config{

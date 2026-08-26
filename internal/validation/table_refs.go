@@ -55,6 +55,9 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 		}
 
 		tableName := match[1]
+		if isDynamicOrVirtualTable(tableName) {
+			continue
+		}
 
 		if utils.IsSQLKeyword(tableName) {
 			continue
@@ -99,4 +102,24 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 	}
 
 	return nil
+}
+
+// SQLite exposes table-valued JSON functions through FROM/JOIN syntax. They
+// are valid virtual row sources, not schema tables. Dynamic placeholders are
+// likewise resolved by the application at runtime.
+func isDynamicOrVirtualTable(name string) bool {
+	trimmed := strings.Trim(strings.TrimSpace(name), "\"'`")
+	if strings.ContainsAny(trimmed, "{}") {
+		return true
+	}
+	base := strings.ToLower(trimmed)
+	if dot := strings.LastIndexByte(base, '('); dot >= 0 {
+		base = base[:dot]
+	}
+	switch base {
+	case "json_each", "json_tree", "json_each_text", "json_tree_text":
+		return true
+	default:
+		return false
+	}
 }

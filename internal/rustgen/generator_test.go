@@ -1,6 +1,8 @@
 package rustgen
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -8,6 +10,73 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/gencommon"
 	"github.com/Lumos-Labs-HQ/flash/internal/parser"
 )
+
+func TestGenerateSQLiteQuotedSchemaAndVirtualSources(t *testing.T) {
+	root := t.TempDir()
+	schemaDir := filepath.Join(root, "db", "schema")
+	queryDir := filepath.Join(root, "db", "queries")
+	outDir := filepath.Join(root, "src", "flash_gen")
+	for _, dir := range []string{schemaDir, queryDir, outDir} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	schemaSQL := `CREATE TABLE "postgres_dbs" (
+  "id" INTEGER PRIMARY KEY,
+  "primary_host" TEXT,
+  "primary_port" INTEGER,
+  "replication_user" TEXT,
+  "replication_password" TEXT,
+  "metadata" JSON
+);`
+	queriesSQL := `-- name: GetPostgresDbs :one
+SELECT primary_host, primary_port, replication_user, replication_password
+FROM postgres_dbs WHERE id = ?;
+
+-- name: UpdateRuntimeTable :exec
+UPDATE {} SET primary_host = ? WHERE id = ?;
+
+-- name: MetadataValues :many
+SELECT value FROM json_each((SELECT metadata FROM postgres_dbs WHERE id = ?));`
+	if err := os.WriteFile(filepath.Join(schemaDir, "schema.sql"), []byte(schemaSQL), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(queryDir, "queries.sql"), []byte(queriesSQL), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		SchemaDir:      schemaDir,
+		SchemaPath:     filepath.Join(schemaDir, "schema.sql"),
+		Queries:        queryDir,
+		MigrationsPath: filepath.Join(root, "db", "migrations"),
+		Database:       config.Database{Provider: "sqlite"},
+		Gen:            config.Gen{Rust: config.RustGen{Enabled: true, Out: outDir, Driver: "sqlx"}},
+	}
+	if err := New(cfg).Generate(); err != nil {
+		t.Fatalf("SQLite Rust generation failed: %v", err)
+	}
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generated strings.Builder
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".rs" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(outDir, entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		generated.Write(data)
+	}
+	for _, expected := range []string{"get_postgres_dbs", "update_runtime_table", "metadata_values"} {
+		if !strings.Contains(generated.String(), expected) {
+			t.Errorf("generated Rust missing %q", expected)
+		}
+	}
+}
 
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
