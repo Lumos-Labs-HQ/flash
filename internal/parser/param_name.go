@@ -67,96 +67,14 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			}
 		}
 
-		// SET clause with ? params: SET col = ?, col2 = ?, col = col + ?
-		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
-		if setMatch := setColPattern.FindStringSubmatch(sql); len(setMatch) > 1 {
-			setClause := setMatch[1]
-			// Match both: direct (col = ?) and counter (col = col + ? or col = col - ?)
-			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*(?:\w+\s*[+\-]\s*)?\?`)
-			allSetMatches := colPattern.FindAllStringSubmatch(setClause, -1)
-			setCols := []string{}
-			for _, m := range allSetMatches {
-				setCols = append(setCols, m[1])
-			}
-			if paramIndex <= len(setCols) {
-				name := setCols[paramIndex-1]
-				// For counter pattern (col = col +/- ?) append _delta
-				counterCheck := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s*=\s*\w+\s*[+\-]\s*\?`, regexp.QuoteMeta(name)))
-				if counterCheck.MatchString(setClause) {
-					return name + "_delta"
-				}
-				return name
-			}
-			// Offset index past SET params for WHERE matching
-			paramIndex = paramIndex - len(setCols)
-		}
-
-		// WHERE clause with ? params
-		// Find the LAST/outermost WHERE clause to avoid matching subquery WHERE clauses
-		wherePos := strings.LastIndex(strings.ToUpper(sql), "WHERE")
-		if wherePos >= 0 {
-			// Extract the WHERE clause content after the last WHERE keyword
-			afterWhere := sql[wherePos+5:] // skip "WHERE"
-			// Trim to the end of the WHERE clause (stop at LIMIT/ORDER/GROUP/HAVING/ALLOW FILTERING)
-			endRe := regexp.MustCompile(`(?i)\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`)
-			if endLoc := endRe.FindStringIndex(afterWhere); endLoc != nil {
-				afterWhere = afterWhere[:endLoc[0]]
-			}
-			whereClause := strings.TrimSpace(afterWhere)
-
-			// Count ? that appear BEFORE the WHERE clause but AFTER any SET clause
-			// (SET ? params are already handled above via paramIndex reduction).
-			// This accounts for ? in LATERAL subqueries, inline subqueries, etc.
-			beforeWhere := sql[:wherePos]
-			paramsBefore := strings.Count(beforeWhere, "?")
-			// Subtract SET params that were already handled (paramIndex was already reduced)
-			setColPattern2 := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
-			setParamsHandled := 0
-			if setMatch2 := setColPattern2.FindStringSubmatch(sql); len(setMatch2) > 1 {
-				setParamsHandled = strings.Count(setMatch2[1], "?")
-			}
-			subqueryParamsBefore := paramsBefore - setParamsHandled
-			if subqueryParamsBefore < 0 {
-				subqueryParamsBefore = 0
-			}
-			relParamIndex := paramIndex - subqueryParamsBefore
-
-			// col ILIKE '%' || ? || '%' or col ILIKE ? (concatenated search)
-			ilikePattern := regexp.MustCompile(`(?i)(\w+)\s+I?LIKE\s+.*?\?`)
-			ilikeMatches := ilikePattern.FindAllStringSubmatch(whereClause, -1)
-
-			colPattern := regexp.MustCompile(`(?i)(?:\w+\.)?(\w+)\s*=\s*\?`)
-			matches := colPattern.FindAllStringSubmatch(whereClause, -1)
-			if relParamIndex > 0 && relParamIndex <= len(matches) && len(matches[relParamIndex-1]) > 1 {
-				return matches[relParamIndex-1][1]
-			}
-
-			// ILIKE with ? (including '%' || ? || '%' patterns)
-			if len(ilikeMatches) > 0 {
-				relIdx := relParamIndex
-				// Check if this param falls within an ILIKE pattern
-				for _, m := range ilikeMatches {
-					if relIdx > 0 && relIdx <= strings.Count(m[0], "?") {
-						return m[1]
-					}
-					relIdx -= strings.Count(m[0], "?")
-				}
-			}
-
-			// CONTAINS ? pattern
-			containsPattern := regexp.MustCompile(`(?i)(\w+)\s+CONTAINS\s+\?`)
-			allContains := containsPattern.FindAllStringSubmatch(whereClause, -1)
-			// Only match if this paramIndex maps to a CONTAINS position
-			if relParamIndex > 0 && relParamIndex <= len(allContains) {
-				return allContains[relParamIndex-1][1]
-			}
-			// Also match >= AND <= BETWEEN-style
-			whereParamIndex := relParamIndex - len(matches)
-			rangePattern := regexp.MustCompile(`(?i)(\w+)\s*(>=|<=|>|<)\s*\?`)
-			rangeMatches := rangePattern.FindAllStringSubmatch(whereClause, -1)
-			if whereParamIndex > 0 && whereParamIndex <= len(rangeMatches) {
-				return rangeMatches[whereParamIndex-1][1]
-			}
+		// Positional naming: map the paramIndex-th ? to the column it targets
+		// by scanning the SET clause and the trailing WHERE clause in order.
+		// The previous pattern-list lookups miscounted ?s wrapped in
+		// expressions (COALESCE(?, col), CASE WHEN ?=?, func(?)), shifting
+		// every later name — e.g. "SET a=?, b=COALESCE(?,b) WHERE id=?"
+		// generated (a, id, param2) instead of (a, b, id).
+		if name := inferPositionalName(sql, paramIndex); name != "" {
+			return name
 		}
 
 		// LIMIT ? — count total params before LIMIT to find if this ? is LIMIT
@@ -174,21 +92,6 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			totalBefore := strings.Count(beforeOffset, "?")
 			if paramIndex == totalBefore+1 {
 				return "offset"
-			}
-		}
-
-		// SET col = col + ? (counter increment) → use the column name
-		counterRe := regexp.MustCompile(`(?i)(\w+)\s*=\s*(\w+)\s*\+\s*\?`)
-		for _, m := range counterRe.FindAllStringSubmatch(sql, -1) {
-			if strings.EqualFold(m[1], m[2]) {
-				// Find position of this ? in the SQL
-				idx := strings.Index(sql, m[0])
-				if idx >= 0 {
-					pos := strings.Count(sql[:idx+len(m[0])], "?")
-					if paramIndex == pos {
-						return m[1]
-					}
-				}
 			}
 		}
 	}
@@ -445,4 +348,86 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	return fmt.Sprintf("param%d", paramIndex)
+}
+
+// inferPositionalName maps the paramIndex-th ? placeholder to the column it
+// targets. It locates the placeholder inside the UPDATE ... SET clause or the
+// trailing WHERE clause and names it after the assigned/compared column.
+// Expression-wrapped placeholders (COALESCE(?, col), func(?)) inherit the
+// column name; counter assignments (col = col + ?) get a _delta suffix.
+// Placeholders it cannot attribute (CASE WHEN ?=?, bare SELECT ?) return ""
+// so the caller keeps the ordered paramN fallback.
+func inferPositionalName(sql string, paramIndex int) string {
+	upper := strings.ToUpper(sql)
+
+	setStart, setEnd := -1, -1
+	if setLoc := regexp.MustCompile(`\bSET\s`).FindStringIndex(upper); setLoc != nil {
+		setStart = setLoc[1]
+		setEnd = len(sql)
+		if w := strings.LastIndex(upper, "WHERE"); w > setStart {
+			setEnd = w
+		}
+	}
+
+	whereStart, whereEnd := -1, -1
+	if w := strings.LastIndex(upper, "WHERE"); w >= 0 {
+		whereStart = w + 5
+		whereEnd = len(sql)
+		if e := regexp.MustCompile(`\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`).FindStringIndex(upper[whereStart:]); e != nil {
+			whereEnd = whereStart + e[0]
+		}
+	}
+
+	qPositions := make([]int, 0, 8)
+	for i := 0; i < len(sql); i++ {
+		if sql[i] == '?' {
+			qPositions = append(qPositions, i)
+		}
+	}
+	if paramIndex > len(qPositions) {
+		return ""
+	}
+	pos := qPositions[paramIndex-1]
+
+	if setStart >= 0 && pos >= setStart && pos < setEnd {
+		return nameForSetPlaceholder(sql[setStart:pos])
+	}
+	if whereStart >= 0 && pos >= whereStart && pos < whereEnd {
+		return nameForWherePlaceholder(sql[whereStart:pos])
+	}
+	return ""
+}
+
+// nameForSetPlaceholder names a SET-clause ? from the clause text preceding it.
+func nameForSetPlaceholder(prefix string) string {
+	// col = col + ? / col = col - ? → counter delta
+	if m := regexp.MustCompile(`(\w+)\s*=\s*\w+\s*[+\-]\s*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1] + "_delta"
+	}
+	// col = ?, col = COALESCE(?, ...), col = func(func(?...
+	if m := regexp.MustCompile(`(\w+)\s*=\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
+// nameForWherePlaceholder names a WHERE-clause ? from the clause text preceding it.
+func nameForWherePlaceholder(prefix string) string {
+	// col = ?, col = COALESCE(?, col), col = func(... func(?
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*=\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	// col >= ? / col <= ? / col != ? / col > ? / col < ?
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*(?:>=|<=|!=|>|<)\s*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	// col LIKE ? / col ILIKE '%' || ? (concatenated search)
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s+(?:NOT\s+)?I?LIKE\s+.*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	// col CONTAINS ? (ScyllaDB)
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s+CONTAINS\s+$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	return ""
 }
