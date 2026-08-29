@@ -137,3 +137,13 @@ func TestInferParamNameInsertPositional(t *testing.T) {
 		})
 	}
 }
+
+func TestInferParamNameUnionBranches(t *testing.T) {
+	sql := "SELECT x FROM service_application sa JOIN services s ON s.id = sa.service_id WHERE sa.registry_id = ? UNION ALL SELECT x FROM t WHERE sa.rollback_registry_id = ? UNION ALL SELECT x FROM t WHERE sa.build_registry_id = ?"
+	ti := &TypeInferrer{}
+	for i, want := range []string{"registry_id", "rollback_registry_id", "build_registry_id"} {
+		if got := ti.InferParamName(sql, i+1); got != want {
+			t.Errorf("param %d = %q, want %q", i+1, got, want)
+		}
+	}
+}

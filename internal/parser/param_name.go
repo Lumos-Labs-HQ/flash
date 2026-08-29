@@ -454,15 +454,6 @@ func inferPositionalName(sql string, paramIndex int) string {
 		}
 	}
 
-	whereStart, whereEnd := -1, -1
-	if w := strings.LastIndex(upper, "WHERE"); w >= 0 {
-		whereStart = w + 5
-		whereEnd = len(sql)
-		if e := regexp.MustCompile(`\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`).FindStringIndex(upper[whereStart:]); e != nil {
-			whereEnd = whereStart + e[0]
-		}
-	}
-
 	qPositions := make([]int, 0, 8)
 	for i := 0; i < len(sql); i++ {
 		if sql[i] == '?' {
@@ -477,8 +468,19 @@ func inferPositionalName(sql string, paramIndex int) string {
 	if setStart >= 0 && pos >= setStart && pos < setEnd {
 		return nameForSetPlaceholder(sql[setStart:pos])
 	}
-	if whereStart >= 0 && pos >= whereStart && pos < whereEnd {
-		return nameForWherePlaceholder(sql[whereStart:pos])
+
+	// Resolve against the WHERE clause nearest BEFORE this placeholder, so
+	// UNION/multi-SELECT statements map each branch's params to its own
+	// WHERE columns (LastIndex-WHERE only sees the final branch).
+	if w := strings.LastIndex(upper[:pos], "WHERE"); w >= 0 {
+		start := w + 5
+		end := len(sql)
+		if e := regexp.MustCompile(`\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`).FindStringIndex(upper[start:]); e != nil {
+			end = start + e[0]
+		}
+		if pos < end {
+			return nameForWherePlaceholder(sql[start:pos])
+		}
 	}
 	return ""
 }
@@ -498,7 +500,7 @@ func nameForSetPlaceholder(prefix string) string {
 
 // nameForWherePlaceholder names a WHERE-clause ? from the clause text preceding it.
 func nameForWherePlaceholder(prefix string) string {
-	// col = ?, col = COALESCE(?, col), col = func(... func(?
+	// col = ?, col = COALESCE(?, col), col = func(... func(?, alias.col = ?
 	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*=\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 1 {
 		return m[1]
 	}
