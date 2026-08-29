@@ -7,16 +7,11 @@ import (
 )
 
 func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
-	// Check for INSERT statement first — collect ALL column names from every INSERT in multi-statement SQL
-	insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\S+\s*\(([\s\S]*?)\)\s*VALUES`)
-	allInsertCols := []string{}
-	for _, match := range insertColRegex.FindAllStringSubmatch(sql, -1) {
-		for _, c := range strings.Split(match[1], ",") {
-			allInsertCols = append(allInsertCols, strings.TrimSpace(c))
-		}
-	}
-	if paramIndex <= len(allInsertCols) {
-		return allInsertCols[paramIndex-1]
+	// INSERT statements: map the paramIndex-th ? to the VALUES slot (column)
+	// it sits in. Handles literal slots ('VALUES (?, ''LIT'', ?...)') that the
+	// old positional column-list lookup misnamed.
+	if name := inferInsertName(sql, paramIndex); name != "" {
+		return name
 	}
 
 	// col = ANY($N) — param name is the column name (it's an array param)
@@ -348,6 +343,96 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	return fmt.Sprintf("param%d", paramIndex)
+}
+
+// inferInsertName maps the paramIndex-th ? of an INSERT to the column of the
+// VALUES slot it occupies. Literals and expressions in sibling slots do not
+// shift the mapping. INSERT..SELECT returns "" (params belong to the SELECT).
+func inferInsertName(sql string, paramIndex int) string {
+	re := regexp.MustCompile(`(?is)INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\S+\s*\(([^)]*)\)\s*(?:VALUES|ROW\s+VALUES)\s*\(`)
+	loc := re.FindStringSubmatchIndex(sql)
+	if loc == nil {
+		return ""
+	}
+	cols := splitTopLevelCommas(sql[loc[2]:loc[3]])
+
+	valuesStart := loc[1] // just after the "VALUES (" opening paren
+	depth := 1            // already inside the VALUES paren
+	end := -1
+	for i := valuesStart; i < len(sql); i++ {
+		switch sql[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				end = i
+			}
+		case '\'', '"':
+			// skip string literal
+			quote := sql[i]
+			for i++; i < len(sql) && sql[i] != quote; i++ {
+				if sql[i] == '\\' {
+					i++
+				}
+			}
+		}
+		if end >= 0 {
+			break
+		}
+	}
+	if end < 0 {
+		return ""
+	}
+	slots := splitTopLevelCommas(sql[valuesStart:end])
+	if len(slots) != len(cols) {
+		return ""
+	}
+
+	qSeen := 0
+	for i, slot := range slots {
+		// $N-style: the slot references $paramIndex directly.
+		if regexp.MustCompile(fmt.Sprintf(`\$%d\b`, paramIndex)).MatchString(slot) {
+			return strings.TrimSpace(cols[i])
+		}
+		// ?-style: count ? occurrences across slots in order.
+		for j := 0; j < strings.Count(slot, "?"); j++ {
+			qSeen++
+			if qSeen == paramIndex {
+				return strings.TrimSpace(cols[i])
+			}
+		}
+	}
+	return ""
+}
+
+// splitTopLevelCommas splits on commas outside parentheses/quotes/brackets.
+func splitTopLevelCommas(s string) []string {
+	var parts []string
+	depth := 0
+	start := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case '\'', '"':
+			quote := s[i]
+			for i++; i < len(s) && s[i] != quote; i++ {
+				if s[i] == '\\' {
+					i++
+				}
+			}
+		case ',':
+			if depth == 0 {
+				parts = append(parts, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
 }
 
 // inferPositionalName maps the paramIndex-th ? placeholder to the column it

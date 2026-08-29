@@ -87,3 +87,53 @@ func TestInferParamNamePositional(t *testing.T) {
 		})
 	}
 }
+
+func TestInferParamNameInsertPositional(t *testing.T) {
+	cases := []struct {
+		name       string
+		sql        string
+		paramIndex int
+		want       string
+	}{
+		{
+			name:       "dollar params map to columns",
+			sql:        "INSERT INTO users (email, name) VALUES ($1, $2)",
+			paramIndex: 1,
+			want:       "email",
+		},
+		{
+			name:       "question marks map to columns",
+			sql:        "INSERT INTO users (name, email) VALUES (?, ?)",
+			paramIndex: 2,
+			want:       "email",
+		},
+		{
+			name:       "literal slot does not shift mapping",
+			sql:        "INSERT INTO mounts (mount_type, service_type, host_path) VALUES (?, 'DATABASE', ?)",
+			paramIndex: 2,
+			want:       "host_path",
+		},
+		{
+			name:       "trailing literal slots",
+			sql:        "INSERT INTO service_compose (service_id, compose_type, compose_file, compose_path, suffix) VALUES (?, ?, ?, '', '')",
+			paramIndex: 3,
+			want:       "compose_file",
+		},
+		{
+			name:       "INSERT OR IGNORE",
+			sql:        "INSERT OR IGNORE INTO group_policy (group_id, policy_id) VALUES (?, ?)",
+			paramIndex: 2,
+			want:       "policy_id",
+		},
+	}
+
+	ti := &TypeInferrer{}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ti.InferParamName(tc.sql, tc.paramIndex)
+			if got != tc.want {
+				t.Fatalf("InferParamName(%q, %d) = %q, want %q", tc.sql, tc.paramIndex, got, tc.want)
+			}
+		})
+	}
+}
