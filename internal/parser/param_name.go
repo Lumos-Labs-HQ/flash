@@ -138,10 +138,23 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 	}
 
+	// func(col) = func($N) — both sides function-wrapped (e.g. lower(owner) = lower($1))
+	funcFuncRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\w+\.)?\w+\s*\(\s*(?:(\w+)\.)?(\w+)(?:\s+AS\s+\w+)?\s*\)\s*(?:>=|<=|!=|<>|=|>|<)\s*\w+\s*\(\s*\$%d\b`, paramIndex))
+	if match := funcFuncRe.FindStringSubmatch(sql); len(match) > 2 {
+		return tvfSafeName(match[1], match[2])
+	}
+
+	// $N = 'LITERAL' — param on the left of a comparison against a constant
+	// (e.g. CASE WHEN $1 = 'HEALTHY' THEN ...): name after the literal.
+	litLeftRe := regexp.MustCompile(fmt.Sprintf(`\$%d\s*(?:=|!=|<>|>=|<=|>|<)\s*'([A-Za-z_][A-Za-z0-9_]*)'`, paramIndex))
+	if match := litLeftRe.FindStringSubmatch(sql); len(match) > 1 {
+		return strings.ToLower(match[1])
+	}
+
 	// func(col) = $N or func(col)::type = $N (function-wrapped column comparison)
-	funcColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:\w+\.)?(\w+)\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
-	if match := funcColRe.FindStringSubmatch(sql); len(match) > 1 {
-		return match[1]
+	funcColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:(\w+)\.)?(\w+)(?:\s+AS\s+\w+)?\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
+	if match := funcColRe.FindStringSubmatch(sql); len(match) > 2 {
+		return tvfSafeName(match[1], match[2])
 	}
 
 	wherePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$%d\b`, paramIndex)
@@ -347,12 +360,12 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 
 // inferInsertName maps the paramIndex-th ? of an INSERT to the column of the
 // VALUES slot it occupies. Literals and expressions in sibling slots do not
-// shift the mapping. INSERT..SELECT returns "" (params belong to the SELECT).
+// shift the mapping. INSERT..SELECT delegates to inferInsertSelectName.
 func inferInsertName(sql string, paramIndex int) string {
 	re := regexp.MustCompile(`(?is)INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\S+\s*\(([^)]*)\)\s*(?:VALUES|ROW\s+VALUES)\s*\(`)
 	loc := re.FindStringSubmatchIndex(sql)
 	if loc == nil {
-		return ""
+		return inferInsertSelectName(sql, paramIndex)
 	}
 	cols := splitTopLevelCommas(sql[loc[2]:loc[3]])
 
@@ -404,6 +417,103 @@ func inferInsertName(sql string, paramIndex int) string {
 		}
 	}
 	return ""
+}
+
+// inferInsertSelectName maps the placeholders of an INSERT..SELECT statement
+// positionally: each ? (or $N) in the SELECT expression list names after the
+// INSERT column in the same slot position. Placeholders after the expression
+// list (JOIN/WHERE of the SELECT) return "" so the general positional paths
+// name them.
+func inferInsertSelectName(sql string, paramIndex int) string {
+	re := regexp.MustCompile(`(?is)INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\S+\s*\(([^)]*)\)\s*SELECT\s`)
+	loc := re.FindStringSubmatchIndex(sql)
+	if loc == nil {
+		return ""
+	}
+	cols := splitTopLevelCommas(sql[loc[2]:loc[3]])
+
+	exprStart := loc[1]
+	fromIdx := topLevelKeywordIndex(sql[exprStart:], "FROM")
+	if fromIdx < 0 {
+		return ""
+	}
+	exprs := splitTopLevelCommas(sql[exprStart : exprStart+fromIdx])
+
+	qSeen := 0
+	for i, expr := range exprs {
+		if i >= len(cols) {
+			return ""
+		}
+		// $N-style: the slot references $paramIndex directly.
+		if regexp.MustCompile(fmt.Sprintf(`\$%d\b`, paramIndex)).MatchString(expr) {
+			return strings.TrimSpace(cols[i])
+		}
+		// ?-style: count ? occurrences across slots in order.
+		for j := 0; j < strings.Count(expr, "?"); j++ {
+			qSeen++
+			if qSeen == paramIndex {
+				return strings.TrimSpace(cols[i])
+			}
+		}
+	}
+	return ""
+}
+
+// topLevelKeywordIndex returns the index of the first top-level occurrence of
+// keyword (word-boundary matched, case-insensitive) in s, skipping content
+// inside parentheses, brackets, and quotes. Returns -1 if absent.
+func topLevelKeywordIndex(s string, keyword string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case '\'', '"':
+			quote := s[i]
+			for i++; i < len(s) && s[i] != quote; i++ {
+				if s[i] == '\\' {
+					i++
+				}
+			}
+		default:
+			if depth == 0 && matchWordAt(s, i, keyword) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func matchWordAt(s string, i int, word string) bool {
+	end := i + len(word)
+	if end > len(s) || !strings.EqualFold(s[i:end], word) {
+		return false
+	}
+	if i > 0 && isWordChar(s[i-1]) {
+		return false
+	}
+	if end < len(s) && isWordChar(s[end]) {
+		return false
+	}
+	return true
+}
+
+func isWordChar(c byte) bool {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// tvfSafeName resolves the param name for a function-wrapped comparison
+// operand. Columns of table-valued functions (json_each.value) are not real
+// schema columns, so naming after them collides with unrelated column types
+// in type inference — use a semantic name instead.
+func tvfSafeName(alias, col string) string {
+	switch strings.ToLower(alias) {
+	case "json_each", "json_tree", "openjson":
+		return "json_value"
+	}
+	return col
 }
 
 // splitTopLevelCommas splits on commas outside parentheses/quotes/brackets.
@@ -465,6 +575,12 @@ func inferPositionalName(sql string, paramIndex int) string {
 	}
 	pos := qPositions[paramIndex-1]
 
+	// ? = 'LITERAL' — param on the left of a comparison against a constant
+	// (e.g. CASE WHEN ? = 'HEALTHY' THEN ...): name after the literal.
+	if m := regexp.MustCompile(`^\?\s*(?:=|!=|<>|>=|<=|>|<)\s*'([A-Za-z_][A-Za-z0-9_]*)'`).FindStringSubmatch(sql[pos:]); len(m) > 1 {
+		return strings.ToLower(m[1])
+	}
+
 	if setStart >= 0 && pos >= setStart && pos < setEnd {
 		return nameForSetPlaceholder(sql[setStart:pos])
 	}
@@ -479,7 +595,31 @@ func inferPositionalName(sql string, paramIndex int) string {
 			end = start + e[0]
 		}
 		if pos < end {
+			if name := nameForWherePlaceholder(sql[start:pos]); name != "" {
+				return name
+			}
+		}
+	}
+
+	// JOIN ... ON cond AND col = ? — placeholder inside a join condition,
+	// reached only when no WHERE clause precedes it (WHERE params resolve
+	// above).
+	if onLocs := regexp.MustCompile(`\bON\b`).FindAllStringIndex(upper[:pos], -1); len(onLocs) > 0 {
+		start := onLocs[len(onLocs)-1][1]
+		if strings.LastIndex(upper[:pos], "WHERE") < start {
 			return nameForWherePlaceholder(sql[start:pos])
+		}
+	}
+
+	// col IN (SELECT ... FROM func(?)) — the placeholder is the argument of a
+	// table-valued function (json_each, json_tree, unnest) expanding an array
+	// of col values: name it after the IN column.
+	if m := regexp.MustCompile(`(?i)(\w+)\s*\(\s*$`).FindStringSubmatch(sql[:pos]); len(m) > 1 {
+		switch strings.ToLower(m[1]) {
+		case "json_each", "json_tree", "unnest":
+			if inMs := regexp.MustCompile(`(?i)(?:\w+\.)?(\w+)\s+IN\s*\(\s*SELECT\b`).FindAllStringSubmatch(sql[:pos], -1); len(inMs) > 0 {
+				return inMs[len(inMs)-1][1] + "_list"
+			}
 		}
 	}
 	return ""
@@ -500,6 +640,11 @@ func nameForSetPlaceholder(prefix string) string {
 
 // nameForWherePlaceholder names a WHERE-clause ? from the clause text preceding it.
 func nameForWherePlaceholder(prefix string) string {
+	// func(col) = ? or func(col) = func(?) — e.g. lower(g.owner) = lower(?),
+	// CAST(json_each.value AS TEXT) = ?
+	if m := regexp.MustCompile(`(?:\w+\.)?\w+\s*\(\s*(?:(\w+)\.)?(\w+)(?:\s+AS\s+\w+)?\s*\)\s*(?:>=|<=|!=|<>|=|>|<)\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 2 {
+		return tvfSafeName(m[1], m[2])
+	}
 	// col = ?, col = COALESCE(?, col), col = func(... func(?, alias.col = ?
 	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*=\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 1 {
 		return m[1]
