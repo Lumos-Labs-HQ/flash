@@ -11,6 +11,11 @@ func TestExtractTableName_Select(t *testing.T) {
 		{"SELECT * FROM users WHERE id = 1", "users"},
 		{"SELECT id FROM posts ORDER BY id", "posts"},
 		{"select count(*) from orders", "orders"},
+		// Trailing punctuation must not leak into the captured name.
+		{"SELECT id, name FROM tags;", "tags"},
+		{"SELECT * FROM users u JOIN posts p ON p.user_id = u.id;", "users"},
+		{"DELETE FROM tags;", "tags"},
+		{"UPDATE tags SET name = $1 WHERE id = $2;", "tags"},
 	}
 	for _, c := range cases {
 		got := ExtractTableName(c.sql)

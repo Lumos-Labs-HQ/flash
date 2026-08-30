@@ -22,6 +22,7 @@ type Generator struct {
 	cache        *gencommon.GenerationCache
 	expander     *gencommon.SchemaExpander
 	caches       []*cachegen.CacheInfo // resolved @cache annotations
+	structPlan   *sharedStructPlan     // deterministic row/params struct names + dedup aliases
 }
 
 func New(cfg *config.Config) *Generator {
@@ -345,7 +346,7 @@ func (g *Generator) writeCachedQueryMethod(w *strings.Builder, q *parser.Query, 
 
 	var paramNames []string
 	if len(q.Params) > 2 {
-		paramsStruct := toRustStructName(q.Name) + "Params"
+		paramsStruct := g.paramsTypeName(q)
 		w.WriteString(fmt.Sprintf("        params: &%s,\n", paramsStruct))
 		for _, p := range q.Params {
 			paramNames = append(paramNames, fmt.Sprintf("params.%s", utils.ToSnakeCase(p.Name)))
@@ -428,7 +429,7 @@ func (g *Generator) writePurgingMutationMethod(w *strings.Builder, q *parser.Que
 
 	var paramNames []string
 	if len(q.Params) > 2 {
-		paramsStruct := toRustStructName(q.Name) + "Params"
+		paramsStruct := g.paramsTypeName(q)
 		w.WriteString(fmt.Sprintf("        params: &%s,\n", paramsStruct))
 		for _, p := range q.Params {
 			paramNames = append(paramNames, fmt.Sprintf("params.%s", utils.ToSnakeCase(p.Name)))
