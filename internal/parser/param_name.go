@@ -7,16 +7,11 @@ import (
 )
 
 func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
-	// Check for INSERT statement first — collect ALL column names from every INSERT in multi-statement SQL
-	insertColRegex := regexp.MustCompile(`(?i)INSERT\s+INTO\s+\S+\s*\(([\s\S]*?)\)\s*VALUES`)
-	allInsertCols := []string{}
-	for _, match := range insertColRegex.FindAllStringSubmatch(sql, -1) {
-		for _, c := range strings.Split(match[1], ",") {
-			allInsertCols = append(allInsertCols, strings.TrimSpace(c))
-		}
-	}
-	if paramIndex <= len(allInsertCols) {
-		return allInsertCols[paramIndex-1]
+	// INSERT statements: map the paramIndex-th ? to the VALUES slot (column)
+	// it sits in. Handles literal slots ('VALUES (?, ''LIT'', ?...)') that the
+	// old positional column-list lookup misnamed.
+	if name := inferInsertName(sql, paramIndex); name != "" {
+		return name
 	}
 
 	// col = ANY($N) — param name is the column name (it's an array param)
@@ -67,96 +62,14 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			}
 		}
 
-		// SET clause with ? params: SET col = ?, col2 = ?, col = col + ?
-		setColPattern := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
-		if setMatch := setColPattern.FindStringSubmatch(sql); len(setMatch) > 1 {
-			setClause := setMatch[1]
-			// Match both: direct (col = ?) and counter (col = col + ? or col = col - ?)
-			colPattern := regexp.MustCompile(`(?i)(\w+)\s*=\s*(?:\w+\s*[+\-]\s*)?\?`)
-			allSetMatches := colPattern.FindAllStringSubmatch(setClause, -1)
-			setCols := []string{}
-			for _, m := range allSetMatches {
-				setCols = append(setCols, m[1])
-			}
-			if paramIndex <= len(setCols) {
-				name := setCols[paramIndex-1]
-				// For counter pattern (col = col +/- ?) append _delta
-				counterCheck := regexp.MustCompile(fmt.Sprintf(`(?i)%s\s*=\s*\w+\s*[+\-]\s*\?`, regexp.QuoteMeta(name)))
-				if counterCheck.MatchString(setClause) {
-					return name + "_delta"
-				}
-				return name
-			}
-			// Offset index past SET params for WHERE matching
-			paramIndex = paramIndex - len(setCols)
-		}
-
-		// WHERE clause with ? params
-		// Find the LAST/outermost WHERE clause to avoid matching subquery WHERE clauses
-		wherePos := strings.LastIndex(strings.ToUpper(sql), "WHERE")
-		if wherePos >= 0 {
-			// Extract the WHERE clause content after the last WHERE keyword
-			afterWhere := sql[wherePos+5:] // skip "WHERE"
-			// Trim to the end of the WHERE clause (stop at LIMIT/ORDER/GROUP/HAVING/ALLOW FILTERING)
-			endRe := regexp.MustCompile(`(?i)\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`)
-			if endLoc := endRe.FindStringIndex(afterWhere); endLoc != nil {
-				afterWhere = afterWhere[:endLoc[0]]
-			}
-			whereClause := strings.TrimSpace(afterWhere)
-
-			// Count ? that appear BEFORE the WHERE clause but AFTER any SET clause
-			// (SET ? params are already handled above via paramIndex reduction).
-			// This accounts for ? in LATERAL subqueries, inline subqueries, etc.
-			beforeWhere := sql[:wherePos]
-			paramsBefore := strings.Count(beforeWhere, "?")
-			// Subtract SET params that were already handled (paramIndex was already reduced)
-			setColPattern2 := regexp.MustCompile(`(?i)SET\s+([\s\S]*?)(?:WHERE|$)`)
-			setParamsHandled := 0
-			if setMatch2 := setColPattern2.FindStringSubmatch(sql); len(setMatch2) > 1 {
-				setParamsHandled = strings.Count(setMatch2[1], "?")
-			}
-			subqueryParamsBefore := paramsBefore - setParamsHandled
-			if subqueryParamsBefore < 0 {
-				subqueryParamsBefore = 0
-			}
-			relParamIndex := paramIndex - subqueryParamsBefore
-
-			// col ILIKE '%' || ? || '%' or col ILIKE ? (concatenated search)
-			ilikePattern := regexp.MustCompile(`(?i)(\w+)\s+I?LIKE\s+.*?\?`)
-			ilikeMatches := ilikePattern.FindAllStringSubmatch(whereClause, -1)
-
-			colPattern := regexp.MustCompile(`(?i)(?:\w+\.)?(\w+)\s*=\s*\?`)
-			matches := colPattern.FindAllStringSubmatch(whereClause, -1)
-			if relParamIndex > 0 && relParamIndex <= len(matches) && len(matches[relParamIndex-1]) > 1 {
-				return matches[relParamIndex-1][1]
-			}
-
-			// ILIKE with ? (including '%' || ? || '%' patterns)
-			if len(ilikeMatches) > 0 {
-				relIdx := relParamIndex
-				// Check if this param falls within an ILIKE pattern
-				for _, m := range ilikeMatches {
-					if relIdx > 0 && relIdx <= strings.Count(m[0], "?") {
-						return m[1]
-					}
-					relIdx -= strings.Count(m[0], "?")
-				}
-			}
-
-			// CONTAINS ? pattern
-			containsPattern := regexp.MustCompile(`(?i)(\w+)\s+CONTAINS\s+\?`)
-			allContains := containsPattern.FindAllStringSubmatch(whereClause, -1)
-			// Only match if this paramIndex maps to a CONTAINS position
-			if relParamIndex > 0 && relParamIndex <= len(allContains) {
-				return allContains[relParamIndex-1][1]
-			}
-			// Also match >= AND <= BETWEEN-style
-			whereParamIndex := relParamIndex - len(matches)
-			rangePattern := regexp.MustCompile(`(?i)(\w+)\s*(>=|<=|>|<)\s*\?`)
-			rangeMatches := rangePattern.FindAllStringSubmatch(whereClause, -1)
-			if whereParamIndex > 0 && whereParamIndex <= len(rangeMatches) {
-				return rangeMatches[whereParamIndex-1][1]
-			}
+		// Positional naming: map the paramIndex-th ? to the column it targets
+		// by scanning the SET clause and the trailing WHERE clause in order.
+		// The previous pattern-list lookups miscounted ?s wrapped in
+		// expressions (COALESCE(?, col), CASE WHEN ?=?, func(?)), shifting
+		// every later name — e.g. "SET a=?, b=COALESCE(?,b) WHERE id=?"
+		// generated (a, id, param2) instead of (a, b, id).
+		if name := inferPositionalName(sql, paramIndex); name != "" {
+			return name
 		}
 
 		// LIMIT ? — count total params before LIMIT to find if this ? is LIMIT
@@ -174,21 +87,6 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 			totalBefore := strings.Count(beforeOffset, "?")
 			if paramIndex == totalBefore+1 {
 				return "offset"
-			}
-		}
-
-		// SET col = col + ? (counter increment) → use the column name
-		counterRe := regexp.MustCompile(`(?i)(\w+)\s*=\s*(\w+)\s*\+\s*\?`)
-		for _, m := range counterRe.FindAllStringSubmatch(sql, -1) {
-			if strings.EqualFold(m[1], m[2]) {
-				// Find position of this ? in the SQL
-				idx := strings.Index(sql, m[0])
-				if idx >= 0 {
-					pos := strings.Count(sql[:idx+len(m[0])], "?")
-					if paramIndex == pos {
-						return m[1]
-					}
-				}
 			}
 		}
 	}
@@ -240,10 +138,23 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 		}
 	}
 
+	// func(col) = func($N) — both sides function-wrapped (e.g. lower(owner) = lower($1))
+	funcFuncRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\w+\.)?\w+\s*\(\s*(?:(\w+)\.)?(\w+)(?:\s+AS\s+\w+)?\s*\)\s*(?:>=|<=|!=|<>|=|>|<)\s*\w+\s*\(\s*\$%d\b`, paramIndex))
+	if match := funcFuncRe.FindStringSubmatch(sql); len(match) > 2 {
+		return tvfSafeName(match[1], match[2])
+	}
+
+	// $N = 'LITERAL' — param on the left of a comparison against a constant
+	// (e.g. CASE WHEN $1 = 'HEALTHY' THEN ...): name after the literal.
+	litLeftRe := regexp.MustCompile(fmt.Sprintf(`\$%d\s*(?:=|!=|<>|>=|<=|>|<)\s*'([A-Za-z_][A-Za-z0-9_]*)'`, paramIndex))
+	if match := litLeftRe.FindStringSubmatch(sql); len(match) > 1 {
+		return strings.ToLower(match[1])
+	}
+
 	// func(col) = $N or func(col)::type = $N (function-wrapped column comparison)
-	funcColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:\w+\.)?(\w+)\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
-	if match := funcColRe.FindStringSubmatch(sql); len(match) > 1 {
-		return match[1]
+	funcColRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*\w+\s*\(\s*(?:(\w+)\.)?(\w+)(?:\s+AS\s+\w+)?\s*\)(?:::\w+)?\s*=\s*\$%d\b`, paramIndex))
+	if match := funcColRe.FindStringSubmatch(sql); len(match) > 2 {
+		return tvfSafeName(match[1], match[2])
 	}
 
 	wherePattern := fmt.Sprintf(`(?i)(?:WHERE|AND|OR)\s*\(?\s*(?:\w+\.)?(\w+)\s*=\s*\$%d\b`, paramIndex)
@@ -445,4 +356,310 @@ func (ti *TypeInferrer) InferParamName(sql string, paramIndex int) string {
 	}
 
 	return fmt.Sprintf("param%d", paramIndex)
+}
+
+// inferInsertName maps the paramIndex-th ? of an INSERT to the column of the
+// VALUES slot it occupies. Literals and expressions in sibling slots do not
+// shift the mapping. INSERT..SELECT delegates to inferInsertSelectName.
+func inferInsertName(sql string, paramIndex int) string {
+	re := regexp.MustCompile(`(?is)INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\S+\s*\(([^)]*)\)\s*(?:VALUES|ROW\s+VALUES)\s*\(`)
+	loc := re.FindStringSubmatchIndex(sql)
+	if loc == nil {
+		return inferInsertSelectName(sql, paramIndex)
+	}
+	cols := splitTopLevelCommas(sql[loc[2]:loc[3]])
+
+	valuesStart := loc[1] // just after the "VALUES (" opening paren
+	depth := 1            // already inside the VALUES paren
+	end := -1
+	for i := valuesStart; i < len(sql); i++ {
+		switch sql[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				end = i
+			}
+		case '\'', '"':
+			// skip string literal
+			quote := sql[i]
+			for i++; i < len(sql) && sql[i] != quote; i++ {
+				if sql[i] == '\\' {
+					i++
+				}
+			}
+		}
+		if end >= 0 {
+			break
+		}
+	}
+	if end < 0 {
+		return ""
+	}
+	slots := splitTopLevelCommas(sql[valuesStart:end])
+	if len(slots) != len(cols) {
+		return ""
+	}
+
+	qSeen := 0
+	for i, slot := range slots {
+		// $N-style: the slot references $paramIndex directly.
+		if regexp.MustCompile(fmt.Sprintf(`\$%d\b`, paramIndex)).MatchString(slot) {
+			return strings.TrimSpace(cols[i])
+		}
+		// ?-style: count ? occurrences across slots in order.
+		for j := 0; j < strings.Count(slot, "?"); j++ {
+			qSeen++
+			if qSeen == paramIndex {
+				return strings.TrimSpace(cols[i])
+			}
+		}
+	}
+	return ""
+}
+
+// inferInsertSelectName maps the placeholders of an INSERT..SELECT statement
+// positionally: each ? (or $N) in the SELECT expression list names after the
+// INSERT column in the same slot position. Placeholders after the expression
+// list (JOIN/WHERE of the SELECT) return "" so the general positional paths
+// name them.
+func inferInsertSelectName(sql string, paramIndex int) string {
+	re := regexp.MustCompile(`(?is)INSERT\s+(?:OR\s+\w+\s+)?INTO\s+\S+\s*\(([^)]*)\)\s*SELECT\s`)
+	loc := re.FindStringSubmatchIndex(sql)
+	if loc == nil {
+		return ""
+	}
+	cols := splitTopLevelCommas(sql[loc[2]:loc[3]])
+
+	exprStart := loc[1]
+	fromIdx := topLevelKeywordIndex(sql[exprStart:], "FROM")
+	if fromIdx < 0 {
+		return ""
+	}
+	exprs := splitTopLevelCommas(sql[exprStart : exprStart+fromIdx])
+
+	qSeen := 0
+	for i, expr := range exprs {
+		if i >= len(cols) {
+			return ""
+		}
+		// $N-style: the slot references $paramIndex directly.
+		if regexp.MustCompile(fmt.Sprintf(`\$%d\b`, paramIndex)).MatchString(expr) {
+			return strings.TrimSpace(cols[i])
+		}
+		// ?-style: count ? occurrences across slots in order.
+		for j := 0; j < strings.Count(expr, "?"); j++ {
+			qSeen++
+			if qSeen == paramIndex {
+				return strings.TrimSpace(cols[i])
+			}
+		}
+	}
+	return ""
+}
+
+// topLevelKeywordIndex returns the index of the first top-level occurrence of
+// keyword (word-boundary matched, case-insensitive) in s, skipping content
+// inside parentheses, brackets, and quotes. Returns -1 if absent.
+func topLevelKeywordIndex(s string, keyword string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case '\'', '"':
+			quote := s[i]
+			for i++; i < len(s) && s[i] != quote; i++ {
+				if s[i] == '\\' {
+					i++
+				}
+			}
+		default:
+			if depth == 0 && matchWordAt(s, i, keyword) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func matchWordAt(s string, i int, word string) bool {
+	end := i + len(word)
+	if end > len(s) || !strings.EqualFold(s[i:end], word) {
+		return false
+	}
+	if i > 0 && isWordChar(s[i-1]) {
+		return false
+	}
+	if end < len(s) && isWordChar(s[end]) {
+		return false
+	}
+	return true
+}
+
+func isWordChar(c byte) bool {
+	return c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// tvfSafeName resolves the param name for a function-wrapped comparison
+// operand. Columns of table-valued functions (json_each.value) are not real
+// schema columns, so naming after them collides with unrelated column types
+// in type inference — use a semantic name instead.
+func tvfSafeName(alias, col string) string {
+	switch strings.ToLower(alias) {
+	case "json_each", "json_tree", "openjson":
+		return "json_value"
+	}
+	return col
+}
+
+// splitTopLevelCommas splits on commas outside parentheses/quotes/brackets.
+func splitTopLevelCommas(s string) []string {
+	var parts []string
+	depth := 0
+	start := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case '\'', '"':
+			quote := s[i]
+			for i++; i < len(s) && s[i] != quote; i++ {
+				if s[i] == '\\' {
+					i++
+				}
+			}
+		case ',':
+			if depth == 0 {
+				parts = append(parts, s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, s[start:])
+	return parts
+}
+
+// inferPositionalName maps the paramIndex-th ? placeholder to the column it
+// targets. It locates the placeholder inside the UPDATE ... SET clause or the
+// trailing WHERE clause and names it after the assigned/compared column.
+// Expression-wrapped placeholders (COALESCE(?, col), func(?)) inherit the
+// column name; counter assignments (col = col + ?) get a _delta suffix.
+// Placeholders it cannot attribute (CASE WHEN ?=?, bare SELECT ?) return ""
+// so the caller keeps the ordered paramN fallback.
+func inferPositionalName(sql string, paramIndex int) string {
+	upper := strings.ToUpper(sql)
+
+	setStart, setEnd := -1, -1
+	if setLoc := regexp.MustCompile(`\bSET\s`).FindStringIndex(upper); setLoc != nil {
+		setStart = setLoc[1]
+		setEnd = len(sql)
+		if w := strings.LastIndex(upper, "WHERE"); w > setStart {
+			setEnd = w
+		}
+	}
+
+	qPositions := make([]int, 0, 8)
+	for i := 0; i < len(sql); i++ {
+		if sql[i] == '?' {
+			qPositions = append(qPositions, i)
+		}
+	}
+	if paramIndex > len(qPositions) {
+		return ""
+	}
+	pos := qPositions[paramIndex-1]
+
+	// ? = 'LITERAL' — param on the left of a comparison against a constant
+	// (e.g. CASE WHEN ? = 'HEALTHY' THEN ...): name after the literal.
+	if m := regexp.MustCompile(`^\?\s*(?:=|!=|<>|>=|<=|>|<)\s*'([A-Za-z_][A-Za-z0-9_]*)'`).FindStringSubmatch(sql[pos:]); len(m) > 1 {
+		return strings.ToLower(m[1])
+	}
+
+	if setStart >= 0 && pos >= setStart && pos < setEnd {
+		return nameForSetPlaceholder(sql[setStart:pos])
+	}
+
+	// Resolve against the WHERE clause nearest BEFORE this placeholder, so
+	// UNION/multi-SELECT statements map each branch's params to its own
+	// WHERE columns (LastIndex-WHERE only sees the final branch).
+	if w := strings.LastIndex(upper[:pos], "WHERE"); w >= 0 {
+		start := w + 5
+		end := len(sql)
+		if e := regexp.MustCompile(`\b(LIMIT|ORDER\s+BY|GROUP\s+BY|HAVING|ALLOW\s+FILTERING)\b`).FindStringIndex(upper[start:]); e != nil {
+			end = start + e[0]
+		}
+		if pos < end {
+			if name := nameForWherePlaceholder(sql[start:pos]); name != "" {
+				return name
+			}
+		}
+	}
+
+	// JOIN ... ON cond AND col = ? — placeholder inside a join condition,
+	// reached only when no WHERE clause precedes it (WHERE params resolve
+	// above).
+	if onLocs := regexp.MustCompile(`\bON\b`).FindAllStringIndex(upper[:pos], -1); len(onLocs) > 0 {
+		start := onLocs[len(onLocs)-1][1]
+		if strings.LastIndex(upper[:pos], "WHERE") < start {
+			return nameForWherePlaceholder(sql[start:pos])
+		}
+	}
+
+	// col IN (SELECT ... FROM func(?)) — the placeholder is the argument of a
+	// table-valued function (json_each, json_tree, unnest) expanding an array
+	// of col values: name it after the IN column.
+	if m := regexp.MustCompile(`(?i)(\w+)\s*\(\s*$`).FindStringSubmatch(sql[:pos]); len(m) > 1 {
+		switch strings.ToLower(m[1]) {
+		case "json_each", "json_tree", "unnest":
+			if inMs := regexp.MustCompile(`(?i)(?:\w+\.)?(\w+)\s+IN\s*\(\s*SELECT\b`).FindAllStringSubmatch(sql[:pos], -1); len(inMs) > 0 {
+				return inMs[len(inMs)-1][1] + "_list"
+			}
+		}
+	}
+	return ""
+}
+
+// nameForSetPlaceholder names a SET-clause ? from the clause text preceding it.
+func nameForSetPlaceholder(prefix string) string {
+	// col = col + ? / col = col - ? → counter delta
+	if m := regexp.MustCompile(`(\w+)\s*=\s*\w+\s*[+\-]\s*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1] + "_delta"
+	}
+	// col = ?, col = COALESCE(?, ...), col = func(func(?...
+	if m := regexp.MustCompile(`(\w+)\s*=\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
+
+// nameForWherePlaceholder names a WHERE-clause ? from the clause text preceding it.
+func nameForWherePlaceholder(prefix string) string {
+	// func(col) = ? or func(col) = func(?) — e.g. lower(g.owner) = lower(?),
+	// CAST(json_each.value AS TEXT) = ?
+	if m := regexp.MustCompile(`(?:\w+\.)?\w+\s*\(\s*(?:(\w+)\.)?(\w+)(?:\s+AS\s+\w+)?\s*\)\s*(?:>=|<=|!=|<>|=|>|<)\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 2 {
+		return tvfSafeName(m[1], m[2])
+	}
+	// col = ?, col = COALESCE(?, col), col = func(... func(?, alias.col = ?
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*=\s*(?:\w+\s*\(\s*)*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	// col >= ? / col <= ? / col != ? / col > ? / col < ?
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s*(?:>=|<=|!=|>|<)\s*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	// col LIKE ? / col ILIKE '%' || ? (concatenated search)
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s+(?:NOT\s+)?I?LIKE\s+.*$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	// col CONTAINS ? (ScyllaDB)
+	if m := regexp.MustCompile(`(?:\w+\.)?(\w+)\s+CONTAINS\s+$`).FindStringSubmatch(prefix); len(m) > 1 {
+		return m[1]
+	}
+	return ""
 }

@@ -25,7 +25,7 @@ func ExtractTableName(sql string) string {
 
 	if strings.Contains(sqlUpper, "INSERT INTO") {
 		if matches := insertIntoRegex.FindStringSubmatch(sql); len(matches) > 1 {
-			return matches[1]
+			return trimTableName(matches[1])
 		}
 	}
 
@@ -33,18 +33,25 @@ func ExtractTableName(sql string) string {
 	// Strip parentheses content first to avoid matching EXTRACT(EPOCH FROM ...).
 	stripped := StripParenthesizedContent(sqlUpper)
 	if matches := fromTableRegex.FindStringSubmatch(stripped); len(matches) > 1 {
-		return strings.ToLower(matches[1])
+		return strings.ToLower(trimTableName(matches[1]))
 	}
 
 	if matches := updateTableRegex.FindStringSubmatch(stripped); len(matches) > 1 {
-		return strings.ToLower(matches[1])
+		return strings.ToLower(trimTableName(matches[1]))
 	}
 
 	if matches := deleteFromRegex.FindStringSubmatch(stripped); len(matches) > 1 {
-		return strings.ToLower(matches[1])
+		return strings.ToLower(trimTableName(matches[1]))
 	}
 
 	return ""
+}
+
+// trimTableName strips trailing SQL punctuation (statement terminators, list
+// separators) that the \S+ capture groups swallow along with the name —
+// e.g. "FROM tags;" must yield "tags", not "tags;".
+func trimTableName(name string) string {
+	return strings.TrimRight(name, ";,)")
 }
 
 // StripParenthesizedContent replaces everything between balanced parentheses with spaces.

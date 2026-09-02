@@ -219,3 +219,47 @@ func (e *SchemaExpander) ModelTypeForQuery(query *parser.Query, columns []*parse
 	}
 	return ""
 }
+
+// ModelTypeForQueryByName is the name-based variant of ModelTypeForQuery for
+// ORMs that map result columns by NAME rather than position (sqlx FromRow /
+// query_as!). The column SET must match the table — same names, types, and
+// nullability — but the SELECT order may differ from the schema order.
+func (e *SchemaExpander) ModelTypeForQueryByName(query *parser.Query, columns []*parser.QueryColumn) string {
+	if e == nil || len(columns) == 0 || len(e.Tables) == 0 {
+		return ""
+	}
+	tableName := utils.ExtractTableName(query.SQL)
+	if tableName == "" {
+		return ""
+	}
+	// Strip keyspace prefix for lookup
+	if idx := strings.LastIndex(tableName, "."); idx >= 0 {
+		tableName = tableName[idx+1:]
+	}
+
+	for _, t := range e.Tables {
+		name := t.Name
+		if idx := strings.LastIndex(name, "."); idx >= 0 {
+			name = name[idx+1:]
+		}
+		if !strings.EqualFold(name, tableName) || len(t.Columns) != len(columns) {
+			continue
+		}
+		byName := make(map[string]*parser.Column, len(t.Columns))
+		for _, tc := range t.Columns {
+			byName[strings.ToLower(tc.Name)] = tc
+		}
+		match := true
+		for _, col := range columns {
+			tc, ok := byName[strings.ToLower(col.Name)]
+			if !ok || !strings.EqualFold(tc.Type, col.Type) || tc.Nullable != col.Nullable {
+				match = false
+				break
+			}
+		}
+		if match {
+			return utils.ToPascalCase(tableName)
+		}
+	}
+	return ""
+}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 
@@ -16,6 +17,167 @@ import (
 type fileGroup struct {
 	src     string
 	queries []*parser.Query
+}
+
+// sharedStructPlan deduplicates structurally identical Row/Params structs.
+// The first occurrence in deterministic order (sorted source files, in-file
+// query order) is emitted as the canonical struct; later occurrences become
+// `pub type X = Y;` aliases. Row and Params shapes are deduped within their
+// own namespaces — a Row never aliases a Params.
+type sharedStructPlan struct {
+	// rowNames/paramsNames map a query to its final (suffix-deduped) struct
+	// name, allocated deterministically before parallel generation starts.
+	rowNames    map[*parser.Query]string
+	paramsNames map[*parser.Query]string
+	// canonical maps shape key → canonical struct name.
+	canonical map[string]string
+	// alias maps struct name → canonical struct name (identity for the
+	// canonical struct itself).
+	alias map[string]string
+	// ownerSrc maps canonical struct name → source file owning the definition.
+	ownerSrc map[string]string
+	// imports maps source file → canonical struct names it must import from
+	// other modules for its aliases.
+	imports map[string]map[string]bool
+}
+
+func (p *sharedStructPlan) addImport(src, canonicalName string) {
+	if p.imports[src] == nil {
+		p.imports[src] = make(map[string]bool)
+	}
+	p.imports[src][canonicalName] = true
+}
+
+// planSharedStructs precomputes deterministic struct names and the canonical/
+// alias split for all query files. It must mirror the emission conditions in
+// generateSingleRustFile exactly: a query emits a Row struct when it is not an
+// exec command, expands to >1 column, and does not match a table model; a
+// Params struct when it has >2 params.
+func (g *Generator) planSharedStructs(groups []fileGroup) *sharedStructPlan {
+	plan := &sharedStructPlan{
+		rowNames:    make(map[*parser.Query]string),
+		paramsNames: make(map[*parser.Query]string),
+		canonical:   make(map[string]string),
+		alias:       make(map[string]string),
+		ownerSrc:    make(map[string]string),
+		imports:     make(map[string]map[string]bool),
+	}
+
+	sorted := make([]fileGroup, len(groups))
+	copy(sorted, groups)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].src < sorted[j].src })
+
+	usedNames := make(map[string]int)
+
+	claim := func(base string) string {
+		if count, ok := usedNames[base]; ok {
+			usedNames[base] = count + 1
+			return fmt.Sprintf("%s%d", base, count+1)
+		}
+		usedNames[base] = 1
+		return base
+	}
+
+	for _, fg := range sorted {
+		for _, q := range fg.queries {
+			cmd := strings.ToLower(q.Cmd)
+			isExec := cmd == ":exec" || cmd == "exec" || cmd == ":execresult" || cmd == "execresult"
+			if !isExec {
+				columns := g.expandWildcardColumns(q)
+				if len(columns) > 1 && g.modelTypeForQuery(q, columns) == "" {
+					name := claim(toRustStructName(q.Name) + "Row")
+					plan.rowNames[q] = name
+					shape := "R" + g.rowShapeKey(columns)
+					plan.assign(shape, name, fg.src)
+				}
+			}
+			if len(q.Params) > 2 {
+				name := toRustStructName(q.Name) + "Params"
+				plan.paramsNames[q] = name
+				shape := "P" + g.paramsShapeKey(q)
+				plan.assign(shape, name, fg.src)
+			}
+		}
+	}
+	return plan
+}
+
+func (p *sharedStructPlan) assign(shape, name, src string) {
+	if canon, ok := p.canonical[shape]; ok {
+		p.alias[name] = canon
+		if p.ownerSrc[canon] != src {
+			p.addImport(src, canon)
+		}
+		return
+	}
+	p.canonical[shape] = name
+	p.alias[name] = name
+	p.ownerSrc[name] = src
+}
+
+// rowShapeKey builds the structural identity of a row struct: ordered
+// (name, rust type) pairs. Identical column lists in different order are NOT
+// the same struct (fields are emitted in SELECT order).
+func (g *Generator) rowShapeKey(columns []*parser.QueryColumn) string {
+	var b strings.Builder
+	for _, col := range columns {
+		b.WriteString("|")
+		b.WriteString(utils.ToSnakeCase(col.Name))
+		b.WriteString(":")
+		b.WriteString(g.rowFieldType(col))
+	}
+	return b.String()
+}
+
+func (g *Generator) paramsShapeKey(q *parser.Query) string {
+	var b strings.Builder
+	for _, p := range q.Params {
+		b.WriteString("|")
+		b.WriteString(utils.ToSnakeCase(p.Name))
+		b.WriteString(":")
+		b.WriteString(g.sqlTypeToRust(p.Type, false))
+	}
+	return b.String()
+}
+
+// rowFieldType computes the emitted Rust type for a result column, applying
+// the macros-mode nullability adjustments. Shared by shape keys and emission
+// so the two can never drift apart.
+func (g *Generator) rowFieldType(col *parser.QueryColumn) string {
+	nullable := col.Nullable
+	if g.Config.Gen.Rust.Macros {
+		// sqlx macros always infer computed/aggregate columns as nullable
+		if col.IsComputed {
+			nullable = true
+		}
+		// sqlx macros return Option<i64> for COUNT/SUM/RANK results
+		// even when accessed through CTE aliases or JOINs.
+		// Any BIGINT that isn't an actual table column should be Option.
+		if strings.ToUpper(col.Type) == "BIGINT" && !g.isActualTableColumn(col.Name, col.Table) {
+			nullable = true
+		}
+	}
+	return g.sqlTypeToRust(col.Type, nullable)
+}
+
+// rowTypeName resolves the struct name a query's method returns. Falls back
+// to the plain derived name when no plan is active (e.g. cache-only tests).
+func (g *Generator) rowTypeName(q *parser.Query) string {
+	if g.structPlan != nil {
+		if name, ok := g.structPlan.rowNames[q]; ok {
+			return name
+		}
+	}
+	return toRustStructName(q.Name) + "Row"
+}
+
+func (g *Generator) paramsTypeName(q *parser.Query) string {
+	if g.structPlan != nil {
+		if name, ok := g.structPlan.paramsNames[q]; ok {
+			return name
+		}
+	}
+	return toRustStructName(q.Name) + "Params"
 }
 
 func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRegen bool) error {
@@ -33,8 +195,9 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 		groups = append(groups, fileGroup{src, qs})
 	}
 
-	usedNames := make(map[string]int)
-	var mu sync.Mutex
+	// Precompute struct names and the canonical/alias split deterministically
+	// before parallel generation starts, so identical structs are emitted once.
+	g.structPlan = g.planSharedStructs(groups)
 
 	numWorkers := runtime.NumCPU()
 	if numWorkers > len(groups) {
@@ -53,7 +216,9 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 		go func() {
 			defer wg.Done()
 			for fg := range workCh {
-				errCh <- g.generateSingleRustFile(fg.src, fg.queries, fullRegen, &mu, usedNames)
+				if err := g.generateSingleRustFile(fg.src, fg.queries, fullRegen); err != nil {
+					errCh <- err
+				}
 			}
 		}()
 	}
@@ -70,7 +235,7 @@ func (g *Generator) generateQueriesIncremental(queries []*parser.Query, fullRege
 	return nil
 }
 
-func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, fullRegen bool, mu *sync.Mutex, usedNames map[string]int) error {
+func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, fullRegen bool) error {
 	queryFile := filepath.Join(g.Config.Queries, src+".sql")
 	currentHash, _ := gencommon.ComputeFileChecksum(queryFile)
 
@@ -96,11 +261,29 @@ func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, 
 	}
 
 	w.WriteString("use super::models::*;\n")
-	w.WriteString("use super::db::Queries;\n\n")
+	w.WriteString("use super::db::Queries;\n")
+
+	// Canonical structs aliased from other modules need explicit imports
+	// (explicit imports shadow the glob above).
+	if g.structPlan != nil {
+		if imported := g.structPlan.imports[src]; len(imported) > 0 {
+			names := make([]string, 0, len(imported))
+			for name := range imported {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			for _, name := range names {
+				ownerMod := toRustModuleName(g.structPlan.ownerSrc[name])
+				w.WriteString(fmt.Sprintf("use super::%s::%s;\n", ownerMod, name))
+			}
+		}
+	}
+	w.WriteString("\n")
 
 	useMacros := g.Config.Gen.Rust.Macros
 
-	// Generate row structs for queries returning multiple columns not matching a model
+	// Generate row structs for queries returning multiple columns not matching a model.
+	// Structurally identical structs are emitted once; duplicates become type aliases.
 	for _, q := range queries {
 		cmd := strings.ToLower(q.Cmd)
 		if cmd == ":exec" || cmd == "exec" || cmd == ":execresult" || cmd == "execresult" {
@@ -118,15 +301,13 @@ func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, 
 			continue
 		}
 
-		structName := toRustStructName(q.Name) + "Row"
-		mu.Lock()
-		if count, ok := usedNames[structName]; ok {
-			usedNames[structName] = count + 1
-			structName = fmt.Sprintf("%s%d", structName, count+1)
-		} else {
-			usedNames[structName] = 1
+		structName := g.rowTypeName(q)
+		if g.structPlan != nil {
+			if canon, ok := g.structPlan.alias[structName]; ok && canon != structName {
+				w.WriteString(fmt.Sprintf("pub type %s = %s;\n\n", structName, canon))
+				continue
+			}
 		}
-		mu.Unlock()
 
 		if useMacros {
 			// With macros, FromRow is not needed — the macro handles mapping
@@ -137,32 +318,25 @@ func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, 
 		w.WriteString(fmt.Sprintf("pub struct %s {\n", structName))
 		for _, col := range columns {
 			fieldName := utils.ToSnakeCase(col.Name)
-			nullable := col.Nullable
-			if useMacros {
-				// sqlx macros always infer computed/aggregate columns as nullable
-				if col.IsComputed {
-					nullable = true
-				}
-				// sqlx macros return Option<i64> for COUNT/SUM/RANK results
-				// even when accessed through CTE aliases or JOINs.
-				// Any BIGINT that isn't an actual table column should be Option.
-				colTypeUpper := strings.ToUpper(col.Type)
-				if colTypeUpper == "BIGINT" && !g.isActualTableColumn(col.Name, col.Table) {
-					nullable = true
-				}
-			}
-			rustType := g.sqlTypeToRust(col.Type, nullable)
+			rustType := g.rowFieldType(col)
 			w.WriteString(fmt.Sprintf("    pub %s: %s,\n", fieldName, rustType))
 		}
 		w.WriteString("}\n\n")
 	}
 
-	// Generate param structs for queries with >2 params
+	// Generate param structs for queries with >2 params.
+	// Structurally identical params structs are emitted once; duplicates become type aliases.
 	for _, q := range queries {
 		if len(q.Params) <= 2 {
 			continue
 		}
-		structName := toRustStructName(q.Name) + "Params"
+		structName := g.paramsTypeName(q)
+		if g.structPlan != nil {
+			if canon, ok := g.structPlan.alias[structName]; ok && canon != structName {
+				w.WriteString(fmt.Sprintf("pub type %s = %s;\n\n", structName, canon))
+				continue
+			}
+		}
 		w.WriteString(fmt.Sprintf("pub struct %s {\n", structName))
 		for _, p := range q.Params {
 			fieldName := utils.ToSnakeCase(p.Name)
@@ -236,7 +410,7 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, q *parser.Query) {
 
 	// Parameters
 	if len(q.Params) > 2 {
-		paramsStruct := toRustStructName(q.Name) + "Params"
+		paramsStruct := g.paramsTypeName(q)
 		w.WriteString(fmt.Sprintf("        params: &%s,\n", paramsStruct))
 	} else {
 		for _, p := range q.Params {
@@ -405,7 +579,7 @@ func (g *Generator) getMacroOneReturnType(q *parser.Query, columns []*parser.Que
 	if modelType != "" {
 		return modelType
 	}
-	return toRustStructName(q.Name) + "Row"
+	return g.rowTypeName(q)
 }
 
 // isActualTableColumn checks if a column name exists as a physical column in the given table.
@@ -438,7 +612,7 @@ func (g *Generator) getOneReturnType(q *parser.Query, columns []*parser.QueryCol
 	if len(columns) == 1 {
 		return g.sqlTypeToRust(columns[0].Type, columns[0].Nullable)
 	}
-	return toRustStructName(q.Name) + "Row"
+	return g.rowTypeName(q)
 }
 
 func (g *Generator) getExecResultType() string {
@@ -452,9 +626,12 @@ func (g *Generator) getExecResultType() string {
 	}
 }
 
-// modelTypeForQuery checks if query columns exactly match a table model
+// modelTypeForQuery checks if query columns exactly match a table model.
+// Uses the name-based matcher: sqlx maps result columns by name (FromRow /
+// query_as!), so a SELECT in a different column order still decodes into the
+// model struct.
 func (g *Generator) modelTypeForQuery(q *parser.Query, columns []*parser.QueryColumn) string {
-	return g.expander.ModelTypeForQuery(q, columns)
+	return g.expander.ModelTypeForQueryByName(q, columns)
 }
 
 // expandWildcardColumns expands * in queries using schema info
