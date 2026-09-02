@@ -81,13 +81,6 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 	case "count", "min_count", "count_threshold":
 		return "BIGINT"
 	}
-	// Any param named *_count, *_sum, *_total — these are typically compared to
-	// COUNT/SUM results which return BIGINT in PostgreSQL
-	if strings.HasSuffix(nameLower, "_count") || strings.HasSuffix(nameLower, "_sum") ||
-		strings.HasSuffix(nameLower, "_total") || strings.HasSuffix(nameLower, "_num") {
-		return "BIGINT"
-	}
-
 	// col = ANY($N) must be checked before name-based lookup, as the param name
 	// is the column name but the type is col.Type[] (an array), not col.Type.
 	anyArrayRe := regexp.MustCompile(fmt.Sprintf(`(?i)(?:\w+\.)?(\w+)\s*=\s*ANY\s*\(\s*\$%d`, paramIndex))
@@ -153,6 +146,15 @@ func (ti *TypeInferrer) inferParamTypeInternal(sql string, paramIndex int, table
 				}
 			}
 		}
+	}
+
+	// Any param named *_count, *_sum, *_total — these are typically compared to
+	// COUNT/SUM results which return BIGINT in PostgreSQL. Runs AFTER the schema
+	// column lookups above, so a real column named e.g. view_count keeps its
+	// declared INTEGER type.
+	if strings.HasSuffix(nameLower, "_count") || strings.HasSuffix(nameLower, "_sum") ||
+		strings.HasSuffix(nameLower, "_total") || strings.HasSuffix(nameLower, "_num") {
+		return "BIGINT"
 	}
 
 	aggregatePattern := fmt.Sprintf(`(?i)\b(count|sum|avg|max|min|total)_?\w*\s*[<>=!]+\s*\$%d|\$%d\s*[<>=!]+\s*\b(count|sum|avg|max|min|total)_?\w*|\b\w+_count\b\s*[<>=!]+\s*\$%d|\b\w+_sum\b\s*[<>=!]+\s*\$%d`, paramIndex, paramIndex, paramIndex, paramIndex)

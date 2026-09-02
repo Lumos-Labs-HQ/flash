@@ -78,6 +78,20 @@ func ValidateTableReferences(sql string, schema interface{}, sourceFile string) 
 			tableExists = tableNames[stripped]
 		}
 
+		// Reverse direction: the SCHEMA table is keyspace-qualified
+		// (e.g. "myks.users") but the query uses the plain name ("users").
+		// Mirrors parser.matchesTableName so validation cannot contradict
+		// the query analyzer's own table resolution.
+		if !tableExists {
+			plain := strings.ToLower(tableName)
+			for name := range tableNames {
+				if dotIdx := strings.LastIndex(name, "."); dotIdx >= 0 && name[dotIdx+1:] == plain {
+					tableExists = true
+					break
+				}
+			}
+		}
+
 		if !tableExists {
 			lines := strings.Split(sql, "\n")
 			lineNum := 1

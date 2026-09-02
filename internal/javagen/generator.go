@@ -53,6 +53,27 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
+	// Remove cache entries and generated files for query sources that no
+	// longer exist (deleted or renamed .sql/.cql files), mirroring gogen.
+	// Java per-source output files are named PascalCase(base) + "Queries.java";
+	// Row/Params classes are keyed off query names, not the source file, so
+	// they are handled by the normal regeneration path.
+	pruned := g.cache.PruneStaleQueryEntries(g.Config.Queries)
+	for _, source := range pruned {
+		base := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
+		orphan := filepath.Join(g.Config.Gen.Java.Out, utils.ToPascalCase(base)+"Queries.java")
+		if err := os.Remove(orphan); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove orphaned output %s: %w", orphan, err)
+		}
+	}
+
+	// Models/DB regen must also fire when this generator's own canonical
+	// output is missing — a shared cache file (same out dir, multiple
+	// languages) can otherwise carry a matching schema checksum written by
+	// another generator, suppressing model generation entirely.
+	if _, err := os.Stat(filepath.Join(g.Config.Gen.Java.Out, "Queries.java")); os.IsNotExist(err) {
+		fullRegen = true
+	}
 	if fullRegen || g.cache.SchemaChecksum != schemaHash {
 		if err := g.generateModels(); err != nil {
 			return err

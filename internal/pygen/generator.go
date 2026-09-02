@@ -54,6 +54,23 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
+	// Remove cache entries and generated files for query sources that no
+	// longer exist (deleted or renamed .sql/.cql files), mirroring gogen.
+	pruned := g.cache.PruneStaleQueryEntries(g.Config.Queries)
+	for _, source := range pruned {
+		base := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
+		orphan := filepath.Join(g.Config.Gen.Python.Out, base+".py")
+		if err := os.Remove(orphan); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove orphaned output %s: %w", orphan, err)
+		}
+	}
+
+	// A shared cache file (same out dir, multiple languages) can carry a
+	// matching schema checksum from another generator — force regen when our
+	// own canonical outputs are missing.
+	if _, err := os.Stat(filepath.Join(g.Config.Gen.Python.Out, "models.py")); os.IsNotExist(err) {
+		fullRegen = true
+	}
 	if fullRegen || g.cache.SchemaChecksum != schemaHash {
 		if err := g.generateModels(schema); err != nil {
 			return err

@@ -39,21 +39,35 @@ tasks:
          - cd plugins/core && go get -u ./... && go mod tidy
          - cd plugins/studio && go get -u ./... && go mod tidy
 
-   test:
-      desc: Run all tests with dev + plugins tags
+   chmod:
       cmds:
-         - go test -tags="dev,plugins" -v ./...
+         - chmod +x ./gotest.sh
+          
+   test:
+      desc: Run all tests (unit + integration) with dev + plugins tags
+      cmds:
+         - task: build
+         - task: chmod
+         - ./gotest.sh all
 
    smoke:
       desc: Run all unit tests (excludes integration tests requiring Docker/DB)
       cmds:
-         - chmod +x ./gotest.sh && ./gotest.sh
+         - task: chmod
+         - ./gotest.sh
+
+   race:
+      desc: Run unit tests with the race detector (excludes integration)
+      cmds:
+         - task: chmod
+         - ./gotest.sh race
 
    test-integration:
-      desc: Run all command integration tests
+      desc: Run all command integration tests (sqlite runs locally with no server; postgres/mysql skip when unreachable)
       cmds:
          - task: build
-         - cd test/integration && go test -tags="dev,plugins" -v ./...
+         - task: chmod
+         - ./gotest.sh integration
          - rm flash
 
    # ── Shared ───────────────────────────────────────────────────────────

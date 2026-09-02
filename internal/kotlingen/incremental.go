@@ -70,7 +70,10 @@ func (g *Generator) generateSingleKtFile(src string, queries []*parser.Query, fu
 	queryFile := filepath.Join(g.Config.Queries, src+".sql")
 	currentHash, _ := gencommon.ComputeFileChecksum(queryFile)
 
-	if !gencommon.ShouldRegenerateFile(g.cache, queryFile, currentHash, fullRegen) {
+	// The skip decision must consider this generator's own output file so a
+	// shared cache entry from another language cannot suppress generation.
+	primaryOutput := filepath.Join(g.Config.Gen.Kotlin.Out, utils.ToPascalCase(strings.TrimSuffix(src, ".sql"))+".kt")
+	if !gencommon.ShouldRegenerateFileForOutput(g.cache, queryFile, currentHash, fullRegen, primaryOutput) {
 		gencommon.PrintSkipMessage(src, ".kt")
 		return nil
 	}

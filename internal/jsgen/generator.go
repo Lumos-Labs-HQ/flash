@@ -51,6 +51,17 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
+	// Remove cache entries and generated files for query sources that no
+	// longer exist (deleted or renamed .sql/.cql files), mirroring gogen.
+	pruned := g.cache.PruneStaleQueryEntries(g.Config.Queries)
+	for _, source := range pruned {
+		base := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
+		orphan := filepath.Join(g.Config.Gen.JS.Out, base+".js")
+		if err := os.Remove(orphan); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove orphaned output %s: %w", orphan, err)
+		}
+	}
+
 	if err := g.generateQueriesIncremental(queries, fullRegen); err != nil {
 		return err
 	}

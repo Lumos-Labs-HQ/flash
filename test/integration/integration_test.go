@@ -3,6 +3,7 @@ package integration
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,6 +20,9 @@ var flashBinary string
 type Database struct {
 	Name string
 	URL  string
+	// Host:Port to pre-flight for server-backed databases. Empty for
+	// file-backed databases (sqlite) which never need a server.
+	Addr string
 }
 
 func getDatabases() []Database {
@@ -26,14 +30,18 @@ func getDatabases() []Database {
 		{
 			Name: "postgresql",
 			URL:  getEnv("POSTGRES_URL", "postgres://testuser:testpass@localhost:5432/testdb?sslmode=disable"),
+			Addr: getEnv("POSTGRES_ADDR", "localhost:5432"),
 		},
 		{
 			Name: "mysql",
 			URL:  getEnv("MYSQL_URL", "mysql://testuser:testpass@localhost:3306/testdb"),
+			Addr: getEnv("MYSQL_ADDR", "localhost:3306"),
 		},
 		{
+			// SQLite is file-backed: no DB_URL needed — the DB file is created
+			// inside the per-test project directory at apply time.
 			Name: "sqlite",
-			URL:  getEnv("SQLITE_URL", "sqlite://./test.db"),
+			URL:  getEnv("SQLITE_URL", ""),
 		},
 	}
 }
@@ -43,6 +51,23 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// requireServerDB skips the test (without failing) when the configured
+// database server is not reachable. This keeps the suite green on machines
+// without Docker/Postgres/MySQL while still running everything against a
+// live server when one exists.
+func requireServerDB(t *testing.T, db Database) {
+	t.Helper()
+	if db.Addr == "" {
+		return // file-backed (sqlite): always available
+	}
+	conn, err := net.DialTimeout("tcp", db.Addr, 2*time.Second)
+	if err != nil {
+		t.Skipf("database server %s not reachable (set %s_URL to override): %v",
+			db.Name, strings.ToUpper(db.Name), err)
+	}
+	conn.Close()
 }
 
 func TestMain(m *testing.M) {
@@ -86,9 +111,28 @@ func mustFlash(t *testing.T, dir string, args ...string) string {
 	return out
 }
 
+// dbURLFor returns the DATABASE_URL to write into the project's .env. SQLite
+// defaults to a local file inside the project dir so the suite needs no
+// external server and no DB_URL env var at all. The path must be absolute —
+// flash commands chdir into the project dir at runtime.
+func dbURLFor(db Database, dir string) string {
+	if db.URL != "" {
+		return db.URL
+	}
+	if db.Name == "sqlite" {
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			return "sqlite://flash_test.db"
+		}
+		return "sqlite://" + filepath.Join(absDir, "flash_test.db")
+	}
+	return ""
+}
+
 // setupProject initialises a project dir with .env and runs init+migrate+apply.
 func setupProject(t *testing.T, dir string, db Database) {
 	t.Helper()
+	requireServerDB(t, db)
 
 	flag := "--" + db.Name
 	if db.Name == "postgresql" {
@@ -96,7 +140,7 @@ func setupProject(t *testing.T, dir string, db Database) {
 	}
 	mustFlash(t, dir, "init", flag)
 
-	envContent := fmt.Sprintf("DATABASE_URL=%s\n", db.URL)
+	envContent := fmt.Sprintf("DATABASE_URL=%s\n", dbURLFor(db, dir))
 	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(envContent), 0644); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
@@ -119,6 +163,9 @@ func TestAllDatabases(t *testing.T) {
 		db := db
 		t.Run(db.Name, func(t *testing.T) {
 			t.Parallel()
+
+			// Skip the whole database group when its server is not reachable.
+			requireServerDB(t, db)
 
 			dir := filepath.Join("test_projects", db.Name)
 			os.RemoveAll(dir)
@@ -168,7 +215,7 @@ func testInit(t *testing.T, dir string, db Database) {
 	}
 
 	// Write .env so subsequent steps can connect.
-	os.WriteFile(filepath.Join(dir, ".env"), []byte(fmt.Sprintf("DATABASE_URL=%s\n", db.URL)), 0644)
+	os.WriteFile(filepath.Join(dir, ".env"), []byte(fmt.Sprintf("DATABASE_URL=%s\n", dbURLFor(db, dir))), 0644)
 }
 
 func testMigrate(t *testing.T, dir string, _ Database) {

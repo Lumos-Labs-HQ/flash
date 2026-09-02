@@ -284,6 +284,9 @@ func extractColumnsFromSelect(sql string, selectIdx int) string {
 					start++
 				}
 			}
+		} else {
+			// Bare DISTINCT (no ON): the qualifier itself is not a column.
+			start = after
 		}
 	}
 

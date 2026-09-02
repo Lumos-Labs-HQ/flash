@@ -96,7 +96,10 @@ func (p *IncrementalPipeline) processFile(sourceFile string, fileQueries []inter
 	queryFile := filepath.Join(p.QueriesDir, sourceFile+".sql")
 	currentHash, _ := ComputeFileChecksum(queryFile)
 
-	if !ShouldRegenerateFile(p.Cache, queryFile, currentHash, fullRegen) {
+	// The skip decision must consider this pipeline's own output file so a
+	// shared cache entry from another generator cannot suppress generation.
+	primaryOutput := filepath.Join(p.OutDir, strings.TrimSuffix(sourceFile, ".sql")+p.Extension)
+	if !ShouldRegenerateFileForOutput(p.Cache, queryFile, currentHash, fullRegen, primaryOutput) {
 		PrintSkipMessage(sourceFile, p.Extension)
 		return nil
 	}

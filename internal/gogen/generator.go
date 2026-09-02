@@ -65,7 +65,25 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("failed to parse queries: %w", err)
 	}
 
-	// Generate models (only if schema changed)
+	// Remove cache entries and generated files for query sources that no
+	// longer exist (deleted or renamed .sql/.cql files). Without this, stale
+	// entries survive forever and orphaned .go files keep compiling against
+	// types that may no longer exist.
+	pruned := g.cache.PruneStaleQueryEntries(g.Config.Queries)
+	for _, source := range pruned {
+		base := strings.TrimSuffix(filepath.Base(source), filepath.Ext(source))
+		orphan := filepath.Join(g.Config.Gen.Go.Out, base+".go")
+		if err := os.Remove(orphan); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove orphaned output %s: %w", orphan, err)
+		}
+	}
+
+	// Generate models (only if schema changed). A shared cache file (same out
+	// dir, multiple languages) can carry a matching schema checksum from
+	// another generator — force regen when our own models file is missing.
+	if _, err := os.Stat(filepath.Join(g.Config.Gen.Go.Out, "models.go")); os.IsNotExist(err) {
+		fullRegen = true
+	}
 	if fullRegen || g.cache.SchemaChecksum != schemaHash {
 		if err := g.generateModels(); err != nil {
 			return err

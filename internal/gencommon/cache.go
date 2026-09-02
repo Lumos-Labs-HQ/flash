@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -275,6 +277,80 @@ func (c *GenerationCache) UpdateQueryDependencies(queryFile string, tables []str
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.QueryTableDeps[queryFile] = tables
+}
+
+// PruneStaleQueryEntries removes cache entries (checksums, deps, generated-file
+// checksums) for query files that no longer exist on disk, and returns the
+// pruned query file identifiers. Call after each generation so deleted or
+// renamed query files stop producing hits against stale cache entries.
+func (c *GenerationCache) PruneStaleQueryEntries(queriesDir string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	pruned := make([]string, 0, len(c.QueryFileChecksums))
+	for queryFile := range c.QueryFileChecksums {
+		if !queryFileExists(queriesDir, queryFile) {
+			delete(c.QueryFileChecksums, queryFile)
+			delete(c.QueryTableDeps, queryFile)
+			delete(c.GeneratedFileChecksums, queryFile)
+			pruned = append(pruned, queryFile)
+		}
+	}
+	// Deps may reference files that never had a checksum entry.
+	for queryFile := range c.QueryTableDeps {
+		if _, ok := c.QueryFileChecksums[queryFile]; !ok {
+			if !queryFileExists(queriesDir, queryFile) {
+				delete(c.QueryTableDeps, queryFile)
+				delete(c.GeneratedFileChecksums, queryFile)
+				pruned = append(pruned, queryFile)
+			}
+		}
+	}
+	// Generated-file checksums are keyed by output path (e.g. flash_gen/users.go);
+	// drop entries whose backing source file no longer exists.
+	for genFile := range c.GeneratedFileChecksums {
+		base := filepath.Base(genFile)
+		ext := filepath.Ext(base)
+		if ext != ".go" && ext != ".ts" && ext != ".py" && ext != ".kt" && ext != ".java" && ext != ".rs" {
+			continue // not a per-query-source output; leave alone
+		}
+		source := strings.TrimSuffix(base, ext)
+		if !queryFileExists(queriesDir, source) && !queryFileExists(queriesDir, source+".sql") && !queryFileExists(queriesDir, source+".cql") {
+			delete(c.GeneratedFileChecksums, genFile)
+		}
+	}
+	sort.Strings(pruned)
+	return pruned
+}
+
+// queryFileExists reports whether the query source file backing a cache entry
+// is still present. Cache keys are either bare source names ("users") or
+// relative/absolute paths ending in .sql/.cql — check both forms.
+func queryFileExists(queriesDir, key string) bool {
+	if queriesDir == "" {
+		// No queries dir known: only absolute/path-shaped keys can be checked.
+		if filepath.IsAbs(key) {
+			_, err := os.Stat(key)
+			return err == nil
+		}
+		return true // keep entries when we cannot verify
+	}
+	if _, err := os.Stat(filepath.Join(queriesDir, key)); err == nil {
+		return true
+	}
+	// Path-shaped key (relative or absolute): try as-is.
+	if strings.ContainsRune(key, os.PathSeparator) || filepath.IsAbs(key) {
+		if _, err := os.Stat(key); err == nil {
+			return true
+		}
+	}
+	// Source-name key with an unknown extension: try the known extensions.
+	for _, ext := range []string{".sql", ".cql"} {
+		if _, err := os.Stat(filepath.Join(queriesDir, key+ext)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // UpdateGeneratedFileChecksum updates checksum of generated file

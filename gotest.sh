@@ -1,14 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
+TAGS="dev,plugins"
+MODE="${1:-smoke}"
+OUT="/tmp/flash_gotest_${MODE//\//_}.txt"
 
-go test -tags="dev,plugins" -v $(go list -tags="dev,plugins" ./... | grep -v test/integration) 2>&1 | tee /tmp/smoke_output.txt || true
+case "$MODE" in
+   smoke)
+      go test -tags="$TAGS" -v $(go list -tags="$TAGS" ./... | grep -v test/integration) 2>&1 | tee "$OUT" || true
+      ;;
+   race)
+      go test -tags="$TAGS" -race -v $(go list -tags="$TAGS" ./... | grep -v test/integration) 2>&1 | tee "$OUT" || true
+      ;;
+   integration)
+      (cd test/integration && go test -tags="$TAGS" -v ./...) 2>&1 | tee "$OUT" || true
+      ;;
+   all)
+      go test -tags="$TAGS" -v ./... 2>&1 | tee "$OUT" || true
+      ;;
+   *)
+      go test -tags="$TAGS" -v "$@" 2>&1 | tee "$OUT" || true
+      ;;
+esac
 
 awk '
   /^--- PASS:/  { pass++ }
   /^--- FAIL:/  { fail++ }
   /^--- SKIP:/  { skip++ }
   /^ok /        { pkgpass++ }
-  /^FAIL /      { pkgfail++ }
+  /^FAIL[ \t]/  { pkgfail++ }
   END {
     total = pass + fail + skip
     printf "\n────────────────────────────────────\n"
@@ -20,4 +39,4 @@ awk '
     printf "────────────────────────────────────\n"
     if (fail > 0 || pkgfail > 0) exit 1
   }
-' /tmp/smoke_output.txt
+' "$OUT"
