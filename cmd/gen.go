@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/Lumos-Labs-HQ/flash/internal/config"
 	"github.com/Lumos-Labs-HQ/flash/internal/gogen"
@@ -12,6 +13,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/kotlingen"
 	"github.com/Lumos-Labs-HQ/flash/internal/pygen"
 	"github.com/Lumos-Labs-HQ/flash/internal/rustgen"
+	tmpl "github.com/Lumos-Labs-HQ/flash/template"
 	"github.com/spf13/cobra"
 )
 
@@ -140,6 +142,17 @@ func runGenForConfig(cfg *config.Config) error {
 		}
 		fmt.Println("🎉 Go code generated successfully!")
 		fmt.Printf("   Output: %s/\n", cfg.Gen.Go.Out)
+	}
+
+	// Generate or update FLASH.md — the agent guide for this project.
+	_, flashErr := os.Stat("FLASH.md")
+	flashContent := tmpl.GenerateAgentGuideFromConfig(cfg)
+	if writeErr := os.WriteFile("FLASH.md", []byte(flashContent), 0644); writeErr != nil {
+		fmt.Printf("⚠️  Warning: could not write FLASH.md: %v\n", writeErr)
+	} else if os.IsNotExist(flashErr) {
+		fmt.Println("📝 FLASH.md created")
+	} else {
+		fmt.Println("📝 FLASH.md updated")
 	}
 
 	return nil

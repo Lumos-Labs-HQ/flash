@@ -70,9 +70,7 @@ func TestGetAffectedQueries_MultiTableAndMissing(t *testing.T) {
 
 func mkTable(name string, cols ...*parser.Column) *parser.Table {
 	tbl := &parser.Table{Name: name}
-	for _, c := range cols {
-		tbl.Columns = append(tbl.Columns, c)
-	}
+	tbl.Columns = append(tbl.Columns, cols...)
 	return tbl
 }
 

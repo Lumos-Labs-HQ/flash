@@ -162,6 +162,8 @@ func (g *Generator) generateOptimizedQueryMethod(w *strings.Builder, query *pars
 	switch provider {
 	case "sqlite", "sqlite3":
 		g.generateSQLiteExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
+	case "turso":
+		g.generateTursoExecution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
 	case "mysql":
 		if driver == "mysql2" {
 			g.generateMySQL2Execution(w, paramNames, hasColumns, query.Cmd, isSingleColumn, query.Columns)
@@ -348,6 +350,31 @@ func (g *Generator) generatePostgresDriverExecution(w *strings.Builder, sql stri
 	}
 }
 
+func (g *Generator) generateTursoExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
+	if len(paramNames) > 0 {
+		w.WriteString("    const r = await this.db.execute({ sql: stmt, args: [" + strings.Join(paramNames, ", ") + "] });\n")
+	} else {
+		w.WriteString("    const r = await this.db.execute(stmt);\n")
+	}
+	if hasColumns {
+		if cmd == ":one" {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r.rows[0] ? r.rows[0].%s : null;\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r.rows[0] || null;\n")
+			}
+		} else {
+			if isSingleColumn && len(columns) > 0 {
+				w.WriteString(fmt.Sprintf("    return r.rows.map(row => row.%s);\n", columns[0].Name))
+			} else {
+				w.WriteString("    return r.rows;\n")
+			}
+		}
+	} else {
+		w.WriteString("    return r.rowsAffected;\n")
+	}
+}
+
 func (g *Generator) generateSQLiteExecution(w *strings.Builder, paramNames []string, hasColumns bool, cmd string, isSingleColumn bool, columns []*parser.QueryColumn) {
 	w.WriteString("    const sql = typeof stmt === 'string' ? stmt : stmt.text;\n")
 	w.WriteString("    const prepared = this.db.prepare(sql);\n")
@@ -521,6 +548,8 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 	provider := g.Config.Database.Provider
 	if provider == "scylla" || provider == "scylladb" || provider == "cassandra" {
 		w.WriteString(" * @param {Object} db - ScyllaDB/Cassandra client (from cassandra-driver)\n")
+	} else if provider == "turso" {
+		w.WriteString(" * @param {Object} db - Turso libSQL client (from @libsql/client, created with createClient())\n")
 	} else {
 		w.WriteString(" * @param {Object} db - Database connection (pg.Pool, postgres instance, mysql2.Pool, better-sqlite3 instance, or bun:sqlite instance)\n")
 	}
@@ -645,7 +674,7 @@ func (g *Generator) mapSQLTypeToJS(sqlType string) string {
 
 func (g *Generator) convertSQL(sql string) string {
 	switch g.Config.Database.Provider {
-	case "mysql", "sqlite", "sqlite3":
+	case "mysql", "sqlite", "sqlite3", "turso":
 		result := sql
 		for i := 20; i >= 1; i-- {
 			result = strings.ReplaceAll(result, fmt.Sprintf("$%d", i), "?")

@@ -13,10 +13,12 @@ const (
 	MySQL      DatabaseType = "mysql"
 	ClickHouse DatabaseType = "clickhouse"
 	ScyllaDB   DatabaseType = "scylla"
+	Turso      DatabaseType = "turso"
 )
 
 type ProjectTemplate struct {
 	DatabaseType    DatabaseType
+	IsGoProject     bool
 	IsNodeProject   bool
 	IsPythonProject bool
 	IsKotlinProject bool
@@ -100,6 +102,18 @@ var dbConfigs = map[DatabaseType]dbConfig{
 		returnType:       ":one",
 		envExample:       "scylla://host:9042/keyspace_name",
 	},
+	Turso: {
+		provider:         "turso",
+		engine:           "turso",
+		primaryKey:       "INTEGER PRIMARY KEY AUTOINCREMENT",
+		autoIncrement:    "AUTOINCREMENT",
+		textType:         "TEXT",
+		timestampType:    "DATETIME",
+		timestampDefault: "CURRENT_TIMESTAMP",
+		queryParam:       "?",
+		returnType:       ":one",
+		envExample:       "libsql://your-database.turso.io",
+	},
 }
 
 func NewProjectTemplate(dbType DatabaseType, isNodeProject bool, isPythonProject bool) *ProjectTemplate {
@@ -133,7 +147,12 @@ func (pt *ProjectTemplate) GetFlashORMConfig() string {
 
 	config += "[database]\n"
 	config += fmt.Sprintf("provider = \"%s\"\n", cfg.provider)
-	config += "url_env = \"DATABASE_URL\"\n"
+	if pt.DatabaseType == Turso {
+		config += "url_env = \"TURSO_DATABASE_URL\"\n"
+		config += "token_env = \"TURSO_AUTH_TOKEN\"\n"
+	} else {
+		config += "url_env = \"DATABASE_URL\"\n"
+	}
 
 	genSection := pt.getGenSection()
 	if genSection != "" {
@@ -240,6 +259,9 @@ func (pt *ProjectTemplate) getReturningClause() string {
 
 func (pt *ProjectTemplate) GetEnvTemplate() string {
 	cfg := dbConfigs[pt.DatabaseType]
+	if pt.DatabaseType == Turso {
+		return fmt.Sprintf("TURSO_DATABASE_URL=%s\nTURSO_AUTH_TOKEN=your-auth-token\n", cfg.envExample)
+	}
 	return fmt.Sprintf("DATABASE_URL=%s\n", cfg.envExample)
 }
 
@@ -257,6 +279,7 @@ func ValidateDatabaseType(dbType string) DatabaseType {
 		"scylla":     ScyllaDB,
 		"scylladb":   ScyllaDB,
 		"cassandra":  ScyllaDB,
+		"turso":      Turso,
 	}
 
 	if dt, exists := types[dbType]; exists {
@@ -272,6 +295,12 @@ enabled = true
 out = "flash_gen"`
 	}
 	if pt.IsPythonProject {
+		if pt.DatabaseType == Turso {
+			return `[gen.python]
+enabled = true
+out = "flash_gen"
+async = false`
+		}
 		return `[gen.python]
 enabled = true
 out = "flash_gen"
@@ -356,6 +385,13 @@ func (pt *ProjectTemplate) getDriverHeaderComment() string {
 #   Java:   uses DataStax Java Driver (CqlSession) — no driver key needed
 #   Rust:   "sqlx" (default) — ScyllaDB not yet supported for Rust
 # Add driver = "gocql" inside the [gen.go] block to use gocql/gocql instead.`
+	case Turso:
+		return `# FlashORM — Turso (libsql) Drivers
+#   Go:     "libsql-client-go" (database/sql compatible, driver name "libsql")
+#   JS/TS:  "@libsql/client" (official Turso client, uses client.execute())
+#   Python: "libsql" (sync DB-API 2.0, same interface as sqlite3)
+#   Rust:   "libsql" crate (async, uses libsql::Connection)
+# Credentials: set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in your .env file.`
 	default:
 		return `# FlashORM — See docs for available drivers per database.`
 	}

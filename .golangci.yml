@@ -1,21 +1,63 @@
+version: "2"
+
 linters:
+  default: none
   enable:
-    - gofmt
-    - goimports
     - govet
     - errcheck
     - staticcheck
-    - unused
-    - gosimple
     - ineffassign
     - misspell
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # Skip quickfix style hints (not bugs, automated refactors only)
+        - "-QF1001"
+        - "-QF1002"
+        - "-QF1003"
+        - "-QF1007"
+        - "-QF1008"
+        - "-QF1009"
+        - "-QF1010"
+        - "-QF1011"
+        - "-QF1012"
+        # Skip naming/doc-comment conventions (ST1003=Json→JSON etc., too widespread to fix now)
+        - "-ST1000"
+        - "-ST1003"
+        - "-ST1016"
+        - "-ST1020"
+        - "-ST1021"
+    errcheck:
+      exclude-functions:
+        # Standard library print functions rarely error in practice
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Printf
+        - fmt.Println
+        # os.Remove/RemoveAll errors in cleanup paths are acceptable
+        - os.Remove
+        - os.RemoveAll
+  exclusions:
+    rules:
+      # errcheck: unchecked Close()/Flush() in defer and cleanup paths is idiomatic Go
+      - text: "Error return value of .*(Close|Flush).* is not checked"
+        linters:
+          - errcheck
+      # errcheck: color terminal output errors are never actionable
+      - text: "Error return value of .*(Printf|Println|Print).* is not checked"
+        linters:
+          - errcheck
+      # errcheck: test files commonly ignore cleanup errors by convention
+      - path: "_test\\.go"
+        linters:
+          - errcheck
 
-linters-settings:
-  goimports:
-    local-prefixes: github.com/Lumos-Labs-HQ/flash
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/Lumos-Labs-HQ/flash

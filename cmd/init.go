@@ -22,6 +22,7 @@ func init() {
 	initCmd.Flags().Bool("clickhouse", false, "Initialize project for ClickHouse database")
 	initCmd.Flags().Bool("scylla", false, "Initialize project for ScyllaDB database")
 	initCmd.Flags().Bool("cassandra", false, "Initialize project for Cassandra database (ScyllaDB-compatible)")
+	initCmd.Flags().Bool("turso", false, "Initialize project for Turso (libSQL) database")
 }
 
 var initCmd = &cobra.Command{
@@ -61,9 +62,13 @@ func runInit(cmd *cobra.Command, args []string) {
 		dbType = tmpl.ScyllaDB
 		flagCount++
 	}
+	if cmd.Flags().Changed("turso") {
+		dbType = tmpl.Turso
+		flagCount++
+	}
 
 	if flagCount > 1 {
-		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, --mysql, --clickhouse, --scylla, or --cassandra)")
+		fmt.Fprintln(os.Stderr, "please specify only one database type (--sqlite, --postgresql, --mysql, --clickhouse, --scylla, --cassandra, or --turso)")
 		os.Exit(1)
 	}
 
