@@ -47,6 +47,7 @@ type DatabaseConfig struct {
 	Name           string `toml:"name"`
 	Provider       string `toml:"provider"`
 	URLEnv         string `toml:"url_env"`
+	TokenEnv       string `toml:"token_env"`
 	SchemaDir      string `toml:"schema_dir"`
 	Queries        string `toml:"queries"`
 	MigrationsPath string `toml:"migrations_path"`
@@ -58,6 +59,7 @@ type DatabaseConfig struct {
 type Database struct {
 	Provider string `toml:"provider"`
 	URLEnv   string `toml:"url_env"`
+	TokenEnv string `toml:"token_env"`
 }
 
 type Gen struct {
@@ -284,7 +286,14 @@ func loadUncached() (*Config, error) {
 		cfg.Database.Provider = "postgresql"
 	}
 	if cfg.Database.URLEnv == "" {
-		cfg.Database.URLEnv = "DATABASE_URL"
+		if cfg.Database.Provider == "turso" {
+			cfg.Database.URLEnv = "TURSO_DATABASE_URL"
+		} else {
+			cfg.Database.URLEnv = "DATABASE_URL"
+		}
+	}
+	if cfg.Database.Provider == "turso" && cfg.Database.TokenEnv == "" {
+		cfg.Database.TokenEnv = "TURSO_AUTH_TOKEN"
 	}
 	if cfg.Gen.JS.Out == "" && cfg.Gen.JS.Enabled {
 		cfg.Gen.JS.Out = "flash_gen"
@@ -340,6 +349,15 @@ func (c *Config) GetDatabaseURL() (string, error) {
 	if dbURL == "" {
 		return "", fmt.Errorf("database URL not found in environment variable %s", c.Database.URLEnv)
 	}
+	if c.Database.Provider == "turso" && c.Database.TokenEnv != "" {
+		if token := os.Getenv(c.Database.TokenEnv); token != "" && !strings.Contains(dbURL, "authToken=") {
+			sep := "?"
+			if strings.Contains(dbURL, "?") {
+				sep = "&"
+			}
+			dbURL += sep + "authToken=" + token
+		}
+	}
 	return dbURL, nil
 }
 
@@ -381,7 +399,7 @@ func (c *Config) ResolveForDB(name string) (*Config, error) {
 	for _, db := range c.Databases {
 		if db.Name == name {
 			resolved := *c
-			resolved.Database = Database{Provider: db.Provider, URLEnv: db.URLEnv}
+			resolved.Database = Database{Provider: db.Provider, URLEnv: db.URLEnv, TokenEnv: db.TokenEnv}
 			if db.SchemaDir != "" {
 				resolved.SchemaDir = db.SchemaDir
 			}
@@ -421,7 +439,7 @@ func (c *Config) EnsureDirectories() error {
 }
 
 func (c *Config) Validate() error {
-	supportedProviders := []string{"postgresql", "postgres", "mysql", "sqlite", "sqlite3", "clickhouse", "scylla", "scylladb", "cassandra"}
+	supportedProviders := []string{"postgresql", "postgres", "mysql", "sqlite", "sqlite3", "turso", "clickhouse", "scylla", "scylladb", "cassandra"}
 	supported := slices.Contains(supportedProviders, c.Database.Provider)
 	if !supported {
 		return fmt.Errorf("unsupported database provider: %s. Supported providers: %v", c.Database.Provider, supportedProviders)
@@ -444,7 +462,7 @@ func (c *Config) GetSqlcEngine() string {
 		return "postgresql"
 	case "mysql":
 		return "mysql"
-	case "sqlite", "sqlite3":
+	case "sqlite", "sqlite3", "turso":
 		return "sqlite"
 	case "clickhouse":
 		return "clickhouse"

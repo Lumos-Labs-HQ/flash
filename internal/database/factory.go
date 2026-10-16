@@ -7,6 +7,7 @@ import (
 	"github.com/Lumos-Labs-HQ/flash/internal/database/postgres"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/scylla"
 	"github.com/Lumos-Labs-HQ/flash/internal/database/sqlite"
+	"github.com/Lumos-Labs-HQ/flash/internal/database/turso"
 )
 
 func NewAdapter(provider string) DatabaseAdapter {
@@ -17,6 +18,8 @@ func NewAdapter(provider string) DatabaseAdapter {
 		return mysql.New()
 	case "sqlite", "sqlite3":
 		return sqlite.New()
+	case "turso":
+		return turso.New()
 	case "mongodb", "mongo":
 		return mongodb.New()
 	case "clickhouse":

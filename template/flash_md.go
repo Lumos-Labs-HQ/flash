@@ -1,6 +1,11 @@
 package template
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Lumos-Labs-HQ/flash/internal/config"
+)
 
 // GetAgentGuide returns FLASH.md — a complete, self-contained reference an AI
 // agent can read to understand and drive FlashORM in this project. The content
@@ -25,13 +30,22 @@ func (pt *ProjectTemplate) GetAgentGuide() string {
 	guide := agentGuideTemplate
 	language, languageGuide := pt.agentLanguageGuide()
 
+	envBlock := fmt.Sprintf("DATABASE_URL=%s", cfg.envExample)
+	tokenEnvLine := ""
+	if pt.DatabaseType == Turso {
+		envBlock = "TURSO_DATABASE_URL=libsql://your-database.turso.io\nTURSO_AUTH_TOKEN=your-auth-token-here"
+		tokenEnvLine = `token_env = "TURSO_AUTH_TOKEN"    # Turso auth token env var`
+	}
+
 	replacements := []struct{ from, to string }{
 		{"@@PROVIDER@@", cfg.provider},
 		{"@@PARAM@@", cfg.queryParam},
 		{"@@ENV@@", cfg.envExample},
+		{"@@ENVBLOCK@@", envBlock},
+		{"@@TOKENENVLINE@@", tokenEnvLine},
 		{"@@EXT@@", ext},
 		{"@@SCHEMADIR@@", schemaDir},
-		{"@@PROVIDERLIST@@", "postgresql | mysql | sqlite | clickhouse | scylla"},
+		{"@@PROVIDERLIST@@", "postgresql | mysql | sqlite | turso | clickhouse | scylla"},
 		{"@@SCHEMA@@", strings.TrimRight(pt.GetSchema(), "\n")},
 		{"@@QUERIES@@", strings.TrimRight(pt.GetQueries(), "\n")},
 		{"@@DRIVERS@@", pt.getDriverHeaderComment()},
@@ -43,6 +57,23 @@ func (pt *ProjectTemplate) GetAgentGuide() string {
 	}
 	guide = strings.ReplaceAll(guide, "§", "`")
 	return guide
+}
+
+// GenerateAgentGuideFromConfig generates (or refreshes) FLASH.md from the
+// current flash.toml config. Call this from §flash gen§ so the guide always
+// reflects the live enabled targets and database provider.
+func GenerateAgentGuideFromConfig(cfg *config.Config) string {
+	dbType := ValidateDatabaseType(cfg.Database.Provider)
+	pt := &ProjectTemplate{
+		DatabaseType:    dbType,
+		IsGoProject:     cfg.Gen.Go.Enabled,
+		IsNodeProject:   cfg.Gen.JS.Enabled,
+		IsPythonProject: cfg.Gen.Python.Enabled,
+		IsRustProject:   cfg.Gen.Rust.Enabled,
+		IsKotlinProject: cfg.Gen.Kotlin.Enabled,
+		IsJavaProject:   cfg.Gen.Java.Enabled,
+	}
+	return pt.GetAgentGuide()
 }
 
 // agentGuideTemplate is the raw FLASH.md template.
@@ -172,7 +203,7 @@ Re-run §flash gen§ after every §@@EXT@@§ file change.
 
 | Command | What it does | Key flags |
 |---|---|---|
-| §flash init [name]§ | Scaffold a new project | §--@@PROVIDER@@§, §--sqlite§, §--mysql§, §--clickhouse§, §--scylla§ |
+| §flash init [name]§ | Scaffold a new project | §--@@PROVIDER@@§, §--sqlite§, §--mysql§, §--turso§, §--clickhouse§, §--scylla§ |
 | §flash migrate <name>§ | Create migration from schema diff | |
 | §flash apply§ | Apply pending migrations | §--force§, §--db <name>§ |
 | §flash down [id]§ | Roll back migration(s) | |
@@ -206,6 +237,7 @@ json_path       = ""                # dir with .json defs for @json columns
 [database]
 provider = "@@PROVIDER@@"           # @@PROVIDERLIST@@
 url_env  = "DATABASE_URL"           # env var with connection string
+@@TOKENENVLINE@@
 
 # ── Code generation — enable one or more targets ──────────────────────────
 
@@ -279,7 +311,7 @@ reads §.env§ automatically (also §.env.local§, §.env.<name>§ via §--env <
 This project:
 
 §§§
-DATABASE_URL=@@ENV@@
+@@ENVBLOCK@@
 §§§
 
 Connection string formats:
@@ -289,6 +321,7 @@ Connection string formats:
 | postgresql | §postgres://user:pass@localhost:5432/dbname§ |
 | mysql | §mysql://user:pass@localhost:3306/dbname§ |
 | sqlite | §sqlite://./data.sqlite§ |
+| turso | §TURSO_DATABASE_URL=libsql://your-db.turso.io§ + §TURSO_AUTH_TOKEN=§ |
 | clickhouse | §clickhouse://user:pass@localhost:9000/dbname§ |
 | scylla | §scylla://host:9042/keyspace§ |
 
@@ -349,6 +382,7 @@ Rules:
 | **PostgreSQL** | ✅ Full | ✅ | ✅ SQL Studio | §$1, $2, …§ |
 | **MySQL** | ✅ Full | ✅ | ✅ SQL Studio | §?§ |
 | **SQLite** | ✅ Full | ✅ | ✅ SQL Studio | §?§ |
+| **Turso (libSQL)** | ✅ Full | ✅ | ❌ (use Turso dashboard) | §?§ |
 | **ScyllaDB / Cassandra** | ✅ Beta | ✅ | ✅ SQL Studio | §?§ (CQL) |
 | **ClickHouse** | ✅ Beta | ✅ | ✅ SQL Studio | §?§ |
 | **MongoDB** | ❌ ORM | ❌ | ✅ Visual Management | N/A |
@@ -706,21 +740,155 @@ automatically.
 11. **Broken generation? Run §flash issues§** with real reproduction steps.
 `
 
-// agentLanguageGuide returns the language selected by init and a minimal,
-// copy/paste usage example that matches that generator's API.
+// agentLanguageGuide returns the enabled language(s) and usage examples.
+// When multiple [gen.*] targets are enabled each gets a ### header so an
+// agent can navigate to its specific section quickly.
 func (pt *ProjectTemplate) agentLanguageGuide() (string, string) {
-	switch {
-	case pt.IsRustProject:
-		return "Rust", "" + "§§§toml\n# Cargo.toml\nsqlx = { version = \"0.9\", features = [\"runtime-tokio\", \"postgres\", \"macros\"] }\n§§§\n\nGenerated files are Rust modules under §[gen.rust].out§. Include the module\nwith `mod flash_gen;`, create a `sqlx::PgPool`, then call async methods on\n`flash_gen::db::Queries`; results are `Result<T, sqlx::Error>` and nullable SQL\ncolumns are `Option<T>`.\n\n§§§rust\nmod flash_gen;\nuse flash_gen::db::Queries;\nlet pool = sqlx::PgPool::connect(&std::env::var(\"DATABASE_URL\")?).await?;\nflash_gen::migrations::FlashInitMigrate(&pool).await?;\nlet queries = Queries::new(pool);\nlet user = queries.get_user(1).await?;\n§§§\n\nSet `macros = true` only when a live database is available at compile time;\nFlash then emits `sqlx::query!` macros for schema validation."
-	case pt.IsPythonProject:
-		return "Python", "" + "§§§toml\n[gen.python]\nenabled = true\nasync = true\n§§§\n\nGenerated modules are importable from §[gen.python].out§. Async mode uses\n`asyncio` and the configured driver (normally `asyncpg` for PostgreSQL); set\n`async = false` for synchronous code. Pass an asyncpg/psycopg/SQLite connection\nor pool to `newq`; Flash does not create the connection for you.\n\n§§§python\nfrom flash_gen import FlashInitMigrate, newq\nawait FlashInitMigrate(db_connection)\nqueries = newq(db_connection)\nuser = await queries.get_user(1)\n§§§"
-	case pt.IsKotlinProject:
-		return "Kotlin", "" + "§§§kotlin\n// Generated package is the value of [gen.kotlin].package\nFlashMigrations.FlashInitMigrate(connection)\nval queries = Queries.newq(connection)\nval user = queries.getUser(1)\n§§§\n\nKotlin generation targets JDBC by default; set `driver = \"exposed\"` or\n`driver = \"r2dbc\"` when your project uses those runtimes."
-	case pt.IsJavaProject:
-		return "Java", "" + "§§§java\n// Generated package is the value of [gen.java].package\nFlashMigrations.FlashInitMigrate(connection);\nQueries queries = Queries.newq(connection);\nUsers user = queries.getUser(1);\n§§§\n\nJava generation targets JDBC by default; `jooq` and `hibernate` are available\nthrough the `driver` setting."
-	case pt.IsNodeProject:
-		return "JavaScript/TypeScript", "" + "§§§typescript\nimport { FlashInitMigrate, Newq } from './flash_gen';\nawait FlashInitMigrate(db);\nconst queries = Newq(db); // db is a pg/mysql2/bun:sqlite client\nconst user = await queries.getUser(1);\n§§§\n\nThe JS generator emits JavaScript plus `.d.ts` declarations. Set `driver` in\n§[gen.js]§ to `pg`, `postgres`, `mysql2`, or the provider's supported driver."
-	default:
-		return "Go", "" + "§§§go\nimport \"your/module/flash_gen\"\nif err := flash_gen.FlashInitMigrate(ctx, db); err != nil { return err }\nqueries := flash_gen.Newq(db)\nuser, err := queries.GetUser(1)\nusers, err := queries.ListUsers(20, 0)\n§§§\n\nGo generation uses `database/sql` by default; set `driver = \"pgx\"` for the\npgx-native path. `FlashInitMigrate` embeds the migration SQL at generation time\nand applies pending migrations through the supplied database connection; it\ndoes not invoke or require the Flash binary. pgx and Scylla methods also accept\n`context.Context`."
+	isTurso := pt.DatabaseType == Turso
+
+	type entry struct {
+		name  string
+		guide string
 	}
+	var entries []entry
+
+	if pt.IsRustProject {
+		var g strings.Builder
+		if isTurso {
+			g.WriteString("§§§toml\n# Cargo.toml\nlibsql = \"0.9\"\ntokio = { version = \"1\", features = [\"full\"] }\n§§§\n\n")
+			g.WriteString("Turso uses the native §libsql§ crate — not §sqlx§. Generated files are Rust\n")
+			g.WriteString("modules under §[gen.rust].out§. Include with §mod flash_gen;§.\n\n")
+			g.WriteString("§§§rust\nmod flash_gen;\nuse flash_gen::db::Queries;\nuse libsql::{Builder, Connection};\n\n")
+			g.WriteString("let db = Builder::new_remote(\n")
+			g.WriteString("    std::env::var(\"TURSO_DATABASE_URL\")?,\n")
+			g.WriteString("    std::env::var(\"TURSO_AUTH_TOKEN\")?,\n")
+			g.WriteString(").build().await?;\n")
+			g.WriteString("let conn = db.connect()?;\n")
+			g.WriteString("flash_gen::migrations::FlashInitMigrate(&conn).await?;\n")
+			g.WriteString("let queries = Queries::new(conn);\n")
+			g.WriteString("let user = queries.get_user(1).await?;\n§§§")
+		} else {
+			g.WriteString("§§§toml\n# Cargo.toml\nsqlx = { version = \"0.9\", features = [\"runtime-tokio\", \"postgres\", \"macros\"] }\n§§§\n\n")
+			g.WriteString("Generated files are Rust modules under §[gen.rust].out§. Include the module\n")
+			g.WriteString("with §mod flash_gen;§, create a §sqlx::PgPool§, then call async methods on\n")
+			g.WriteString("§flash_gen::db::Queries§; results are §Result<T, sqlx::Error>§ and nullable SQL\n")
+			g.WriteString("columns are §Option<T>§.\n\n")
+			g.WriteString("§§§rust\nmod flash_gen;\nuse flash_gen::db::Queries;\nlet pool = sqlx::PgPool::connect(&std::env::var(\"DATABASE_URL\")?).await?;\n")
+			g.WriteString("flash_gen::migrations::FlashInitMigrate(&pool).await?;\n")
+			g.WriteString("let queries = Queries::new(pool);\n")
+			g.WriteString("let user = queries.get_user(1).await?;\n§§§\n\n")
+			g.WriteString("Set §macros = true§ only when a live database is available at compile time;\n")
+			g.WriteString("Flash then emits §sqlx::query!§ macros for schema validation.")
+		}
+		entries = append(entries, entry{"Rust", g.String()})
+	}
+
+	if pt.IsPythonProject {
+		var g strings.Builder
+		if isTurso {
+			g.WriteString("§§§toml\n[gen.python]\nenabled = true\nasync = false   # libsql Python is sync DB-API 2.0\n§§§\n\n")
+			g.WriteString("Turso uses the §libsql§ package (sync, DB-API 2.0 — same interface as §sqlite3§).\n\n")
+			g.WriteString("§§§python\nimport os, libsql\nfrom flash_gen import FlashInitMigrate, newq\n\n")
+			g.WriteString("conn = libsql.connect(\n")
+			g.WriteString("    os.environ[\"TURSO_DATABASE_URL\"],\n")
+			g.WriteString("    auth_token=os.environ[\"TURSO_AUTH_TOKEN\"],\n")
+			g.WriteString(")\n")
+			g.WriteString("FlashInitMigrate(conn)\n")
+			g.WriteString("queries = newq(conn)\n")
+			g.WriteString("user = queries.get_user(1)\n§§§")
+		} else {
+			g.WriteString("§§§toml\n[gen.python]\nenabled = true\nasync = true\n§§§\n\n")
+			g.WriteString("Generated modules are importable from §[gen.python].out§. Async mode uses\n")
+			g.WriteString("§asyncio§ and the configured driver (normally §asyncpg§ for PostgreSQL); set\n")
+			g.WriteString("§async = false§ for synchronous code. Pass an asyncpg/psycopg/SQLite connection\n")
+			g.WriteString("or pool to §newq§; Flash does not create the connection for you.\n\n")
+			g.WriteString("§§§python\nfrom flash_gen import FlashInitMigrate, newq\nawait FlashInitMigrate(db_connection)\nqueries = newq(db_connection)\nuser = await queries.get_user(1)\n§§§")
+		}
+		entries = append(entries, entry{"Python", g.String()})
+	}
+
+	if pt.IsKotlinProject {
+		var g strings.Builder
+		g.WriteString("§§§kotlin\n// Generated package is the value of [gen.kotlin].package\n")
+		g.WriteString("FlashMigrations.FlashInitMigrate(connection)\n")
+		g.WriteString("val queries = Queries.newq(connection)\n")
+		g.WriteString("val user = queries.getUser(1)\n§§§\n\n")
+		g.WriteString("Kotlin generation targets JDBC by default; set §driver = \"exposed\"§ or\n")
+		g.WriteString("§driver = \"r2dbc\"§ when your project uses those runtimes.")
+		entries = append(entries, entry{"Kotlin", g.String()})
+	}
+
+	if pt.IsJavaProject {
+		var g strings.Builder
+		g.WriteString("§§§java\n// Generated package is the value of [gen.java].package\n")
+		g.WriteString("FlashMigrations.FlashInitMigrate(connection);\n")
+		g.WriteString("Queries queries = Queries.newq(connection);\n")
+		g.WriteString("Users user = queries.getUser(1);\n§§§\n\n")
+		g.WriteString("Java generation targets JDBC by default; §jooq§ and §hibernate§ are available\n")
+		g.WriteString("through the §driver§ setting.")
+		entries = append(entries, entry{"Java", g.String()})
+	}
+
+	if pt.IsNodeProject {
+		var g strings.Builder
+		if isTurso {
+			g.WriteString("Install the Turso client: §npm install @libsql/client§\n\n")
+			g.WriteString("§§§typescript\nimport { createClient } from \"@libsql/client\";\nimport { FlashInitMigrate, Newq } from \"./flash_gen\";\n\n")
+			g.WriteString("const db = createClient({\n")
+			g.WriteString("  url: process.env.TURSO_DATABASE_URL!,\n")
+			g.WriteString("  authToken: process.env.TURSO_AUTH_TOKEN,\n")
+			g.WriteString("});\n")
+			g.WriteString("await FlashInitMigrate(db);\n")
+			g.WriteString("const queries = Newq(db);\n")
+			g.WriteString("const user = await queries.getUser(1);\n§§§\n\n")
+			g.WriteString("Flash calls §db.execute({ sql, args })§ for all queries — the Turso client\n")
+			g.WriteString("uses this interface. Generated §.d.ts§ declarations are included automatically.")
+		} else {
+			g.WriteString("§§§typescript\nimport { FlashInitMigrate, Newq } from './flash_gen';\nawait FlashInitMigrate(db);\n")
+			g.WriteString("const queries = Newq(db); // db is a pg/mysql2/bun:sqlite client\n")
+			g.WriteString("const user = await queries.getUser(1);\n§§§\n\n")
+			g.WriteString("The JS generator emits JavaScript plus §.d.ts§ declarations. Set §driver§ in\n")
+			g.WriteString("§[gen.js]§ to §pg§, §postgres§, §mysql2§, or the provider's supported driver.")
+		}
+		entries = append(entries, entry{"JavaScript/TypeScript", g.String()})
+	}
+
+	// Go is default when no other language is enabled, or always include it
+	// when Gen.Go.Enabled is set (tracked via IsGoProject sentinel).
+	if len(entries) == 0 || pt.IsGoProject {
+		var g strings.Builder
+		if isTurso {
+			g.WriteString("Add the libsql driver to your module: §go get github.com/tursodatabase/libsql-client-go/libsql§\n\n")
+			g.WriteString("§§§go\nimport (\n    \"database/sql\"\n    \"os\"\n    _ \"github.com/tursodatabase/libsql-client-go/libsql\"\n    flash_gen \"your/module/flash_gen\"\n)\n\n")
+			g.WriteString("url := os.Getenv(\"TURSO_DATABASE_URL\") + \"?authToken=\" + os.Getenv(\"TURSO_AUTH_TOKEN\")\n")
+			g.WriteString("db, err := sql.Open(\"libsql\", url)\n")
+			g.WriteString("if err := flash_gen.FlashInitMigrate(ctx, db); err != nil { return err }\n")
+			g.WriteString("queries := flash_gen.Newq(db)\n")
+			g.WriteString("user, err := queries.GetUser(1)\n§§§\n\n")
+			g.WriteString("The §_ import§ registers the §libsql§ driver in §database/sql§; without it\n")
+			g.WriteString("§sql.Open§ will return \"unknown driver\" at runtime. Flash generates the\n")
+			g.WriteString("standard §database/sql§ DBTX interface so all standard patterns apply.")
+		} else {
+			g.WriteString("§§§go\nimport \"your/module/flash_gen\"\nif err := flash_gen.FlashInitMigrate(ctx, db); err != nil { return err }\nqueries := flash_gen.Newq(db)\nuser, err := queries.GetUser(1)\nusers, err := queries.ListUsers(20, 0)\n§§§\n\n")
+			g.WriteString("Go generation uses §database/sql§ by default; set §driver = \"pgx\"§ for the\n")
+			g.WriteString("pgx-native path. §FlashInitMigrate§ embeds the migration SQL at generation time\n")
+			g.WriteString("and applies pending migrations through the supplied database connection; it\n")
+			g.WriteString("does not invoke or require the Flash binary. pgx and Scylla methods also accept\n")
+			g.WriteString("§context.Context§.")
+		}
+		entries = append(entries, entry{"Go", g.String()})
+	}
+
+	if len(entries) == 1 {
+		return entries[0].name, entries[0].guide
+	}
+
+	// Multiple languages enabled — emit with ### headers
+	var names []string
+	var blocks []string
+	for _, e := range entries {
+		names = append(names, e.name)
+		blocks = append(blocks, "### "+e.name+"\n\n"+e.guide)
+	}
+	return strings.Join(names, " / "), strings.Join(blocks, "\n\n")
 }

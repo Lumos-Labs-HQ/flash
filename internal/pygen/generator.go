@@ -348,6 +348,9 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, query *parser.Query)
 		} else {
 			g.generateSQLiteExecution(w, execParamNames, query)
 		}
+	case "turso":
+		// libsql uses sync DB-API 2.0 interface identical to sqlite3
+		g.generateSQLite3Execution(w, execParamNames, query)
 	case "mysql":
 		if driver == "pymysql" {
 			g.generatePyMySQLExecution(w, execParamNames, query)
@@ -806,7 +809,11 @@ func (g *Generator) generateDatabase(queries []*parser.Query) error {
 	w.WriteString("    Create a new database client.\n")
 	w.WriteString("    \n")
 	w.WriteString("    Args:\n")
-	w.WriteString("        db: Database connection (asyncpg.Pool, psycopg3 Connection, aiomysql.Pool, PyMySQL connection, aiosqlite connection, or sqlite3 connection)\n")
+	if g.Config.Database.Provider == "turso" {
+		w.WriteString("        db: Database connection (libsql.Connection — created with libsql.connect(url, auth_token=token))\n")
+	} else {
+		w.WriteString("        db: Database connection (asyncpg.Pool, psycopg3 Connection, aiomysql.Pool, PyMySQL connection, aiosqlite connection, or sqlite3 connection)\n")
+	}
 	w.WriteString("    \n")
 	w.WriteString("    Returns:\n")
 	w.WriteString("        Queries: An instance of the Queries class\n")
@@ -851,8 +858,8 @@ func (g *Generator) convertSQL(sql string) string {
 		for range placeholderCount {
 			sql = strings.Replace(sql, "?", "%s", 1)
 		}
-	case "sqlite", "sqlite3":
-		// SQLite uses ? placeholders - convert PostgreSQL-style $1, $2 to ?
+	case "sqlite", "sqlite3", "turso":
+		// SQLite/Turso uses ? placeholders - convert PostgreSQL-style $1, $2 to ?
 		for i := 20; i >= 1; i-- {
 			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "?")
 		}

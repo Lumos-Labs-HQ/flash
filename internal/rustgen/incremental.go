@@ -308,8 +308,7 @@ func (g *Generator) generateSingleRustFile(src string, queries []*parser.Query, 
 			}
 		}
 
-		if useMacros {
-			// With macros, FromRow is not needed — the macro handles mapping
+		if useMacros || g.Config.Database.Provider == "turso" {
 			w.WriteString("#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]\n")
 		} else {
 			w.WriteString("#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]\n")
@@ -418,12 +417,20 @@ func (g *Generator) generateQueryMethod(w *strings.Builder, q *parser.Query) {
 			w.WriteString(fmt.Sprintf("        %s: %s,\n", paramName, paramType))
 		}
 	}
-	w.WriteString(fmt.Sprintf("    ) -> Result<%s, sqlx::Error> {\n", returnType))
+	w.WriteString(fmt.Sprintf("    ) -> Result<%s, %s> {\n", returnType, g.getErrorType()))
 
 	// Generate body — choose between macros and runtime functions
 	sql := g.convertSQL(q.SQL)
 
-	if g.Config.Gen.Rust.Macros {
+	if g.Config.Database.Provider == "turso" {
+		if isExec {
+			g.writeLibsqlExecBody(w, q, sql, cmd)
+		} else if cmd == ":one" || cmd == "one" {
+			g.writeLibsqlOneBody(w, q, sql, columns)
+		} else {
+			g.writeLibsqlManyBody(w, q, sql, columns)
+		}
+	} else if g.Config.Gen.Rust.Macros {
 		if isExec {
 			g.writeMacroExecBody(w, q, sql, cmd)
 		} else if cmd == ":one" || cmd == "one" {
@@ -496,6 +503,77 @@ func (g *Generator) writeBinds(w *strings.Builder, q *parser.Query) {
 			w.WriteString(fmt.Sprintf("        .bind(%s)\n", paramName))
 		}
 	}
+}
+
+// libsqlParams builds the params argument for libsql's execute/query calls.
+func (g *Generator) libsqlParams(q *parser.Query) string {
+	if len(q.Params) == 0 {
+		return "()"
+	}
+	var args []string
+	if len(q.Params) > 2 {
+		for _, p := range q.Params {
+			args = append(args, fmt.Sprintf("params.%s.clone()", utils.ToSnakeCase(p.Name)))
+		}
+	} else {
+		for _, p := range q.Params {
+			args = append(args, utils.ToSnakeCase(p.Name))
+		}
+	}
+	return "libsql::params![" + strings.Join(args, ", ") + "]"
+}
+
+func (g *Generator) writeLibsqlExecBody(w *strings.Builder, q *parser.Query, sql string, cmd string) {
+	params := g.libsqlParams(q)
+	if cmd == ":execresult" || cmd == "execresult" {
+		w.WriteString(fmt.Sprintf("        let affected = self.conn.execute(\"%s\", %s).await?;\n", escapeSQLForRust(sql), params))
+		w.WriteString("        Ok(affected)\n")
+	} else {
+		w.WriteString(fmt.Sprintf("        self.conn.execute(\"%s\", %s).await?;\n", escapeSQLForRust(sql), params))
+		w.WriteString("        Ok(())\n")
+	}
+}
+
+func (g *Generator) writeLibsqlOneBody(w *strings.Builder, q *parser.Query, sql string, columns []*parser.QueryColumn) {
+	returnType := g.getOneReturnType(q, columns)
+	params := g.libsqlParams(q)
+	w.WriteString(fmt.Sprintf("        let mut rows = self.conn.query(\"%s\", %s).await?;\n", escapeSQLForRust(sql), params))
+	w.WriteString("        let row = rows.next().await?.ok_or(libsql::Error::QueryReturnedNoRows)?;\n")
+	if len(columns) == 1 {
+		_ = returnType
+		w.WriteString("        Ok(row.get(0)?)\n")
+	} else {
+		g.writeLibsqlRowMap(w, returnType, columns)
+	}
+}
+
+func (g *Generator) writeLibsqlManyBody(w *strings.Builder, q *parser.Query, sql string, columns []*parser.QueryColumn) {
+	oneType := g.getOneReturnType(q, columns)
+	params := g.libsqlParams(q)
+	w.WriteString(fmt.Sprintf("        let mut rows = self.conn.query(\"%s\", %s).await?;\n", escapeSQLForRust(sql), params))
+	w.WriteString("        let mut items = Vec::new();\n")
+	w.WriteString("        while let Some(row) = rows.next().await? {\n")
+	if len(columns) == 1 {
+		w.WriteString("            items.push(row.get(0)?);\n")
+	} else {
+		w.WriteString(fmt.Sprintf("            items.push(%s {\n", oneType))
+		for i, col := range columns {
+			fieldName := utils.ToSnakeCase(col.Name)
+			w.WriteString(fmt.Sprintf("                %s: row.get(%d)?,\n", fieldName, i))
+		}
+		w.WriteString("            });\n")
+	}
+	w.WriteString("        }\n")
+	w.WriteString("        Ok(items)\n")
+}
+
+func (g *Generator) writeLibsqlRowMap(w *strings.Builder, structName string, columns []*parser.QueryColumn) {
+	w.WriteString(fmt.Sprintf("        Ok(%s {\n", structName))
+	for i, col := range columns {
+		fieldName := utils.ToSnakeCase(col.Name)
+		w.WriteString(fmt.Sprintf("            %s: row.get(%d)?,\n", fieldName, i))
+	}
+	w.WriteString("        })\n")
 }
 
 // macroArgs builds the comma-separated argument list for sqlx macros
@@ -620,9 +698,18 @@ func (g *Generator) getExecResultType() string {
 		return "sqlx::mysql::MySqlQueryResult"
 	case "sqlite":
 		return "sqlx::sqlite::SqliteQueryResult"
+	case "turso":
+		return "u64"
 	default:
 		return "sqlx::postgres::PgQueryResult"
 	}
+}
+
+func (g *Generator) getErrorType() string {
+	if g.Config.Database.Provider == "turso" {
+		return "libsql::Error"
+	}
+	return "sqlx::Error"
 }
 
 // modelTypeForQuery checks if query columns exactly match a table model.
@@ -643,7 +730,7 @@ func (g *Generator) expandWildcardColumns(q *parser.Query) []*parser.QueryColumn
 func (g *Generator) convertSQL(sql string) string {
 	sql = strings.TrimSpace(sql)
 	switch g.Config.Database.Provider {
-	case "mysql", "sqlite":
+	case "mysql", "sqlite", "turso":
 		for i := 99; i >= 1; i-- {
 			sql = strings.ReplaceAll(sql, fmt.Sprintf("$%d", i), "?")
 		}
